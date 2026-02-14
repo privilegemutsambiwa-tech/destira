@@ -4,10 +4,10 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
+import { useProfile } from "@/hooks/use-profiles";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 
-// Pages
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
 import Onboarding from "@/pages/Onboarding";
@@ -17,6 +17,7 @@ import Discover from "@/pages/Discover";
 import Interviews from "@/pages/Interviews";
 import InterviewChat from "@/pages/InterviewChat";
 import Lounge from "@/pages/Lounge";
+import DirectChat from "@/pages/DirectChat";
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
   const { user, isLoading } = useAuth();
@@ -38,11 +39,28 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
 
   if (!user) return null;
 
-  // If user hasn't completed onboarding, force them there (unless they are already there)
-  // Note: We need to check if 'onboardingCompleted' exists on the user object or profile
-  // For now, assuming basic auth check is enough, but in real app we'd fetch profile here.
-
   return <Component {...rest} />;
+}
+
+function AuthenticatedHome() {
+  const { data: profile, isLoading } = useProfile();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading) {
+      if (!profile || !profile.onboardingCompleted) {
+        setLocation("/onboarding");
+      } else {
+        setLocation("/discover");
+      }
+    }
+  }, [profile, isLoading, setLocation]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  );
 }
 
 function Router() {
@@ -58,9 +76,8 @@ function Router() {
 
   return (
     <Switch>
-      <Route path="/" component={user ? Profile : Landing} />
-      
-      {/* Auth-protected routes */}
+      <Route path="/" component={user ? AuthenticatedHome : Landing} />
+
       <Route path="/onboarding">
         <ProtectedRoute component={Onboarding} />
       </Route>
@@ -81,6 +98,9 @@ function Router() {
       </Route>
       <Route path="/lounge">
         <ProtectedRoute component={Lounge} />
+      </Route>
+      <Route path="/chat/:matchId">
+        {(params) => <ProtectedRoute component={DirectChat} params={params} />}
       </Route>
 
       <Route component={NotFound} />
