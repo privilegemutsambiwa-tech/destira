@@ -10,7 +10,7 @@ export default function Landing() {
     try {
       await fetch("/api/demo/seed", { method: "POST" });
     } catch (e) {}
-    setLocation("/api/login");
+    window.location.href = "/api/login";
   };
 
   return (
@@ -24,14 +24,14 @@ export default function Landing() {
             <span className="font-display font-bold text-xl tracking-tight text-foreground">VibeFlow</span>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            <Link href="/api/login">
+            <a href="/api/login">
               <Button variant="ghost" className="font-medium" data-testid="button-login">Log In</Button>
-            </Link>
-            <Link href="/api/login">
+            </a>
+            <a href="/api/login">
               <Button className="font-medium bg-primary text-white rounded-full px-6" data-testid="button-get-started">
                 Get Started
               </Button>
-            </Link>
+            </a>
           </div>
         </div>
       </nav>
@@ -60,11 +60,11 @@ export default function Landing() {
                 Stop swiping on faces. Start connecting with personalities. VibeFlow uses an AI Twin trained on your values to find your perfect match.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link href="/api/login">
+                <a href="/api/login">
                   <Button size="lg" className="rounded-full text-lg h-14 px-8 bg-primary shadow-lg shadow-primary/25 transition-all" data-testid="button-create-twin">
                     Create Your AI Twin <ArrowRight className="ml-2 w-5 h-5" />
                   </Button>
-                </Link>
+                </a>
                 <Button
                   size="lg"
                   variant="outline"
