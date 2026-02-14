@@ -1,11 +1,16 @@
 import { db } from "./db";
 import {
   profiles, matches, interviews, groups, groupMembers, directMessages, groupMessages,
+  userPhotos, groupJoinRequests, groupInviteLinks, groupModerationLogs,
+  twinMemory, twinNotifications, subscriptions, payments, entitlements,
   type Profile, type InsertProfile, type UpdateProfileRequest,
-  type Match, type Interview, type Group, type GroupMember, type DirectMessage, type GroupMessage
+  type Match, type Interview, type Group, type GroupMember, type DirectMessage, type GroupMessage,
+  type GroupJoinRequest, type GroupInviteLink, type GroupModerationLog,
+  type UserPhoto, type TwinMemoryEntry, type TwinNotification,
+  type Subscription, type Payment, type Entitlement
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
-import { eq, or, and, ne, asc } from "drizzle-orm";
+import { eq, or, and, ne, asc, desc, ilike, sql, count } from "drizzle-orm";
 
 export interface IStorage {
   getProfile(userId: string): Promise<Profile | undefined>;
@@ -20,6 +25,8 @@ export interface IStorage {
   updateMatchStatus(id: number, status: string): Promise<Match>;
   getMatchBetweenUsers(user1Id: string, user2Id: string): Promise<Match | undefined>;
   getMatchesWithProfiles(userId: string): Promise<any[]>;
+  softDeleteChat(matchId: number, userId: string): Promise<Match>;
+  unmatch(matchId: number): Promise<Match>;
 
   createInterview(requesterId: string, targetId: string): Promise<Interview>;
   getInterviews(userId: string): Promise<Interview[]>;
@@ -31,14 +38,56 @@ export interface IStorage {
   getGroups(): Promise<Group[]>;
   getGroup(id: number): Promise<Group | undefined>;
   createGroup(name: string, description: string, type: string): Promise<Group>;
+  createGroupFull(data: { name: string; description: string; type: string; ownerId: string; iconUrl?: string; categoryTags?: string[]; privacyMode?: string; mediaEnabled?: boolean; stickersEnabled?: boolean; postingPermission?: string; inviteDirectJoinEnabled?: boolean }): Promise<Group>;
+  updateGroup(id: number, updates: Partial<Group>): Promise<Group>;
+  deleteGroup(id: number): Promise<void>;
+  searchGroups(query: string): Promise<Group[]>;
   joinGroup(groupId: number, userId: string, nickname: string): Promise<GroupMember>;
   getGroupMembers(groupId: number): Promise<GroupMember[]>;
+  getGroupMember(groupId: number, userId: string): Promise<GroupMember | undefined>;
   isGroupMember(groupId: number, userId: string): Promise<boolean>;
+  updateGroupMemberRole(groupId: number, userId: string, role: string): Promise<GroupMember>;
+  removeGroupMember(groupId: number, userId: string): Promise<void>;
   getGroupMessages(groupId: number, limit?: number): Promise<GroupMessage[]>;
   sendGroupMessage(groupId: number, userId: string, nickname: string, content: string): Promise<GroupMessage>;
+  deleteGroupMessage(messageId: number): Promise<GroupMessage>;
+  createJoinRequest(groupId: number, userId: string): Promise<GroupJoinRequest>;
+  getJoinRequests(groupId: number): Promise<GroupJoinRequest[]>;
+  processJoinRequest(id: number, processedBy: string, status: string): Promise<GroupJoinRequest>;
+  createInviteLink(groupId: number, createdBy: string, token: string, expiresAt?: Date): Promise<GroupInviteLink>;
+  getInviteLink(token: string): Promise<GroupInviteLink | undefined>;
+  revokeInviteLink(id: number): Promise<void>;
+  getGroupInviteLinks(groupId: number): Promise<GroupInviteLink[]>;
+  createModerationLog(data: { groupId: number; messageId?: number; userId: string; action: string; reason?: string; moderatedBy?: string }): Promise<GroupModerationLog>;
 
   getDirectMessages(matchId: number, limit?: number): Promise<DirectMessage[]>;
   sendDirectMessage(matchId: number, senderId: string, content: string): Promise<DirectMessage>;
+
+  getUserPhotos(userId: string): Promise<UserPhoto[]>;
+  addUserPhoto(userId: string, photoUrl: string, orderIndex: number, isMain?: boolean): Promise<UserPhoto>;
+  deleteUserPhoto(id: number): Promise<void>;
+  reorderUserPhotos(userId: string, photoIds: number[]): Promise<void>;
+
+  addTwinMemory(userId: string, message: string, role: string, useForTraining?: boolean): Promise<TwinMemoryEntry>;
+  getTwinMemory(userId: string, limit?: number): Promise<TwinMemoryEntry[]>;
+  updateTwinTrainingOptOut(userId: string, useForTraining: boolean): Promise<void>;
+
+  createNotification(userId: string, type: string, title: string, body: string): Promise<TwinNotification>;
+  getNotifications(userId: string): Promise<TwinNotification[]>;
+  markNotificationRead(id: number): Promise<void>;
+  getUnreadNotificationCount(userId: string): Promise<number>;
+
+  createSubscription(userId: string, tier: string, stripeSubId?: string): Promise<Subscription>;
+  getSubscription(userId: string): Promise<Subscription | undefined>;
+  updateSubscription(id: number, updates: Partial<Subscription>): Promise<Subscription>;
+  cancelSubscription(id: number): Promise<Subscription>;
+
+  createPayment(userId: string, amount: number, currency: string, stripeChargeId?: string, subscriptionId?: number): Promise<Payment>;
+  getPayments(userId: string): Promise<Payment[]>;
+
+  getEntitlements(userId: string): Promise<Entitlement[]>;
+  addEntitlement(userId: string, type: string, quantity: number, expiresAt?: Date): Promise<Entitlement>;
+  useEntitlement(userId: string, type: string): Promise<boolean>;
 
   seedDemoData(): Promise<void>;
 }
@@ -163,15 +212,37 @@ export class DatabaseStorage implements IStorage {
     const userMatches = await this.getMatches(userId);
     const result = [];
     for (const match of userMatches) {
-      const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+      const isUser1 = match.user1Id === userId;
+      if (isUser1 && match.user1DeletedChat) continue;
+      if (!isUser1 && match.user2DeletedChat) continue;
+      const otherUserId = isUser1 ? match.user2Id : match.user1Id;
       const otherProfile = await this.getProfileWithUser(otherUserId);
       result.push({
         ...match,
         otherProfile: otherProfile || null,
-        isRequester: match.user1Id === userId,
+        isRequester: isUser1,
       });
     }
     return result;
+  }
+
+  async softDeleteChat(matchId: number, userId: string): Promise<Match> {
+    const match = await this.getMatch(matchId);
+    if (!match) throw new Error("Match not found");
+    const isUser1 = match.user1Id === userId;
+    const [updated] = await db.update(matches)
+      .set(isUser1 ? { user1DeletedChat: true } : { user2DeletedChat: true })
+      .where(eq(matches.id, matchId))
+      .returning();
+    return updated;
+  }
+
+  async unmatch(matchId: number): Promise<Match> {
+    const [updated] = await db.update(matches)
+      .set({ status: "unmatched" })
+      .where(eq(matches.id, matchId))
+      .returning();
+    return updated;
   }
 
   async createInterview(requesterId: string, targetId: string): Promise<Interview> {
@@ -237,6 +308,37 @@ export class DatabaseStorage implements IStorage {
     return group;
   }
 
+  async createGroupFull(data: { name: string; description: string; type: string; ownerId: string; iconUrl?: string; categoryTags?: string[]; privacyMode?: string; mediaEnabled?: boolean; stickersEnabled?: boolean; postingPermission?: string; inviteDirectJoinEnabled?: boolean }): Promise<Group> {
+    const [group] = await db.insert(groups).values(data).returning();
+    return group;
+  }
+
+  async updateGroup(id: number, updates: Partial<Group>): Promise<Group> {
+    const [updated] = await db.update(groups)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(groups.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteGroup(id: number): Promise<void> {
+    await db.delete(groupMembers).where(eq(groupMembers.groupId, id));
+    await db.delete(groupMessages).where(eq(groupMessages.groupId, id));
+    await db.delete(groupJoinRequests).where(eq(groupJoinRequests.groupId, id));
+    await db.delete(groupInviteLinks).where(eq(groupInviteLinks.groupId, id));
+    await db.delete(groupModerationLogs).where(eq(groupModerationLogs.groupId, id));
+    await db.delete(groups).where(eq(groups.id, id));
+  }
+
+  async searchGroups(query: string): Promise<Group[]> {
+    return db.select().from(groups).where(
+      or(
+        ilike(groups.name, `%${query}%`),
+        ilike(groups.description, `%${query}%`)
+      )
+    );
+  }
+
   async joinGroup(groupId: number, userId: string, nickname: string): Promise<GroupMember> {
     const [member] = await db.insert(groupMembers).values({ groupId, userId, nickname }).returning();
     return member;
@@ -246,11 +348,32 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(groupMembers).where(eq(groupMembers.groupId, groupId));
   }
 
+  async getGroupMember(groupId: number, userId: string): Promise<GroupMember | undefined> {
+    const [member] = await db.select().from(groupMembers).where(
+      and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId))
+    );
+    return member;
+  }
+
   async isGroupMember(groupId: number, userId: string): Promise<boolean> {
     const [member] = await db.select().from(groupMembers).where(
       and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId))
     );
     return !!member;
+  }
+
+  async updateGroupMemberRole(groupId: number, userId: string, role: string): Promise<GroupMember> {
+    const [updated] = await db.update(groupMembers)
+      .set({ role })
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  async removeGroupMember(groupId: number, userId: string): Promise<void> {
+    await db.delete(groupMembers).where(
+      and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId))
+    );
   }
 
   async getGroupMessages(groupId: number, limit: number = 50): Promise<GroupMessage[]> {
@@ -265,6 +388,60 @@ export class DatabaseStorage implements IStorage {
     return msg;
   }
 
+  async deleteGroupMessage(messageId: number): Promise<GroupMessage> {
+    const [msg] = await db.select().from(groupMessages).where(eq(groupMessages.id, messageId));
+    const [updated] = await db.update(groupMessages)
+      .set({ isDeletedByAdmin: true, originalContent: msg.content, content: "[Message deleted by admin]" })
+      .where(eq(groupMessages.id, messageId))
+      .returning();
+    return updated;
+  }
+
+  async createJoinRequest(groupId: number, userId: string): Promise<GroupJoinRequest> {
+    const [request] = await db.insert(groupJoinRequests).values({ groupId, userId }).returning();
+    return request;
+  }
+
+  async getJoinRequests(groupId: number): Promise<GroupJoinRequest[]> {
+    return db.select().from(groupJoinRequests)
+      .where(and(eq(groupJoinRequests.groupId, groupId), eq(groupJoinRequests.status, "pending")));
+  }
+
+  async processJoinRequest(id: number, processedBy: string, status: string): Promise<GroupJoinRequest> {
+    const [updated] = await db.update(groupJoinRequests)
+      .set({ status, processedBy, processedAt: new Date() })
+      .where(eq(groupJoinRequests.id, id))
+      .returning();
+    return updated;
+  }
+
+  async createInviteLink(groupId: number, createdBy: string, token: string, expiresAt?: Date): Promise<GroupInviteLink> {
+    const values: any = { groupId, createdBy, token };
+    if (expiresAt) values.expiresAt = expiresAt;
+    const [link] = await db.insert(groupInviteLinks).values(values).returning();
+    return link;
+  }
+
+  async getInviteLink(token: string): Promise<GroupInviteLink | undefined> {
+    const [link] = await db.select().from(groupInviteLinks).where(
+      and(eq(groupInviteLinks.token, token), eq(groupInviteLinks.isActive, true))
+    );
+    return link;
+  }
+
+  async revokeInviteLink(id: number): Promise<void> {
+    await db.update(groupInviteLinks).set({ isActive: false }).where(eq(groupInviteLinks.id, id));
+  }
+
+  async getGroupInviteLinks(groupId: number): Promise<GroupInviteLink[]> {
+    return db.select().from(groupInviteLinks).where(eq(groupInviteLinks.groupId, groupId));
+  }
+
+  async createModerationLog(data: { groupId: number; messageId?: number; userId: string; action: string; reason?: string; moderatedBy?: string }): Promise<GroupModerationLog> {
+    const [log] = await db.insert(groupModerationLogs).values(data).returning();
+    return log;
+  }
+
   async getDirectMessages(matchId: number, limit: number = 50): Promise<DirectMessage[]> {
     return db.select().from(directMessages)
       .where(eq(directMessages.matchId, matchId))
@@ -275,6 +452,137 @@ export class DatabaseStorage implements IStorage {
   async sendDirectMessage(matchId: number, senderId: string, content: string): Promise<DirectMessage> {
     const [msg] = await db.insert(directMessages).values({ matchId, senderId, content }).returning();
     return msg;
+  }
+
+  async getUserPhotos(userId: string): Promise<UserPhoto[]> {
+    return db.select().from(userPhotos)
+      .where(eq(userPhotos.userId, userId))
+      .orderBy(asc(userPhotos.orderIndex));
+  }
+
+  async addUserPhoto(userId: string, photoUrl: string, orderIndex: number, isMain: boolean = false): Promise<UserPhoto> {
+    const [photo] = await db.insert(userPhotos).values({ userId, photoUrl, orderIndex, isMainProfilePhoto: isMain }).returning();
+    return photo;
+  }
+
+  async deleteUserPhoto(id: number): Promise<void> {
+    await db.delete(userPhotos).where(eq(userPhotos.id, id));
+  }
+
+  async reorderUserPhotos(userId: string, photoIds: number[]): Promise<void> {
+    for (let i = 0; i < photoIds.length; i++) {
+      await db.update(userPhotos)
+        .set({ orderIndex: i })
+        .where(and(eq(userPhotos.id, photoIds[i]), eq(userPhotos.userId, userId)));
+    }
+  }
+
+  async addTwinMemory(userId: string, message: string, role: string, useForTraining: boolean = true): Promise<TwinMemoryEntry> {
+    const [entry] = await db.insert(twinMemory).values({ userId, message, role, useForTraining }).returning();
+    return entry;
+  }
+
+  async getTwinMemory(userId: string, limit: number = 100): Promise<TwinMemoryEntry[]> {
+    return db.select().from(twinMemory)
+      .where(eq(twinMemory.userId, userId))
+      .orderBy(desc(twinMemory.createdAt))
+      .limit(limit);
+  }
+
+  async updateTwinTrainingOptOut(userId: string, useForTraining: boolean): Promise<void> {
+    await db.update(twinMemory)
+      .set({ useForTraining })
+      .where(eq(twinMemory.userId, userId));
+  }
+
+  async createNotification(userId: string, type: string, title: string, body: string): Promise<TwinNotification> {
+    const [notif] = await db.insert(twinNotifications).values({ userId, type, title, body }).returning();
+    return notif;
+  }
+
+  async getNotifications(userId: string): Promise<TwinNotification[]> {
+    return db.select().from(twinNotifications)
+      .where(eq(twinNotifications.userId, userId))
+      .orderBy(desc(twinNotifications.createdAt));
+  }
+
+  async markNotificationRead(id: number): Promise<void> {
+    await db.update(twinNotifications).set({ read: true }).where(eq(twinNotifications.id, id));
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const [result] = await db.select({ value: count() }).from(twinNotifications)
+      .where(and(eq(twinNotifications.userId, userId), eq(twinNotifications.read, false)));
+    return result?.value ?? 0;
+  }
+
+  async createSubscription(userId: string, tier: string, stripeSubId?: string): Promise<Subscription> {
+    const values: any = { userId, tier, status: "active" };
+    if (stripeSubId) values.stripeSubscriptionId = stripeSubId;
+    const [sub] = await db.insert(subscriptions).values(values).returning();
+    return sub;
+  }
+
+  async getSubscription(userId: string): Promise<Subscription | undefined> {
+    const [sub] = await db.select().from(subscriptions)
+      .where(eq(subscriptions.userId, userId))
+      .orderBy(desc(subscriptions.createdAt))
+      .limit(1);
+    return sub;
+  }
+
+  async updateSubscription(id: number, updates: Partial<Subscription>): Promise<Subscription> {
+    const [updated] = await db.update(subscriptions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(subscriptions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async cancelSubscription(id: number): Promise<Subscription> {
+    const [updated] = await db.update(subscriptions)
+      .set({ status: "canceled", updatedAt: new Date() })
+      .where(eq(subscriptions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async createPayment(userId: string, amount: number, currency: string, stripeChargeId?: string, subscriptionId?: number): Promise<Payment> {
+    const values: any = { userId, amount, currency, status: "completed" };
+    if (stripeChargeId) values.stripeChargeId = stripeChargeId;
+    if (subscriptionId) values.subscriptionId = subscriptionId;
+    const [payment] = await db.insert(payments).values(values).returning();
+    return payment;
+  }
+
+  async getPayments(userId: string): Promise<Payment[]> {
+    return db.select().from(payments)
+      .where(eq(payments.userId, userId))
+      .orderBy(desc(payments.createdAt));
+  }
+
+  async getEntitlements(userId: string): Promise<Entitlement[]> {
+    return db.select().from(entitlements)
+      .where(eq(entitlements.userId, userId));
+  }
+
+  async addEntitlement(userId: string, type: string, quantity: number, expiresAt?: Date): Promise<Entitlement> {
+    const values: any = { userId, type, quantity };
+    if (expiresAt) values.expiresAt = expiresAt;
+    const [ent] = await db.insert(entitlements).values(values).returning();
+    return ent;
+  }
+
+  async useEntitlement(userId: string, type: string): Promise<boolean> {
+    const [ent] = await db.select().from(entitlements).where(
+      and(eq(entitlements.userId, userId), eq(entitlements.type, type))
+    );
+    if (!ent || ent.quantity <= 0) return false;
+    if (ent.expiresAt && new Date(ent.expiresAt) < new Date()) return false;
+    await db.update(entitlements)
+      .set({ quantity: ent.quantity - 1, updatedAt: new Date() })
+      .where(eq(entitlements.id, ent.id));
+    return true;
   }
 
   async seedDemoData(): Promise<void> {
