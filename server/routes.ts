@@ -4,6 +4,9 @@ import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { z } from "zod";
 import OpenAI from "openai";
+import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 import crypto from "crypto";
 
 const openai = new OpenAI({
@@ -802,6 +805,140 @@ You are chatting with your human self. Be reflective, insightful, supportive. He
       res.json(ents);
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch entitlements" });
+    }
+  });
+
+  app.get("/api/stripe/publishable-key", async (_req, res) => {
+    try {
+      const key = await getStripePublishableKey();
+      res.json({ publishableKey: key });
+    } catch (e) {
+      console.error("Failed to get publishable key:", e);
+      res.status(500).json({ message: "Failed to get Stripe config" });
+    }
+  });
+
+  app.get("/api/stripe/products", async (_req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT
+          p.id as product_id,
+          p.name as product_name,
+          p.description as product_description,
+          p.metadata as product_metadata,
+          pr.id as price_id,
+          pr.unit_amount,
+          pr.currency,
+          pr.recurring,
+          pr.active as price_active
+        FROM stripe.products p
+        LEFT JOIN stripe.prices pr ON pr.product = p.id AND pr.active = true
+        WHERE p.active = true
+        ORDER BY pr.unit_amount ASC
+      `);
+
+      const productsMap = new Map<string, any>();
+      for (const row of result.rows) {
+        const r = row as any;
+        if (!productsMap.has(r.product_id)) {
+          productsMap.set(r.product_id, {
+            id: r.product_id,
+            name: r.product_name,
+            description: r.product_description,
+            metadata: r.product_metadata,
+            prices: [],
+          });
+        }
+        if (r.price_id) {
+          productsMap.get(r.product_id).prices.push({
+            id: r.price_id,
+            unit_amount: r.unit_amount,
+            currency: r.currency,
+            recurring: r.recurring,
+          });
+        }
+      }
+
+      res.json(Array.from(productsMap.values()));
+    } catch (e) {
+      console.error("Failed to fetch Stripe products:", e);
+      res.json([]);
+    }
+  });
+
+  app.post("/api/stripe/checkout", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+
+    const { priceId } = req.body;
+    if (!priceId) return res.status(400).json({ message: "priceId is required" });
+
+    try {
+      const stripe = await getUncachableStripeClient();
+      const userClaims = (req as any).user?.claims;
+      const email = userClaims?.email || undefined;
+
+      let customerId: string | undefined;
+
+      if (email) {
+        const customers = await stripe.customers.list({ email, limit: 1 });
+        if (customers.data.length > 0) {
+          customerId = customers.data[0].id;
+        }
+      }
+
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email,
+          metadata: { userId },
+        });
+        customerId = customer.id;
+      }
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ['card'],
+        line_items: [{ price: priceId, quantity: 1 }],
+        mode: 'subscription',
+        success_url: `${baseUrl}/billing?success=true`,
+        cancel_url: `${baseUrl}/billing?canceled=true`,
+        metadata: { userId },
+      });
+
+      res.json({ url: session.url });
+    } catch (e: any) {
+      console.error("Checkout error:", e);
+      res.status(500).json({ message: "Failed to create checkout session" });
+    }
+  });
+
+  app.post("/api/stripe/portal", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+
+    try {
+      const stripe = await getUncachableStripeClient();
+      const userClaims = (req as any).user?.claims;
+      const email = userClaims?.email;
+
+      if (!email) return res.status(400).json({ message: "No email on account" });
+
+      const customers = await stripe.customers.list({ email, limit: 1 });
+      if (customers.data.length === 0) {
+        return res.status(404).json({ message: "No Stripe customer found" });
+      }
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const session = await stripe.billingPortal.sessions.create({
+        customer: customers.data[0].id,
+        return_url: `${baseUrl}/billing`,
+      });
+
+      res.json({ url: session.url });
+    } catch (e: any) {
+      console.error("Portal error:", e);
+      res.status(500).json({ message: "Failed to create portal session" });
     }
   });
 
