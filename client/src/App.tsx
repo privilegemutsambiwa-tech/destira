@@ -18,6 +18,8 @@ import Interviews from "@/pages/Interviews";
 import InterviewChat from "@/pages/InterviewChat";
 import Lounge from "@/pages/Lounge";
 import DirectChat from "@/pages/DirectChat";
+import TwinChat from "@/pages/TwinChat";
+import Billing from "@/pages/Billing";
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
   const { user, isLoading } = useAuth();
@@ -101,6 +103,12 @@ function Router() {
       </Route>
       <Route path="/chat/:matchId">
         {(params) => <ProtectedRoute component={DirectChat} params={params} />}
+      </Route>
+      <Route path="/twin-chat">
+        <ProtectedRoute component={TwinChat} />
+      </Route>
+      <Route path="/billing">
+        <ProtectedRoute component={Billing} />
       </Route>
 
       <Route component={NotFound} />

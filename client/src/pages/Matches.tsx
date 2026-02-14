@@ -1,7 +1,12 @@
+import { useState } from "react";
 import { LayoutShell } from "@/components/layout-shell";
-import { useMatches, useRespondToMatch } from "@/hooks/use-interactions";
+import { useMatches, useRespondToMatch, useSoftDeleteChat, useUnmatch } from "@/hooks/use-interactions";
 import { Button } from "@/components/ui/button";
-import { Loader2, MessageCircle, Heart, Check, X, Search } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
+} from "@/components/ui/dialog";
+import { Loader2, MessageCircle, Heart, Check, X, Search, Trash2, UserX } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -83,7 +88,7 @@ function PendingMatchCard({ match }: { match: any }) {
       toast({
         title: action === "accept" ? "Match Accepted!" : "Match Declined",
         description: action === "accept"
-          ? `You and ${match.otherProfile?.displayName || "this person"} are now connected! You can start chatting.`
+          ? `You and ${match.otherProfile?.displayName || "this person"} are now connected!`
           : "No worries, they won't be notified.",
       });
     } catch (e) {
@@ -92,85 +97,158 @@ function PendingMatchCard({ match }: { match: any }) {
   };
 
   return (
-    <div className="bg-white rounded-3xl p-6 border border-pink-200 shadow-sm" data-testid={`card-pending-match-${match.id}`}>
-      <div className="flex items-center gap-4 mb-4">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-100 to-purple-100 flex items-center justify-center text-xl font-bold text-primary">
-          {match.otherProfile?.displayName?.[0] || "?"}
+    <Card data-testid={`card-pending-match-${match.id}`}>
+      <CardContent className="p-5">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 rounded-md bg-primary/10 flex items-center justify-center text-lg font-bold text-primary">
+            {match.otherProfile?.displayName?.[0] || "?"}
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-bold truncate">{match.otherProfile?.displayName || "Someone"}</h3>
+            <p className="text-xs text-muted-foreground">{match.otherProfile?.location || "Somewhere"}</p>
+          </div>
         </div>
-        <div>
-          <h3 className="font-bold text-lg">{match.otherProfile?.displayName || "Someone"}</h3>
-          <p className="text-sm text-muted-foreground">{match.otherProfile?.location || "Somewhere"}</p>
+        <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{match.otherProfile?.bio || ""}</p>
+        <div className="flex gap-2">
+          <Button
+            className="flex-1"
+            onClick={() => handleRespond("accept")}
+            disabled={respondToMatch.isPending}
+            data-testid={`button-accept-${match.id}`}
+          >
+            <Check className="w-4 h-4 mr-1" /> Accept
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => handleRespond("reject")}
+            disabled={respondToMatch.isPending}
+            data-testid={`button-reject-${match.id}`}
+          >
+            <X className="w-4 h-4" />
+          </Button>
         </div>
-      </div>
-      <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{match.otherProfile?.bio || ""}</p>
-      <div className="flex gap-2">
-        <Button
-          className="flex-1 rounded-xl"
-          onClick={() => handleRespond("accept")}
-          disabled={respondToMatch.isPending}
-          data-testid={`button-accept-${match.id}`}
-        >
-          <Check className="w-4 h-4 mr-1" /> Accept
-        </Button>
-        <Button
-          variant="outline"
-          className="rounded-xl"
-          onClick={() => handleRespond("reject")}
-          disabled={respondToMatch.isPending}
-          data-testid={`button-reject-${match.id}`}
-        >
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
 function MatchedCard({ match }: { match: any }) {
   const [, setLocation] = useLocation();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showUnmatchDialog, setShowUnmatchDialog] = useState(false);
+  const softDelete = useSoftDeleteChat();
+  const unmatch = useUnmatch();
+  const { toast } = useToast();
+
+  const handleSoftDelete = async () => {
+    try {
+      await softDelete.mutateAsync(match.id);
+      toast({ title: "Chat deleted", description: "The chat has been removed from your view." });
+      setShowDeleteDialog(false);
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to delete chat.", variant: "destructive" });
+    }
+  };
+
+  const handleUnmatch = async () => {
+    try {
+      await unmatch.mutateAsync(match.id);
+      toast({ title: "Unmatched", description: "You've been unmatched." });
+      setShowUnmatchDialog(false);
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to unmatch.", variant: "destructive" });
+    }
+  };
 
   return (
-    <div className="bg-white rounded-3xl p-6 border border-purple-100 shadow-sm" data-testid={`card-matched-${match.id}`}>
-      <div className="flex items-center gap-4 mb-4">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center text-xl font-bold text-primary">
-          {match.otherProfile?.displayName?.[0] || "?"}
-        </div>
-        <div>
-          <h3 className="font-bold text-lg">{match.otherProfile?.displayName || "Someone"}</h3>
-          <div className="flex items-center gap-1 text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full w-fit mt-1">
-            <Heart className="w-3 h-3 fill-current" />
-            Matched
+    <>
+      <Card data-testid={`card-matched-${match.id}`}>
+        <CardContent className="p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-12 h-12 rounded-md bg-primary/10 flex items-center justify-center text-lg font-bold text-primary">
+              {match.otherProfile?.displayName?.[0] || "?"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-bold truncate">{match.otherProfile?.displayName || "Someone"}</h3>
+              <div className="flex items-center gap-1 text-xs text-green-600 mt-0.5">
+                <Heart className="w-3 h-3 fill-current" />
+                Matched
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-      <div className="flex gap-2 mt-4">
-        <Button
-          className="flex-1 rounded-xl"
-          variant="default"
-          onClick={() => setLocation(`/chat/${match.id}`)}
-          data-testid={`button-chat-${match.id}`}
-        >
-          <MessageCircle className="w-4 h-4 mr-2" />
-          Chat Now
-        </Button>
-      </div>
-    </div>
+          <div className="flex gap-2 mt-3">
+            <Button
+              className="flex-1"
+              onClick={() => setLocation(`/chat/${match.id}`)}
+              data-testid={`button-chat-${match.id}`}
+            >
+              <MessageCircle className="w-4 h-4 mr-2" />
+              Chat
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setShowDeleteDialog(true)} data-testid={`button-delete-chat-${match.id}`}>
+              <Trash2 className="w-4 h-4 text-muted-foreground" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setShowUnmatchDialog(true)} data-testid={`button-unmatch-${match.id}`}>
+              <UserX className="w-4 h-4 text-muted-foreground" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Chat?</DialogTitle>
+            <DialogDescription>
+              This will remove the chat from your view. The other person can still see it. This can't be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleSoftDelete} disabled={softDelete.isPending} data-testid="button-confirm-delete">
+              {softDelete.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Delete Chat
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showUnmatchDialog} onOpenChange={setShowUnmatchDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unmatch?</DialogTitle>
+            <DialogDescription>
+              This will remove the match entirely. You won't be able to chat anymore. This can't be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUnmatchDialog(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleUnmatch} disabled={unmatch.isPending} data-testid="button-confirm-unmatch">
+              {unmatch.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Unmatch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
 function SentMatchCard({ match }: { match: any }) {
   return (
-    <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-sm opacity-75" data-testid={`card-sent-match-${match.id}`}>
-      <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-gray-100 to-purple-50 flex items-center justify-center text-xl font-bold text-muted-foreground">
-          {match.otherProfile?.displayName?.[0] || "?"}
+    <Card className="opacity-75" data-testid={`card-sent-match-${match.id}`}>
+      <CardContent className="p-5">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center text-lg font-bold text-muted-foreground">
+            {match.otherProfile?.displayName?.[0] || "?"}
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-bold truncate">{match.otherProfile?.displayName || "Someone"}</h3>
+            <p className="text-sm text-muted-foreground">Waiting for response...</p>
+          </div>
         </div>
-        <div>
-          <h3 className="font-bold text-lg">{match.otherProfile?.displayName || "Someone"}</h3>
-          <p className="text-sm text-muted-foreground">Waiting for response...</p>
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -178,15 +256,16 @@ function EmptyState() {
   const [, setLocation] = useLocation();
 
   return (
-    <div className="text-center py-20 px-6 bg-white rounded-3xl border border-dashed border-purple-200">
-      <div className="w-20 h-20 bg-purple-50 rounded-full flex items-center justify-center mx-auto mb-6">
-        <Heart className="w-10 h-10 text-purple-300" />
+    <div className="text-center py-20 px-6">
+      <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
+        <Heart className="w-10 h-10 text-muted-foreground" />
       </div>
       <h3 className="text-2xl font-bold font-display mb-2">No matches yet</h3>
       <p className="text-muted-foreground max-w-md mx-auto mb-8">
         Your soulmate is out there! Start by exploring potential connections and interviewing their AI Twins.
       </p>
-      <Button size="lg" onClick={() => setLocation("/discover")} className="rounded-full" data-testid="button-discover">
+      <Button size="lg" onClick={() => setLocation("/discover")} data-testid="button-discover">
+        <Search className="w-4 h-4 mr-2" />
         Discover People
       </Button>
     </div>

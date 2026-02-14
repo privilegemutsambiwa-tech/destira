@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { buildUrl } from "@shared/routes";
 
 export function useMatches() {
   return useQuery({
@@ -43,6 +42,36 @@ export function useRespondToMatch() {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to respond to match");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/matches"] }),
+  });
+}
+
+export function useSoftDeleteChat() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (matchId: number) => {
+      const res = await fetch(`/api/matches/${matchId}/soft-delete`, {
+        method: "PUT",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete chat");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/matches"] }),
+  });
+}
+
+export function useUnmatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (matchId: number) => {
+      const res = await fetch(`/api/matches/${matchId}/unmatch`, {
+        method: "PUT",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to unmatch");
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/matches"] }),
@@ -132,11 +161,12 @@ export function useSendDirectMessage(matchId: number) {
   });
 }
 
-export function useGroups() {
+export function useGroups(search?: string) {
   return useQuery({
-    queryKey: ["/api/groups"],
+    queryKey: ["/api/groups", search],
     queryFn: async () => {
-      const res = await fetch("/api/groups", { credentials: "include" });
+      const url = search ? `/api/groups?search=${encodeURIComponent(search)}` : "/api/groups";
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch groups");
       return res.json();
     },
@@ -151,6 +181,58 @@ export function useGroup(id: number) {
       if (!res.ok) throw new Error("Failed to fetch group");
       return res.json();
     },
+  });
+}
+
+export function useCreateGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string; description: string; type?: string; privacyMode?: string; categoryTags?: string[] }) => {
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to create group");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups"] }),
+  });
+}
+
+export function useUpdateGroup(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch(`/api/groups/${groupId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update group");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] });
+    },
+  });
+}
+
+export function useDeleteGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (groupId: number) => {
+      const res = await fetch(`/api/groups/${groupId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete group");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups"] }),
   });
 }
 
@@ -171,6 +253,21 @@ export function useJoinGroup() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
     },
+  });
+}
+
+export function useLeaveGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (groupId: number) => {
+      const res = await fetch(`/api/groups/${groupId}/leave`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to leave group");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups"] }),
   });
 }
 
@@ -200,5 +297,214 @@ export function useSendGroupMessage(groupId: number) {
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages"] }),
+  });
+}
+
+export function useDeleteGroupMessage(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (messageId: number) => {
+      const res = await fetch(`/api/groups/${groupId}/messages/${messageId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete message");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages"] }),
+  });
+}
+
+export function useRemoveGroupMember(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (targetUserId: string) => {
+      const res = await fetch(`/api/groups/${groupId}/members/${targetUserId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to remove member");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] }),
+  });
+}
+
+export function useUpdateMemberRole(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ targetUserId, role }: { targetUserId: string; role: string }) => {
+      const res = await fetch(`/api/groups/${groupId}/members/role`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId, role }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update role");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] }),
+  });
+}
+
+export function useCreateInviteLink(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/groups/${groupId}/invite-link`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to create invite link");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "invite-links"] }),
+  });
+}
+
+export function useGroupInviteLinks(groupId: number) {
+  return useQuery({
+    queryKey: ["/api/groups", groupId, "invite-links"],
+    queryFn: async () => {
+      const res = await fetch(`/api/groups/${groupId}/invite-links`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
+
+export function useJoinRequests(groupId: number) {
+  return useQuery({
+    queryKey: ["/api/groups", groupId, "join-requests"],
+    queryFn: async () => {
+      const res = await fetch(`/api/groups/${groupId}/join-requests`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
+
+export function useProcessJoinRequest(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ requestId, status }: { requestId: number; status: string }) => {
+      const res = await fetch(`/api/groups/${groupId}/join-requests/${requestId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to process request");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "join-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] });
+    },
+  });
+}
+
+export function useTwinChat() {
+  return useMutation({
+    mutationFn: async (message: string) => {
+      const res = await fetch("/api/twin/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to chat with twin");
+      return res.json();
+    },
+  });
+}
+
+export function useTwinMemory() {
+  return useQuery({
+    queryKey: ["/api/twin/memory"],
+    queryFn: async () => {
+      const res = await fetch("/api/twin/memory", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
+
+export function useNotifications() {
+  return useQuery({
+    queryKey: ["/api/notifications"],
+    queryFn: async () => {
+      const res = await fetch("/api/notifications", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+}
+
+export function useUnreadNotificationCount() {
+  return useQuery({
+    queryKey: ["/api/notifications/unread-count"],
+    queryFn: async () => {
+      const res = await fetch("/api/notifications/unread-count", { credentials: "include" });
+      if (!res.ok) return { count: 0 };
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+}
+
+export function useMarkNotificationRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/notifications/${id}/read`, {
+        method: "PUT",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to mark read");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+    },
+  });
+}
+
+export function useSubscription() {
+  return useQuery({
+    queryKey: ["/api/subscription"],
+    queryFn: async () => {
+      const res = await fetch("/api/subscription", { credentials: "include" });
+      if (!res.ok) return { tier: "free", status: "active" };
+      return res.json();
+    },
+  });
+}
+
+export function useEntitlements() {
+  return useQuery({
+    queryKey: ["/api/entitlements"],
+    queryFn: async () => {
+      const res = await fetch("/api/entitlements", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
+
+export function useGenerateSummary() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/profiles/generate-summary", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to generate summary");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] }),
   });
 }

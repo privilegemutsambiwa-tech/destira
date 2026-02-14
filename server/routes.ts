@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { z } from "zod";
 import OpenAI from "openai";
+import crypto from "crypto";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -65,6 +66,35 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/profiles/generate-summary", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const profile = await storage.getProfile(userId);
+      if (!profile) return res.status(404).json({ message: "Profile not found" });
+      const response = await openai.chat.completions.create({
+        model: "openai/gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `Generate two short summaries for a dating profile. Return JSON with: {"aboutSummary": "A 1-2 sentence witty 'About Me' summary", "personalitySummary": "A 1-2 sentence personality passage based on their traits"}. Make them warm, genuine, and engaging.`
+          },
+          { role: "user", content: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName }) }
+        ],
+        response_format: { type: "json_object" }
+      });
+      const summaries = JSON.parse(response.choices[0].message.content || "{}");
+      await storage.updateProfile(userId, {
+        aboutSummary: summaries.aboutSummary,
+        personalitySummary: summaries.personalitySummary,
+      });
+      res.json(summaries);
+    } catch (e) {
+      console.error("Summary generation error:", e);
+      res.status(500).json({ message: "Failed to generate summary" });
+    }
+  });
+
   app.post("/api/profiles", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -101,6 +131,50 @@ export async function registerRoutes(
     const profile = await storage.getProfileWithUser(req.params.userId);
     if (!profile) return res.status(404).json({ message: "Profile not found" });
     res.json(profile);
+  });
+
+  app.get("/api/photos/:userId", async (req, res) => {
+    try {
+      const photos = await storage.getUserPhotos(req.params.userId);
+      res.json(photos);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch photos" });
+    }
+  });
+
+  app.post("/api/photos", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const { photoUrl, orderIndex, isMainProfilePhoto } = req.body;
+    try {
+      const photo = await storage.addUserPhoto(userId, photoUrl, orderIndex || 0, isMainProfilePhoto);
+      res.status(201).json(photo);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to add photo" });
+    }
+  });
+
+  app.delete("/api/photos/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      await storage.deleteUserPhoto(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to delete photo" });
+    }
+  });
+
+  app.put("/api/photos/reorder", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const { photoIds } = req.body;
+    try {
+      await storage.reorderUserPhotos(userId, photoIds);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to reorder photos" });
+    }
   });
 
   app.get("/api/matches", async (req, res) => {
@@ -146,6 +220,33 @@ export async function registerRoutes(
       res.json(updated);
     } catch (e) {
       res.status(500).json({ message: "Failed to respond to match" });
+    }
+  });
+
+  app.put("/api/matches/:id/soft-delete", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const matchId = parseInt(req.params.id);
+    try {
+      const updated = await storage.softDeleteChat(matchId, userId);
+      res.json(updated);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to delete chat" });
+    }
+  });
+
+  app.put("/api/matches/:id/unmatch", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const matchId = parseInt(req.params.id);
+    try {
+      const match = await storage.getMatch(matchId);
+      if (!match) return res.status(404).json({ message: "Match not found" });
+      if (match.user1Id !== userId && match.user2Id !== userId) return res.sendStatus(403);
+      const updated = await storage.unmatch(matchId);
+      res.json(updated);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to unmatch" });
     }
   });
 
@@ -218,7 +319,112 @@ Stay in character as ${targetProfile.displayName}'s AI Twin. Be warm, engaging, 
       res.json({ response: aiResponse });
     } catch (e) {
       console.error("AI Twin chat error:", e);
-      res.json({ response: "I'm having a moment... could you try asking me again?" });
+      const fallbacks = [
+        "That's a great question! I'd love to share more about that when we connect in person.",
+        "I'm reflecting on that... my human self would have a lot to say about it!",
+        "Hmm, let me think about that one. What about you?",
+      ];
+      const fallback = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+      history.push({ role: "assistant", content: fallback });
+      await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
+      res.json({ response: fallback });
+    }
+  });
+
+  app.post("/api/twin/chat", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const { message } = req.body;
+    try {
+      const profile = await storage.getProfile(userId);
+      if (!profile || !profile.twinPersona) {
+        return res.status(400).json({ message: "Complete onboarding first" });
+      }
+      const memory = await storage.getTwinMemory(userId, 20);
+      const memoryMessages = memory.reverse().map(m => ({
+        role: m.role as "user" | "assistant",
+        content: m.message,
+      }));
+      await storage.addTwinMemory(userId, message, "user");
+
+      const completion = await openai.chat.completions.create({
+        model: "openai/gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are the AI Twin of the user on VibeFlow. ${profile.twinPersona}
+
+You are chatting with your human self. Be reflective, insightful, supportive. Help them understand themselves better. Reference past conversations when relevant. Keep responses conversational (2-4 sentences).`
+          },
+          ...memoryMessages,
+          { role: "user", content: message }
+        ]
+      });
+
+      const aiResponse = completion.choices[0].message.content || "I hear you. Tell me more about what's on your mind.";
+      await storage.addTwinMemory(userId, aiResponse, "assistant");
+      res.json({ response: aiResponse });
+    } catch (e) {
+      console.error("Twin self-chat error:", e);
+      const fallback = "I'm here for you. Let's talk about what's on your mind.";
+      await storage.addTwinMemory(userId, fallback, "assistant");
+      res.json({ response: fallback });
+    }
+  });
+
+  app.get("/api/twin/memory", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const memory = await storage.getTwinMemory(userId, 50);
+      res.json(memory);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch twin memory" });
+    }
+  });
+
+  app.put("/api/twin/training-opt-out", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const { useForTraining } = req.body;
+    try {
+      await storage.updateTwinTrainingOptOut(userId, useForTraining);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to update training preference" });
+    }
+  });
+
+  app.get("/api/notifications", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const notifications = await storage.getNotifications(userId);
+      res.json(notifications);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  app.get("/api/notifications/unread-count", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const count = await storage.getUnreadNotificationCount(userId);
+      res.json({ count });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to get unread count" });
+    }
+  });
+
+  app.put("/api/notifications/:id/read", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      await storage.markNotificationRead(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to mark notification read" });
     }
   });
 
@@ -256,11 +462,20 @@ Stay in character as ${targetProfile.displayName}'s AI Twin. Be warm, engaging, 
   });
 
   app.get("/api/groups", async (req, res) => {
+    const userId = getUserId(req);
+    const search = req.query.search as string | undefined;
     try {
-      const allGroups = await storage.getGroups();
+      let allGroups;
+      if (search) {
+        allGroups = await storage.searchGroups(search);
+      } else {
+        allGroups = await storage.getGroups();
+      }
       const groupsWithCounts = await Promise.all(allGroups.map(async (g) => {
         const members = await storage.getGroupMembers(g.id);
-        return { ...g, memberCount: members.length };
+        const isMember = userId ? members.some(m => m.userId === userId) : false;
+        const myRole = userId ? members.find(m => m.userId === userId)?.role : undefined;
+        return { ...g, memberCount: members.length, isMember, myRole };
       }));
       res.json(groupsWithCounts);
     } catch (e) {
@@ -268,15 +483,72 @@ Stay in character as ${targetProfile.displayName}'s AI Twin. Be warm, engaging, 
     }
   });
 
+  app.post("/api/groups", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const { name, description, type, iconUrl, categoryTags, privacyMode, mediaEnabled, stickersEnabled, postingPermission, inviteDirectJoinEnabled } = req.body;
+    try {
+      const group = await storage.createGroupFull({
+        name, description: description || "", type: type || "custom",
+        ownerId: userId, iconUrl, categoryTags, privacyMode,
+        mediaEnabled, stickersEnabled, postingPermission, inviteDirectJoinEnabled,
+      });
+      const adjectives = ["Curious", "Dreamy", "Bold", "Gentle", "Witty", "Bright", "Calm", "Warm"];
+      const nouns = ["Phoenix", "River", "Cloud", "Star", "Wave", "Spark", "Moon", "Breeze"];
+      const nickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
+      await storage.joinGroup(group.id, userId, nickname);
+      await storage.updateGroupMemberRole(group.id, userId, "owner");
+      res.status(201).json(group);
+    } catch (e) {
+      console.error("Group create error:", e);
+      res.status(500).json({ message: "Failed to create group" });
+    }
+  });
+
   app.get("/api/groups/:id", async (req, res) => {
     const groupId = parseInt(req.params.id);
+    const userId = getUserId(req);
     try {
       const group = await storage.getGroup(groupId);
       if (!group) return res.status(404).json({ message: "Group not found" });
       const members = await storage.getGroupMembers(groupId);
-      res.json({ ...group, memberCount: members.length, members });
+      const isMember = userId ? members.some(m => m.userId === userId) : false;
+      const myRole = userId ? members.find(m => m.userId === userId)?.role : undefined;
+      res.json({ ...group, memberCount: members.length, members, isMember, myRole });
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch group" });
+    }
+  });
+
+  app.put("/api/groups/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member || (member.role !== "owner" && member.role !== "admin")) {
+        return res.status(403).json({ message: "Only admins can edit group settings" });
+      }
+      const updated = await storage.updateGroup(groupId, req.body);
+      res.json(updated);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to update group" });
+    }
+  });
+
+  app.delete("/api/groups/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member || member.role !== "owner") {
+        return res.status(403).json({ message: "Only owner can delete group" });
+      }
+      await storage.deleteGroup(groupId);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to delete group" });
     }
   });
 
@@ -287,6 +559,19 @@ Stay in character as ${targetProfile.displayName}'s AI Twin. Be warm, engaging, 
     try {
       const isMember = await storage.isGroupMember(groupId, userId);
       if (isMember) return res.status(409).json({ message: "Already a member" });
+
+      const group = await storage.getGroup(groupId);
+      if (!group) return res.status(404).json({ message: "Group not found" });
+
+      if (group.privacyMode === "request-to-join") {
+        const request = await storage.createJoinRequest(groupId, userId);
+        return res.json({ status: "requested", request });
+      }
+
+      if (group.privacyMode === "invite-only") {
+        return res.status(403).json({ message: "This group is invite-only" });
+      }
+
       const adjectives = ["Curious", "Dreamy", "Bold", "Gentle", "Witty", "Bright", "Calm", "Warm"];
       const nouns = ["Phoenix", "River", "Cloud", "Star", "Wave", "Spark", "Moon", "Breeze"];
       const nickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
@@ -294,6 +579,163 @@ Stay in character as ${targetProfile.displayName}'s AI Twin. Be warm, engaging, 
       res.json(member);
     } catch (e) {
       res.status(500).json({ message: "Failed to join group" });
+    }
+  });
+
+  app.get("/api/groups/:id/join-requests", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member || (member.role !== "owner" && member.role !== "admin")) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      const requests = await storage.getJoinRequests(groupId);
+      res.json(requests);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch join requests" });
+    }
+  });
+
+  app.put("/api/groups/:id/join-requests/:requestId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    const requestId = parseInt(req.params.requestId);
+    const { status } = req.body;
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member || (member.role !== "owner" && member.role !== "admin")) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      const processed = await storage.processJoinRequest(requestId, userId, status);
+      if (status === "approved") {
+        const adjectives = ["Curious", "Dreamy", "Bold", "Gentle", "Witty", "Bright", "Calm", "Warm"];
+        const nouns = ["Phoenix", "River", "Cloud", "Star", "Wave", "Spark", "Moon", "Breeze"];
+        const nickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
+        await storage.joinGroup(groupId, processed.userId, nickname);
+      }
+      res.json(processed);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to process join request" });
+    }
+  });
+
+  app.post("/api/groups/:id/invite-link", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member || (member.role !== "owner" && member.role !== "admin")) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      const token = crypto.randomBytes(16).toString("hex");
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const link = await storage.createInviteLink(groupId, userId, token, expiresAt);
+      res.json(link);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to create invite link" });
+    }
+  });
+
+  app.get("/api/groups/:id/invite-links", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const links = await storage.getGroupInviteLinks(groupId);
+      res.json(links);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch invite links" });
+    }
+  });
+
+  app.post("/api/groups/join-by-invite/:token", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const { token } = req.params;
+    try {
+      const link = await storage.getInviteLink(token);
+      if (!link || !link.isActive) return res.status(404).json({ message: "Invalid or expired invite link" });
+      if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
+        return res.status(410).json({ message: "Invite link expired" });
+      }
+      const isMember = await storage.isGroupMember(link.groupId, userId);
+      if (isMember) return res.status(409).json({ message: "Already a member" });
+
+      const adjectives = ["Curious", "Dreamy", "Bold", "Gentle", "Witty", "Bright", "Calm", "Warm"];
+      const nouns = ["Phoenix", "River", "Cloud", "Star", "Wave", "Spark", "Moon", "Breeze"];
+      const nickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
+      const member = await storage.joinGroup(link.groupId, userId, nickname);
+      res.json(member);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to join via invite" });
+    }
+  });
+
+  app.delete("/api/groups/:id/invite-links/:linkId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      await storage.revokeInviteLink(parseInt(req.params.linkId));
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to revoke invite link" });
+    }
+  });
+
+  app.put("/api/groups/:id/members/:memberId/role", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    const { role, targetUserId } = req.body;
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member || member.role !== "owner") {
+        return res.status(403).json({ message: "Only owner can change roles" });
+      }
+      const updated = await storage.updateGroupMemberRole(groupId, targetUserId, role);
+      res.json(updated);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to update role" });
+    }
+  });
+
+  app.delete("/api/groups/:id/members/:targetUserId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    const { targetUserId } = req.params;
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member || (member.role !== "owner" && member.role !== "admin")) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      await storage.removeGroupMember(groupId, targetUserId);
+      await storage.createModerationLog({ groupId, userId: targetUserId, action: "removed", moderatedBy: userId });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to remove member" });
+    }
+  });
+
+  app.delete("/api/groups/:id/messages/:messageId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    const messageId = parseInt(req.params.messageId);
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member || (member.role !== "owner" && member.role !== "admin")) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      const deleted = await storage.deleteGroupMessage(messageId);
+      await storage.createModerationLog({ groupId, messageId, userId: deleted.userId, action: "message_deleted", moderatedBy: userId });
+      res.json(deleted);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to delete message" });
     }
   });
 
@@ -316,10 +758,50 @@ Stay in character as ${targetProfile.displayName}'s AI Twin. Be warm, engaging, 
       const members = await storage.getGroupMembers(groupId);
       const member = members.find(m => m.userId === userId);
       if (!member) return res.status(403).json({ message: "Must join group first" });
+
+      const group = await storage.getGroup(groupId);
+      if (group?.postingPermission === "admins_only" && member.role === "member") {
+        return res.status(403).json({ message: "Only admins can post in this group" });
+      }
+
       const msg = await storage.sendGroupMessage(groupId, userId, member.nickname || "Anonymous", content);
       res.status(201).json(msg);
     } catch (e) {
       res.status(500).json({ message: "Failed to send message" });
+    }
+  });
+
+  app.post("/api/groups/:id/leave", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      await storage.removeGroupMember(groupId, userId);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to leave group" });
+    }
+  });
+
+  app.get("/api/subscription", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const sub = await storage.getSubscription(userId);
+      res.json(sub || { tier: "free", status: "active" });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch subscription" });
+    }
+  });
+
+  app.get("/api/entitlements", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const ents = await storage.getEntitlements(userId);
+      res.json(ents);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch entitlements" });
     }
   });
 
