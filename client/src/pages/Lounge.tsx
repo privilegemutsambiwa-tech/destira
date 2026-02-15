@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { AvatarStack } from "@/components/avatar-stack";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription
 } from "@/components/ui/dialog";
@@ -53,13 +54,13 @@ export default function Lounge() {
   return (
     <LayoutShell>
       <div className="text-center mb-8">
-        <h1 className="text-4xl font-display font-bold mb-4" data-testid="text-lounge-title">Serendipity Lounge</h1>
-        <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-          Connect organically in interest-based groups. Chat with anonymous nicknames and discover unexpected connections.
+        <h1 className="font-display font-bold mb-2" data-testid="text-lounge-title">Serendipity Lounge</h1>
+        <p className="text-sm text-muted-foreground max-w-xl mx-auto">
+          Connect organically in interest-based groups. Chat anonymously and discover unexpected connections.
         </p>
       </div>
 
-      <div className="flex items-center gap-3 mb-8 flex-wrap">
+      <div className="flex items-center gap-3 mb-6 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -72,7 +73,7 @@ export default function Lounge() {
         </div>
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
-            <Button data-testid="button-create-group">
+            <Button className="btn-press" data-testid="button-create-group">
               <Plus className="w-4 h-4 mr-2" />
               Create Group
             </Button>
@@ -87,43 +88,59 @@ export default function Lounge() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {groups?.map((group: any) => {
+          {groups?.map((group: any, idx: number) => {
             const Icon = GROUP_ICONS[group.name] || Users;
             const privacy = PRIVACY_LABELS[group.privacyMode] || PRIVACY_LABELS["open"];
             const PrivacyIcon = privacy.icon;
             return (
-              <Card
+              <motion.div
                 key={group.id}
-                className="cursor-pointer hover-elevate"
-                onClick={() => setActiveGroupId(group.id)}
-                data-testid={`card-group-${group.id}`}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.05 }}
               >
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="w-10 h-10 bg-primary/10 rounded-md flex items-center justify-center text-primary">
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">
+                <Card
+                  className="cursor-pointer card-lift hover-elevate"
+                  onClick={() => setActiveGroupId(group.id)}
+                  data-testid={`card-group-${group.id}`}
+                >
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="w-10 h-10 rounded-md gradient-bg flex items-center justify-center text-white shrink-0">
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <Badge variant="secondary" className="shrink-0">
                         <PrivacyIcon className="w-3 h-3 mr-1" />
                         {privacy.label}
                       </Badge>
                     </div>
-                  </div>
-                  <h3 className="font-bold mb-1">{group.name}</h3>
-                  <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{group.description}</p>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted-foreground">{group.memberCount} members</span>
-                    {group.isMember && (
-                      <Badge variant="outline">
-                        {group.myRole === "owner" ? <Crown className="w-3 h-3 mr-1" /> : null}
-                        {group.myRole === "admin" ? <Shield className="w-3 h-3 mr-1" /> : null}
-                        Joined
-                      </Badge>
+                    <h3 className="font-bold mb-1">{group.name}</h3>
+                    <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{group.description}</p>
+
+                    {group.categoryTag && (
+                      <Badge variant="outline" className="mb-3 text-xs">{group.categoryTag}</Badge>
                     )}
-                  </div>
-                </CardContent>
-              </Card>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <AvatarStack members={group.members || []} max={4} />
+                        <span className="text-xs text-muted-foreground">{group.memberCount} members</span>
+                      </div>
+                      {group.isMember ? (
+                        <Badge variant="outline" className="shrink-0">
+                          {group.myRole === "owner" ? <Crown className="w-3 h-3 mr-1" /> : null}
+                          {group.myRole === "admin" ? <Shield className="w-3 h-3 mr-1" /> : null}
+                          Joined
+                        </Badge>
+                      ) : (
+                        <Badge className="gradient-bg text-white border-0 shrink-0">
+                          {group.privacyMode === "request-to-join" ? "Request" : "Join"}
+                        </Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
             );
           })}
           {groups?.length === 0 && (
@@ -196,7 +213,7 @@ function CreateGroupDialog({ onClose }: { onClose: () => void }) {
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button onClick={handleCreate} disabled={!name.trim() || createGroup.isPending} data-testid="button-submit-group">
+        <Button onClick={handleCreate} disabled={!name.trim() || createGroup.isPending} className="btn-press" data-testid="button-submit-group">
           {createGroup.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
           Create Group
         </Button>
@@ -352,7 +369,7 @@ function GroupChat({ groupId, onBack }: { groupId: number; onBack: () => void })
       <div className="p-4 border-t bg-background">
         {!isMember ? (
           <Button
-            className="w-full"
+            className="w-full btn-press"
             onClick={handleJoin}
             disabled={joinGroup.isPending}
             data-testid="button-join-group"
@@ -376,6 +393,7 @@ function GroupChat({ groupId, onBack }: { groupId: number; onBack: () => void })
               type="submit"
               size="icon"
               disabled={!input.trim() || sendMessage.isPending}
+              className="btn-press"
               data-testid="button-send-group"
             >
               <Send className="w-4 h-4" />
@@ -489,7 +507,7 @@ function GroupSettings({ group, onBack, onLeave }: { group: any; onBack: () => v
                   </Button>
                 </div>
               ) : (
-                <Button onClick={handleCreateInvite} disabled={createInvite.isPending} data-testid="button-create-invite">
+                <Button onClick={handleCreateInvite} disabled={createInvite.isPending} className="btn-press" data-testid="button-create-invite">
                   <Link2 className="w-4 h-4 mr-2" />
                   Generate Invite Link
                 </Button>
@@ -506,7 +524,7 @@ function GroupSettings({ group, onBack, onLeave }: { group: any; onBack: () => v
             {group.members?.map((member: any) => (
               <div key={member.id} className="flex items-center justify-between gap-2 py-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                  <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-xs font-bold text-accent-foreground">
                     {member.nickname?.[0] || "?"}
                   </div>
                   <div className="min-w-0">
@@ -542,12 +560,12 @@ function GroupSettings({ group, onBack, onLeave }: { group: any; onBack: () => v
         </Card>
 
         <div className="space-y-3">
-          <Button variant="outline" className="w-full" onClick={onLeave} data-testid="button-leave-group">
+          <Button variant="outline" className="w-full btn-press" onClick={onLeave} data-testid="button-leave-group">
             <LogOut className="w-4 h-4 mr-2" />
             Leave Group
           </Button>
           {isOwner && (
-            <Button variant="destructive" className="w-full" onClick={handleDeleteGroup} data-testid="button-delete-group">
+            <Button variant="destructive" className="w-full btn-press" onClick={handleDeleteGroup} data-testid="button-delete-group">
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Group
             </Button>

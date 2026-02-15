@@ -23,9 +23,9 @@ export default function Interviews() {
         <div className="grid gap-4">
           {interviews.map((interview: any) => (
             <Link key={interview.id} href={`/interviews/${interview.id}/chat`}>
-              <div className="bg-white p-6 rounded-2xl border border-purple-100 shadow-sm cursor-pointer flex items-center justify-between gap-4 group" data-testid={`card-interview-${interview.id}`}>
+              <div className="bg-card p-6 rounded-md border shadow-sm cursor-pointer flex items-center justify-between gap-4 group card-lift" data-testid={`card-interview-${interview.id}`}>
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center text-primary">
+                  <div className="w-12 h-12 rounded-md gradient-bg flex items-center justify-center text-white">
                     <Brain className="w-6 h-6" />
                   </div>
                   <div>
@@ -46,15 +46,15 @@ export default function Interviews() {
           ))}
         </div>
       ) : (
-        <div className="text-center py-20 px-6 bg-white rounded-3xl border border-dashed border-purple-200">
-          <div className="w-20 h-20 bg-purple-50 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Search className="w-10 h-10 text-purple-300" />
+        <div className="text-center py-20 px-6 bg-card rounded-md border border-dashed">
+          <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
+            <Search className="w-10 h-10 text-muted-foreground" />
           </div>
           <h3 className="text-2xl font-bold font-display mb-2">No active interviews</h3>
           <p className="text-muted-foreground max-w-md mx-auto mb-8">
             Go to Discover to find interesting people and interview their AI Twins before connecting.
           </p>
-          <Button size="lg" onClick={() => setLocation("/discover")} className="rounded-full" data-testid="button-go-discover">
+          <Button size="lg" onClick={() => setLocation("/discover")} className="rounded-full btn-press" data-testid="button-go-discover">
             Discover People
           </Button>
         </div>

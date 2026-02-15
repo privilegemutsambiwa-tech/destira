@@ -119,14 +119,14 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-white">
-      <div className="bg-white border-b border-purple-100 px-4 py-3 flex items-center justify-between gap-2 sticky top-0 z-10">
+    <div className="h-screen flex flex-col bg-background">
+      <div className="bg-card border-b px-4 py-3 flex items-center justify-between gap-2 sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => setLocation("/interviews")} data-testid="button-back">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white">
+            <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white">
               <Brain className="w-5 h-5" />
             </div>
             <div>
@@ -151,7 +151,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/50">
         {messages.map((msg) => (
           <motion.div
             key={msg.id}
@@ -160,10 +160,10 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
             className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div className={`
-              max-w-[80%] rounded-2xl px-5 py-3 shadow-sm text-sm leading-relaxed
+              max-w-[80%] rounded-md px-5 py-3 shadow-sm text-sm leading-relaxed
               ${msg.sender === 'user'
-                ? 'bg-primary text-white rounded-tr-none'
-                : 'bg-white border border-purple-100 text-gray-800 rounded-tl-none'
+                ? 'bg-primary text-primary-foreground rounded-tr-none'
+                : 'bg-card border text-card-foreground rounded-tl-none'
               }
             `} data-testid={`message-${msg.sender}-${msg.id}`}>
               {msg.text}
@@ -172,17 +172,17 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
         ))}
         {chatMutation.isPending && (
           <div className="flex justify-start">
-            <div className="bg-white border border-purple-100 px-4 py-3 rounded-2xl rounded-tl-none shadow-sm flex gap-1">
-              <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" />
-              <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce [animation-delay:75ms]" />
-              <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce [animation-delay:150ms]" />
+            <div className="bg-card border px-4 py-3 rounded-md rounded-tl-none shadow-sm flex gap-1">
+              <span className="w-2 h-2 bg-primary rounded-full animate-bounce" />
+              <span className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:75ms]" />
+              <span className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:150ms]" />
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 bg-white border-t border-purple-100">
+      <div className="p-4 bg-background border-t">
         <form
           className="flex gap-2 max-w-4xl mx-auto"
           onSubmit={(e) => { e.preventDefault(); handleSend(); }}
@@ -191,14 +191,14 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={`Ask about ${targetName}'s values...`}
-            className="flex-1 rounded-full border-purple-200 focus-visible:ring-primary h-12 px-6"
+            className="flex-1 rounded-full h-12 px-6"
             data-testid="input-message"
           />
           <Button
             type="submit"
             size="icon"
             disabled={!input.trim() || chatMutation.isPending}
-            className="h-12 w-12 rounded-full bg-primary shadow-md"
+            className="h-12 w-12 rounded-full bg-primary shadow-md btn-press"
             data-testid="button-send"
           >
             <Send className="w-5 h-5" />

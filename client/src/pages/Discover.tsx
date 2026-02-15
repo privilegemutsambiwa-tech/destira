@@ -1,11 +1,60 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { Button } from "@/components/ui/button";
+import { CompatibilityRing } from "@/components/compatibility-ring";
 import { Brain, X, Loader2, MapPin, Heart } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch } from "@/hooks/use-interactions";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
+import heroCoupleImg1 from "@assets/images/hero-couple_1.jpg";
+import heroCoupleImg2 from "@assets/images/hero-couple_2.jpg";
+import heroCoupleImg3 from "@assets/images/hero-couple_3.jpg";
+
+
+const HERO_IMAGES = [heroCoupleImg1, heroCoupleImg2, heroCoupleImg3];
+
+function HeroBanner({ onStartMatching, onInterviewTwin }: { onStartMatching: () => void; onInterviewTwin: () => void }) {
+  const heroImg = useMemo(() => HERO_IMAGES[Math.floor(Math.random() * HERO_IMAGES.length)], []);
+
+  return (
+    <div className="relative rounded-md overflow-hidden mb-8" data-testid="hero-banner">
+      <img
+        src={heroImg}
+        alt="Couple connecting"
+        className="w-full h-64 md:h-80 object-cover"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20" />
+      <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-8">
+        <h2 className="text-white text-2xl md:text-3xl font-display font-bold mb-2">
+          Find your perfect vibe
+        </h2>
+        <p className="text-white/80 text-sm md:text-base mb-5 max-w-lg">
+          Discover people who resonate with your personality. Interview their AI Twin before you connect.
+        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button
+            onClick={onStartMatching}
+            className="gradient-bg text-white btn-press rounded-full px-6"
+            data-testid="button-hero-match"
+          >
+            <Heart className="w-4 h-4 mr-2" />
+            Start Matching
+          </Button>
+          <Button
+            variant="outline"
+            onClick={onInterviewTwin}
+            className="text-white border-white/30 bg-white/10 backdrop-blur-sm btn-press rounded-full px-6"
+            data-testid="button-hero-interview"
+          >
+            <Brain className="w-4 h-4 mr-2" />
+            Interview AI Twin
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Discover() {
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -28,11 +77,12 @@ export default function Discover() {
   if (!profiles || profiles.length === 0) {
     return (
       <LayoutShell>
-        <div className="text-center py-20 px-6 bg-white rounded-3xl border border-dashed border-purple-200">
-          <div className="w-20 h-20 bg-purple-50 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Brain className="w-10 h-10 text-purple-300" />
+        <HeroBanner onStartMatching={() => {}} onInterviewTwin={() => {}} />
+        <div className="text-center py-20 px-6 bg-card rounded-md border border-dashed">
+          <div className="w-20 h-20 bg-accent rounded-full flex items-center justify-center mx-auto mb-6">
+            <Brain className="w-10 h-10 text-accent-foreground/50" />
           </div>
-          <h3 className="text-2xl font-bold font-display mb-2">No one to discover yet</h3>
+          <h3 className="text-2xl font-display font-bold mb-2">No one to discover yet</h3>
           <p className="text-muted-foreground max-w-md mx-auto">
             Complete your onboarding first, then check back as more people join VibeFlow.
           </p>
@@ -85,26 +135,28 @@ export default function Discover() {
   return (
     <LayoutShell>
       <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-display font-bold" data-testid="text-discover-title">Discover</h1>
-          <p className="text-muted-foreground">Find people who resonate with your vibe.</p>
-        </div>
+        <HeroBanner onStartMatching={handleMatchRequest} onInterviewTwin={handleInterview} />
 
         <AnimatePresence mode="wait">
           <motion.div
             key={currentIdx}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.3 }}
-            className="relative bg-white rounded-[2.5rem] overflow-hidden shadow-2xl border border-purple-100 flex flex-col"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.25 }}
+            className="relative bg-card rounded-md overflow-hidden shadow-lg dark:shadow-none border flex flex-col card-lift"
           >
-            <div className="h-64 bg-gradient-to-br from-purple-100 to-pink-100 relative">
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-8xl font-display font-bold text-primary/20">
-                  {currentProfile.displayName?.[0] || "?"}
-                </span>
-              </div>
+            <div className="h-56 md:h-64 bg-gradient-to-br from-primary/20 to-secondary/20 relative">
+              {currentProfile.coverPhotoUrl && (
+                <img src={currentProfile.coverPhotoUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              )}
+              {!currentProfile.coverPhotoUrl && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-8xl font-display font-bold text-primary/10">
+                    {currentProfile.displayName?.[0] || "?"}
+                  </span>
+                </div>
+              )}
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 pt-16 text-white">
                 <h2 className="text-3xl font-display font-bold mb-1" data-testid="text-profile-name">
                   {currentProfile.displayName}{currentProfile.age ? `, ${currentProfile.age}` : ""}
@@ -116,23 +168,25 @@ export default function Discover() {
                       {currentProfile.location}
                     </div>
                   )}
-                  <div className="inline-block bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-sm font-medium border border-white/20" data-testid="text-match-score">
-                    {matchScore}% Compatibility
-                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 flex flex-col gap-4 bg-white">
-              <div>
-                <h3 className="font-bold text-gray-900 mb-2">About</h3>
-                <p className="text-gray-600 leading-relaxed" data-testid="text-profile-bio">{currentProfile.bio}</p>
+            <div className="p-6 flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <h3 className="font-bold mb-2">About</h3>
+                  <p className="text-muted-foreground leading-relaxed text-sm" data-testid="text-profile-bio">{currentProfile.bio}</p>
+                </div>
+                <div className="shrink-0" data-testid="text-match-score">
+                  <CompatibilityRing percentage={matchScore} size={64} />
+                </div>
               </div>
 
               {currentProfile.personalityProfile && typeof currentProfile.personalityProfile === 'object' && (
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(currentProfile.personalityProfile as Record<string, number>).slice(0, 3).map(([trait, score]) => (
-                    <span key={trait} className="text-xs px-3 py-1 rounded-full bg-purple-50 text-purple-700 font-medium capitalize">
+                    <span key={trait} className="text-xs px-3 py-1 rounded-full bg-accent text-accent-foreground font-medium capitalize">
                       {trait}: {score}%
                     </span>
                   ))}
@@ -144,7 +198,7 @@ export default function Discover() {
                   variant="outline"
                   size="lg"
                   onClick={handleNext}
-                  className="h-14 rounded-2xl border-2 px-6"
+                  className="rounded-md btn-press"
                   data-testid="button-skip"
                 >
                   <X className="w-5 h-5" />
@@ -154,7 +208,7 @@ export default function Discover() {
                   size="lg"
                   onClick={handleInterview}
                   disabled={startInterview.isPending}
-                  className="flex-1 h-14 rounded-2xl bg-gradient-to-r from-primary to-secondary text-lg font-semibold"
+                  className="flex-1 gradient-bg text-white text-lg font-semibold rounded-md btn-press"
                   data-testid="button-interview"
                 >
                   <Brain className="w-5 h-5 mr-2" />
@@ -166,7 +220,7 @@ export default function Discover() {
                   variant="outline"
                   onClick={handleMatchRequest}
                   disabled={createMatch.isPending}
-                  className="h-14 rounded-2xl border-2 border-pink-200 text-pink-600 px-6"
+                  className="rounded-md btn-press border-secondary/30 text-secondary"
                   data-testid="button-match-request"
                 >
                   <Heart className="w-5 h-5" />

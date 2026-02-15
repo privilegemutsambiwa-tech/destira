@@ -95,7 +95,28 @@ shared/
 - 5 demo users with complete profiles and AI Twin personas are seeded on startup
 - 5 interest-based groups are created automatically
 
+## Design System: "Romantic Modern"
+- Semantic CSS tokens: `gradient-bg`, `bg-accent`, `bg-card`, `bg-muted`, `text-foreground`, `text-muted-foreground`
+- Micro-interactions: `btn-press` (button scale on active), `card-lift` (hover elevation), `hover-elevate`
+- CompatibilityRing: animated SVG component with gradient fill
+- AvatarStack: stacked member avatars (max 4 + overflow indicator)
+- Hero images stored in `attached_assets/images/`, served via `@assets` alias
+- Dark mode support via semantic tokens (no hardcoded colors)
+- Border radius: `rounded-md` consistently (not rounded-3xl/2xl)
+
+## Image Upload Pipeline
+- Multer-based upload: POST /api/uploads/image (5MB limit, JPEG/PNG/WebP/GIF)
+- Files stored in `/uploads` directory (local filesystem)
+- Static serving via Express: `/uploads/*`
+- PhotoManagementDialog: upload/delete/set-cover, up to 6 photos
+- Privacy: GET /api/photos/:userId requires auth; private profiles return empty array for other users
+
 ## Recent Changes (Feb 2026)
+- "Romantic Modern" design system with semantic color tokens and micro-interactions
+- Hero banner on Landing page with stock images and gradient overlay
+- Redesigned Lounge cards with AvatarStack, category tags, privacy badges
+- Complete image upload pipeline with multer backend and PhotoManagementDialog
+- Photo privacy: auth-gated photo access, private profiles hide photos
 - Full Stripe billing integration with real checkout flow
 - WhatsApp-like group features (admin roles, privacy modes, invite links, join requests, moderation)
 - Profile photo management with public/private toggle

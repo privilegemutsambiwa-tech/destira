@@ -8,33 +8,70 @@
   --font-sans: 'DM Sans', sans-serif;
   --font-display: 'Outfit', sans-serif;
 
-  /* Premium Dating App Palette - Deep Purple & Vibrant Coral/Pink */
+  /* Romantic Modern Design System */
   --background: 260 30% 98%;
-  --foreground: 260 40% 10%;
-  
-  --primary: 262 83% 58%; /* Vibrant Purple */
+  --foreground: 0 0% 10%;
+
+  --primary: 269 83% 56%;
   --primary-foreground: 0 0% 100%;
-  
-  --secondary: 320 80% 60%; /* Warm Pink/Coral Accent */
+
+  --secondary: 325 90% 52%;
   --secondary-foreground: 0 0% 100%;
-  
-  --muted: 260 20% 96%;
-  --muted-foreground: 260 10% 45%;
-  
-  --accent: 280 60% 95%;
-  --accent-foreground: 262 83% 58%;
-  
+
+  --muted: 260 20% 95%;
+  --muted-foreground: 0 0% 42%;
+
+  --accent: 280 50% 95%;
+  --accent-foreground: 269 83% 56%;
+
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 260 20% 90%;
-  --input: 260 20% 90%;
-  --ring: 262 83% 58%;
-  
+  --border: 0 0% 92%;
+  --input: 0 0% 92%;
+  --ring: 269 83% 56%;
+
   --card: 0 0% 100%;
-  --card-foreground: 260 40% 10%;
-  
+  --card-foreground: 0 0% 10%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 10%;
+
   --radius: 1rem;
+
+  --gradient-primary: linear-gradient(135deg, hsl(269 83% 56%), hsl(325 90% 52%));
+  --accent-spark: 350 80% 60%;
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.dark {
+  --background: 260 20% 8%;
+  --foreground: 0 0% 92%;
+
+  --primary: 269 83% 62%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 325 80% 58%;
+  --secondary-foreground: 0 0% 100%;
+
+  --muted: 260 15% 16%;
+  --muted-foreground: 0 0% 60%;
+
+  --accent: 269 30% 18%;
+  --accent-foreground: 269 70% 75%;
+
+  --destructive: 0 70% 50%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 260 15% 20%;
+  --input: 260 15% 20%;
+  --ring: 269 83% 62%;
+
+  --card: 260 15% 12%;
+  --card-foreground: 0 0% 92%;
+
+  --popover: 260 15% 12%;
+  --popover-foreground: 0 0% 92%;
 }
 
 @layer base {
@@ -47,23 +84,58 @@
     font-family: var(--font-display);
     @apply font-bold tracking-tight text-foreground;
   }
+
+  h1 { @apply text-[30px] leading-tight; }
+  h2 { @apply text-[22px] leading-snug; }
+  h3 { @apply text-lg; }
+
+  * {
+    @apply border-border;
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
-  
+
   .glass-panel {
-    @apply bg-white/70 backdrop-blur-lg border border-white/20 shadow-xl;
+    @apply bg-white/70 dark:bg-white/10 backdrop-blur-lg border border-white/20 shadow-xl;
   }
 
   .gradient-text {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-primary via-secondary to-primary bg-[length:200%_auto] animate-gradient;
   }
-  
+
   .animate-gradient {
     animation: gradient 8s linear infinite;
+  }
+
+  .gradient-bg {
+    background: var(--gradient-primary);
+  }
+
+  .btn-press {
+    transition: transform 150ms ease-out;
+  }
+  .btn-press:active {
+    transform: scale(0.96);
+  }
+
+  .card-lift {
+    transition: transform 250ms ease, box-shadow 250ms ease;
+  }
+  .card-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+  }
+
+  .fade-slide-in {
+    animation: fadeSlideIn 250ms ease-out forwards;
+  }
+
+  .pulse-glow {
+    animation: pulseGlow 2s ease-in-out infinite;
   }
 }
 
@@ -71,4 +143,43 @@
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsla(269, 83%, 56%, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 12px hsla(269, 83%, 56%, 0);
+  }
+}
+
+@keyframes ringFill {
+  from { stroke-dashoffset: var(--ring-circumference); }
+  to { stroke-dashoffset: var(--ring-offset); }
+}
+
+.ring-animate {
+  animation: ringFill 1.5s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-press:active { transform: none; }
+  .card-lift:hover { transform: none; }
+  .fade-slide-in { animation: none; opacity: 1; transform: none; }
+  .pulse-glow { animation: none; }
+  .ring-animate { animation: none; }
+  .animate-gradient { animation: none; }
+  .gradient-text { animation: none; }
 }

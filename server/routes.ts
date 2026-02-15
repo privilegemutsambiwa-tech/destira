@@ -8,6 +8,34 @@ import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClie
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import crypto from "crypto";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+
+const UPLOAD_DIR = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+    filename: (_req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const ext = path.extname(file.originalname) || ".jpg";
+      cb(null, `${uniqueSuffix}${ext}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only JPEG, PNG, WebP, and GIF images are allowed"));
+    }
+  },
+});
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -136,9 +164,28 @@ export async function registerRoutes(
     res.json(profile);
   });
 
+  app.use("/uploads", (await import("express")).default.static(UPLOAD_DIR));
+
+  app.post("/api/uploads/image", upload.single("image"), (req: any, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    if (!req.file) return res.status(400).json({ message: "No image file provided" });
+    const url = `/uploads/${req.file.filename}`;
+    res.json({ url, filename: req.file.filename });
+  });
+
   app.get("/api/photos/:userId", async (req, res) => {
+    const currentUserId = getUserId(req);
+    if (!currentUserId) return res.sendStatus(401);
     try {
-      const photos = await storage.getUserPhotos(req.params.userId);
+      const targetUserId = req.params.userId;
+      if (targetUserId !== currentUserId) {
+        const profile = await storage.getProfile(targetUserId);
+        if (profile && !profile.isPublic) {
+          return res.json([]);
+        }
+      }
+      const photos = await storage.getUserPhotos(targetUserId);
       res.json(photos);
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch photos" });

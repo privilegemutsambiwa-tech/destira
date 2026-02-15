@@ -130,6 +130,7 @@ export default function TwinChat() {
             type="submit"
             size="icon"
             disabled={!input.trim() || twinChat.isPending}
+            className="btn-press"
             data-testid="button-send-twin"
           >
             <Send className="w-4 h-4" />

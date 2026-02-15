@@ -1,22 +1,23 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useSubscription, useGenerateSummary } from "@/hooks/use-interactions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "@/components/ui/dialog";
 import {
-  Loader2, Brain, Sparkles, MapPin, Shield, Eye, EyeOff,
-  Camera, Crown, Wand2, MessageCircle
+  Loader2, Sparkles, MapPin, Shield, Eye, EyeOff,
+  Camera, Crown, Wand2, MessageCircle, Trash2, ImagePlus
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 
 export default function Profile() {
   const { data: profile, isLoading } = useProfile();
@@ -27,7 +28,11 @@ export default function Profile() {
   const updateProfile = useUpdateProfile();
   const generateSummary = useGenerateSummary();
   const [showPhotoDialog, setShowPhotoDialog] = useState(false);
-  const [photoUrl, setPhotoUrl] = useState("");
+
+  const { data: photos } = useQuery<any[]>({
+    queryKey: ["/api/photos", user?.id],
+    enabled: !!user?.id,
+  });
 
   if (isLoading) {
     return (
@@ -45,7 +50,7 @@ export default function Profile() {
         <div className="text-center mt-20">
           <h2 className="text-2xl font-bold">Welcome to VibeFlow!</h2>
           <p className="text-muted-foreground mt-2 mb-6">Complete your Soul-Mapping to get started.</p>
-          <Button size="lg" onClick={() => setLocation("/onboarding")} data-testid="button-start-onboarding">
+          <Button size="lg" onClick={() => setLocation("/onboarding")} className="btn-press" data-testid="button-start-onboarding">
             Start Soul-Mapping
           </Button>
         </div>
@@ -78,35 +83,12 @@ export default function Profile() {
     }
   };
 
-  const handleAddPhoto = async () => {
-    if (!photoUrl.trim()) return;
-    try {
-      await fetch("/api/photos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photoUrl, orderIndex: 0, isMainProfilePhoto: !profile.coverPhotoUrl }),
-        credentials: "include",
-      });
-      if (!profile.coverPhotoUrl) {
-        await updateProfile.mutateAsync({
-          userId: user!.id,
-          data: { coverPhotoUrl: photoUrl },
-        });
-      }
-      toast({ title: "Photo added!" });
-      setPhotoUrl("");
-      setShowPhotoDialog(false);
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to add photo.", variant: "destructive" });
-    }
-  };
-
   const tierLabel = subscription?.tier === "vip" ? "VIP" : subscription?.tier === "plus" ? "Plus" : "Free";
 
   return (
     <LayoutShell>
       <div className="relative">
-        <div className="h-48 md:h-64 rounded-md bg-gradient-to-r from-primary to-primary/60 p-8 flex items-end relative overflow-hidden">
+        <div className="h-48 md:h-64 rounded-md bg-gradient-to-r from-primary/80 to-secondary/80 relative overflow-hidden">
           {profile.coverPhotoUrl && (
             <>
               <img src={profile.coverPhotoUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
@@ -116,51 +98,55 @@ export default function Profile() {
           <Button
             variant="outline"
             size="sm"
-            className="absolute top-4 right-4 bg-background/80 backdrop-blur"
+            className="absolute top-4 right-4 bg-background/80 backdrop-blur btn-press"
             onClick={() => setShowPhotoDialog(true)}
             data-testid="button-add-photo"
           >
             <Camera className="w-4 h-4 mr-1" />
-            Photo
+            Photos
           </Button>
 
-          <div className="relative z-10 flex items-end gap-4 translate-y-12 px-2">
-            <div className="w-28 h-28 md:w-36 md:h-36 rounded-md bg-background border-4 border-background flex items-center justify-center overflow-hidden">
-              {profile.cartoonPhotoUrl ? (
-                <img src={profile.cartoonPhotoUrl} alt="avatar" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-4xl md:text-6xl font-bold text-primary/20">
-                  {profile.displayName?.[0] || user?.firstName?.[0] || "?"}
-                </span>
-              )}
-            </div>
-            <div className="pb-4 md:pb-6">
-              <h1 className="text-3xl md:text-4xl font-display font-bold text-white mb-1" data-testid="text-display-name">
-                {profile.displayName || user?.firstName}
-              </h1>
-              <div className="flex items-center gap-3 flex-wrap">
-                {profile.location && (
-                  <div className="flex items-center gap-1 text-white/90 text-sm">
-                    <MapPin className="w-3.5 h-3.5" />
-                    <span>{profile.location}</span>
-                  </div>
+          <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+            <div className="flex items-end gap-4">
+              <div className="w-24 h-24 md:w-32 md:h-32 rounded-md bg-background border-4 border-background flex items-center justify-center overflow-hidden shrink-0">
+                {(!profile.isPublic && profile.cartoonPhotoUrl) ? (
+                  <img src={profile.cartoonPhotoUrl} alt="avatar" className="w-full h-full object-cover" />
+                ) : profile.coverPhotoUrl ? (
+                  <img src={profile.coverPhotoUrl} alt="avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-4xl md:text-5xl font-bold text-primary/20">
+                    {profile.displayName?.[0] || user?.firstName?.[0] || "?"}
+                  </span>
                 )}
-                <Badge variant="secondary" className="text-xs">
-                  <Crown className="w-3 h-3 mr-1" />
-                  {tierLabel}
-                </Badge>
+              </div>
+              <div className="pb-2">
+                <h1 className="text-2xl md:text-3xl font-display font-bold mb-1" data-testid="text-display-name">
+                  {profile.displayName || user?.firstName}
+                </h1>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {profile.location && (
+                    <div className="flex items-center gap-1 text-white/90 text-sm">
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span>{profile.location}</span>
+                    </div>
+                  )}
+                  <Badge variant="secondary" className="text-xs">
+                    <Crown className="w-3 h-3 mr-1" />
+                    {tierLabel}
+                  </Badge>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-20 grid lg:grid-cols-3 gap-6">
+        <div className="mt-8 grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-2">
                 <CardTitle className="text-base">About Me</CardTitle>
                 {!profile.aboutSummary && (
-                  <Button variant="ghost" size="sm" onClick={handleGenerateSummary} disabled={generateSummary.isPending} data-testid="button-generate-summary">
+                  <Button variant="ghost" size="sm" onClick={handleGenerateSummary} disabled={generateSummary.isPending} className="btn-press" data-testid="button-generate-summary">
                     {generateSummary.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Wand2 className="w-3 h-3 mr-1" />}
                     AI Summary
                   </Button>
@@ -183,10 +169,27 @@ export default function Profile() {
               </CardContent>
             </Card>
 
+            {photos && photos.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">My Photos</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-3 gap-3">
+                    {photos.map((photo: any) => (
+                      <div key={photo.id} className="aspect-square rounded-md overflow-hidden bg-muted" data-testid={`photo-${photo.id}`}>
+                        <img src={photo.photoUrl} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {personalityTraits.length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Personality Traits (VPP)</CardTitle>
+                  <CardTitle className="text-base">Personality Traits</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
@@ -211,7 +214,7 @@ export default function Profile() {
                     <div>
                       <p className="text-sm font-medium">{profile.isPublic ? "Public Profile" : "Private Profile"}</p>
                       <p className="text-xs text-muted-foreground">
-                        {profile.isPublic ? "Others can see your real profile" : "Others see your AI cartoon avatar"}
+                        {profile.isPublic ? "Others can see your real photos" : "Others see your AI cartoon avatar instead"}
                       </p>
                     </div>
                   </div>
@@ -226,11 +229,11 @@ export default function Profile() {
           </div>
 
           <div className="lg:col-span-1 space-y-6">
-            <Card className="bg-card">
+            <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-primary/10 rounded-md">
-                    <Sparkles className="w-5 h-5 text-primary" />
+                  <div className="p-1.5 gradient-bg rounded-md">
+                    <Sparkles className="w-5 h-5 text-white" />
                   </div>
                   <CardTitle className="text-base">AI Twin</CardTitle>
                 </div>
@@ -242,7 +245,7 @@ export default function Profile() {
                     <span>{profile.onboardingCompleted ? "Active" : "Not Started"}</span>
                   </div>
                   <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div className={`h-full bg-primary rounded-full transition-all ${profile.onboardingCompleted ? 'w-full' : 'w-0'}`} />
+                    <div className={`h-full rounded-full transition-all gradient-bg ${profile.onboardingCompleted ? 'w-full' : 'w-0'}`} />
                   </div>
                 </div>
 
@@ -263,7 +266,7 @@ export default function Profile() {
 
                 {profile.onboardingCompleted && (
                   <Button
-                    className="w-full"
+                    className="w-full btn-press"
                     variant="outline"
                     onClick={() => setLocation("/twin-chat")}
                     data-testid="button-chat-twin"
@@ -293,7 +296,7 @@ export default function Profile() {
                   <span className="text-xs text-muted-foreground">{subscription?.status || "active"}</span>
                 </div>
                 {tierLabel === "Free" && (
-                  <Button className="w-full" variant="outline" onClick={() => setLocation("/billing")} data-testid="button-upgrade">
+                  <Button className="w-full btn-press" variant="outline" onClick={() => setLocation("/billing")} data-testid="button-upgrade">
                     Upgrade Plan
                   </Button>
                 )}
@@ -303,26 +306,171 @@ export default function Profile() {
         </div>
       </div>
 
-      <Dialog open={showPhotoDialog} onOpenChange={setShowPhotoDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Profile Photo</DialogTitle>
-            <DialogDescription>Enter a URL for your profile or cover photo.</DialogDescription>
-          </DialogHeader>
-          <Input
-            value={photoUrl}
-            onChange={(e) => setPhotoUrl(e.target.value)}
-            placeholder="https://example.com/photo.jpg"
-            data-testid="input-photo-url"
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPhotoDialog(false)}>Cancel</Button>
-            <Button onClick={handleAddPhoto} disabled={!photoUrl.trim()} data-testid="button-submit-photo">
-              Add Photo
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PhotoManagementDialog
+        open={showPhotoDialog}
+        onOpenChange={setShowPhotoDialog}
+        photos={photos || []}
+        profile={profile}
+        userId={user?.id || ""}
+      />
     </LayoutShell>
+  );
+}
+
+function PhotoManagementDialog({
+  open,
+  onOpenChange,
+  photos,
+  profile,
+  userId,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  photos: any[];
+  profile: any;
+  userId: string;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const { toast } = useToast();
+  const updateProfile = useUpdateProfile();
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Maximum size is 5MB.", variant: "destructive" });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const uploadRes = await fetch("/api/uploads/image", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+      const { url } = await uploadRes.json();
+
+      const isFirst = photos.length === 0;
+      await fetch("/api/photos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoUrl: url, orderIndex: photos.length, isMainProfilePhoto: isFirst }),
+        credentials: "include",
+      });
+
+      if (isFirst) {
+        await updateProfile.mutateAsync({ userId, data: { coverPhotoUrl: url } });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/photos", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+      toast({ title: "Photo uploaded!" });
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to upload photo.", variant: "destructive" });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDelete = async (photoId: number) => {
+    try {
+      await fetch(`/api/photos/${photoId}`, { method: "DELETE", credentials: "include" });
+      queryClient.invalidateQueries({ queryKey: ["/api/photos", userId] });
+      toast({ title: "Photo removed" });
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to remove photo.", variant: "destructive" });
+    }
+  };
+
+  const handleSetCover = async (photoUrl: string) => {
+    try {
+      await updateProfile.mutateAsync({ userId, data: { coverPhotoUrl: photoUrl } });
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+      toast({ title: "Cover photo updated!" });
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to update cover photo.", variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Manage Photos</DialogTitle>
+          <DialogDescription>Upload up to 6 photos. The first one becomes your cover photo.</DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-3 gap-3">
+          {photos.map((photo: any) => (
+            <div key={photo.id} className="aspect-square rounded-md overflow-hidden bg-muted relative group" data-testid={`edit-photo-${photo.id}`}>
+              <img src={photo.photoUrl} alt="" className="w-full h-full object-cover" />
+              {profile.coverPhotoUrl === photo.photoUrl && (
+                <Badge className="absolute top-1 left-1 text-[10px] gradient-bg text-white border-0">Cover</Badge>
+              )}
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                {profile.coverPhotoUrl !== photo.photoUrl && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-white"
+                    onClick={() => handleSetCover(photo.photoUrl)}
+                    data-testid={`button-set-cover-${photo.id}`}
+                  >
+                    <Camera className="w-4 h-4" />
+                  </Button>
+                )}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 text-white"
+                  onClick={() => handleDelete(photo.id)}
+                  data-testid={`button-delete-photo-${photo.id}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+
+          {photos.length < 6 && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="aspect-square rounded-md border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1 text-muted-foreground cursor-pointer transition-colors"
+              data-testid="button-upload-photo"
+            >
+              {uploading ? (
+                <Loader2 className="w-6 h-6 animate-spin" />
+              ) : (
+                <>
+                  <ImagePlus className="w-6 h-6" />
+                  <span className="text-xs">Upload</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          onChange={handleFileSelect}
+          className="hidden"
+          data-testid="input-file-upload"
+        />
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

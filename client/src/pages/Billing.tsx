@@ -145,24 +145,9 @@ export default function Billing() {
   const hasActiveSub = currentTier !== "free";
 
   const tiers = [
-    {
-      tier: "free",
-      name: "Free",
-      price: "$0",
-      period: "forever",
-    },
-    {
-      tier: "plus",
-      name: "Plus",
-      price: "$9.99",
-      period: "/month",
-    },
-    {
-      tier: "vip",
-      name: "VIP",
-      price: "$19.99",
-      period: "/month",
-    },
+    { tier: "free", name: "Free", price: "$0", period: "forever" },
+    { tier: "plus", name: "Plus", price: "$9.99", period: "/month" },
+    { tier: "vip", name: "VIP", price: "$19.99", period: "/month" },
   ];
 
   if (stripeProducts && stripeProducts.length > 0) {
@@ -192,7 +177,7 @@ export default function Billing() {
   return (
     <LayoutShell>
       <div className="text-center mb-10">
-        <h1 className="text-3xl font-display font-bold mb-2" data-testid="text-billing-title">Choose Your Plan</h1>
+        <h1 className="font-display font-bold mb-2" data-testid="text-billing-title">Choose Your Plan</h1>
         <p className="text-muted-foreground max-w-xl mx-auto">
           Unlock the full VibeFlow experience with premium features.
         </p>
@@ -207,12 +192,12 @@ export default function Billing() {
           return (
             <Card
               key={tier.tier}
-              className={`relative ${config?.popular ? 'border-primary' : ''}`}
+              className={`relative card-lift ${config?.popular ? 'border-primary border-2' : ''}`}
               data-testid={`card-tier-${tier.tier}`}
             >
               {config?.popular && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="bg-primary text-primary-foreground">
+                  <Badge className="gradient-bg text-white border-0">
                     <Star className="w-3 h-3 mr-1" />
                     Most Popular
                   </Badge>
@@ -241,7 +226,7 @@ export default function Billing() {
                 ) : tier.tier === "free" ? (
                   hasActiveSub ? (
                     <Button
-                      className="w-full"
+                      className="w-full btn-press"
                       variant="outline"
                       onClick={() => portalMutation.mutate()}
                       disabled={portalMutation.isPending}
@@ -261,7 +246,7 @@ export default function Billing() {
                   )
                 ) : (
                   <Button
-                    className="w-full"
+                    className={`w-full btn-press ${config?.popular ? 'gradient-bg text-white' : ''}`}
                     variant={config?.popular ? "default" : "outline"}
                     onClick={() => handleSubscribe(tier.tier)}
                     disabled={isPending}
@@ -283,6 +268,7 @@ export default function Billing() {
         <div className="mt-8 text-center">
           <Button
             variant="outline"
+            className="btn-press"
             onClick={() => portalMutation.mutate()}
             disabled={portalMutation.isPending}
             data-testid="button-manage-subscription"

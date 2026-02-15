@@ -97,7 +97,7 @@ function PendingMatchCard({ match }: { match: any }) {
   };
 
   return (
-    <Card data-testid={`card-pending-match-${match.id}`}>
+    <Card className="card-lift" data-testid={`card-pending-match-${match.id}`}>
       <CardContent className="p-5">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-12 h-12 rounded-md bg-primary/10 flex items-center justify-center text-lg font-bold text-primary">
@@ -111,7 +111,7 @@ function PendingMatchCard({ match }: { match: any }) {
         <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{match.otherProfile?.bio || ""}</p>
         <div className="flex gap-2">
           <Button
-            className="flex-1"
+            className="flex-1 btn-press"
             onClick={() => handleRespond("accept")}
             disabled={respondToMatch.isPending}
             data-testid={`button-accept-${match.id}`}
@@ -120,6 +120,7 @@ function PendingMatchCard({ match }: { match: any }) {
           </Button>
           <Button
             variant="outline"
+            className="btn-press"
             onClick={() => handleRespond("reject")}
             disabled={respondToMatch.isPending}
             data-testid={`button-reject-${match.id}`}
@@ -162,7 +163,7 @@ function MatchedCard({ match }: { match: any }) {
 
   return (
     <>
-      <Card data-testid={`card-matched-${match.id}`}>
+      <Card className="card-lift" data-testid={`card-matched-${match.id}`}>
         <CardContent className="p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-12 h-12 rounded-md bg-primary/10 flex items-center justify-center text-lg font-bold text-primary">
@@ -178,7 +179,7 @@ function MatchedCard({ match }: { match: any }) {
           </div>
           <div className="flex gap-2 mt-3">
             <Button
-              className="flex-1"
+              className="flex-1 btn-press"
               onClick={() => setLocation(`/chat/${match.id}`)}
               data-testid={`button-chat-${match.id}`}
             >
@@ -264,7 +265,7 @@ function EmptyState() {
       <p className="text-muted-foreground max-w-md mx-auto mb-8">
         Your soulmate is out there! Start by exploring potential connections and interviewing their AI Twins.
       </p>
-      <Button size="lg" onClick={() => setLocation("/discover")} data-testid="button-discover">
+      <Button size="lg" className="btn-press" onClick={() => setLocation("/discover")} data-testid="button-discover">
         <Search className="w-4 h-4 mr-2" />
         Discover People
       </Button>

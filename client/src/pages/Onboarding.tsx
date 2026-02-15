@@ -77,7 +77,7 @@ export default function Onboarding() {
             <span>Soul-Mapping in progress</span>
             <span>{Math.round(((step + 1) / QUESTIONS.length) * 100)}%</span>
           </div>
-          <div className="h-2 bg-purple-100 rounded-full overflow-hidden">
+          <div className="h-2 bg-muted rounded-full overflow-hidden">
             <motion.div
               className="h-full bg-gradient-to-r from-primary to-secondary"
               initial={{ width: 0 }}
@@ -89,7 +89,7 @@ export default function Onboarding() {
             <span className="text-xs text-muted-foreground">Question {step + 1} of {QUESTIONS.length}</span>
             <button
               onClick={() => setPrivacyMode(!privacyMode)}
-              className="flex items-center gap-2 text-xs text-muted-foreground px-3 py-1.5 rounded-full border border-purple-200 transition-colors"
+              className="flex items-center gap-2 text-xs text-muted-foreground px-3 py-1.5 rounded-full border transition-colors"
               data-testid="button-privacy-toggle"
             >
               {privacyMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -108,7 +108,7 @@ export default function Onboarding() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
-                className="bg-white rounded-3xl p-8 md:p-12 shadow-xl border border-white/50 backdrop-blur-sm"
+                className="bg-card rounded-md p-8 md:p-12 shadow-xl border backdrop-blur-sm"
               >
                 <h2 className="text-2xl md:text-3xl font-display font-bold mb-8 leading-tight" data-testid="text-question">
                   {QUESTIONS[step]}
@@ -117,7 +117,7 @@ export default function Onboarding() {
                   value={answers[step] || ""}
                   onChange={(e) => setAnswers({ ...answers, [step]: e.target.value })}
                   placeholder="Type your answer honestly..."
-                  className="min-h-[150px] text-lg bg-transparent border-0 border-b-2 border-purple-100 rounded-none focus-visible:ring-0 focus-visible:border-primary px-0 resize-none placeholder:text-muted-foreground/50 mb-8"
+                  className="min-h-[150px] text-lg bg-transparent border-0 border-b-2 border-border rounded-none focus-visible:ring-0 focus-visible:border-primary px-0 resize-none placeholder:text-muted-foreground/50 mb-8"
                   autoFocus
                   data-testid="input-answer"
                 />
@@ -135,7 +135,7 @@ export default function Onboarding() {
                     size="lg"
                     onClick={handleNext}
                     disabled={!answers[step]?.trim()}
-                    className="rounded-full px-8 h-12 text-base font-semibold shadow-lg shadow-primary/20"
+                    className="rounded-full px-8 h-12 text-base font-semibold shadow-lg shadow-primary/20 btn-press"
                     data-testid="button-next"
                   >
                     {step === QUESTIONS.length - 1 ? "Create My AI Twin" : "Next Question"}
@@ -151,7 +151,7 @@ export default function Onboarding() {
               >
                 <div className="relative mb-8">
                   <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse" />
-                  <div className="relative bg-white p-6 rounded-2xl shadow-xl">
+                  <div className="relative bg-card p-6 rounded-md shadow-xl">
                     <Loader2 className="w-12 h-12 text-primary animate-spin" />
                   </div>
                 </div>
