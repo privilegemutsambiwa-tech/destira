@@ -1,0 +1,182 @@
+# VibeFlow Spec Addendum: UI/UX, Design System & Media Upgrade
+
+**Author:** Manus AI
+**Date:** February 14, 2026
+
+This document serves as a production-minded addendum to the existing VibeFlow specification. It details the implementation of a professional design system, premium micro-interactions, a robust image pipeline, and significant upgrades to the Lounge and Profile sections to create a more polished, engaging, and "alive" user experience.
+
+## 1. Design System — Option A: “Romantic Modern”
+
+To ensure visual consistency and a high-quality aesthetic, VibeFlow will implement the “Romantic Modern” design system. All components must be built using these design tokens. **No random hex codes or inline styles are permitted.**
+
+### 1.1. Design Tokens
+
+These tokens must be defined as CSS variables in a global stylesheet (e.g., `theme.css`) for reusability and easy theming.
+
+| Category | Token Name | Value | Description |
+| :--- | :--- | :--- | :--- |
+| **Gradient** | `--gradient-primary` | `linear-gradient(90deg, #7B2FF7, #F107A3)` | Main brand gradient for CTAs and highlights. |
+| **Accent** | `--accent-spark` | `#FF4D6D` | For likes, hearts, and key interactive moments. |
+| **Background** | `--bg-primary` | `#F8F7FC` | Main application background color. |
+| **Surface** | `--surface-card` | `#FFFFFF` | Background for cards and elevated surfaces. |
+| **Text** | `--text-primary` | `#1A1A1A` | For headings and primary body text. |
+| **Text** | `--text-muted` | `#6B6B6B` | For secondary text, captions, and descriptions. |
+| **Borders** | `--border-primary` | `rgba(26, 26, 26, 0.08)` | Subtle borders for cards and inputs. |
+| **Shadows** | `--shadow-card` | `0 8px 24px rgba(0, 0, 0, 0.06)` | Default shadow for cards. |
+| **Radius** | `--radius-global` | `16px` | Single, consistent border radius for all elements. |
+| **Spacing** | `--space-1` to `--space-4` | `8px`, `16px`, `24px`, `32px` | Spacing scale for margins and paddings. |
+
+### 1.2. Example CSS Variables Implementation
+
+```css
+:root {
+  --gradient-primary: linear-gradient(90deg, #7B2FF7, #F107A3);
+  --accent-spark: #FF4D6D;
+  --bg-primary: #F8F7FC;
+  --surface-card: #FFFFFF;
+  --text-primary: #1A1A1A;
+  --text-muted: #6B6B6B;
+  --border-primary: rgba(26, 26, 26, 0.08);
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.06);
+  --radius-global: 16px;
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+}
+```
+
+### 1.3. Typography Scale
+
+| Element | Font Size | Font Weight | Usage |
+| :--- | :--- | :--- | :--- |
+| `H1` | 30-32px | Bold | Main screen titles. |
+| `H2` | 20-22px | Semibold | Section headings. |
+| `Body` | 16px | Regular | Standard text content. |
+| `Caption` | 13-14px | Regular | Muted descriptions, timestamps. |
+
+## 2. Premium UI/UX Upgrades & Micro-interactions
+
+To elevate the user experience, the following micro-interactions and animation standards must be implemented across the application.
+
+### 2.1. Animation & Interaction Specifications
+
+| Element | Interaction | Animation Details |
+| :--- | :--- | :--- |
+| **Buttons** | On Press | `transform: scale(0.96)`, `transition: transform 150ms ease-out` |
+| **Cards (Web)** | On Hover | `transform: translateY(-4px)`, `box-shadow: 0 12px 32px rgba(0,0,0,0.08)` |
+| **Tab Transitions** | On Change | Smooth fade and slide (`opacity` + `transform`), duration: 250ms. |
+| **Match Moment** | On Match | A subtle pulse/glow animation around the matched user's avatar. |
+| **Compatibility** | Display | An animated SVG progress ring that fills to the percentage value. |
+
+### 2.2. Accessibility Checklist
+
+- **Focus Rings:** All interactive elements must have a soft, visible focus ring (e.g., `box-shadow: 0 0 0 2px var(--accent-spark)`).
+- **Contrast:** Text must meet WCAG AA contrast ratios against its background.
+- **Touch Targets:** All buttons and interactive elements must have a minimum touch target of 44x44 pixels.
+- **Reduced Motion:** Use the `prefers-reduced-motion` media query to disable non-essential animations for users who prefer it.
+
+## 3. Home Screen Hero & Image Strategy
+
+The Home/Discover screen will feature a dynamic hero banner to create an immediate emotional connection.
+
+- **Component:** `HeroBanner`
+- **Content:** A background image of an authentic, diverse couple with a soft overlay using `--gradient-primary`. Includes two main CTAs: "Start Matching" and "Interview AI Twin."
+- **Image Rotation:** On page load, one of 3-5 pre-selected hero images will be chosen randomly.
+
+### 3.1. Image Sourcing and Storage
+
+- **MVP Approach:** Use high-quality, royalty-free photos from Unsplash/Pexels. Store static URLs in a configuration file (e.g., `/public/hero/couple_1.jpg`).
+- **Production Approach:** Store images in an S3-compatible bucket (e.g., Cloudinary, Supabase Storage). Serve images via a CDN with appropriate caching headers (`Cache-Control: max-age=31536000, immutable`) to optimize delivery.
+
+## 4. Lounge Groups — “Feel Alive” Upgrade
+
+To make Lounge groups more dynamic and engaging, the UI and underlying functionality will be enhanced.
+
+### 4.1. Group Card UI (`GroupCard` Component)
+
+Each card in the Lounge list will display:
+- **Group Profile Picture:** Circular avatar.
+- **Stacked Member Avatars:** A preview of 3-4 members' avatars, partially overlapped.
+- **Group Name & Description Snippet.**
+- **Member Count & Category Tag.**
+- **Join Button:** With clear states: `Join` (for open groups), `Request` (for request-to-join), and `Joined` (if a member).
+
+### 4.2. Group Creation & Admin Tools
+
+- **Flow:** A new `/lounge/create` route with a `CreateGroupForm` component.
+- **Admin Panel:** Within a group (`/lounge/group/:id/settings`), admins will have tools to remove members, delete messages, approve requests, and generate a shareable invite link (`/invite/:token`).
+
+## 5. Image Upload Pipeline & Profile UX
+
+A robust image upload system is required for both user profiles and group icons, replacing any URL-based inputs.
+
+### 5.1. Profile Photo Requirements
+
+- **Structure:** 1 cover photo and a minimum of 3 (max 6) profile photos.
+- **UX:** A `PhotoGrid` component on the `/profile/edit` page will allow users to upload, preview, reorder (drag-and-drop), and delete photos.
+- **Privacy Toggle:** A `PrivacyToggle` component will switch the `profileVisibility` status. If `private`, the user's main photo is replaced by an AI-generated cartoon version (`cartoon_photo_url`), and real photos are hidden from non-matches.
+
+### 5.2. Full-Stack Image Upload Flow
+
+1.  **Frontend:** The `UploadWidget` component sends the selected file (with MIME type and size validation) to the backend.
+2.  **Backend:** The `POST /uploads/image` endpoint receives the file, validates it again, and uploads it to the designated S3-compatible storage provider (e.g., Cloudinary).
+3.  **Storage:** The image is stored in the bucket.
+4.  **Backend:** Upon successful upload, the storage provider returns a secure URL.
+5.  **Database:** The backend saves this URL to the appropriate table (`Users.coverPhotoUrl`, `UserPhotos.url`, or `Groups.groupPhotoUrl`).
+6.  **Frontend:** The URL is returned to the client to display the new image instantly.
+
+## 6. Full-Stack Changes Required
+
+### 6.1. Database Schema Additions/Updates
+
+**`Users` Table:**
+- `coverPhotoUrl` (`VARCHAR(255)`)
+- `profileVisibility` (`ENUM('public', 'private')`)
+- `createdAt`, `updatedAt` (`TIMESTAMP`)
+
+**`UserPhotos` Table (New):**
+- `id` (`UUID`), `userId` (`UUID`), `url` (`VARCHAR(255)`), `sortOrder` (`INT`), `createdAt` (`TIMESTAMP`)
+
+**`Groups` Table:**
+- `groupPhotoUrl` (`VARCHAR(255)`)
+- `categoryTag` (`VARCHAR(50)`)
+- `privacyMode` (`ENUM('open', 'request_to_join')`)
+- `rulesText` (`TEXT`)
+- `memberCount` (`INT`, cached)
+
+**`GroupMembers` Table:**
+- `role` (`ENUM('admin', 'member')`)
+- `joinedAt` (`TIMESTAMP`)
+
+**`GroupInviteLinks` Table (New):**
+- `token` (`VARCHAR(255)`), `groupId` (`UUID`), `isActive` (`BOOLEAN`), `createdAt` (`TIMESTAMP`), `expiresAt` (`TIMESTAMP`, nullable)
+
+### 6.2. Backend API Endpoints
+
+- **Uploads:** `POST /uploads/image`, `POST /profile/cover`, `POST /profile/photos`, `DELETE /profile/photos/:photoId`, `PATCH /profile/visibility`
+- **Groups:** `POST /groups`, `GET /groups`, `PATCH /groups/:id`, `POST /groups/:id/join`, `POST /groups/:id/requests/:requestId/approve`, `POST /groups/:id/invite-links`
+- **Invites:** `GET /invite/:token`, `POST /invite/:token/join`
+
+### 6.3. Frontend Routes & Components
+
+- **Routes:** `/discover` (with Hero), `/lounge` (upgraded), `/lounge/create`, `/lounge/group/:id`, `/lounge/group/:id/settings`, `/invite/:token`, `/profile/edit` (upgraded).
+- **New Components:** `HeroBanner`, `AnimatedCompatibilityRing`, `GroupCard`, `AvatarStack`, `CreateGroupForm`, `UploadWidget`, `PhotoGrid`, `PrivacyToggle`.
+
+## 7. Implementation Milestones (Build Order)
+
+1.  **Foundation:** Implement the design tokens and global styles.
+2.  **Component Refactor:** Update existing components (buttons, cards) to use the new tokens.
+3.  **UI Polish:** Add micro-interactions and the `AnimatedCompatibilityRing`.
+4.  **Home Screen:** Build the `HeroBanner` with the image rotation logic.
+5.  **Core Infrastructure:** Implement the backend image upload pipeline and storage integration.
+6.  **Profile Upgrade:** Build the profile photo upload/management UX and privacy toggle.
+7.  **Lounge Upgrade:** Implement the “alive” group cards and search functionality.
+8.  **Group Management:** Build the “Create Group” flow and admin tools.
+
+## 8. Asset Generation Plan (Optional)
+
+For marketing placeholders, AI-generated images can be used, but **royalty-free real photos are strongly recommended for authenticity.** If AI is used, prompts should focus on realism and warmth.
+
+- **Example Prompt:** `cinematic photo, a happy and diverse couple in their late 20s, laughing together in a cozy coffee shop with warm, natural light, candid moment, shallow depth of field`
+- **Negative Prompt:** `text, watermark, logo, nudity, explicit, distorted faces, extra limbs, AI artifacts, plastic skin, blurry, oversaturated, cartoon, 3d render`
