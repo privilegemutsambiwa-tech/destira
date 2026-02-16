@@ -1,0 +1,110 @@
+# VibeFlow Spec Addendum: Lounge Perfection + IA Improvements
+
+**Author:** Manus AI
+**Date:** February 15, 2026
+
+This document serves as a full-stack specification addendum to the existing VibeFlow application plan. Its primary goal is to perfect the Lounge feature by implementing a professional, WhatsApp-like Groups architecture and to refine the application's information architecture (IA) for a more intuitive user experience. This specification is designed to be handed directly to a development team for immediate implementation.
+
+## 1. WhatsApp Group Architecture Research Summary
+
+A deep analysis of WhatsApp's group functionality reveals a robust and user-centric architecture. Key patterns include a clear hierarchy of roles (Owner, Admin, Member), granular permissions for group management, and multiple privacy-aware join flows. Message and media handling is seamless, with features like polls, reactions, and admin-level moderation tools ensuring a rich and safe user experience.
+
+| Feature Area | WhatsApp Implementation Details |
+| :--- | :--- |
+| **Group Creation & Privacy** | Admins create groups and can set privacy to `Open`, `Request-to-Join`, or `Invite-Only`. Invite links can be generated and revoked by admins to control access. |
+| **Roles & Permissions** | A clear hierarchy exists: the **Owner** (creator, cannot be removed), **Admins** (can manage members and settings), and **Members**. Admins can restrict who can send messages or edit group info. |
+| **Group Info & Media** | A dedicated "Group Info" screen provides access to the group description, rules, a full member list (with admins prioritized), and a gallery of all shared media (photos, videos, links). |
+| **Messaging & Interaction** | Supports rich media, including text, images, videos, stickers, and native **Polls**. Users can react to messages with emojis and reply directly to specific messages. |
+| **Moderation & Safety** | Admins can delete any message for everyone in the group. Users can report messages or entire groups for review. Blocking a user prevents direct interaction. |
+| **Polls** | A native message type allowing a question with up to 12 options. Supports a toggle for allowing multiple answers, and results are visible in real-time to all members. |
+
+### How VibeFlow Maps These Patterns
+
+VibeFlow will adopt these proven patterns to create a professional and engaging group experience. We will map WhatsApp’s architecture to the Lounge, with specific adaptations for a dating context. For instance, `Request-to-Join` will be the default for most groups to foster high-quality, curated communities. Polls will be a key feature for icebreakers and topic discussions. Most importantly, the robust admin and moderation tools will be implemented to ensure all Community Groups are safe spaces for users.
+
+## 2. Lounge Groups: WhatsApp-Like Architecture Specification
+
+This section details the full-stack implementation for upgrading the Lounge into a complete, WhatsApp-inspired Groups feature.
+
+### 2.1. Group List & Chat UI/UX
+
+The user experience will be elevated to match top-tier chat applications. The group list will be informative, and the chat interface will be rich and engaging.
+
+-   **Group List (`/lounge`):** Each `GroupCard` component will display the group's profile picture, name, a snippet of the last message, member count, and a join-state button (`Joined`, `Open`, `Request`).
+-   **Chat UI (`/lounge/group/:groupId`):** The `WhatsAppChatLayout` component will feature a professional design, including a subtle background pattern, distinct incoming/outgoing message bubbles, date separators, and a feature-rich input bar for sending text, media, and polls.
+-   **Message Interactions:** Users can long-press a message to bring up a `MessageActionsSheet` with options to `Reply`, `React`, `Copy`, `Report`, or `Delete` (for their own messages). Admins will have an additional `Admin Delete` option.
+
+### 2.2. Core Group Features
+
+| Feature | Implementation Details |
+| :--- | :--- |
+| **Polls** | A native `Poll` message type. The `PollComposer` allows creating a poll with a question and 2-12 options, with a toggle for multiple answers. Results are displayed in real-time within the `MessageBubble`. |
+| **Media Uploads** | The `MediaPickerUploader` component allows users to upload photos and videos, with previews before sending. Media is validated for size and MIME type. |
+| **Group Info Page** | The `/lounge/group/:groupId/info` screen will display the group's photo, name, description, and rules. It will also feature a `MediaGalleryGrid` and a `MembersList` that pins admins to the top. |
+
+### 2.3. Admin, Member, and Join Flow Logic
+
+The permission structure and join flows will mirror WhatsApp's robust model to ensure security and good governance.
+
+-   **Roles:** `Owner`, `Admin`, `Member`.
+-   **Admin Controls:** Admins can approve/deny join requests, remove members, promote/demote other admins, edit all group info, and configure permissions (e.g., who can send messages/media).
+-   **Join Flows:** The system will support `Open Join`, `Request-to-Join` (with an admin approval queue), and `Invite Link` (token-based and revocable) flows.
+
+### 2.4. Full-Stack Implementation: Lounge Groups
+
+#### Database Schema Updates
+
+-   **`Groups`:** Add `groupPhotoUrl`, `privacyMode` (`open`, `request`, `invite_only`), `postingPermission` (`everyone`, `admin_only`), `mediaPermission` (`everyone`, `admin_only`).
+-   **`GroupMembers`:** Add `role` (`owner`, `admin`, `member`).
+-   **`GroupMessages`:** Add `type` (`text`, `image`, `video`, `poll`, `sticker`, `system`), `replyToMessageId`, `deletedForEveryone`, `deletedByAdmin`.
+-   **New Tables:** `GroupJoinRequests`, `GroupInviteLinks`, `MessageReactions`, `Polls`, `PollOptions`, `PollVotes`, `GroupModerationLog`.
+
+#### Backend API Endpoints (REST)
+
+-   `POST /groups`: Create a group.
+-   `POST /groups/:id/photo`: Upload group photo (admin only).
+-   `GET /groups`: List/search groups.
+-   `POST /groups/:id/join`: Handle join requests/direct joins.
+-   `POST /groups/:id/requests/:reqId/approve`: Approve join request (admin only).
+-   `POST /groups/:id/messages`: Send a message (all types).
+-   `POST /messages/:id/react`: React to a message.
+-   `POST /polls`: Create a poll.
+-   `POST /polls/:id/vote`: Vote on a poll.
+
+#### Frontend Routes & Components
+
+-   **Routes:** `/lounge`, `/lounge/create`, `/lounge/group/:groupId`, `/lounge/group/:groupId/info`, `/invite/:token`.
+-   **Components:** `GroupCard`, `WhatsAppChatLayout`, `MessageBubble`, `PollComposer`, `MediaPickerUploader`, `GroupInfoHeader`, `MembersList`.
+
+## 3. Information Architecture (IA) Improvement
+
+To improve usability, the AI Twin interactions will be centralized under the "Interviews" section, separating them from the user's personal profile.
+
+-   **Change:** The "AI Twin" section will be removed from the main `Profile` page.
+-   **New Location:** The "Interviews" tab will now house two primary actions:
+    1.  **"Interview Their Twin"**: The existing feature to interact with potential matches' AIs.
+    2.  **"Chat With My Twin"**: The new private mode for users to train, coach, and interact with their own AI Twin.
+-   **Profile Focus:** The `Profile` page will be streamlined to focus exclusively on user-editable content: Photos, About Me, and Privacy Settings (Public/Private).
+
+### Implementation: IA Change
+
+-   **Navigation:** Update main navigation labels to reflect the change.
+-   **Routing:** Modify frontend routes to move AI Twin components from `/profile/twin` to `/interviews/my-twin`.
+-   **Component Placement:** Relocate the relevant UI components to the Interviews screen.
+
+## 4. Implementation Milestones (Build Order)
+
+1.  **Group Foundation:** Implement the updated `GroupCard` list, search, and the "Create Group" flow with photo uploads.
+2.  **Chat UI:** Build the WhatsApp-style chat layout, message bubbles, and input bar.
+3.  **Core Chat Features:** Implement media uploads (photos/videos) and the media gallery.
+4.  **Polls:** Build the end-to-end polls feature (composer, voting, results).
+5.  **Admin & Info:** Develop the Group Info page and the full suite of admin controls.
+6.  **Join Flows:** Implement the request-to-join and invite link systems.
+7.  **Moderation:** Add admin moderation tools (delete messages, remove members).
+8.  **IA Refactor:** Move the "AI Twin" features from Profile to Interviews and update all relevant navigation and routes.
+
+
+## References
+
+[1] WhatsApp Help Center. (n.d.). *How to change group admin settings*. Retrieved from https://faq.whatsapp.com/526742385997912
+[2] WhatsApp Help Center. (n.d.). *How to use polls*. Retrieved from https://faq.whatsapp.com/796470361614974
