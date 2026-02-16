@@ -736,6 +736,18 @@ You are chatting with your human self. Be reflective, insightful, supportive. He
     }
   });
 
+  app.get("/api/groups/:id/members", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const members = await storage.getGroupMembers(groupId);
+      res.json(members);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch members" });
+    }
+  });
+
   app.put("/api/groups/:id/members/:memberId/role", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -803,7 +815,7 @@ You are chatting with your human self. Be reflective, insightful, supportive. He
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     const groupId = parseInt(req.params.id);
-    const { content } = req.body;
+    const { content, contentType, mediaUrl, replyToMessageId } = req.body;
     try {
       const members = await storage.getGroupMembers(groupId);
       const member = members.find(m => m.userId === userId);
@@ -814,7 +826,13 @@ You are chatting with your human self. Be reflective, insightful, supportive. He
         return res.status(403).json({ message: "Only admins can post in this group" });
       }
 
-      const msg = await storage.sendGroupMessage(groupId, userId, member.nickname || "Anonymous", content);
+      if ((contentType === "image" || contentType === "video") && group?.mediaPermission === "admin_only" && member.role === "member") {
+        return res.status(403).json({ message: "Only admins can post media in this group" });
+      }
+
+      const msg = await storage.sendGroupMessage(groupId, userId, member.nickname || "Anonymous", content, {
+        contentType, mediaUrl, replyToMessageId
+      });
       res.status(201).json(msg);
     } catch (e) {
       res.status(500).json({ message: "Failed to send message" });
@@ -830,6 +848,173 @@ You are chatting with your human self. Be reflective, insightful, supportive. He
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ message: "Failed to leave group" });
+    }
+  });
+
+  // Poll endpoints
+  app.post("/api/groups/:id/polls", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    const { question, options, allowMultiple } = req.body;
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member) return res.status(403).json({ message: "Must join group first" });
+      if (!question || !options || options.length < 2 || options.length > 12) {
+        return res.status(400).json({ message: "Poll needs a question and 2-12 options" });
+      }
+      const result = await storage.createPoll(groupId, userId, question, options, !!allowMultiple);
+      res.status(201).json(result);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to create poll" });
+    }
+  });
+
+  app.get("/api/polls/:pollId", async (req, res) => {
+    try {
+      const result = await storage.getPoll(parseInt(req.params.pollId));
+      if (!result) return res.status(404).json({ message: "Poll not found" });
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch poll" });
+    }
+  });
+
+  app.get("/api/messages/:messageId/poll", async (req, res) => {
+    try {
+      const result = await storage.getPollByMessageId(parseInt(req.params.messageId));
+      if (!result) return res.status(404).json({ message: "Poll not found" });
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch poll" });
+    }
+  });
+
+  app.post("/api/polls/:pollId/vote", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const { optionId } = req.body;
+    try {
+      const vote = await storage.votePoll(parseInt(req.params.pollId), optionId, userId);
+      res.status(201).json(vote);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to vote" });
+    }
+  });
+
+  app.delete("/api/polls/:pollId/vote", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const { optionId } = req.body;
+    try {
+      await storage.removePollVote(parseInt(req.params.pollId), optionId, userId);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to remove vote" });
+    }
+  });
+
+  // Reaction endpoints
+  app.post("/api/messages/:messageId/reactions", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const { reaction } = req.body;
+    try {
+      const r = await storage.addReaction(parseInt(req.params.messageId), userId, reaction);
+      res.status(201).json(r);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to add reaction" });
+    }
+  });
+
+  app.delete("/api/messages/:messageId/reactions", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const { reaction } = req.body;
+    try {
+      await storage.removeReaction(parseInt(req.params.messageId), userId, reaction);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to remove reaction" });
+    }
+  });
+
+  app.get("/api/messages/:messageId/reactions", async (req, res) => {
+    try {
+      const reactions = await storage.getReactions(parseInt(req.params.messageId));
+      res.json(reactions);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch reactions" });
+    }
+  });
+
+  // Group photo upload
+  app.post("/api/groups/:id/photo", upload.single("image"), async (req: any, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member || (member.role !== "owner" && member.role !== "admin")) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      if (!req.file) return res.status(400).json({ message: "No image provided" });
+      const url = `/uploads/${req.file.filename}`;
+      await storage.updateGroup(groupId, { groupPhotoUrl: url } as any);
+      res.json({ url });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to upload group photo" });
+    }
+  });
+
+  // Media gallery for group
+  app.get("/api/groups/:id/media", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const media = await storage.getMediaMessages(parseInt(req.params.id));
+      res.json(media);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch media" });
+    }
+  });
+
+  // Delete own message
+  app.delete("/api/messages/:messageId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const msg = await storage.getGroupMessage(parseInt(req.params.messageId));
+      if (!msg) return res.status(404).json({ message: "Message not found" });
+      if (msg.userId !== userId) return res.status(403).json({ message: "Can only delete own messages" });
+      const deleted = await storage.deleteMessageForEveryone(msg.id);
+      res.json(deleted);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to delete message" });
+    }
+  });
+
+  // Group messages with reactions (enriched)
+  app.get("/api/groups/:id/messages-enriched", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const msgs = await storage.getGroupMessages(groupId, 200);
+      const msgIds = msgs.map(m => m.id);
+      const reactions = msgIds.length > 0 ? await storage.getReactionsForMessages(msgIds) : [];
+      const reactionsByMsg: Record<number, any[]> = {};
+      for (const r of reactions) {
+        if (!reactionsByMsg[r.messageId]) reactionsByMsg[r.messageId] = [];
+        reactionsByMsg[r.messageId].push(r);
+      }
+      const enriched = msgs.map(m => ({
+        ...m,
+        reactions: reactionsByMsg[m.id] || [],
+      }));
+      res.json(enriched);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch enriched messages" });
     }
   });
 

@@ -286,11 +286,12 @@ export function useGroupMessages(groupId: number) {
 export function useSendGroupMessage(groupId: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async (data: string | { content: string; contentType?: string; mediaUrl?: string; replyToMessageId?: number }) => {
+      const body = typeof data === "string" ? { content: data } : data;
       const res = await fetch(`/api/groups/${groupId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify(body),
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to send message");
@@ -506,5 +507,136 @@ export function useGenerateSummary() {
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] }),
+  });
+}
+
+export function useEnrichedGroupMessages(groupId: number) {
+  return useQuery({
+    queryKey: ["/api/groups", groupId, "messages-enriched"],
+    queryFn: async () => {
+      const res = await fetch(`/api/groups/${groupId}/messages-enriched`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 5000,
+  });
+}
+
+export function useCreatePoll(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { question: string; options: string[]; allowMultiple: boolean }) => {
+      const res = await fetch(`/api/groups/${groupId}/polls`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to create poll");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] }),
+  });
+}
+
+export function usePollByMessage(messageId: number) {
+  return useQuery({
+    queryKey: ["/api/messages", messageId, "poll"],
+    queryFn: async () => {
+      const res = await fetch(`/api/messages/${messageId}/poll`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+}
+
+export function useVotePoll(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ pollId, optionId, messageId }: { pollId: number; optionId: number; messageId: number }) => {
+      const res = await fetch(`/api/polls/${pollId}/vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ optionId }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to vote");
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/messages", variables.messageId, "poll"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] });
+    },
+  });
+}
+
+export function useAddReaction(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ messageId, reaction }: { messageId: number; reaction: string }) => {
+      const res = await fetch(`/api/messages/${messageId}/reactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reaction }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to add reaction");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] }),
+  });
+}
+
+export function useRemoveReaction(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ messageId, reaction }: { messageId: number; reaction: string }) => {
+      const res = await fetch(`/api/messages/${messageId}/reactions`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reaction }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to remove reaction");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] }),
+  });
+}
+
+export function useDeleteOwnMessage(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (messageId: number) => {
+      const res = await fetch(`/api/messages/${messageId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete message");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] }),
+  });
+}
+
+export function useGroupMedia(groupId: number) {
+  return useQuery({
+    queryKey: ["/api/groups", groupId, "media"],
+    queryFn: async () => {
+      const res = await fetch(`/api/groups/${groupId}/media`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
+
+export function useGroupMembers(groupId: number) {
+  return useQuery({
+    queryKey: ["/api/groups", groupId, "members"],
+    queryFn: async () => {
+      const res = await fetch(`/api/groups/${groupId}/members`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
   });
 }

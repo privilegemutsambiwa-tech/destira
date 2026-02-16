@@ -20,6 +20,8 @@ import Lounge from "@/pages/Lounge";
 import DirectChat from "@/pages/DirectChat";
 import TwinChat from "@/pages/TwinChat";
 import Billing from "@/pages/Billing";
+import GroupChatPage from "@/pages/GroupChat";
+import GroupInfoPage from "@/pages/GroupInfo";
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
   const { user, isLoading } = useAuth();
@@ -100,6 +102,12 @@ function Router() {
       </Route>
       <Route path="/lounge">
         <ProtectedRoute component={Lounge} />
+      </Route>
+      <Route path="/lounge/group/:groupId/info">
+        {(params) => <ProtectedRoute component={GroupInfoPage} params={params} />}
+      </Route>
+      <Route path="/lounge/group/:groupId">
+        {(params) => <ProtectedRoute component={GroupChatPage} params={params} />}
       </Route>
       <Route path="/chat/:matchId">
         {(params) => <ProtectedRoute component={DirectChat} params={params} />}

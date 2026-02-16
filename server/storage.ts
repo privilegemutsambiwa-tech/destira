@@ -2,10 +2,12 @@ import { db } from "./db";
 import {
   profiles, matches, interviews, groups, groupMembers, directMessages, groupMessages,
   userPhotos, groupJoinRequests, groupInviteLinks, groupModerationLogs,
+  polls, pollOptions, pollVotes, messageReactions,
   twinMemory, twinNotifications, subscriptions, payments, entitlements,
   type Profile, type InsertProfile, type UpdateProfileRequest,
   type Match, type Interview, type Group, type GroupMember, type DirectMessage, type GroupMessage,
   type GroupJoinRequest, type GroupInviteLink, type GroupModerationLog,
+  type Poll, type PollOption, type PollVote, type MessageReaction,
   type UserPhoto, type TwinMemoryEntry, type TwinNotification,
   type Subscription, type Payment, type Entitlement
 } from "@shared/schema";
@@ -49,8 +51,10 @@ export interface IStorage {
   updateGroupMemberRole(groupId: number, userId: string, role: string): Promise<GroupMember>;
   removeGroupMember(groupId: number, userId: string): Promise<void>;
   getGroupMessages(groupId: number, limit?: number): Promise<GroupMessage[]>;
-  sendGroupMessage(groupId: number, userId: string, nickname: string, content: string): Promise<GroupMessage>;
+  getGroupMessage(messageId: number): Promise<GroupMessage | undefined>;
+  sendGroupMessage(groupId: number, userId: string, nickname: string, content: string, opts?: { contentType?: string; mediaUrl?: string; replyToMessageId?: number }): Promise<GroupMessage>;
   deleteGroupMessage(messageId: number): Promise<GroupMessage>;
+  deleteMessageForEveryone(messageId: number): Promise<GroupMessage>;
   createJoinRequest(groupId: number, userId: string): Promise<GroupJoinRequest>;
   getJoinRequests(groupId: number): Promise<GroupJoinRequest[]>;
   processJoinRequest(id: number, processedBy: string, status: string): Promise<GroupJoinRequest>;
@@ -59,6 +63,19 @@ export interface IStorage {
   revokeInviteLink(id: number): Promise<void>;
   getGroupInviteLinks(groupId: number): Promise<GroupInviteLink[]>;
   createModerationLog(data: { groupId: number; messageId?: number; userId: string; action: string; reason?: string; moderatedBy?: string }): Promise<GroupModerationLog>;
+
+  createPoll(groupId: number, createdBy: string, question: string, options: string[], allowMultiple: boolean): Promise<{ poll: Poll; options: PollOption[]; message: GroupMessage }>;
+  getPoll(pollId: number): Promise<{ poll: Poll; options: PollOption[]; votes: PollVote[] } | undefined>;
+  votePoll(pollId: number, optionId: number, userId: string): Promise<PollVote>;
+  removePollVote(pollId: number, optionId: number, userId: string): Promise<void>;
+  getPollByMessageId(messageId: number): Promise<{ poll: Poll; options: PollOption[]; votes: PollVote[] } | undefined>;
+
+  addReaction(messageId: number, userId: string, reaction: string): Promise<MessageReaction>;
+  removeReaction(messageId: number, userId: string, reaction: string): Promise<void>;
+  getReactions(messageId: number): Promise<MessageReaction[]>;
+  getReactionsForMessages(messageIds: number[]): Promise<MessageReaction[]>;
+
+  getMediaMessages(groupId: number): Promise<GroupMessage[]>;
 
   getDirectMessages(matchId: number, limit?: number): Promise<DirectMessage[]>;
   sendDirectMessage(matchId: number, senderId: string, content: string): Promise<DirectMessage>;
@@ -383,8 +400,17 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
-  async sendGroupMessage(groupId: number, userId: string, nickname: string, content: string): Promise<GroupMessage> {
-    const [msg] = await db.insert(groupMessages).values({ groupId, userId, nickname, content }).returning();
+  async getGroupMessage(messageId: number): Promise<GroupMessage | undefined> {
+    const [msg] = await db.select().from(groupMessages).where(eq(groupMessages.id, messageId));
+    return msg;
+  }
+
+  async sendGroupMessage(groupId: number, userId: string, nickname: string, content: string, opts?: { contentType?: string; mediaUrl?: string; replyToMessageId?: number }): Promise<GroupMessage> {
+    const values: any = { groupId, userId, nickname, content };
+    if (opts?.contentType) values.contentType = opts.contentType;
+    if (opts?.mediaUrl) values.mediaUrl = opts.mediaUrl;
+    if (opts?.replyToMessageId) values.replyToMessageId = opts.replyToMessageId;
+    const [msg] = await db.insert(groupMessages).values(values).returning();
     return msg;
   }
 
@@ -392,6 +418,15 @@ export class DatabaseStorage implements IStorage {
     const [msg] = await db.select().from(groupMessages).where(eq(groupMessages.id, messageId));
     const [updated] = await db.update(groupMessages)
       .set({ isDeletedByAdmin: true, originalContent: msg.content, content: "[Message deleted by admin]" })
+      .where(eq(groupMessages.id, messageId))
+      .returning();
+    return updated;
+  }
+
+  async deleteMessageForEveryone(messageId: number): Promise<GroupMessage> {
+    const [msg] = await db.select().from(groupMessages).where(eq(groupMessages.id, messageId));
+    const [updated] = await db.update(groupMessages)
+      .set({ deletedForEveryone: true, originalContent: msg.content, content: "[Message deleted]" })
       .where(eq(groupMessages.id, messageId))
       .returning();
     return updated;
@@ -440,6 +475,90 @@ export class DatabaseStorage implements IStorage {
   async createModerationLog(data: { groupId: number; messageId?: number; userId: string; action: string; reason?: string; moderatedBy?: string }): Promise<GroupModerationLog> {
     const [log] = await db.insert(groupModerationLogs).values(data).returning();
     return log;
+  }
+
+  async createPoll(groupId: number, createdBy: string, question: string, optionTexts: string[], allowMultiple: boolean): Promise<{ poll: Poll; options: PollOption[]; message: GroupMessage }> {
+    const member = await this.getGroupMember(groupId, createdBy);
+    const nickname = member?.nickname || "Anonymous";
+    const [msg] = await db.insert(groupMessages).values({
+      groupId, userId: createdBy, nickname, content: question, contentType: "poll"
+    }).returning();
+    const [poll] = await db.insert(polls).values({
+      groupId, createdBy, question, allowMultiple, messageId: msg.id
+    }).returning();
+    const opts: PollOption[] = [];
+    for (let i = 0; i < optionTexts.length; i++) {
+      const [opt] = await db.insert(pollOptions).values({
+        pollId: poll.id, text: optionTexts[i], orderIndex: i
+      }).returning();
+      opts.push(opt);
+    }
+    return { poll, options: opts, message: msg };
+  }
+
+  async getPoll(pollId: number): Promise<{ poll: Poll; options: PollOption[]; votes: PollVote[] } | undefined> {
+    const [poll] = await db.select().from(polls).where(eq(polls.id, pollId));
+    if (!poll) return undefined;
+    const opts = await db.select().from(pollOptions).where(eq(pollOptions.pollId, pollId)).orderBy(asc(pollOptions.orderIndex));
+    const votes = await db.select().from(pollVotes).where(eq(pollVotes.pollId, pollId));
+    return { poll, options: opts, votes };
+  }
+
+  async votePoll(pollId: number, optionId: number, userId: string): Promise<PollVote> {
+    const poll = await this.getPoll(pollId);
+    if (poll && !poll.poll.allowMultiple) {
+      await db.delete(pollVotes).where(
+        and(eq(pollVotes.pollId, pollId), eq(pollVotes.userId, userId))
+      );
+    }
+    const [vote] = await db.insert(pollVotes).values({ pollId, optionId, userId }).returning();
+    return vote;
+  }
+
+  async removePollVote(pollId: number, optionId: number, userId: string): Promise<void> {
+    await db.delete(pollVotes).where(
+      and(eq(pollVotes.pollId, pollId), eq(pollVotes.optionId, optionId), eq(pollVotes.userId, userId))
+    );
+  }
+
+  async getPollByMessageId(messageId: number): Promise<{ poll: Poll; options: PollOption[]; votes: PollVote[] } | undefined> {
+    const [poll] = await db.select().from(polls).where(eq(polls.messageId, messageId));
+    if (!poll) return undefined;
+    return this.getPoll(poll.id);
+  }
+
+  async addReaction(messageId: number, userId: string, reaction: string): Promise<MessageReaction> {
+    await db.delete(messageReactions).where(
+      and(eq(messageReactions.messageId, messageId), eq(messageReactions.userId, userId), eq(messageReactions.reaction, reaction))
+    );
+    const [r] = await db.insert(messageReactions).values({ messageId, userId, reaction }).returning();
+    return r;
+  }
+
+  async removeReaction(messageId: number, userId: string, reaction: string): Promise<void> {
+    await db.delete(messageReactions).where(
+      and(eq(messageReactions.messageId, messageId), eq(messageReactions.userId, userId), eq(messageReactions.reaction, reaction))
+    );
+  }
+
+  async getReactions(messageId: number): Promise<MessageReaction[]> {
+    return db.select().from(messageReactions).where(eq(messageReactions.messageId, messageId));
+  }
+
+  async getReactionsForMessages(messageIds: number[]): Promise<MessageReaction[]> {
+    if (messageIds.length === 0) return [];
+    return db.select().from(messageReactions).where(
+      sql`${messageReactions.messageId} = ANY(${sql.raw(`ARRAY[${messageIds.join(',')}]`)})`
+    );
+  }
+
+  async getMediaMessages(groupId: number): Promise<GroupMessage[]> {
+    return db.select().from(groupMessages)
+      .where(and(
+        eq(groupMessages.groupId, groupId),
+        sql`${groupMessages.contentType} IN ('image', 'video')`
+      ))
+      .orderBy(desc(groupMessages.createdAt));
   }
 
   async getDirectMessages(matchId: number, limit: number = 50): Promise<DirectMessage[]> {

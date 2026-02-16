@@ -10,8 +10,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "@/components/ui/dialog";
 import {
-  Loader2, Sparkles, MapPin, Shield, Eye, EyeOff,
-  Camera, Crown, Wand2, MessageCircle, Trash2, ImagePlus
+  Loader2, MapPin, Eye, EyeOff,
+  Camera, Crown, Wand2, Trash2, ImagePlus
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -229,60 +229,6 @@ export default function Profile() {
           </div>
 
           <div className="lg:col-span-1 space-y-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 gradient-bg rounded-md">
-                    <Sparkles className="w-5 h-5 text-white" />
-                  </div>
-                  <CardTitle className="text-base">AI Twin</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex justify-between text-sm mb-2 text-muted-foreground">
-                    <span>Status</span>
-                    <span>{profile.onboardingCompleted ? "Active" : "Not Started"}</span>
-                  </div>
-                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full transition-all gradient-bg ${profile.onboardingCompleted ? 'w-full' : 'w-0'}`} />
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-1.5 h-1.5 rounded-full ${profile.onboardingCompleted ? 'bg-green-500' : 'bg-muted-foreground/30'}`} />
-                    Basic Conversation
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-1.5 h-1.5 rounded-full ${profile.onboardingCompleted ? 'bg-green-500' : 'bg-muted-foreground/30'}`} />
-                    Value Alignment
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-1.5 h-1.5 rounded-full ${profile.onboardingCompleted ? 'bg-green-500' : 'bg-muted-foreground/30'}`} />
-                    Memory & Learning
-                  </div>
-                </div>
-
-                {profile.onboardingCompleted && (
-                  <Button
-                    className="w-full btn-press"
-                    variant="outline"
-                    onClick={() => setLocation("/twin-chat")}
-                    data-testid="button-chat-twin"
-                  >
-                    <MessageCircle className="w-4 h-4 mr-2" />
-                    Chat with My Twin
-                  </Button>
-                )}
-
-                <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t">
-                  <Shield className="w-3.5 h-3.5" />
-                  Your data is encrypted and secure
-                </div>
-              </CardContent>
-            </Card>
-
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Subscription</CardTitle>

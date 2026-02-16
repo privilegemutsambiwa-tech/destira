@@ -65,11 +65,13 @@ export const groups = pgTable("groups", {
   type: text("type").notNull(),
   ownerId: varchar("owner_id").references(() => users.id),
   iconUrl: text("icon_url"),
+  groupPhotoUrl: text("group_photo_url"),
   categoryTags: text("category_tags").array(),
   privacyMode: text("privacy_mode").notNull().default("open"),
   mediaEnabled: boolean("media_enabled").default(true),
   stickersEnabled: boolean("stickers_enabled").default(true),
   postingPermission: text("posting_permission").notNull().default("everyone"),
+  mediaPermission: text("media_permission").notNull().default("everyone"),
   inviteDirectJoinEnabled: boolean("invite_direct_join_enabled").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -121,7 +123,9 @@ export const groupMessages = pgTable("group_messages", {
   content: text("content").notNull(),
   contentType: text("content_type").notNull().default("text"),
   mediaUrl: text("media_url"),
+  replyToMessageId: integer("reply_to_message_id"),
   isDeletedByAdmin: boolean("is_deleted_by_admin").default(false),
+  deletedForEveryone: boolean("deleted_for_everyone").default(false),
   originalContent: text("original_content"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -134,6 +138,39 @@ export const groupModerationLogs = pgTable("group_moderation_logs", {
   action: text("action").notNull(),
   reason: text("reason"),
   moderatedBy: varchar("moderated_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const polls = pgTable("polls", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => groups.id),
+  messageId: integer("message_id").references(() => groupMessages.id),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  question: text("question").notNull(),
+  allowMultiple: boolean("allow_multiple").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const pollOptions = pgTable("poll_options", {
+  id: serial("id").primaryKey(),
+  pollId: integer("poll_id").notNull().references(() => polls.id),
+  text: text("text").notNull(),
+  orderIndex: integer("order_index").notNull().default(0),
+});
+
+export const pollVotes = pgTable("poll_votes", {
+  id: serial("id").primaryKey(),
+  pollId: integer("poll_id").notNull().references(() => polls.id),
+  optionId: integer("option_id").notNull().references(() => pollOptions.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const messageReactions = pgTable("message_reactions", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").notNull().references(() => groupMessages.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  reaction: text("reaction").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -242,6 +279,25 @@ export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
   updatedAt: true,
 });
 
+export const insertPollSchema = createInsertSchema(polls).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPollOptionSchema = createInsertSchema(pollOptions).omit({
+  id: true,
+});
+
+export const insertPollVoteSchema = createInsertSchema(pollVotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMessageReactionSchema = createInsertSchema(messageReactions).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type Profile = typeof profiles.$inferSelect;
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
 export type Match = typeof matches.$inferSelect;
@@ -259,6 +315,11 @@ export type TwinNotification = typeof twinNotifications.$inferSelect;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Entitlement = typeof entitlements.$inferSelect;
+
+export type Poll = typeof polls.$inferSelect;
+export type PollOption = typeof pollOptions.$inferSelect;
+export type PollVote = typeof pollVotes.$inferSelect;
+export type MessageReaction = typeof messageReactions.$inferSelect;
 
 export type CreateProfileRequest = InsertProfile;
 export type UpdateProfileRequest = Partial<InsertProfile>;
