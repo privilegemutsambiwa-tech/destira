@@ -4,6 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
@@ -12,12 +16,14 @@ import {
 } from "@/components/ui/dialog";
 import {
   ArrowLeft, Crown, Shield, Loader2, Users, Globe, Lock, UserPlus,
-  Link2, Copy, Check, X, Trash2, Pencil, Image as ImageIcon
+  Link2, Copy, Check, X, Trash2, Pencil, Image as ImageIcon, Star,
+  Search, BellOff, Settings, ChevronRight
 } from "lucide-react";
 import {
   useGroup, useGroupMembers, useGroupMedia, useUpdateGroup,
   useUpdateMemberRole, useRemoveGroupMember, useCreateInviteLink,
-  useGroupInviteLinks, useLeaveGroup, useDeleteGroup
+  useGroupInviteLinks, useLeaveGroup, useDeleteGroup,
+  useStarredMessages, useUpdateGroupSettings
 } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -38,18 +44,21 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   const { data: members } = useGroupMembers(groupId);
   const { data: media } = useGroupMedia(groupId);
   const { data: inviteLinks } = useGroupInviteLinks(groupId);
+  const { data: starredMessages } = useStarredMessages(groupId);
   const updateGroup = useUpdateGroup(groupId);
+  const updateSettings = useUpdateGroupSettings(groupId);
   const updateRole = useUpdateMemberRole(groupId);
   const removeMember = useRemoveGroupMember(groupId);
   const createInvite = useCreateInviteLink(groupId);
   const leaveGroup = useLeaveGroup();
   const deleteGroup = useDeleteGroup();
 
-  const [editOpen, setEditOpen] = useState(false);
-  const [editName, setEditName] = useState("");
+  const [editDescOpen, setEditDescOpen] = useState(false);
   const [editDesc, setEditDesc] = useState("");
-  const [editPrivacy, setEditPrivacy] = useState("open");
+  const [editRules, setEditRules] = useState("");
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const [mediaExpanded, setMediaExpanded] = useState(false);
+  const [starredExpanded, setStarredExpanded] = useState(false);
 
   const isOwner = group?.myRole === "owner";
   const isAdmin = group?.myRole === "owner" || group?.myRole === "admin";
@@ -58,23 +67,6 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
     const order: Record<string, number> = { owner: 0, admin: 1, member: 2 };
     return (order[a.role] || 2) - (order[b.role] || 2);
   });
-
-  const openEditDialog = () => {
-    setEditName(group?.name || "");
-    setEditDesc(group?.description || "");
-    setEditPrivacy(group?.privacyMode || "open");
-    setEditOpen(true);
-  };
-
-  const handleSaveEdit = async () => {
-    try {
-      await updateGroup.mutateAsync({ name: editName, description: editDesc, privacyMode: editPrivacy });
-      toast({ title: "Group updated" });
-      setEditOpen(false);
-    } catch {
-      toast({ title: "Error", description: "Failed to update group.", variant: "destructive" });
-    }
-  };
 
   const handleCreateInvite = async () => {
     try {
@@ -132,6 +124,39 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
     }
   };
 
+  const openEditDescDialog = () => {
+    setEditDesc(group?.description || "");
+    setEditRules(group?.rulesText || "");
+    setEditDescOpen(true);
+  };
+
+  const handleSaveDescRules = async () => {
+    try {
+      await updateGroup.mutateAsync({ description: editDesc });
+      await updateSettings.mutateAsync({ rulesText: editRules });
+      toast({ title: "Updated successfully" });
+      setEditDescOpen(false);
+    } catch {
+      toast({ title: "Error", description: "Failed to save changes.", variant: "destructive" });
+    }
+  };
+
+  const handleSettingToggle = async (key: string, value: boolean) => {
+    try {
+      await updateSettings.mutateAsync({ [key]: value });
+    } catch {
+      toast({ title: "Error", description: "Failed to update setting.", variant: "destructive" });
+    }
+  };
+
+  const handleSettingSelect = async (key: string, value: string) => {
+    try {
+      await updateSettings.mutateAsync({ [key]: value });
+    } catch {
+      toast({ title: "Error", description: "Failed to update setting.", variant: "destructive" });
+    }
+  };
+
   if (!groupId || isNaN(groupId)) {
     setLocation("/lounge");
     return null;
@@ -146,12 +171,14 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   }
 
   const privacy = PRIVACY_LABELS[group?.privacyMode || "open"] || PRIVACY_LABELS["open"];
-  const PrivacyIcon = privacy.icon;
+  const mediaCount = media?.length || 0;
+  const starredCount = starredMessages?.length || 0;
+  const canAddMembers = isAdmin || group?.canMembersAddOthers;
 
   return (
     <div className="h-screen flex flex-col bg-background">
       <div className="border-b px-4 py-3 flex items-center gap-3 sticky top-0 z-50 bg-background">
-        <Button variant="ghost" size="icon" onClick={() => setLocation(`/lounge/group/${groupId}`)} data-testid="button-back-chat" className="btn-press">
+        <Button variant="ghost" size="icon" onClick={() => setLocation(`/lounge/group/${groupId}`)} data-testid="button-back-chat">
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <h2 className="font-bold text-sm">Group Info</h2>
@@ -160,85 +187,234 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
       <div className="flex-1 overflow-y-auto">
         <div className="flex flex-col items-center p-6 gap-3">
           {group?.groupPhotoUrl ? (
-            <img src={group.groupPhotoUrl} alt={group.name} className="w-20 h-20 rounded-md object-cover" data-testid="img-group-photo" />
+            <img src={group.groupPhotoUrl} alt={group.name} className="w-24 h-24 rounded-full object-cover" data-testid="img-group-photo" />
           ) : (
-            <div className="w-20 h-20 rounded-md gradient-bg flex items-center justify-center" data-testid="placeholder-group-photo">
-              <Users className="w-8 h-8 text-white" />
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary/60 to-primary flex items-center justify-center" data-testid="placeholder-group-photo">
+              <Users className="w-10 h-10 text-primary-foreground" />
             </div>
           )}
-          <h2 className="font-bold text-lg" data-testid="text-group-info-name">{group?.name}</h2>
-          {group?.description && (
-            <p className="text-sm text-muted-foreground text-center max-w-sm" data-testid="text-group-description">{group.description}</p>
+          <h2 className="font-bold text-xl text-center" data-testid="text-group-info-name">{group?.name}</h2>
+          <p className="text-sm text-muted-foreground text-center" data-testid="text-group-subtitle">
+            {group?.memberCount || sortedMembers.length} Members {privacy.label !== "Open" ? `- ${privacy.label}` : ""}
+          </p>
+          {group?.categoryTags && group.categoryTags.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap justify-center">
+              {group.categoryTags.map((tag: string) => (
+                <Badge key={tag} variant="secondary" className="text-xs" data-testid={`tag-${tag}`}>{tag}</Badge>
+              ))}
+            </div>
           )}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="secondary">
-              <PrivacyIcon className="w-3 h-3 mr-1" /> {privacy.label}
-            </Badge>
-            <Badge variant="outline">{group?.memberCount || 0} members</Badge>
-          </div>
-          {group?.categoryTags?.map((tag: string) => (
-            <Badge key={tag} variant="outline" className="text-xs" data-testid={`tag-${tag}`}>{tag}</Badge>
-          ))}
+        </div>
+
+        <div className="flex items-center justify-center gap-6 pb-4">
+          {canAddMembers && (
+            <button
+              className="flex flex-col items-center gap-1 text-primary"
+              onClick={handleCreateInvite}
+              data-testid="button-action-add-members"
+            >
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <UserPlus className="w-5 h-5" />
+              </div>
+              <span className="text-xs font-medium">Add</span>
+            </button>
+          )}
+          <button
+            className="flex flex-col items-center gap-1 text-primary"
+            onClick={() => toast({ title: "Search coming soon" })}
+            data-testid="button-action-search"
+          >
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <Search className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-medium">Search</span>
+          </button>
+          <button
+            className="flex flex-col items-center gap-1 text-primary"
+            onClick={() => toast({ title: "Mute coming soon" })}
+            data-testid="button-action-mute"
+          >
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <BellOff className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-medium">Mute</span>
+          </button>
         </div>
 
         <div className="px-4 pb-4 space-y-4 max-w-lg mx-auto">
-          {isAdmin && (
+          {(group?.description || group?.rulesText || isAdmin) && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Admin Controls</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button variant="outline" className="w-full justify-start btn-press" onClick={openEditDialog} data-testid="button-edit-group">
-                  <Pencil className="w-4 h-4 mr-2" /> Edit Group
-                </Button>
-                <Button variant="outline" className="w-full justify-start btn-press" onClick={handleCreateInvite} disabled={createInvite.isPending} data-testid="button-create-invite">
-                  <Link2 className="w-4 h-4 mr-2" /> Generate Invite Link
-                </Button>
-                {inviteLinks && inviteLinks.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Active Invite Links</p>
-                    {inviteLinks.filter((l: any) => l.isActive).map((link: any) => (
-                      <div key={link.id} className="flex items-center gap-2">
-                        <Input
-                          value={`${window.location.origin}/join/${link.token}`}
-                          readOnly
-                          className="text-xs flex-1"
-                          data-testid={`input-invite-${link.id}`}
-                        />
-                        <Button size="icon" variant="outline" onClick={() => handleCopyLink(link.token)} data-testid={`button-copy-invite-${link.id}`}>
-                          {copiedLink === link.token ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
+              <CardContent className="p-4 space-y-3">
+                {group?.description && (
+                  <p className="text-sm" data-testid="text-group-description">{group.description}</p>
                 )}
-                {isOwner && (
-                  <Button variant="destructive" className="w-full justify-start btn-press" onClick={handleDelete} data-testid="button-delete-group">
-                    <Trash2 className="w-4 h-4 mr-2" /> Delete Group
+                {(group?.description && (group?.rulesText || isAdmin)) && <Separator />}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Group Rules</p>
+                  <p className="text-sm" data-testid="text-group-rules">
+                    {group?.rulesText || "No rules set"}
+                  </p>
+                </div>
+                {isAdmin && (
+                  <Button variant="ghost" size="sm" onClick={openEditDescDialog} data-testid="button-edit-desc-rules">
+                    <Pencil className="w-3.5 h-3.5 mr-1.5" /> Edit
                   </Button>
                 )}
               </CardContent>
             </Card>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Members ({sortedMembers.length})</CardTitle>
+          <Card className="hover-elevate cursor-pointer" onClick={() => setMediaExpanded(!mediaExpanded)} data-testid="card-media">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                  <span className="text-sm font-medium">{mediaCount} Media</span>
+                </div>
+                <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${mediaExpanded ? "rotate-90" : ""}`} />
+              </div>
+              {mediaExpanded && (
+                <div className="mt-3">
+                  {mediaCount > 0 ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {media!.map((item: any, idx: number) => (
+                        <div key={idx} className="aspect-square rounded-md overflow-hidden bg-muted" data-testid={`media-${idx}`}>
+                          {item.contentType === "video" ? (
+                            <video src={item.mediaUrl} className="w-full h-full object-cover" />
+                          ) : (
+                            <img src={item.mediaUrl} alt="" className="w-full h-full object-cover" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No shared media yet</p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="hover-elevate cursor-pointer" onClick={() => setStarredExpanded(!starredExpanded)} data-testid="card-starred">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <Star className="w-5 h-5 text-muted-foreground" />
+                  <span className="text-sm font-medium">Starred Messages ({starredCount})</span>
+                </div>
+                <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${starredExpanded ? "rotate-90" : ""}`} />
+              </div>
+              {starredExpanded && (
+                <div className="mt-3 space-y-2">
+                  {starredCount > 0 ? (
+                    starredMessages!.map((msg: any) => (
+                      <div key={msg.id} className="rounded-md bg-muted p-3" data-testid={`starred-msg-${msg.id}`}>
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-xs font-semibold">{msg.nickname || "Unknown"}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {msg.createdAt ? new Date(msg.createdAt).toLocaleDateString() : ""}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">{msg.content}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No starred messages</p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {isAdmin && (
+            <Card data-testid="card-group-settings">
+              <CardHeader className="p-4 pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Settings className="w-4 h-4" /> Group Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-2 space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-sm">Members can send messages</label>
+                  <Switch
+                    checked={group?.canMembersSendMessages ?? true}
+                    onCheckedChange={(v) => handleSettingToggle("canMembersSendMessages", v)}
+                    data-testid="switch-send-messages"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-sm">Members can edit group info</label>
+                  <Switch
+                    checked={group?.canMembersEditInfo ?? true}
+                    onCheckedChange={(v) => handleSettingToggle("canMembersEditInfo", v)}
+                    data-testid="switch-edit-info"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-sm">Members can add others</label>
+                  <Switch
+                    checked={group?.canMembersAddOthers ?? true}
+                    onCheckedChange={(v) => handleSettingToggle("canMembersAddOthers", v)}
+                    data-testid="switch-add-others"
+                  />
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-sm">Posting permission</label>
+                  <Select
+                    value={group?.postingPermission || "everyone"}
+                    onValueChange={(v) => handleSettingSelect("postingPermission", v)}
+                  >
+                    <SelectTrigger className="w-36" data-testid="select-posting-permission">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="everyone">Everyone</SelectItem>
+                      <SelectItem value="admins_only">Admins Only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-sm">Media permission</label>
+                  <Select
+                    value={group?.mediaPermission || "everyone"}
+                    onValueChange={(v) => handleSettingSelect("mediaPermission", v)}
+                  >
+                    <SelectTrigger className="w-36" data-testid="select-media-permission">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="everyone">Everyone</SelectItem>
+                      <SelectItem value="admin_only">Admin Only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card data-testid="card-members">
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="w-4 h-4" /> Members ({sortedMembers.length})
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="p-4 pt-2 space-y-1">
               {sortedMembers.map((member: any) => (
                 <div key={member.id} className="flex items-center justify-between gap-2 py-2" data-testid={`member-${member.id}`}>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-xs font-bold text-accent-foreground shrink-0">
-                      {member.nickname?.[0] || "?"}
-                    </div>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar className="w-9 h-9">
+                      <AvatarFallback className="text-xs font-bold">
+                        {member.nickname?.[0]?.toUpperCase() || "?"}
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{member.nickname || "Anonymous"}</p>
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {member.role === "owner" && <Crown className="w-3 h-3 text-amber-500" />}
-                        {member.role === "admin" && <Shield className="w-3 h-3 text-blue-500" />}
-                        <span className="text-xs text-muted-foreground capitalize">{member.role}</span>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium truncate">{member.nickname || "Anonymous"}</p>
+                        {member.role === "owner" && <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                        {member.role === "admin" && <Shield className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
                       </div>
+                      <span className="text-xs text-muted-foreground capitalize">{member.role}</span>
                     </div>
                   </div>
                   {isOwner && member.userId !== user?.id && (
@@ -263,70 +439,86 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             </CardContent>
           </Card>
 
-          {media && media.length > 0 && (
-            <Card>
-              <CardHeader>
+          {isAdmin && (
+            <Card data-testid="card-invite-links">
+              <CardHeader className="p-4 pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4" /> Shared Media
+                  <Link2 className="w-4 h-4" /> Invite Links
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 gap-2">
-                  {media.map((item: any, idx: number) => (
-                    <div key={idx} className="aspect-square rounded-md overflow-hidden bg-muted" data-testid={`media-${idx}`}>
-                      {item.contentType === "video" ? (
-                        <video src={item.mediaUrl} className="w-full h-full object-cover" />
-                      ) : (
-                        <img src={item.mediaUrl} alt="" className="w-full h-full object-cover" />
-                      )}
-                    </div>
-                  ))}
-                </div>
+              <CardContent className="p-4 pt-2 space-y-3">
+                <Button variant="outline" className="w-full" onClick={handleCreateInvite} disabled={createInvite.isPending} data-testid="button-create-invite">
+                  {createInvite.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Link2 className="w-4 h-4 mr-2" />}
+                  Generate Invite Link
+                </Button>
+                {inviteLinks && inviteLinks.filter((l: any) => l.isActive).length > 0 && (
+                  <div className="space-y-2">
+                    {inviteLinks.filter((l: any) => l.isActive).map((link: any) => (
+                      <div key={link.id} className="flex items-center gap-2">
+                        <Input
+                          value={`${window.location.origin}/join/${link.token}`}
+                          readOnly
+                          className="text-xs flex-1"
+                          data-testid={`input-invite-${link.id}`}
+                        />
+                        <Button size="icon" variant="outline" onClick={() => handleCopyLink(link.token)} data-testid={`button-copy-invite-${link.id}`}>
+                          {copiedLink === link.token ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
 
-          <div className="pt-2 pb-8">
-            <Button variant="outline" className="w-full text-destructive btn-press" onClick={handleLeave} data-testid="button-leave-group">
+          <div className="pt-2 pb-4 space-y-3">
+            <Button variant="destructive" className="w-full" onClick={handleLeave} data-testid="button-leave-group">
               Leave Group
             </Button>
+            {isOwner && (
+              <Button variant="destructive" className="w-full" onClick={handleDelete} data-testid="button-delete-group">
+                <Trash2 className="w-4 h-4 mr-2" /> Delete Group
+              </Button>
+            )}
           </div>
+
+          <div className="pb-8" />
         </div>
       </div>
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+      <Dialog open={editDescOpen} onOpenChange={setEditDescOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Group</DialogTitle>
-            <DialogDescription>Update your group settings.</DialogDescription>
+            <DialogTitle>Edit Description & Rules</DialogTitle>
+            <DialogDescription>Update your group description and rules.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-1 block">Group Name</label>
-              <Input value={editName} onChange={(e) => setEditName(e.target.value)} data-testid="input-edit-name" />
-            </div>
-            <div>
               <label className="text-sm font-medium mb-1 block">Description</label>
-              <Input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} data-testid="input-edit-description" />
+              <Textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                className="resize-none"
+                rows={3}
+                data-testid="input-edit-description"
+              />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">Privacy</label>
-              <Select value={editPrivacy} onValueChange={setEditPrivacy}>
-                <SelectTrigger data-testid="select-edit-privacy">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="request-to-join">Request to Join</SelectItem>
-                  <SelectItem value="invite-only">Invite Only</SelectItem>
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium mb-1 block">Rules</label>
+              <Textarea
+                value={editRules}
+                onChange={(e) => setEditRules(e.target.value)}
+                className="resize-none"
+                rows={4}
+                data-testid="input-edit-rules"
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveEdit} disabled={updateGroup.isPending} className="btn-press" data-testid="button-save-edit">
-              {updateGroup.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+            <Button variant="outline" onClick={() => setEditDescOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveDescRules} disabled={updateGroup.isPending || updateSettings.isPending} data-testid="button-save-desc-rules">
+              {(updateGroup.isPending || updateSettings.isPending) && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               Save
             </Button>
           </DialogFooter>

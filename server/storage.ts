@@ -2,12 +2,12 @@ import { db } from "./db";
 import {
   profiles, matches, interviews, groups, groupMembers, directMessages, groupMessages,
   userPhotos, groupJoinRequests, groupInviteLinks, groupModerationLogs,
-  polls, pollOptions, pollVotes, messageReactions,
+  polls, pollOptions, pollVotes, messageReactions, starredMessages,
   twinMemory, twinNotifications, subscriptions, payments, entitlements,
   type Profile, type InsertProfile, type UpdateProfileRequest,
   type Match, type Interview, type Group, type GroupMember, type DirectMessage, type GroupMessage,
   type GroupJoinRequest, type GroupInviteLink, type GroupModerationLog,
-  type Poll, type PollOption, type PollVote, type MessageReaction,
+  type Poll, type PollOption, type PollVote, type MessageReaction, type StarredMessage,
   type UserPhoto, type TwinMemoryEntry, type TwinNotification,
   type Subscription, type Payment, type Entitlement
 } from "@shared/schema";
@@ -105,6 +105,14 @@ export interface IStorage {
   getEntitlements(userId: string): Promise<Entitlement[]>;
   addEntitlement(userId: string, type: string, quantity: number, expiresAt?: Date): Promise<Entitlement>;
   useEntitlement(userId: string, type: string): Promise<boolean>;
+
+  starMessage(messageId: number, userId: string, groupId: number): Promise<StarredMessage>;
+  unstarMessage(messageId: number, userId: string): Promise<void>;
+  getStarredMessages(groupId: number, userId: string): Promise<any[]>;
+  isMessageStarred(messageId: number, userId: string): Promise<boolean>;
+
+  getProfileCompletion(userId: string): Promise<{ score: number; tasks: { key: string; label: string; benefit: string; completed: boolean; weight: number }[] }>;
+  updateProfileCompletionScore(userId: string, score: number): Promise<void>;
 
   seedDemoData(): Promise<void>;
 }
@@ -783,6 +791,67 @@ export class DatabaseStorage implements IStorage {
         await db.insert(profiles).values(demoProfile);
       }
     }
+  }
+
+  async starMessage(messageId: number, userId: string, groupId: number): Promise<StarredMessage> {
+    const existing = await db.select().from(starredMessages)
+      .where(and(eq(starredMessages.messageId, messageId), eq(starredMessages.userId, userId)));
+    if (existing.length > 0) return existing[0];
+    const [starred] = await db.insert(starredMessages).values({ messageId, userId, groupId }).returning();
+    return starred;
+  }
+
+  async unstarMessage(messageId: number, userId: string): Promise<void> {
+    await db.delete(starredMessages)
+      .where(and(eq(starredMessages.messageId, messageId), eq(starredMessages.userId, userId)));
+  }
+
+  async getStarredMessages(groupId: number, userId: string): Promise<any[]> {
+    const starred = await db.select({
+      id: starredMessages.id,
+      messageId: starredMessages.messageId,
+      starredAt: starredMessages.createdAt,
+      content: groupMessages.content,
+      nickname: groupMessages.nickname,
+      contentType: groupMessages.contentType,
+      mediaUrl: groupMessages.mediaUrl,
+      messageCreatedAt: groupMessages.createdAt,
+      senderId: groupMessages.userId,
+    })
+    .from(starredMessages)
+    .innerJoin(groupMessages, eq(starredMessages.messageId, groupMessages.id))
+    .where(and(eq(starredMessages.groupId, groupId), eq(starredMessages.userId, userId)))
+    .orderBy(desc(starredMessages.createdAt));
+    return starred;
+  }
+
+  async isMessageStarred(messageId: number, userId: string): Promise<boolean> {
+    const [result] = await db.select().from(starredMessages)
+      .where(and(eq(starredMessages.messageId, messageId), eq(starredMessages.userId, userId)));
+    return !!result;
+  }
+
+  async getProfileCompletion(userId: string): Promise<{ score: number; tasks: { key: string; label: string; benefit: string; completed: boolean; weight: number }[] }> {
+    const profile = await this.getProfile(userId);
+    const photos = await this.getUserPhotos(userId);
+
+    const tasks = [
+      { key: "bio", label: "Add About Me", benefit: "+10% more visibility", completed: !!profile?.bio && profile.bio.length > 5, weight: 20 },
+      { key: "photos", label: "Add More Photos", benefit: "Increase your appeal", completed: photos.length >= 3, weight: 25 },
+      { key: "onboarding", label: "Complete Soul-Mapping", benefit: "Unlock AI Twin features", completed: !!profile?.onboardingCompleted, weight: 25 },
+      { key: "verify", label: "Get Verified", benefit: "Build trust, get more matches", completed: !!profile?.isVerified, weight: 15 },
+      { key: "personality", label: "Generate AI Summary", benefit: "Show your personality", completed: !!profile?.aboutSummary, weight: 15 },
+    ];
+
+    const totalWeight = tasks.reduce((sum, t) => sum + t.weight, 0);
+    const completedWeight = tasks.filter(t => t.completed).reduce((sum, t) => sum + t.weight, 0);
+    const score = Math.round((completedWeight / totalWeight) * 100);
+
+    return { score, tasks };
+  }
+
+  async updateProfileCompletionScore(userId: string, score: number): Promise<void> {
+    await db.update(profiles).set({ profileCompletionScore: score }).where(eq(profiles.userId, userId));
   }
 }
 

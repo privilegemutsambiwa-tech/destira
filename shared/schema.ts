@@ -25,6 +25,10 @@ export const profiles = pgTable("profiles", {
   cartoonPhotoUrl: text("cartoon_photo_url"),
   aboutSummary: text("about_summary"),
   personalitySummary: text("personality_summary"),
+  isVerified: boolean("is_verified").default(false),
+  profileCompletionScore: integer("profile_completion_score").default(0),
+  superMatchesRemaining: integer("super_matches_remaining").default(0),
+  boostsRemaining: integer("boosts_remaining").default(0),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -73,6 +77,10 @@ export const groups = pgTable("groups", {
   postingPermission: text("posting_permission").notNull().default("everyone"),
   mediaPermission: text("media_permission").notNull().default("everyone"),
   inviteDirectJoinEnabled: boolean("invite_direct_join_enabled").default(false),
+  rulesText: text("rules_text"),
+  canMembersEditInfo: boolean("can_members_edit_info").default(true),
+  canMembersSendMessages: boolean("can_members_send_messages").default(true),
+  canMembersAddOthers: boolean("can_members_add_others").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -126,7 +134,16 @@ export const groupMessages = pgTable("group_messages", {
   replyToMessageId: integer("reply_to_message_id"),
   isDeletedByAdmin: boolean("is_deleted_by_admin").default(false),
   deletedForEveryone: boolean("deleted_for_everyone").default(false),
+  isStarred: boolean("is_starred").default(false),
   originalContent: text("original_content"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const starredMessages = pgTable("starred_messages", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").notNull().references(() => groupMessages.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  groupId: integer("group_id").notNull().references(() => groups.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -320,6 +337,7 @@ export type Poll = typeof polls.$inferSelect;
 export type PollOption = typeof pollOptions.$inferSelect;
 export type PollVote = typeof pollVotes.$inferSelect;
 export type MessageReaction = typeof messageReactions.$inferSelect;
+export type StarredMessage = typeof starredMessages.$inferSelect;
 
 export type CreateProfileRequest = InsertProfile;
 export type UpdateProfileRequest = Partial<InsertProfile>;

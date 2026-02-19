@@ -640,3 +640,80 @@ export function useGroupMembers(groupId: number) {
     },
   });
 }
+
+export function useProfileCompletion() {
+  return useQuery({
+    queryKey: ["/api/profiles/me/completion"],
+    queryFn: async () => {
+      const res = await fetch("/api/profiles/me/completion", { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+}
+
+export function useStarMessage(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ messageId }: { messageId: number }) => {
+      const res = await fetch(`/api/messages/${messageId}/star`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to star");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "starred"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] });
+    },
+  });
+}
+
+export function useUnstarMessage(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ messageId }: { messageId: number }) => {
+      const res = await fetch(`/api/messages/${messageId}/star`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to unstar");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "starred"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] });
+    },
+  });
+}
+
+export function useStarredMessages(groupId: number) {
+  return useQuery({
+    queryKey: ["/api/groups", groupId, "starred"],
+    queryFn: async () => {
+      const res = await fetch(`/api/groups/${groupId}/starred`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
+
+export function useUpdateGroupSettings(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (settings: Record<string, any>) => {
+      const res = await fetch(`/api/groups/${groupId}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update settings");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] }),
+  });
+}

@@ -1008,9 +1008,12 @@ You are chatting with your human self. Be reflective, insightful, supportive. He
         if (!reactionsByMsg[r.messageId]) reactionsByMsg[r.messageId] = [];
         reactionsByMsg[r.messageId].push(r);
       }
+      const starred = await storage.getStarredMessages(groupId, userId);
+      const starredMsgIds = new Set(starred.map((s: any) => s.messageId));
       const enriched = msgs.map(m => ({
         ...m,
         reactions: reactionsByMsg[m.id] || [],
+        isStarred: starredMsgIds.has(m.id),
       }));
       res.json(enriched);
     } catch (e) {
@@ -1171,6 +1174,80 @@ You are chatting with your human self. Be reflective, insightful, supportive. He
     } catch (e: any) {
       console.error("Portal error:", e);
       res.status(500).json({ message: "Failed to create portal session" });
+    }
+  });
+
+  app.get("/api/profiles/me/completion", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const completion = await storage.getProfileCompletion(userId);
+      await storage.updateProfileCompletionScore(userId, completion.score);
+      res.json(completion);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to get profile completion" });
+    }
+  });
+
+  app.post("/api/messages/:messageId/star", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const messageId = parseInt(req.params.messageId);
+    const { groupId } = req.body;
+    try {
+      const starred = await storage.starMessage(messageId, userId, groupId);
+      res.json(starred);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to star message" });
+    }
+  });
+
+  app.delete("/api/messages/:messageId/star", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const messageId = parseInt(req.params.messageId);
+    try {
+      await storage.unstarMessage(messageId, userId);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to unstar message" });
+    }
+  });
+
+  app.get("/api/groups/:id/starred", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const starred = await storage.getStarredMessages(groupId, userId);
+      res.json(starred);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to get starred messages" });
+    }
+  });
+
+  app.patch("/api/groups/:id/settings", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const members = await storage.getGroupMembers(groupId);
+      const member = members.find(m => m.userId === userId);
+      if (!member || (member.role !== "owner" && member.role !== "admin")) {
+        return res.status(403).json({ message: "Only admins can update group settings" });
+      }
+      const { rulesText, canMembersEditInfo, canMembersSendMessages, canMembersAddOthers, postingPermission, mediaPermission } = req.body;
+      const updates: any = {};
+      if (rulesText !== undefined) updates.rulesText = rulesText;
+      if (canMembersEditInfo !== undefined) updates.canMembersEditInfo = canMembersEditInfo;
+      if (canMembersSendMessages !== undefined) updates.canMembersSendMessages = canMembersSendMessages;
+      if (canMembersAddOthers !== undefined) updates.canMembersAddOthers = canMembersAddOthers;
+      if (postingPermission !== undefined) updates.postingPermission = postingPermission;
+      if (mediaPermission !== undefined) updates.mediaPermission = mediaPermission;
+      const group = await storage.updateGroup(groupId, updates);
+      res.json(group);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to update group settings" });
     }
   });
 

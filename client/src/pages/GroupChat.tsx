@@ -19,7 +19,8 @@ import {
   useGroup, useEnrichedGroupMessages, useSendGroupMessage,
   useCreatePoll, usePollByMessage, useVotePoll,
   useAddReaction, useRemoveReaction, useDeleteOwnMessage,
-  useDeleteGroupMessage, useJoinGroup, useLeaveGroup
+  useDeleteGroupMessage, useJoinGroup, useLeaveGroup,
+  useStarMessage, useUnstarMessage
 } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -230,6 +231,8 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   const addReaction = useAddReaction(groupId);
   const removeReaction = useRemoveReaction(groupId);
   const joinGroup = useJoinGroup();
+  const starMessage = useStarMessage(groupId);
+  const unstarMessage = useUnstarMessage(groupId);
 
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<any>(null);
@@ -449,6 +452,27 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                               data-testid={`action-reply-${msg.id}`}
                             >
                               <Reply className="w-4 h-4 mr-2" /> Reply
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="justify-start btn-press"
+                              onClick={async () => {
+                                try {
+                                  if (msg.isStarred) {
+                                    await unstarMessage.mutateAsync({ messageId: msg.id });
+                                    toast({ title: "Message unstarred" });
+                                  } else {
+                                    await starMessage.mutateAsync({ messageId: msg.id });
+                                    toast({ title: "Message starred" });
+                                  }
+                                } catch {}
+                                setActiveMessageId(null);
+                              }}
+                              data-testid={`action-star-${msg.id}`}
+                            >
+                              <Star className={`w-4 h-4 mr-2 ${msg.isStarred ? "fill-yellow-400 text-yellow-400" : ""}`} />
+                              {msg.isStarred ? "Unstar" : "Star"}
                             </Button>
                             {msg.contentType === "text" && (
                               <Button
