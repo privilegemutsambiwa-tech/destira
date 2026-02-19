@@ -1,5 +1,34 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
+export function useIncomingLikes() {
+  return useQuery({
+    queryKey: ["/api/likes/incoming"],
+    queryFn: async () => {
+      const res = await fetch("/api/likes/incoming", { credentials: "include" });
+      if (!res.ok) return { likes: [], totalCount: 0, isBlurred: true, tier: "free" };
+      return res.json();
+    },
+  });
+}
+
+export function useLikeBack() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (matchId: number) => {
+      const res = await fetch(`/api/likes/${matchId}/like-back`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to like back");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/likes/incoming"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/matches"] });
+    },
+  });
+}
+
 export function useMatches() {
   return useQuery({
     queryKey: ["/api/matches"],
@@ -89,6 +118,18 @@ export function useInterviews() {
   });
 }
 
+export function useChatThreads(filter?: string) {
+  return useQuery({
+    queryKey: ["/api/chat/threads", filter],
+    queryFn: async () => {
+      const url = filter && filter !== "all" ? `/api/chat/threads?filter=${filter}` : "/api/chat/threads";
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
+
 export function useStartInterview() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -161,11 +202,14 @@ export function useSendDirectMessage(matchId: number) {
   });
 }
 
-export function useGroups(search?: string) {
+export function useGroups(search?: string, filter?: string) {
   return useQuery({
-    queryKey: ["/api/groups", search],
+    queryKey: ["/api/lounge/groups", search, filter],
     queryFn: async () => {
-      const url = search ? `/api/groups?search=${encodeURIComponent(search)}` : "/api/groups";
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      if (filter && filter !== "all") params.set("filter", filter);
+      const url = `/api/lounge/groups?${params.toString()}`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch groups");
       return res.json();

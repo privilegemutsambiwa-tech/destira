@@ -1177,6 +1177,173 @@ You are chatting with your human self. Be reflective, insightful, supportive. He
     }
   });
 
+  app.get("/api/chat/threads", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const filter = (req.query.filter as string) || "all";
+    try {
+      const threads: any[] = [];
+
+      if (filter === "all" || filter === "match" || filter === "matches") {
+        const userMatches = await storage.getMatchesWithProfiles(userId);
+        for (const m of userMatches) {
+          if (m.status !== "matched") continue;
+          const msgs = await storage.getDirectMessages(m.id, 1);
+          const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+          threads.push({
+            id: `match_${m.id}`,
+            type: "match",
+            matchId: m.id,
+            name: m.otherProfile?.displayName || "Match",
+            avatar: m.otherProfile?.coverPhotoUrl || null,
+            lastMessage: lastMsg?.content || "Start chatting!",
+            lastMessageAt: lastMsg?.createdAt || m.createdAt,
+            unreadCount: 0,
+            href: `/chat/${m.id}`,
+          });
+        }
+      }
+
+      if (filter === "all" || filter === "ai_twin_interview" || filter === "ai_twin") {
+        const userInterviews = await storage.getInterviewsWithProfiles(userId);
+        for (const iv of userInterviews) {
+          let lastMsg = "";
+          let lastAt = iv.createdAt;
+          if (iv.transcript) {
+            try {
+              const parsed = JSON.parse(iv.transcript);
+              if (parsed.length > 0) {
+                const last = parsed[parsed.length - 1];
+                lastMsg = last.content || "";
+                lastAt = iv.createdAt;
+              }
+            } catch {}
+          }
+          threads.push({
+            id: `interview_${iv.id}`,
+            type: "ai_twin_interview",
+            interviewId: iv.id,
+            name: `${iv.targetProfile?.displayName || "Unknown"}'s AI Twin`,
+            avatar: iv.targetProfile?.coverPhotoUrl || null,
+            lastMessage: lastMsg || "Start interview",
+            lastMessageAt: lastAt,
+            unreadCount: 0,
+            href: `/interviews/${iv.id}/chat`,
+          });
+        }
+      }
+
+      threads.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+      res.json(threads);
+    } catch (e) {
+      console.error("Chat threads error:", e);
+      res.status(500).json({ message: "Failed to fetch chat threads" });
+    }
+  });
+
+  app.get("/api/likes/incoming", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const userMatches = await storage.getMatchesWithProfiles(userId);
+      const incoming = userMatches
+        .filter((m: any) => m.status === "pending" && !m.isRequester)
+        .map((m: any) => ({
+          matchId: m.id,
+          fromUserId: m.isRequester ? m.user2Id : m.user1Id,
+          profile: m.otherProfile,
+          createdAt: m.createdAt,
+        }));
+
+      const sub = await storage.getSubscription(userId);
+      const tier = sub?.tier || "free";
+      const isBlurred = tier === "free";
+
+      res.json({
+        likes: incoming.map((like: any) => ({
+          ...like,
+          profile: isBlurred ? {
+            displayName: null,
+            bio: null,
+            coverPhotoUrl: like.profile?.coverPhotoUrl || null,
+            age: like.profile?.age || null,
+            location: like.profile?.location || null,
+            blurred: true,
+          } : {
+            ...like.profile,
+            blurred: false,
+          },
+        })),
+        totalCount: incoming.length,
+        isBlurred,
+        tier,
+      });
+    } catch (e) {
+      console.error("Likes incoming error:", e);
+      res.status(500).json({ message: "Failed to fetch incoming likes" });
+    }
+  });
+
+  app.post("/api/likes/:matchId/like-back", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const matchId = parseInt(req.params.matchId);
+    try {
+      const match = await storage.getMatch(matchId);
+      if (!match) return res.status(404).json({ message: "Match not found" });
+      const updated = await storage.updateMatchStatus(matchId, "matched");
+      res.json(updated);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to like back" });
+    }
+  });
+
+  app.get("/api/lounge/groups", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const filter = (req.query.filter as string) || "all";
+    const search = (req.query.search as string) || "";
+    try {
+      let rawGroups;
+      if (search) {
+        rawGroups = await storage.searchGroups(search);
+      } else {
+        rawGroups = await storage.getGroups();
+      }
+
+      let allGroups = await Promise.all(rawGroups.map(async (g) => {
+        const members = await storage.getGroupMembers(g.id);
+        const isMember = members.some(m => m.userId === userId);
+        const myRole = members.find(m => m.userId === userId)?.role;
+        const msgs = await storage.getGroupMessages(g.id, 1);
+        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+        return {
+          ...g,
+          memberCount: members.length,
+          isMember,
+          myRole,
+          lastMessage: lastMsg?.content || null,
+          lastMessageNickname: lastMsg?.nickname || null,
+          lastMessageAt: lastMsg?.createdAt || g.createdAt,
+        };
+      }));
+
+      if (filter === "joined") {
+        allGroups = allGroups.filter((g: any) => g.isMember);
+      } else if (filter === "popular") {
+        allGroups.sort((a: any, b: any) => (b.memberCount || 0) - (a.memberCount || 0));
+      } else if (filter === "new") {
+        allGroups.sort((a: any, b: any) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime());
+      }
+
+      allGroups.sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime());
+      res.json(allGroups);
+    } catch (e) {
+      console.error("Lounge groups error:", e);
+      res.status(500).json({ message: "Failed to fetch lounge groups" });
+    }
+  });
+
   app.get("/api/profiles/me/completion", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);

@@ -25,8 +25,8 @@ export function LayoutShell({ children }: LayoutShellProps) {
 
   const navItems = [
     { href: "/discover", icon: Search, label: "Discover" },
-    { href: "/interviews", icon: MessageCircle, label: "Interviews" },
-    { href: "/matches", icon: Heart, label: "Matches" },
+    { href: "/interviews", icon: MessageCircle, label: "Chat" },
+    { href: "/matches", icon: Heart, label: "Likes" },
     { href: "/lounge", icon: Users, label: "Lounge" },
     { href: "/profile", icon: User, label: "Profile" },
   ];
