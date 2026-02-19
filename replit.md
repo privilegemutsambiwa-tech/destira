@@ -112,6 +112,10 @@ shared/
 - Privacy: GET /api/photos/:userId requires auth; private profiles return empty array for other users
 
 ## Recent Changes (Feb 19, 2026)
+- **Chat Hub**: Unified chat list replacing "Interviews" page. GET /api/chat/threads aggregates match chats + AI Twin interviews. Filter tabs (All/Matches/AI Twin), search bar, last message preview, relative timestamps, "Chat with My Twin" pinned card
+- **Likes Screen**: Tinder-style paywall replacing "Matches" page. GET /api/likes/incoming returns incoming likes with blur for free tier. Blurred photos + hidden names for free users, clear view for Plus/VIP. POST /api/likes/:matchId/like-back for mutual matching
+- **Lounge Groups redesign**: WhatsApp-style group list with GET /api/lounge/groups. Filter pills (All/Joined/Popular/New), search bar, last message preview with nickname, relative timestamps, circular group photos
+- **Navigation renamed**: "Interviews" → "Chat", "Matches" → "Likes" across sidebar and bottom nav
 - **Tinder-style Profile redesign**: Circular avatar header, verification badge, Edit Profile dialog, completion bar (weighted scoring engine), improvement task cards, quick action tiles (Super Match/Boosts/Subscription), tier comparison sidebar (Free/Plus/VIP), personality highlight chips
 - **WhatsApp-style Group Info redesign**: Circular group photo header, action row (Add Members/Search/Mute), description + rules editor (admin-only), media module, starred messages module, granular admin settings (permissions toggles for send/edit/add), enhanced sorted member list with role badges
 - **Starred messages feature**: Star/unstar messages in GroupChat popover, starred messages stored in starredMessages table, viewable on GroupInfo page, isStarred field in enriched messages endpoint
