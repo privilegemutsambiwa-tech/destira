@@ -7,7 +7,7 @@ VibeFlow is a personality-first dating platform that uses AI Twins to facilitate
 - **Frontend**: React + Vite + TypeScript, wouter routing, TanStack Query, shadcn/ui, Tailwind CSS, Framer Motion
 - **Backend**: Express.js + TypeScript
 - **Database**: PostgreSQL (Neon via Replit) + Stripe schema (managed by stripe-replit-sync)
-- **AI**: OpenAI (via Replit AI Integrations) - model: openai/gpt-4o-mini
+- **AI**: Google Gemini (via Replit AI Integrations) - models: gemini-3-flash-preview (chat), gemini-3-pro-preview (profile generation/extraction)
 - **Auth**: Replit Auth (OIDC)
 - **Payments**: Stripe (via Replit Stripe Integration + stripe-replit-sync)
 
