@@ -78,6 +78,13 @@ shared/
 - `direct_messages` - 1-on-1 chat messages between matched users
 - `group_messages` - Group chat messages with admin delete support
 - `twin_memory` - AI Twin conversation memory for self-chat
+- `twin_profiles_structured` - Structured personality data (values, interests, goals, tone profile, etc.)
+- `twin_memory_facts` - Extracted conversation facts with sources and expiry
+- `twin_memory_summary` - Rolling conversation summary per user
+- `questions` - 100 personality questions across 9 categories with weights
+- `user_answers` - User's answers to questions with privacy toggle
+- `question_schedule` - Tracks asked/skipped questions with reschedule
+- `audit_logs` - Compliance/debugging log for all AI interactions
 - `twin_notifications` - Proactive twin notifications
 - `subscriptions` - User subscription tracking
 - `payments` - Payment records
@@ -112,6 +119,15 @@ shared/
 - Privacy: GET /api/photos/:userId requires auth; private profiles return empty array for other users
 
 ## Recent Changes (Feb 19, 2026)
+- **AI Twin System Upgrade**: Comprehensive overhaul of AI Twin functionality:
+  - **SSE Streaming**: POST /api/twin/chat and /api/interviews/:id/chat now support `stream: true` for real-time token-by-token rendering via Server-Sent Events (typing/delta/done/quick_replies events)
+  - **Two-Layer Memory**: Structured profile (twin_profiles_structured) + conversational facts (twin_memory_facts) + rolling summary (twin_memory_summary). extractMemoryAfterChat() runs asynchronously every 6 messages
+  - **100 Questions System**: 100 questions across 9 categories (values, relationships, lifestyle, communication, personality, emotions, goals, compatibility, fun) auto-seeded at startup. GET /api/questions/next with intelligent category-gap selection, POST /api/questions/:id/answer and /skip. Questions naturally injected into Twin Chat (30% chance)
+  - **AI Profile Generation**: POST /api/ai/profile/generate-about-me and /generate-summary with PII detection. Preview/edit/regenerate/approve UI flow on Profile page
+  - **Privacy & Safety**: PRIVACY_GUARDRAIL prompt injected in all AI calls, detectPII() strips emails/phones/addresses/SSNs from all AI outputs, audit logging for all AI interactions
+  - **Twin Tone Adaptation**: tone_style, verbosity_level, emoji_usage, formality_level stored in structured profile, dynamically injected into prompts. Tone Settings dialog on Profile page
+  - **Structured Profile Extraction**: POST /api/twin/extract-profile analyzes onboarding + question answers to extract top_values, relationship_goals, boundaries, humor_style, communication_style, attachment_style, interests, lifestyle_patterns, desired_partner_traits
+  - **Enhanced Frontend**: TwinChat.tsx with streaming UI (typing dots animation, token-by-token rendering, quick reply chips, collapsible memory panel), InterviewChat.tsx with streaming, Profile.tsx with Twin Intelligence section and Tone Settings
 - **Chat Hub**: Unified chat list replacing "Interviews" page. GET /api/chat/threads aggregates match chats + AI Twin interviews. Filter tabs (All/Matches/AI Twin), search bar, last message preview, relative timestamps, "Chat with My Twin" pinned card
 - **Likes Screen**: Tinder-style paywall replacing "Matches" page. GET /api/likes/incoming returns incoming likes with blur for free tier. Blurred photos + hidden names for free users, clear view for Plus/VIP. POST /api/likes/:matchId/like-back for mutual matching
 - **Lounge Groups redesign**: WhatsApp-style group list with GET /api/lounge/groups. Filter pills (All/Joined/Popular/New), search bar, last message preview with nickname, relative timestamps, circular group photos

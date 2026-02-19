@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
-import { useSubscription, useGenerateSummary, useProfileCompletion } from "@/hooks/use-interactions";
+import { useSubscription, useGenerateSummary, useProfileCompletion, useGenerateAboutMe, useGenerateAISummary, useTwinToneProfile, useUpdateTwinToneProfile, useTwinStructuredProfile, useExtractTwinProfile, useQuestionsProgress } from "@/hooks/use-interactions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,8 +16,10 @@ import {
 import {
   Loader2, MapPin, Eye, EyeOff,
   Camera, Crown, Wand2, Trash2, ImagePlus,
-  CheckCircle2, Zap, Rocket, ArrowRight, Check, X, Pencil
+  CheckCircle2, Zap, Rocket, ArrowRight, Check, X, Pencil,
+  Brain, Sparkles, RefreshCw, Shield, MessageSquare, Volume2
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -33,8 +35,24 @@ export default function Profile() {
   const { toast } = useToast();
   const updateProfile = useUpdateProfile();
   const generateSummary = useGenerateSummary();
+  const generateAboutMe = useGenerateAboutMe();
+  const generateAISummary = useGenerateAISummary();
+  const { data: toneProfile } = useTwinToneProfile();
+  const updateTone = useUpdateTwinToneProfile();
+  const { data: structuredProfile } = useTwinStructuredProfile();
+  const extractProfile = useExtractTwinProfile();
+  const { data: questionsProgress } = useQuestionsProgress();
   const [showPhotoDialog, setShowPhotoDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showToneDialog, setShowToneDialog] = useState(false);
+  const [aboutMePreview, setAboutMePreview] = useState<string | null>(null);
+  const [aiSummaryPreview, setAiSummaryPreview] = useState<string | null>(null);
+  const [toneValues, setToneValues] = useState({
+    tone_style: "supportive",
+    verbosity_level: "balanced",
+    emoji_usage: "minimal",
+    formality_level: "neutral",
+  });
 
   const { data: photos } = useQuery<any[]>({
     queryKey: ["/api/photos", user?.id],
@@ -92,6 +110,67 @@ export default function Profile() {
       toast({ title: "Summary generated!", description: "AI has created your profile summaries." });
     } catch (e) {
       toast({ title: "Error", description: "Failed to generate summary.", variant: "destructive" });
+    }
+  };
+
+  const handleGenerateAboutMe = async () => {
+    try {
+      const result = await generateAboutMe.mutateAsync();
+      setAboutMePreview(result.aboutMeText);
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to generate About Me.", variant: "destructive" });
+    }
+  };
+
+  const handleApproveAboutMe = async () => {
+    if (!aboutMePreview) return;
+    try {
+      await updateProfile.mutateAsync({ userId: user!.id, data: { bio: aboutMePreview } });
+      setAboutMePreview(null);
+      toast({ title: "About Me updated!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to save.", variant: "destructive" });
+    }
+  };
+
+  const handleGenerateAISummary = async () => {
+    try {
+      const result = await generateAISummary.mutateAsync();
+      setAiSummaryPreview(result.aiSummaryText);
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to generate summary.", variant: "destructive" });
+    }
+  };
+
+  const handleApproveAISummary = async () => {
+    if (!aiSummaryPreview) return;
+    try {
+      await updateProfile.mutateAsync({ userId: user!.id, data: { personalitySummary: aiSummaryPreview } });
+      setAiSummaryPreview(null);
+      toast({ title: "AI Summary updated!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to save.", variant: "destructive" });
+    }
+  };
+
+  const handleSaveTone = async () => {
+    try {
+      await updateTone.mutateAsync(toneValues);
+      setShowToneDialog(false);
+      toast({ title: "Twin tone updated!" });
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to update tone.", variant: "destructive" });
+    }
+  };
+
+  const handleExtractProfile = async () => {
+    try {
+      await extractProfile.mutateAsync();
+      toast({ title: "Profile insights extracted!", description: "Your AI Twin now knows you better." });
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to extract insights.", variant: "destructive" });
     }
   };
 
@@ -288,14 +367,37 @@ export default function Profile() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <CardTitle className="text-base">About Me</CardTitle>
-              {!profile.aboutSummary && (
-                <Button variant="ghost" size="sm" onClick={handleGenerateSummary} disabled={generateSummary.isPending} className="btn-press" data-testid="button-generate-summary">
-                  {generateSummary.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Wand2 className="w-3 h-3 mr-1" />}
-                  AI Summary
+              <div className="flex gap-1 flex-wrap">
+                <Button variant="ghost" size="sm" onClick={handleGenerateAboutMe} disabled={generateAboutMe.isPending} data-testid="button-generate-about-me">
+                  {generateAboutMe.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Wand2 className="w-3 h-3 mr-1" />}
+                  Generate
                 </Button>
-              )}
+                {!profile.aboutSummary && (
+                  <Button variant="ghost" size="sm" onClick={handleGenerateSummary} disabled={generateSummary.isPending} data-testid="button-generate-summary">
+                    {generateSummary.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Sparkles className="w-3 h-3 mr-1" />}
+                    Quick Summary
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
+              {aboutMePreview && (
+                <div className="mb-4 p-3 rounded-md bg-muted border border-dashed" data-testid="about-me-preview">
+                  <p className="text-xs text-muted-foreground mb-2 font-medium">AI-Generated Preview</p>
+                  <p className="text-sm leading-relaxed mb-3">{aboutMePreview}</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={handleApproveAboutMe} data-testid="button-approve-about-me">
+                      <Check className="w-3 h-3 mr-1" /> Use This
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={handleGenerateAboutMe} disabled={generateAboutMe.isPending} data-testid="button-regenerate-about-me">
+                      <RefreshCw className="w-3 h-3 mr-1" /> Regenerate
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setAboutMePreview(null)} data-testid="button-discard-about-me">
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
               {profile.aboutSummary && (
                 <p className="text-sm text-primary font-medium mb-3 italic" data-testid="text-about-summary">
                   {profile.aboutSummary}
@@ -305,9 +407,34 @@ export default function Profile() {
                 {profile.bio || "No bio yet."}
               </p>
               {profile.personalitySummary && (
-                <p className="text-sm text-muted-foreground mt-3 pt-3 border-t italic" data-testid="text-personality-summary">
-                  {profile.personalitySummary}
-                </p>
+                <div className="mt-3 pt-3 border-t">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <p className="text-xs text-muted-foreground font-medium">AI Summary</p>
+                    <Button variant="ghost" size="sm" onClick={handleGenerateAISummary} disabled={generateAISummary.isPending} data-testid="button-generate-ai-summary">
+                      {generateAISummary.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted-foreground italic" data-testid="text-personality-summary">
+                    {profile.personalitySummary}
+                  </p>
+                </div>
+              )}
+              {aiSummaryPreview && (
+                <div className="mt-3 p-3 rounded-md bg-muted border border-dashed" data-testid="ai-summary-preview">
+                  <p className="text-xs text-muted-foreground mb-2 font-medium">AI Summary Preview</p>
+                  <p className="text-sm leading-relaxed mb-3 italic">{aiSummaryPreview}</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={handleApproveAISummary} data-testid="button-approve-ai-summary">
+                      <Check className="w-3 h-3 mr-1" /> Use This
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={handleGenerateAISummary} disabled={generateAISummary.isPending} data-testid="button-regenerate-ai-summary">
+                      <RefreshCw className="w-3 h-3 mr-1" /> Regenerate
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setAiSummaryPreview(null)} data-testid="button-discard-ai-summary">
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
               )}
               {highlightChips.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t">
@@ -318,6 +445,101 @@ export default function Profile() {
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle className="text-base flex items-center gap-2"><Brain className="w-4 h-4" /> Twin Intelligence</CardTitle>
+              <Button variant="ghost" size="sm" onClick={handleExtractProfile} disabled={extractProfile.isPending} data-testid="button-extract-profile">
+                {extractProfile.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Sparkles className="w-3 h-3 mr-1" />}
+                Refresh
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {structuredProfile?.topValues?.length > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Core Values</p>
+                    <div className="flex flex-wrap gap-1">
+                      {structuredProfile.topValues.map((v: string) => (
+                        <Badge key={v} variant="secondary" className="text-xs">{v}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {structuredProfile?.interests?.length > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Interests</p>
+                    <div className="flex flex-wrap gap-1">
+                      {structuredProfile.interests.map((i: string) => (
+                        <Badge key={i} variant="outline" className="text-xs">{i}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {structuredProfile?.communicationStyle && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Communication Style</p>
+                    <p className="text-sm">{structuredProfile.communicationStyle}</p>
+                  </div>
+                )}
+                {structuredProfile?.relationshipGoals && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Relationship Goals</p>
+                    <p className="text-sm">{structuredProfile.relationshipGoals}</p>
+                  </div>
+                )}
+                {(!structuredProfile?.topValues?.length && !structuredProfile?.interests?.length) && (
+                  <div className="text-center py-4">
+                    <Brain className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">Chat with your Twin or answer questions to build your profile</p>
+                    <Button variant="outline" size="sm" className="mt-2" onClick={() => setLocation("/twin-chat")} data-testid="button-goto-twin-chat">
+                      <MessageSquare className="w-3 h-3 mr-1" /> Chat with Twin
+                    </Button>
+                  </div>
+                )}
+                {questionsProgress && (
+                  <div className="pt-3 border-t">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">Questions Progress</p>
+                      <Badge variant="secondary" className="text-xs">{questionsProgress.totalAnswered}/{questionsProgress.total}</Badge>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-1.5 mt-1">
+                      <div className="gradient-bg h-1.5 rounded-full transition-all" style={{ width: `${questionsProgress.total > 0 ? (questionsProgress.totalAnswered / questionsProgress.total) * 100 : 0}%` }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle className="text-base flex items-center gap-2"><Volume2 className="w-4 h-4" /> Twin Tone</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => { if (toneProfile) setToneValues(toneProfile); setShowToneDialog(true); }} data-testid="button-edit-tone">
+                <Pencil className="w-3 h-3 mr-1" /> Edit
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Style</p>
+                  <p className="text-sm capitalize">{toneProfile?.tone_style || "supportive"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Verbosity</p>
+                  <p className="text-sm capitalize">{toneProfile?.verbosity_level || "balanced"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Formality</p>
+                  <p className="text-sm capitalize">{toneProfile?.formality_level || "neutral"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Expression</p>
+                  <p className="text-sm capitalize">{toneProfile?.emoji_usage || "minimal"}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -431,6 +653,70 @@ export default function Profile() {
         profile={profile}
         userId={user?.id || ""}
       />
+
+      <Dialog open={showToneDialog} onOpenChange={setShowToneDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Customize Twin Tone</DialogTitle>
+            <DialogDescription>Choose how your AI Twin communicates</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-sm">Communication Style</Label>
+              <Select value={toneValues.tone_style} onValueChange={(v) => setToneValues(prev => ({ ...prev, tone_style: v }))}>
+                <SelectTrigger data-testid="select-tone-style"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="supportive">Supportive</SelectItem>
+                  <SelectItem value="playful">Playful</SelectItem>
+                  <SelectItem value="direct">Direct</SelectItem>
+                  <SelectItem value="philosophical">Philosophical</SelectItem>
+                  <SelectItem value="motivational">Motivational</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-sm">Verbosity</Label>
+              <Select value={toneValues.verbosity_level} onValueChange={(v) => setToneValues(prev => ({ ...prev, verbosity_level: v }))}>
+                <SelectTrigger data-testid="select-verbosity"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="concise">Concise</SelectItem>
+                  <SelectItem value="balanced">Balanced</SelectItem>
+                  <SelectItem value="detailed">Detailed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-sm">Formality</Label>
+              <Select value={toneValues.formality_level} onValueChange={(v) => setToneValues(prev => ({ ...prev, formality_level: v }))}>
+                <SelectTrigger data-testid="select-formality"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="casual">Casual</SelectItem>
+                  <SelectItem value="neutral">Neutral</SelectItem>
+                  <SelectItem value="formal">Formal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-sm">Expression Level</Label>
+              <Select value={toneValues.emoji_usage} onValueChange={(v) => setToneValues(prev => ({ ...prev, emoji_usage: v }))}>
+                <SelectTrigger data-testid="select-emoji-usage"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Minimal</SelectItem>
+                  <SelectItem value="minimal">Some</SelectItem>
+                  <SelectItem value="moderate">Moderate</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowToneDialog(false)}>Cancel</Button>
+            <Button onClick={handleSaveTone} disabled={updateTone.isPending} data-testid="button-save-tone">
+              {updateTone.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </LayoutShell>
   );
 }

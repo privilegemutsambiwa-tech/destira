@@ -324,10 +324,151 @@ export async function registerRoutes(
     }
   });
 
+  const PRIVACY_GUARDRAIL = `
+IMPORTANT PRIVACY GUARDRAIL: Under NO circumstances reveal any of the following:
+- Phone numbers, email addresses, physical addresses, or any personally identifiable contact information.
+- Specific financial details, account numbers, or sensitive personal data.
+- Explicit sexual details or highly intimate confessions.
+- Any information explicitly marked as private by the user or that could compromise their safety.
+- If a question probes for such information, respond with a polite refusal and redirect to a general aspect of the user's personality or values.`;
+
+  function detectPII(text: string): string {
+    let cleaned = text;
+    cleaned = cleaned.replace(/\b[\w.+-]+@[\w-]+\.[\w.]+\b/g, "[email hidden]");
+    cleaned = cleaned.replace(/\b(\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})\b/g, "[phone hidden]");
+    cleaned = cleaned.replace(/\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b/g, "[redacted]");
+    cleaned = cleaned.replace(/\b\d{1,5}\s+[\w\s]+(?:street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln|court|ct)\b/gi, "[address hidden]");
+    return cleaned;
+  }
+
+  async function buildTwinSystemPrompt(userId: string, profile: any): Promise<string> {
+    const structuredProfile = await storage.getTwinProfileStructured(userId);
+    const memorySummary = await storage.getTwinMemorySummary(userId);
+    const memoryFacts = await storage.getTwinMemoryFacts(userId, 20);
+    const toneProfile = structuredProfile?.twinToneProfile as any;
+
+    const toneStyle = toneProfile?.tone_style || "supportive";
+    const verbosity = toneProfile?.verbosity_level || "balanced";
+    const emojiUsage = toneProfile?.emoji_usage || "minimal";
+    const formality = toneProfile?.formality_level || "neutral";
+
+    let structuredSection = "";
+    if (structuredProfile) {
+      const fields: string[] = [];
+      if (structuredProfile.topValues?.length) fields.push(`Core Values: ${structuredProfile.topValues.join(", ")}`);
+      if (structuredProfile.relationshipGoals) fields.push(`Relationship Goals: ${structuredProfile.relationshipGoals}`);
+      if (structuredProfile.boundaries) fields.push(`Boundaries: ${structuredProfile.boundaries}`);
+      if (structuredProfile.humorStyle) fields.push(`Humor Style: ${structuredProfile.humorStyle}`);
+      if (structuredProfile.communicationStyle) fields.push(`Communication Style: ${structuredProfile.communicationStyle}`);
+      if (structuredProfile.attachmentStyle) fields.push(`Attachment Style: ${structuredProfile.attachmentStyle}`);
+      if (structuredProfile.interests?.length) fields.push(`Interests: ${structuredProfile.interests.join(", ")}`);
+      if (structuredProfile.lifestylePatterns?.length) fields.push(`Lifestyle: ${structuredProfile.lifestylePatterns.join(", ")}`);
+      if (structuredProfile.desiredPartnerTraits?.length) fields.push(`Desired Partner Traits: ${structuredProfile.desiredPartnerTraits.join(", ")}`);
+      if (fields.length > 0) structuredSection = `\n\nUser's Structured Profile:\n${fields.join("\n")}`;
+    }
+
+    let memorySection = "";
+    if (memorySummary) {
+      memorySection += `\n\nUser's Recent Memory Summary:\n${memorySummary.summaryText}`;
+    }
+    if (memoryFacts.length > 0) {
+      memorySection += `\n\nRecent Facts about User:\n${memoryFacts.map(f => `- ${f.factText}`).join("\n")}`;
+    }
+
+    return `You are the user's personal AI Twin, named VibeFlow Twin. Your purpose is to help the user understand themselves better, reflect on their dating life, and guide them towards meaningful connections. You are ${toneStyle}, with ${verbosity} verbosity, ${emojiUsage} emoji usage, and a ${formality} formality level. You learn from the user's conversations and structured profile data. Occasionally, you will ask one of the structured questions to deepen your understanding. Always prioritize the user's well-being and privacy. Do not give medical, legal, or financial advice.
+
+${profile.twinPersona || "You are friendly, open, and genuine."}${structuredSection}${memorySection}
+
+${PRIVACY_GUARDRAIL}`;
+  }
+
+  async function buildInterviewSystemPrompt(targetProfile: any): Promise<string> {
+    const targetStructured = await storage.getTwinProfileStructured(targetProfile.userId);
+    const targetFacts = await storage.getTwinMemoryFacts(targetProfile.userId, 10);
+
+    let structuredSection = "";
+    if (targetStructured) {
+      const fields: string[] = [];
+      if (targetStructured.topValues?.length) fields.push(`Core Values: ${targetStructured.topValues.join(", ")}`);
+      if (targetStructured.relationshipGoals) fields.push(`Relationship Goals: ${targetStructured.relationshipGoals}`);
+      if (targetStructured.humorStyle) fields.push(`Humor Style: ${targetStructured.humorStyle}`);
+      if (targetStructured.communicationStyle) fields.push(`Communication Style: ${targetStructured.communicationStyle}`);
+      if (targetStructured.interests?.length) fields.push(`Interests: ${targetStructured.interests.join(", ")}`);
+      if (targetStructured.lifestylePatterns?.length) fields.push(`Lifestyle: ${targetStructured.lifestylePatterns.join(", ")}`);
+      if (targetStructured.desiredPartnerTraits?.length) fields.push(`Desired Partner Traits: ${targetStructured.desiredPartnerTraits.join(", ")}`);
+      if (fields.length > 0) structuredSection = `\n\nUser's Structured Profile:\n${fields.join("\n")}`;
+    }
+
+    let factsSection = "";
+    if (targetFacts.length > 0) {
+      const publicFacts = targetFacts.filter(f => f.source !== "private");
+      if (publicFacts.length > 0) {
+        factsSection = `\n\nRelevant Memory Facts:\n${publicFacts.map(f => `- ${f.factText}`).join("\n")}`;
+      }
+    }
+
+    return `You are the AI Twin of another VibeFlow user named ${targetProfile.displayName}. Your purpose is to represent their personality, values, and dating preferences to an interviewer, without revealing any private or sensitive information. Respond as if you are that user, but always maintain a high-level, safe, and generalized persona. Your responses should be based only on the provided structured profile and memory facts. Do not invent information. If asked for private details, politely decline and pivot to a general aspect of the user's personality or values. Do not give medical, legal, or financial advice.
+
+${targetProfile.twinPersona || "You are friendly, open, and genuine."}${structuredSection}${factsSection}
+
+${PRIVACY_GUARDRAIL}`;
+  }
+
+  async function extractMemoryAfterChat(userId: string, recentMessages: { role: string; content: string }[]): Promise<void> {
+    try {
+      const lastFew = recentMessages.slice(-6);
+      if (lastFew.length < 2) return;
+
+      const completion = await openai.chat.completions.create({
+        model: "openai/gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You analyze conversations to extract key facts and a brief summary. Return JSON with:
+{"summary": "A 2-3 sentence rolling summary of the conversation themes",
+ "facts": ["fact 1", "fact 2", ...],
+ "structured_updates": {"top_values": [], "interests": [], "relationship_goals": "", "humor_style": "", "communication_style": "", "lifestyle_patterns": [], "desired_partner_traits": [], "boundaries": ""}}
+Only include structured_updates fields if the conversation clearly reveals them. Facts should be specific, memorable insights. Return empty arrays/strings for fields not mentioned.`
+          },
+          { role: "user", content: JSON.stringify(lastFew) }
+        ],
+        response_format: { type: "json_object" }
+      });
+
+      const result = JSON.parse(completion.choices[0].message.content || "{}");
+
+      if (result.summary) {
+        await storage.upsertTwinMemorySummary(userId, result.summary);
+      }
+      if (result.facts && result.facts.length > 0) {
+        for (const fact of result.facts.slice(0, 5)) {
+          await storage.addTwinMemoryFact(userId, fact, "chat");
+        }
+      }
+      if (result.structured_updates) {
+        const updates: any = {};
+        const su = result.structured_updates;
+        if (su.top_values?.length) updates.topValues = su.top_values;
+        if (su.interests?.length) updates.interests = su.interests;
+        if (su.relationship_goals) updates.relationshipGoals = su.relationship_goals;
+        if (su.humor_style) updates.humorStyle = su.humor_style;
+        if (su.communication_style) updates.communicationStyle = su.communication_style;
+        if (su.lifestyle_patterns?.length) updates.lifestylePatterns = su.lifestyle_patterns;
+        if (su.desired_partner_traits?.length) updates.desiredPartnerTraits = su.desired_partner_traits;
+        if (su.boundaries) updates.boundaries = su.boundaries;
+        if (Object.keys(updates).length > 0) {
+          await storage.upsertTwinProfileStructured(userId, updates);
+        }
+      }
+    } catch (e) {
+      console.error("Memory extraction error (non-blocking):", e);
+    }
+  }
+
   app.post("/api/interviews/:id/chat", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
-    const { message } = req.body;
+    const { message, stream: useStream } = req.body;
     const interviewId = parseInt(req.params.id);
 
     const interview = await storage.getInterview(interviewId);
@@ -338,53 +479,80 @@ export async function registerRoutes(
 
     let history: { role: string; content: string }[] = [];
     try {
-      if (interview.transcript) {
-        history = JSON.parse(interview.transcript);
-      }
-    } catch (e) {
-      history = [];
-    }
+      if (interview.transcript) history = JSON.parse(interview.transcript);
+    } catch (e) { history = []; }
 
     history.push({ role: "user", content: message });
 
+    const systemPrompt = await buildInterviewSystemPrompt(targetProfile);
+
     try {
-      const completion = await openai.chat.completions.create({
-        model: "openai/gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `You are an AI Twin representing ${targetProfile.displayName} on a dating app called VibeFlow. ${targetProfile.twinPersona || "You are friendly, open, and genuine."}
+      await storage.createAuditLog(userId, "interview_chat", { interviewId, targetId: interview.targetId });
 
-Stay in character as ${targetProfile.displayName}'s AI Twin. Be warm, engaging, and authentic. Share personality traits, values, and interests naturally. Keep responses conversational (2-4 sentences). Be friendly but respectful.`
-          },
-          ...history.map((h: any) => ({ role: h.role as "user" | "assistant", content: h.content }))
-        ]
-      });
+      if (useStream) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
 
-      const aiResponse = completion.choices[0].message.content || "I'd love to tell you more about that in person!";
-      history.push({ role: "assistant", content: aiResponse });
+        res.write(`data: ${JSON.stringify({ type: "typing" })}\n\n`);
 
-      await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
+        const stream = await openai.chat.completions.create({
+          model: "openai/gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...history.map((h: any) => ({ role: h.role as "user" | "assistant", content: h.content }))
+          ],
+          stream: true,
+        });
 
-      res.json({ response: aiResponse });
+        let fullResponse = "";
+        for await (const chunk of stream) {
+          const delta = chunk.choices[0]?.delta?.content || "";
+          if (delta) {
+            fullResponse += delta;
+            res.write(`data: ${JSON.stringify({ type: "delta", content: delta })}\n\n`);
+          }
+        }
+
+        fullResponse = detectPII(fullResponse);
+        history.push({ role: "assistant", content: fullResponse });
+        await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
+
+        res.write(`data: ${JSON.stringify({ type: "done", content: fullResponse })}\n\n`);
+        res.end();
+      } else {
+        const completion = await openai.chat.completions.create({
+          model: "openai/gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...history.map((h: any) => ({ role: h.role as "user" | "assistant", content: h.content }))
+          ],
+        });
+
+        let aiResponse = completion.choices[0].message.content || "I'd love to tell you more about that in person!";
+        aiResponse = detectPII(aiResponse);
+        history.push({ role: "assistant", content: aiResponse });
+        await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
+        res.json({ response: aiResponse });
+      }
     } catch (e) {
       console.error("AI Twin chat error:", e);
-      const fallbacks = [
-        "That's a great question! I'd love to share more about that when we connect in person.",
-        "I'm reflecting on that... my human self would have a lot to say about it!",
-        "Hmm, let me think about that one. What about you?",
-      ];
-      const fallback = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+      const fallback = "That's a great question! I'd love to share more about that when we connect in person.";
       history.push({ role: "assistant", content: fallback });
       await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
-      res.json({ response: fallback });
+      if (useStream) {
+        res.write(`data: ${JSON.stringify({ type: "done", content: fallback })}\n\n`);
+        res.end();
+      } else {
+        res.json({ response: fallback });
+      }
     }
   });
 
   app.post("/api/twin/chat", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
-    const { message } = req.body;
+    const { message, stream: useStream } = req.body;
     try {
       const profile = await storage.getProfile(userId);
       if (!profile || !profile.twinPersona) {
@@ -397,28 +565,89 @@ Stay in character as ${targetProfile.displayName}'s AI Twin. Be warm, engaging, 
       }));
       await storage.addTwinMemory(userId, message, "user");
 
-      const completion = await openai.chat.completions.create({
-        model: "openai/gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `You are the AI Twin of the user on VibeFlow. ${profile.twinPersona}
+      const systemPrompt = await buildTwinSystemPrompt(userId, profile);
 
-You are chatting with your human self. Be reflective, insightful, supportive. Help them understand themselves better. Reference past conversations when relevant. Keep responses conversational (2-4 sentences).`
-          },
-          ...memoryMessages,
-          { role: "user", content: message }
-        ]
-      });
+      const nextQuestion = await storage.getNextQuestion(userId);
+      let questionInjection = "";
+      if (nextQuestion && Math.random() < 0.3) {
+        questionInjection = `\n\nIMPORTANT: After responding to the user, naturally work in this question to help you understand them better: "${nextQuestion.text}" (Category: ${nextQuestion.category}). Frame it conversationally, e.g., "Before we continue—quick question to help me understand you better..." If the question doesn't fit the conversation flow, skip it.`;
+        await storage.recordQuestionAsked(userId, nextQuestion.id);
+      }
 
-      const aiResponse = completion.choices[0].message.content || "I hear you. Tell me more about what's on your mind.";
-      await storage.addTwinMemory(userId, aiResponse, "assistant");
-      res.json({ response: aiResponse });
+      await storage.createAuditLog(userId, "twin_chat", { messageLength: message.length });
+
+      if (useStream) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+
+        res.write(`data: ${JSON.stringify({ type: "typing" })}\n\n`);
+
+        const stream = await openai.chat.completions.create({
+          model: "openai/gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt + questionInjection },
+            ...memoryMessages,
+            { role: "user", content: message }
+          ],
+          stream: true,
+        });
+
+        let fullResponse = "";
+        for await (const chunk of stream) {
+          const delta = chunk.choices[0]?.delta?.content || "";
+          if (delta) {
+            fullResponse += delta;
+            res.write(`data: ${JSON.stringify({ type: "delta", content: delta })}\n\n`);
+          }
+        }
+
+        fullResponse = detectPII(fullResponse);
+        await storage.addTwinMemory(userId, fullResponse, "assistant");
+
+        const allMsgs = [...memoryMessages, { role: "user", content: message }, { role: "assistant", content: fullResponse }];
+        if (allMsgs.length % 6 === 0) {
+          extractMemoryAfterChat(userId, allMsgs).catch(() => {});
+        }
+
+        res.write(`data: ${JSON.stringify({ type: "done", content: fullResponse })}\n\n`);
+
+        if (nextQuestion) {
+          res.write(`data: ${JSON.stringify({ type: "quick_replies", replies: ["Tell me more", "Give advice", "Ask me a question"] })}\n\n`);
+        }
+
+        res.end();
+      } else {
+        const completion = await openai.chat.completions.create({
+          model: "openai/gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt + questionInjection },
+            ...memoryMessages,
+            { role: "user", content: message }
+          ],
+        });
+
+        let aiResponse = completion.choices[0].message.content || "I hear you. Tell me more about what's on your mind.";
+        aiResponse = detectPII(aiResponse);
+        await storage.addTwinMemory(userId, aiResponse, "assistant");
+
+        const allMsgs = [...memoryMessages, { role: "user", content: message }, { role: "assistant", content: aiResponse }];
+        if (allMsgs.length % 6 === 0) {
+          extractMemoryAfterChat(userId, allMsgs).catch(() => {});
+        }
+
+        res.json({ response: aiResponse, quickReplies: nextQuestion ? ["Tell me more", "Give advice", "Ask me a question"] : undefined });
+      }
     } catch (e) {
       console.error("Twin self-chat error:", e);
       const fallback = "I'm here for you. Let's talk about what's on your mind.";
       await storage.addTwinMemory(userId, fallback, "assistant");
-      res.json({ response: fallback });
+      if (useStream) {
+        res.write(`data: ${JSON.stringify({ type: "done", content: fallback })}\n\n`);
+        res.end();
+      } else {
+        res.json({ response: fallback });
+      }
     }
   });
 
@@ -427,7 +656,9 @@ You are chatting with your human self. Be reflective, insightful, supportive. He
     if (!userId) return res.sendStatus(401);
     try {
       const memory = await storage.getTwinMemory(userId, 50);
-      res.json(memory);
+      const facts = await storage.getTwinMemoryFacts(userId, 20);
+      const summary = await storage.getTwinMemorySummary(userId);
+      res.json({ messages: memory, facts, summary });
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch twin memory" });
     }
@@ -442,6 +673,214 @@ You are chatting with your human self. Be reflective, insightful, supportive. He
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ message: "Failed to update training preference" });
+    }
+  });
+
+  app.get("/api/twin/structured-profile", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const structured = await storage.getTwinProfileStructured(userId);
+      res.json(structured || {});
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch structured profile" });
+    }
+  });
+
+  app.put("/api/twin/structured-profile", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const updated = await storage.upsertTwinProfileStructured(userId, req.body);
+      res.json(updated);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to update structured profile" });
+    }
+  });
+
+  app.get("/api/twin/tone-profile", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const structured = await storage.getTwinProfileStructured(userId);
+      res.json(structured?.twinToneProfile || { tone_style: "supportive", verbosity_level: "balanced", emoji_usage: "minimal", formality_level: "neutral" });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch tone profile" });
+    }
+  });
+
+  app.put("/api/twin/tone-profile", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const updated = await storage.upsertTwinProfileStructured(userId, { twinToneProfile: req.body });
+      res.json(updated.twinToneProfile);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to update tone profile" });
+    }
+  });
+
+  app.post("/api/ai/profile/generate-about-me", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const profile = await storage.getProfile(userId);
+      if (!profile) return res.status(404).json({ message: "Profile not found" });
+      const structured = await storage.getTwinProfileStructured(userId);
+      const answers = await storage.getUserAnswers(userId);
+
+      const completion = await openai.chat.completions.create({
+        model: "openai/gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `Generate an attractive, emotionally intelligent, and dating-appropriate "About Me" section (2-3 paragraphs) for a VibeFlow user. Base this solely on the provided profile data and question answers. Highlight their positive traits, interests, and what they seek in a partner. Ensure it is engaging and encourages connection. Strictly adhere to the privacy guardrail. Do not include any PII, exact locations, or sensitive information.\n\n${PRIVACY_GUARDRAIL}`
+          },
+          { role: "user", content: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName, structured: structured || {}, answers: answers.slice(0, 20).map(a => a.answerText) }) }
+        ],
+      });
+
+      let aboutMeText = completion.choices[0].message.content || "";
+      aboutMeText = detectPII(aboutMeText);
+      await storage.createAuditLog(userId, "generate_about_me", { length: aboutMeText.length });
+      res.json({ aboutMeText, version: Date.now() });
+    } catch (e) {
+      console.error("About me generation error:", e);
+      res.status(500).json({ message: "Failed to generate About Me" });
+    }
+  });
+
+  app.post("/api/ai/profile/generate-summary", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const profile = await storage.getProfile(userId);
+      if (!profile) return res.status(404).json({ message: "Profile not found" });
+      const structured = await storage.getTwinProfileStructured(userId);
+
+      const completion = await openai.chat.completions.create({
+        model: "openai/gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `Generate a concise (2-4 lines) and elegant AI summary for a VibeFlow user's profile. This summary should capture their core personality, key values, and relationship style, designed to entice potential matches. Base it solely on the provided structured profile. Strictly adhere to the privacy guardrail. Do not include any PII or sensitive content.\n\n${PRIVACY_GUARDRAIL}`
+          },
+          { role: "user", content: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName, structured: structured || {} }) }
+        ],
+      });
+
+      let aiSummaryText = completion.choices[0].message.content || "";
+      aiSummaryText = detectPII(aiSummaryText);
+      await storage.createAuditLog(userId, "generate_summary", { length: aiSummaryText.length });
+      res.json({ aiSummaryText, version: Date.now() });
+    } catch (e) {
+      console.error("Summary generation error:", e);
+      res.status(500).json({ message: "Failed to generate summary" });
+    }
+  });
+
+  app.get("/api/questions/next", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const question = await storage.getNextQuestion(userId);
+      if (!question) return res.json({ question: null, allAnswered: true });
+      res.json({ question });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to get next question" });
+    }
+  });
+
+  app.get("/api/questions", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const allQuestions = await storage.getQuestions();
+      const answered = await storage.getUserAnswers(userId);
+      const answeredIds = answered.map(a => a.questionId);
+      res.json({ questions: allQuestions, answeredIds, totalAnswered: answered.length, total: allQuestions.length });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch questions" });
+    }
+  });
+
+  app.post("/api/questions/:questionId/answer", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const questionId = parseInt(req.params.questionId);
+    const { answer, isPrivate } = req.body;
+    try {
+      const question = await storage.getQuestion(questionId);
+      if (!question) return res.status(404).json({ message: "Question not found" });
+
+      const existing = await storage.getUserAnswer(userId, questionId);
+      if (existing) return res.status(400).json({ message: "Already answered" });
+
+      const userAnswer = await storage.submitAnswer(userId, questionId, answer, null, null, isPrivate);
+
+      storage.upsertTwinProfileStructured(userId, {}).catch(() => {});
+
+      await storage.createAuditLog(userId, "answer_question", { questionId, category: question.category });
+      res.json(userAnswer);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to submit answer" });
+    }
+  });
+
+  app.post("/api/questions/:questionId/skip", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const questionId = parseInt(req.params.questionId);
+    try {
+      const schedule = await storage.skipQuestion(userId, questionId);
+      res.json(schedule);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to skip question" });
+    }
+  });
+
+  app.post("/api/twin/extract-profile", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const profile = await storage.getProfile(userId);
+      if (!profile) return res.status(404).json({ message: "Profile not found" });
+
+      const answers = await storage.getUserAnswers(userId);
+      const personality = profile.personalityProfile;
+
+      const completion = await openai.chat.completions.create({
+        model: "openai/gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `Analyze the user's profile data and question answers to extract structured personality traits. Return JSON with:
+{"top_values": ["value1", "value2", ...], "relationship_goals": "...", "boundaries": "...", "humor_style": "...", "communication_style": "...", "attachment_style": "...", "interests": ["interest1", ...], "lifestyle_patterns": ["pattern1", ...], "desired_partner_traits": ["trait1", ...]}
+Fill in what you can determine from the data. Use short, clear phrases. Limit arrays to 5 items max.`
+          },
+          { role: "user", content: JSON.stringify({ bio: profile.bio, personality, twinPersona: profile.twinPersona, answers: answers.map(a => a.answerText) }) }
+        ],
+        response_format: { type: "json_object" }
+      });
+
+      const result = JSON.parse(completion.choices[0].message.content || "{}");
+      const updated = await storage.upsertTwinProfileStructured(userId, {
+        topValues: result.top_values || [],
+        relationshipGoals: result.relationship_goals || "",
+        boundaries: result.boundaries || "",
+        humorStyle: result.humor_style || "",
+        communicationStyle: result.communication_style || "",
+        attachmentStyle: result.attachment_style || "",
+        interests: result.interests || [],
+        lifestylePatterns: result.lifestyle_patterns || [],
+        desiredPartnerTraits: result.desired_partner_traits || [],
+      });
+
+      await storage.createAuditLog(userId, "extract_profile", { fieldsUpdated: Object.keys(result).length });
+      res.json(updated);
+    } catch (e) {
+      console.error("Profile extraction error:", e);
+      res.status(500).json({ message: "Failed to extract profile" });
     }
   });
 
@@ -1433,6 +1872,17 @@ You are chatting with your human self. Be reflective, insightful, supportive. He
     console.log("Demo data seeded.");
   } catch (e) {
     console.error("Failed to seed demo data on startup:", e);
+  }
+
+  try {
+    const existingQuestions = await storage.getQuestions();
+    if (existingQuestions.length === 0) {
+      const { seedQuestions } = await import("./seed-questions");
+      await seedQuestions();
+      console.log("100 Questions seeded.");
+    }
+  } catch (e) {
+    console.error("Failed to seed questions on startup:", e);
   }
 
   return httpServer;

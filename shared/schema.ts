@@ -243,6 +243,102 @@ export const entitlements = pgTable("entitlements", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const twinProfilesStructured = pgTable("twin_profiles_structured", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id).unique(),
+  topValues: text("top_values").array(),
+  relationshipGoals: text("relationship_goals"),
+  boundaries: text("boundaries"),
+  humorStyle: text("humor_style"),
+  communicationStyle: text("communication_style"),
+  attachmentStyle: text("attachment_style"),
+  interests: text("interests").array(),
+  lifestylePatterns: text("lifestyle_patterns").array(),
+  desiredPartnerTraits: text("desired_partner_traits").array(),
+  twinToneProfile: jsonb("twin_tone_profile"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const twinMemoryFacts = pgTable("twin_memory_facts", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  factText: text("fact_text").notNull(),
+  source: text("source").default("chat"),
+  sourceMessageIds: integer("source_message_ids").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+});
+
+export const twinMemorySummary = pgTable("twin_memory_summary", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id).unique(),
+  summaryText: text("summary_text").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const questions = pgTable("questions", {
+  id: serial("id").primaryKey(),
+  text: text("text").notNull(),
+  category: text("category").notNull(),
+  answerType: text("answer_type").notNull().default("text"),
+  options: jsonb("options"),
+  isOnboardingQuestion: boolean("is_onboarding_question").default(false),
+  weight: integer("weight").default(1),
+  orderIndex: integer("order_index").default(0),
+});
+
+export const userAnswers = pgTable("user_answers", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  questionId: integer("question_id").notNull().references(() => questions.id),
+  answerText: text("answer_text"),
+  selectedOptions: jsonb("selected_options"),
+  ratingValue: integer("rating_value"),
+  isPrivate: boolean("is_private").default(false),
+  answeredAt: timestamp("answered_at").defaultNow(),
+});
+
+export const questionSchedule = pgTable("question_schedule", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  questionId: integer("question_id").notNull().references(() => questions.id),
+  askedAt: timestamp("asked_at").defaultNow(),
+  skippedAt: timestamp("skipped_at"),
+  nextAskAt: timestamp("next_ask_at"),
+});
+
+export const auditLogs = pgTable("audit_logs", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id),
+  eventType: text("event_type").notNull(),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertTwinProfilesStructuredSchema = createInsertSchema(twinProfilesStructured).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export const insertTwinMemoryFactSchema = createInsertSchema(twinMemoryFacts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertQuestionSchema = createInsertSchema(questions).omit({
+  id: true,
+});
+
+export const insertUserAnswerSchema = createInsertSchema(userAnswers).omit({
+  id: true,
+  answeredAt: true,
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertProfileSchema = createInsertSchema(profiles).omit({
   id: true,
   userId: true,
@@ -338,6 +434,15 @@ export type PollOption = typeof pollOptions.$inferSelect;
 export type PollVote = typeof pollVotes.$inferSelect;
 export type MessageReaction = typeof messageReactions.$inferSelect;
 export type StarredMessage = typeof starredMessages.$inferSelect;
+
+export type TwinProfileStructured = typeof twinProfilesStructured.$inferSelect;
+export type InsertTwinProfileStructured = z.infer<typeof insertTwinProfilesStructuredSchema>;
+export type TwinMemoryFact = typeof twinMemoryFacts.$inferSelect;
+export type TwinMemorySummaryEntry = typeof twinMemorySummary.$inferSelect;
+export type Question = typeof questions.$inferSelect;
+export type UserAnswer = typeof userAnswers.$inferSelect;
+export type QuestionScheduleEntry = typeof questionSchedule.$inferSelect;
+export type AuditLog = typeof auditLogs.$inferSelect;
 
 export type CreateProfileRequest = InsertProfile;
 export type UpdateProfileRequest = Partial<InsertProfile>;

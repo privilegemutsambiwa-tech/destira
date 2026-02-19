@@ -4,12 +4,16 @@ import {
   userPhotos, groupJoinRequests, groupInviteLinks, groupModerationLogs,
   polls, pollOptions, pollVotes, messageReactions, starredMessages,
   twinMemory, twinNotifications, subscriptions, payments, entitlements,
+  twinProfilesStructured, twinMemoryFacts, twinMemorySummary,
+  questions, userAnswers, questionSchedule, auditLogs,
   type Profile, type InsertProfile, type UpdateProfileRequest,
   type Match, type Interview, type Group, type GroupMember, type DirectMessage, type GroupMessage,
   type GroupJoinRequest, type GroupInviteLink, type GroupModerationLog,
   type Poll, type PollOption, type PollVote, type MessageReaction, type StarredMessage,
   type UserPhoto, type TwinMemoryEntry, type TwinNotification,
-  type Subscription, type Payment, type Entitlement
+  type Subscription, type Payment, type Entitlement,
+  type TwinProfileStructured, type TwinMemoryFact, type TwinMemorySummaryEntry,
+  type Question, type UserAnswer, type QuestionScheduleEntry, type AuditLog
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import { eq, or, and, ne, asc, desc, ilike, sql, count } from "drizzle-orm";
@@ -113,6 +117,31 @@ export interface IStorage {
 
   getProfileCompletion(userId: string): Promise<{ score: number; tasks: { key: string; label: string; benefit: string; completed: boolean; weight: number }[] }>;
   updateProfileCompletionScore(userId: string, score: number): Promise<void>;
+
+  getTwinProfileStructured(userId: string): Promise<TwinProfileStructured | undefined>;
+  upsertTwinProfileStructured(userId: string, data: Partial<TwinProfileStructured>): Promise<TwinProfileStructured>;
+
+  addTwinMemoryFact(userId: string, factText: string, source?: string): Promise<TwinMemoryFact>;
+  getTwinMemoryFacts(userId: string, limit?: number): Promise<TwinMemoryFact[]>;
+  clearExpiredMemoryFacts(): Promise<void>;
+
+  upsertTwinMemorySummary(userId: string, summaryText: string): Promise<TwinMemorySummaryEntry>;
+  getTwinMemorySummary(userId: string): Promise<TwinMemorySummaryEntry | undefined>;
+
+  getQuestions(): Promise<Question[]>;
+  getQuestion(id: number): Promise<Question | undefined>;
+  createQuestion(data: { text: string; category: string; answerType?: string; options?: any; isOnboardingQuestion?: boolean; weight?: number; orderIndex?: number }): Promise<Question>;
+  getNextQuestion(userId: string): Promise<Question | undefined>;
+
+  submitAnswer(userId: string, questionId: number, answerText?: string, selectedOptions?: any, ratingValue?: number, isPrivate?: boolean): Promise<UserAnswer>;
+  getUserAnswers(userId: string): Promise<UserAnswer[]>;
+  getUserAnswer(userId: string, questionId: number): Promise<UserAnswer | undefined>;
+
+  recordQuestionAsked(userId: string, questionId: number): Promise<QuestionScheduleEntry>;
+  skipQuestion(userId: string, questionId: number): Promise<QuestionScheduleEntry>;
+
+  createAuditLog(userId: string | null, eventType: string, details?: any): Promise<AuditLog>;
+  getAuditLogs(userId?: string, limit?: number): Promise<AuditLog[]>;
 
   seedDemoData(): Promise<void>;
 }
@@ -852,6 +881,193 @@ export class DatabaseStorage implements IStorage {
 
   async updateProfileCompletionScore(userId: string, score: number): Promise<void> {
     await db.update(profiles).set({ profileCompletionScore: score }).where(eq(profiles.userId, userId));
+  }
+
+  async getTwinProfileStructured(userId: string): Promise<TwinProfileStructured | undefined> {
+    const [result] = await db.select().from(twinProfilesStructured).where(eq(twinProfilesStructured.userId, userId));
+    return result;
+  }
+
+  async upsertTwinProfileStructured(userId: string, data: Partial<TwinProfileStructured>): Promise<TwinProfileStructured> {
+    const existing = await this.getTwinProfileStructured(userId);
+    if (existing) {
+      const [updated] = await db.update(twinProfilesStructured)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(twinProfilesStructured.userId, userId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(twinProfilesStructured)
+      .values({ userId, ...data } as any)
+      .returning();
+    return created;
+  }
+
+  async addTwinMemoryFact(userId: string, factText: string, source?: string): Promise<TwinMemoryFact> {
+    const [fact] = await db.insert(twinMemoryFacts)
+      .values({ userId, factText, source: source || "chat" })
+      .returning();
+    return fact;
+  }
+
+  async getTwinMemoryFacts(userId: string, limit?: number): Promise<TwinMemoryFact[]> {
+    let query = db.select().from(twinMemoryFacts)
+      .where(eq(twinMemoryFacts.userId, userId))
+      .orderBy(desc(twinMemoryFacts.createdAt));
+    if (limit) {
+      return await query.limit(limit);
+    }
+    return await query;
+  }
+
+  async clearExpiredMemoryFacts(): Promise<void> {
+    await db.delete(twinMemoryFacts)
+      .where(and(
+        sql`${twinMemoryFacts.expiresAt} IS NOT NULL`,
+        sql`${twinMemoryFacts.expiresAt} < NOW()`
+      ));
+  }
+
+  async upsertTwinMemorySummary(userId: string, summaryText: string): Promise<TwinMemorySummaryEntry> {
+    const existing = await this.getTwinMemorySummary(userId);
+    if (existing) {
+      const [updated] = await db.update(twinMemorySummary)
+        .set({ summaryText, updatedAt: new Date() })
+        .where(eq(twinMemorySummary.userId, userId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(twinMemorySummary)
+      .values({ userId, summaryText })
+      .returning();
+    return created;
+  }
+
+  async getTwinMemorySummary(userId: string): Promise<TwinMemorySummaryEntry | undefined> {
+    const [result] = await db.select().from(twinMemorySummary).where(eq(twinMemorySummary.userId, userId));
+    return result;
+  }
+
+  async getQuestions(): Promise<Question[]> {
+    return await db.select().from(questions).orderBy(asc(questions.orderIndex));
+  }
+
+  async getQuestion(id: number): Promise<Question | undefined> {
+    const [q] = await db.select().from(questions).where(eq(questions.id, id));
+    return q;
+  }
+
+  async createQuestion(data: { text: string; category: string; answerType?: string; options?: any; isOnboardingQuestion?: boolean; weight?: number; orderIndex?: number }): Promise<Question> {
+    const [q] = await db.insert(questions).values({
+      text: data.text,
+      category: data.category,
+      answerType: data.answerType || "text",
+      options: data.options,
+      isOnboardingQuestion: data.isOnboardingQuestion || false,
+      weight: data.weight || 1,
+      orderIndex: data.orderIndex || 0,
+    }).returning();
+    return q;
+  }
+
+  async getNextQuestion(userId: string): Promise<Question | undefined> {
+    const answered = await db.select({ questionId: userAnswers.questionId })
+      .from(userAnswers)
+      .where(eq(userAnswers.userId, userId));
+    const skipped = await db.select({ questionId: questionSchedule.questionId })
+      .from(questionSchedule)
+      .where(and(
+        eq(questionSchedule.userId, userId),
+        sql`${questionSchedule.skippedAt} IS NOT NULL`,
+        sql`(${questionSchedule.nextAskAt} IS NULL OR ${questionSchedule.nextAskAt} > NOW())`
+      ));
+    const answeredIds = answered.map(a => a.questionId);
+    const skippedIds = skipped.map(s => s.questionId);
+    const excludeIds = [...answeredIds, ...skippedIds];
+
+    const allQuestions = await this.getQuestions();
+    const unanswered = allQuestions.filter(q => !excludeIds.includes(q.id));
+
+    if (unanswered.length === 0) return undefined;
+
+    const categoryCounts: Record<string, number> = {};
+    for (const a of answered) {
+      const q = allQuestions.find(q2 => q2.id === a.questionId);
+      if (q) categoryCounts[q.category] = (categoryCounts[q.category] || 0) + 1;
+    }
+    const categorySet = new Set(allQuestions.map(q => q.category));
+    const allCategories = Array.from(categorySet);
+    let lowestCategory = allCategories[0];
+    let lowestCount = Infinity;
+    for (const cat of allCategories) {
+      const c = categoryCounts[cat] || 0;
+      if (c < lowestCount) {
+        lowestCount = c;
+        lowestCategory = cat;
+      }
+    }
+
+    const fromCategory = unanswered.filter(q => q.category === lowestCategory);
+    const candidates = fromCategory.length > 0 ? fromCategory : unanswered;
+    candidates.sort((a, b) => (b.weight || 1) - (a.weight || 1));
+    return candidates[0];
+  }
+
+  async submitAnswer(userId: string, questionId: number, answerText?: string, selectedOptions?: any, ratingValue?: number, isPrivate?: boolean): Promise<UserAnswer> {
+    const [answer] = await db.insert(userAnswers).values({
+      userId,
+      questionId,
+      answerText,
+      selectedOptions,
+      ratingValue,
+      isPrivate: isPrivate || false,
+    }).returning();
+    return answer;
+  }
+
+  async getUserAnswers(userId: string): Promise<UserAnswer[]> {
+    return await db.select().from(userAnswers).where(eq(userAnswers.userId, userId)).orderBy(desc(userAnswers.answeredAt));
+  }
+
+  async getUserAnswer(userId: string, questionId: number): Promise<UserAnswer | undefined> {
+    const [answer] = await db.select().from(userAnswers)
+      .where(and(eq(userAnswers.userId, userId), eq(userAnswers.questionId, questionId)));
+    return answer;
+  }
+
+  async recordQuestionAsked(userId: string, questionId: number): Promise<QuestionScheduleEntry> {
+    const [entry] = await db.insert(questionSchedule).values({ userId, questionId }).returning();
+    return entry;
+  }
+
+  async skipQuestion(userId: string, questionId: number): Promise<QuestionScheduleEntry> {
+    const nextAsk = new Date();
+    nextAsk.setDate(nextAsk.getDate() + 7);
+    const [entry] = await db.insert(questionSchedule).values({
+      userId,
+      questionId,
+      skippedAt: new Date(),
+      nextAskAt: nextAsk,
+    }).returning();
+    return entry;
+  }
+
+  async createAuditLog(userId: string | null, eventType: string, details?: any): Promise<AuditLog> {
+    const [log] = await db.insert(auditLogs).values({
+      userId,
+      eventType,
+      details: details || {},
+    }).returning();
+    return log;
+  }
+
+  async getAuditLogs(userId?: string, limit?: number): Promise<AuditLog[]> {
+    if (userId) {
+      const q = db.select().from(auditLogs).where(eq(auditLogs.userId, userId)).orderBy(desc(auditLogs.createdAt));
+      return limit ? await q.limit(limit) : await q;
+    }
+    const q = db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt));
+    return limit ? await q.limit(limit) : await q;
   }
 }
 

@@ -469,7 +469,152 @@ export function useTwinMemory() {
     queryKey: ["/api/twin/memory"],
     queryFn: async () => {
       const res = await fetch("/api/twin/memory", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) return { messages: [], facts: [], summary: null };
+      const data = await res.json();
+      if (Array.isArray(data)) return { messages: data, facts: [], summary: null };
+      return data;
+    },
+  });
+}
+
+export function useTwinStructuredProfile() {
+  return useQuery({
+    queryKey: ["/api/twin/structured-profile"],
+    queryFn: async () => {
+      const res = await fetch("/api/twin/structured-profile", { credentials: "include" });
+      if (!res.ok) return {};
+      return res.json();
+    },
+  });
+}
+
+export function useTwinToneProfile() {
+  return useQuery({
+    queryKey: ["/api/twin/tone-profile"],
+    queryFn: async () => {
+      const res = await fetch("/api/twin/tone-profile", { credentials: "include" });
+      if (!res.ok) return { tone_style: "supportive", verbosity_level: "balanced", emoji_usage: "minimal", formality_level: "neutral" };
+      return res.json();
+    },
+  });
+}
+
+export function useUpdateTwinToneProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (toneProfile: { tone_style: string; verbosity_level: string; emoji_usage: string; formality_level: string }) => {
+      const res = await fetch("/api/twin/tone-profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(toneProfile),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update tone profile");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/twin/tone-profile"] });
+    },
+  });
+}
+
+export function useExtractTwinProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/twin/extract-profile", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to extract profile");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/twin/structured-profile"] });
+    },
+  });
+}
+
+export function useGenerateAboutMe() {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/ai/profile/generate-about-me", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to generate About Me");
+      return res.json();
+    },
+  });
+}
+
+export function useGenerateAISummary() {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/ai/profile/generate-summary", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to generate summary");
+      return res.json();
+    },
+  });
+}
+
+export function useNextQuestion() {
+  return useQuery({
+    queryKey: ["/api/questions/next"],
+    queryFn: async () => {
+      const res = await fetch("/api/questions/next", { credentials: "include" });
+      if (!res.ok) return { question: null, allAnswered: false };
+      return res.json();
+    },
+  });
+}
+
+export function useAnswerQuestion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ questionId, answer, isPrivate }: { questionId: number; answer: string; isPrivate?: boolean }) => {
+      const res = await fetch(`/api/questions/${questionId}/answer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer, isPrivate }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to submit answer");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/questions/next"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
+    },
+  });
+}
+
+export function useSkipQuestion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (questionId: number) => {
+      const res = await fetch(`/api/questions/${questionId}/skip`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to skip question");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/questions/next"] });
+    },
+  });
+}
+
+export function useQuestionsProgress() {
+  return useQuery({
+    queryKey: ["/api/questions"],
+    queryFn: async () => {
+      const res = await fetch("/api/questions", { credentials: "include" });
+      if (!res.ok) return { questions: [], answeredIds: [], totalAnswered: 0, total: 0 };
       return res.json();
     },
   });
