@@ -111,7 +111,14 @@ shared/
 - PhotoManagementDialog: upload/delete/set-cover, up to 6 photos
 - Privacy: GET /api/photos/:userId requires auth; private profiles return empty array for other users
 
-## Recent Changes (Feb 2026)
+## Recent Changes (Feb 19, 2026)
+- **Tinder-style Profile redesign**: Circular avatar header, verification badge, Edit Profile dialog, completion bar (weighted scoring engine), improvement task cards, quick action tiles (Super Match/Boosts/Subscription), tier comparison sidebar (Free/Plus/VIP), personality highlight chips
+- **WhatsApp-style Group Info redesign**: Circular group photo header, action row (Add Members/Search/Mute), description + rules editor (admin-only), media module, starred messages module, granular admin settings (permissions toggles for send/edit/add), enhanced sorted member list with role badges
+- **Starred messages feature**: Star/unstar messages in GroupChat popover, starred messages stored in starredMessages table, viewable on GroupInfo page, isStarred field in enriched messages endpoint
+- **Profile completion engine**: Backend scoring (bio 20%, photos 25%, onboarding 25%, verification 15%, AI summary 15%), recalculated on GET /api/profiles/me/completion
+- **Group settings API**: PATCH /api/groups/:id/settings for admin-only permission management (rulesText, canMembersEditInfo, canMembersSendMessages, canMembersAddOthers, postingPermission, mediaPermission)
+
+## Earlier Changes (Feb 2026)
 - "Romantic Modern" design system with semantic color tokens and micro-interactions
 - Hero banner on Landing page with stock images and gradient overlay
 - Redesigned Lounge cards with AvatarStack, category tags, privacy badges
