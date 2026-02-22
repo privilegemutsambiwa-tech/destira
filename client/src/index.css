@@ -42,6 +42,11 @@
   --gradient-primary: linear-gradient(135deg, hsl(269 83% 56%), hsl(325 90% 52%));
   --accent-spark: 350 80% 60%;
   --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.06);
+
+  --romantic-red: 0 78% 55%;
+  --romantic-red-foreground: 0 0% 100%;
+  --romantic-pink: 325 90% 52%;
+  --gradient-romantic: linear-gradient(135deg, hsl(0 78% 55%), hsl(340 80% 50%));
 }
 
 .dark {

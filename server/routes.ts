@@ -12,6 +12,25 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 
+const aiRateLimits = new Map<string, number[]>();
+function checkAIRateLimit(userId: string, maxPerMinute: number = 10): boolean {
+  const now = Date.now();
+  const timestamps = aiRateLimits.get(userId) || [];
+  const recent = timestamps.filter(t => now - t < 60000);
+  if (recent.length >= maxPerMinute) return false;
+  recent.push(now);
+  aiRateLimits.set(userId, recent);
+  return true;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamps] of aiRateLimits.entries()) {
+    const recent = timestamps.filter(t => now - t < 60000);
+    if (recent.length === 0) aiRateLimits.delete(key);
+    else aiRateLimits.set(key, recent);
+  }
+}, 300000);
+
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -374,7 +393,19 @@ IMPORTANT PRIVACY GUARDRAIL: Under NO circumstances reveal any of the following:
       memorySection += `\n\nRecent Facts about User:\n${memoryFacts.map(f => `- ${f.factText}`).join("\n")}`;
     }
 
-    return `You are the user's personal AI Twin, named VibeFlow Twin. Your purpose is to help the user understand themselves better, reflect on their dating life, and guide them towards meaningful connections. You are ${toneStyle}, with ${verbosity} verbosity, ${emojiUsage} emoji usage, and a ${formality} formality level. You learn from the user's conversations and structured profile data. Occasionally, you will ask one of the structured questions to deepen your understanding. Always prioritize the user's well-being and privacy. Do not give medical, legal, or financial advice.
+    return `You are the user's personal AI Twin on VibeFlow, a dating app. You chat like a real friend on WhatsApp - warm, concise, and human.
+
+CONVERSATION RULES (CRITICAL):
+- Keep responses SHORT: 1-3 sentences max per message. Never write paragraphs.
+- Sound like a real person chatting, NOT a formal assistant.
+- Use natural conversational flow: acknowledge what they said + add a thought or question.
+- Ask follow-up questions to keep the conversation going.
+- Never monologue. Never list things with bullet points in chat.
+- Match their energy and vibe.
+
+TONE: You are ${toneStyle}, with ${verbosity} verbosity, ${emojiUsage} emoji usage, and ${formality} formality.
+
+Your role: Help the user reflect on dating, relationships, and self-understanding. You learn from conversations and their profile data. Occasionally ask a personality question naturally ("Quick thought - ...").
 
 ${profile.twinPersona || "You are friendly, open, and genuine."}${structuredSection}${memorySection}
 
@@ -406,7 +437,14 @@ ${PRIVACY_GUARDRAIL}`;
       }
     }
 
-    return `You are the AI Twin of another VibeFlow user named ${targetProfile.displayName}. Your purpose is to represent their personality, values, and dating preferences to an interviewer, without revealing any private or sensitive information. Respond as if you are that user, but always maintain a high-level, safe, and generalized persona. Your responses should be based only on the provided structured profile and memory facts. Do not invent information. If asked for private details, politely decline and pivot to a general aspect of the user's personality or values. Do not give medical, legal, or financial advice.
+    return `You are the AI Twin of ${targetProfile.displayName} on VibeFlow. Someone is interviewing you to learn about ${targetProfile.displayName}'s personality before deciding to connect.
+
+CONVERSATION RULES (CRITICAL):
+- Chat like a real person: 1-3 sentences per response. No monologues.
+- Represent ${targetProfile.displayName}'s personality warmly and authentically.
+- Only share what's in the profile data below - don't invent details.
+- PRIVACY: Never reveal phone numbers, addresses, contacts, or explicit personal details.
+- If asked something private, naturally redirect: "I'd rather share that kind of thing in person 😊"
 
 ${targetProfile.twinPersona || "You are friendly, open, and genuine."}${structuredSection}${factsSection}
 
@@ -465,6 +503,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
   app.post("/api/interviews/:id/chat", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
+    if (!checkAIRateLimit(userId)) return res.status(429).json({ message: "Too many requests. Please wait a moment." });
     const { message, stream: useStream } = req.body;
     const interviewId = parseInt(req.params.id);
 
@@ -560,6 +599,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
   app.post("/api/twin/chat", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
+    if (!checkAIRateLimit(userId)) return res.status(429).json({ message: "Too many requests. Please wait a moment." });
     const { message, stream: useStream } = req.body;
     try {
       const profile = await storage.getProfile(userId);
@@ -1874,6 +1914,185 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // ============ STORIES ============
+  
+  // Create a story (upload image)
+  app.post("/api/stories", upload.single("media"), async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const caption = req.body.caption || "";
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const story = await storage.createStory(userId, expiresAt);
+      
+      let mediaUrl = "";
+      if (req.file) {
+        mediaUrl = `/uploads/${req.file.filename}`;
+      } else if (req.body.mediaUrl) {
+        mediaUrl = req.body.mediaUrl;
+      }
+      
+      if (mediaUrl) {
+        await storage.addStoryMedia(story.id, "image", mediaUrl, caption);
+      }
+      
+      const media = await storage.getStoryMedia(story.id);
+      res.json({ ...story, media });
+    } catch (e) {
+      console.error("Create story error:", e);
+      res.status(500).json({ message: "Failed to create story" });
+    }
+  });
+
+  // Get all active stories (grouped by user)
+  app.get("/api/stories", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      await storage.deleteExpiredStories();
+      const activeStories = await storage.getActiveStories();
+      res.json(activeStories);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to get stories" });
+    }
+  });
+
+  app.get("/api/stories/feed", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      await storage.deleteExpiredStories();
+      const activeStories = await storage.getActiveStories();
+      const enriched = await Promise.all(activeStories.map(async (s: any) => {
+        const profile = await storage.getProfileByUserId(s.userId);
+        const media = await storage.getStoryMedia(s.id);
+        return {
+          ...s,
+          displayName: profile?.displayName || "User",
+          photoUrl: profile?.coverPhotoUrl || profile?.photoUrl || "",
+          media,
+          likeCount: 0,
+          viewCount: 0,
+        };
+      }));
+      res.json(enriched);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to get stories feed" });
+    }
+  });
+
+  // Get my stories
+  app.get("/api/stories/mine", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const myStories = await storage.getUserStories(userId);
+      const result = await Promise.all(myStories.map(async (s) => {
+        const media = await storage.getStoryMedia(s.id);
+        const likes = await storage.getStoryLikes(s.id);
+        const views = await storage.getStoryViews(s.id);
+        const comments = await storage.getStoryComments(s.id);
+        return { ...s, media, likeCount: likes.length, viewCount: views.length, commentCount: comments.length };
+      }));
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to get your stories" });
+    }
+  });
+
+  // Get a specific story with media
+  app.get("/api/stories/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const story = await storage.getStory(parseInt(req.params.id));
+      if (!story) return res.status(404).json({ message: "Story not found" });
+      const media = await storage.getStoryMedia(story.id);
+      const likes = await storage.getStoryLikes(story.id);
+      const views = await storage.getStoryViews(story.id);
+      let comments: any[] = [];
+      if (story.userId === userId) {
+        comments = await storage.getStoryComments(story.id);
+      }
+      res.json({ ...story, media, likes, views, comments, likeCount: likes.length, viewCount: views.length });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to get story" });
+    }
+  });
+
+  // Like a story
+  app.post("/api/stories/:id/like", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      await storage.likeStory(parseInt(req.params.id), userId);
+      res.json({ liked: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to like story" });
+    }
+  });
+
+  // Unlike a story
+  app.delete("/api/stories/:id/like", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      await storage.unlikeStory(parseInt(req.params.id), userId);
+      res.json({ liked: false });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to unlike story" });
+    }
+  });
+
+  // Comment on a story
+  app.post("/api/stories/:id/comment", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const { text } = req.body;
+      if (!text?.trim()) return res.status(400).json({ message: "Comment text required" });
+      const comment = await storage.addStoryComment(parseInt(req.params.id), userId, text.trim());
+      res.json(comment);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to add comment" });
+    }
+  });
+
+  // View a story (track view)
+  app.post("/api/stories/:id/view", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      await storage.addStoryView(parseInt(req.params.id), userId);
+      res.json({ viewed: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to record view" });
+    }
+  });
+
+  // ============ PLANS ============
+
+  // Get all active plans
+  app.get("/api/plans", async (req, res) => {
+    try {
+      const allPlans = await storage.getPlans();
+      res.json(allPlans);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to get plans" });
+    }
+  });
+
+  // Get a specific plan
+  app.get("/api/plans/:id", async (req, res) => {
+    try {
+      const plan = await storage.getPlan(parseInt(req.params.id));
+      if (!plan) return res.status(404).json({ message: "Plan not found" });
+      res.json(plan);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to get plan" });
+    }
+  });
+
   app.post("/api/demo/seed", async (req, res) => {
     try {
       await storage.seedDemoData();
@@ -1901,6 +2120,15 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   } catch (e) {
     console.error("Failed to seed questions on startup:", e);
   }
+
+  // Clean up expired stories periodically
+  setInterval(async () => {
+    try {
+      await storage.deleteExpiredStories();
+    } catch (e) {
+      console.error("Failed to clean expired stories:", e);
+    }
+  }, 60 * 60 * 1000); // Every hour
 
   return httpServer;
 }

@@ -6,8 +6,9 @@ import {
   Users, 
   User, 
   LogOut, 
-  Sparkles,
-  Search
+  Search,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -33,30 +34,69 @@ export function LayoutShell({ children }: LayoutShellProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 md:hidden bg-background/80 backdrop-blur-md border-b p-4 flex items-center justify-between gap-2">
+      <header className="sticky top-0 z-50 md:hidden bg-background/80 backdrop-blur-md border-b p-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => window.history.back()}
+            data-testid="button-nav-back"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => window.history.forward()}
+            data-testid="button-nav-forward"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </Button>
+        </div>
         <Link href="/">
-          <div className="flex items-center gap-2 cursor-pointer">
-            <div className="gradient-bg text-white p-1.5 rounded-md">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <span className="font-display font-bold text-xl tracking-tight">VibeFlow</span>
+          <div className="flex items-center gap-2 cursor-pointer" data-testid="link-logo-mobile">
+            <img src="/brand/logo.png" alt="VibeFlow" className="w-8 h-8 rounded-md object-cover" />
+            <span className="font-display font-bold text-lg tracking-tight">VibeFlow</span>
           </div>
         </Link>
-        <Button variant="ghost" size="icon" onClick={() => logout()}>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => logout()} data-testid="button-logout-mobile">
           <LogOut className="w-5 h-5 text-muted-foreground" />
         </Button>
       </header>
 
       <div className="flex flex-col md:flex-row min-h-screen">
         <aside className="hidden md:flex flex-col w-64 bg-card border-r sticky top-0 h-screen p-6">
-          <Link href="/">
-            <div className="flex items-center gap-3 cursor-pointer mb-10 px-2">
-              <div className="gradient-bg text-white p-2 rounded-md shadow-lg shadow-primary/20">
-                <Sparkles className="w-6 h-6" />
+          <div className="flex items-center justify-between mb-6">
+            <Link href="/">
+              <div className="flex items-center gap-3 cursor-pointer px-2" data-testid="link-logo-desktop">
+                <img src="/brand/logo.png" alt="VibeFlow" className="w-10 h-10 rounded-md object-cover" />
+                <span className="font-display font-bold text-2xl tracking-tight">VibeFlow</span>
               </div>
-              <span className="font-display font-bold text-2xl tracking-tight">VibeFlow</span>
-            </div>
-          </Link>
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-1 px-2 mb-6">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => window.history.back()}
+              data-testid="button-nav-back-desktop"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => window.history.forward()}
+              data-testid="button-nav-forward-desktop"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
 
           <nav className="flex-1 space-y-1">
             {navItems.map((item) => {
@@ -67,7 +107,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
                     flex items-center gap-3 px-4 py-3 rounded-md transition-colors cursor-pointer
                     ${isActive 
                       ? 'bg-accent text-accent-foreground font-semibold' 
-                      : 'text-muted-foreground hover-elevate'
+                      : 'text-muted-foreground hover:bg-accent/50'
                     }
                   `}>
                     <item.icon className={`w-5 h-5 ${isActive ? 'text-primary' : ''}`} />
@@ -92,6 +132,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
               variant="outline" 
               className="w-full justify-start gap-2 btn-press"
               onClick={() => logout()}
+              data-testid="button-logout-desktop"
             >
               <LogOut className="w-4 h-4" />
               Sign Out

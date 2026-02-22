@@ -23,6 +23,9 @@ export const profiles = pgTable("profiles", {
   profileVisibility: text("profile_visibility").default("public"),
   coverPhotoUrl: text("cover_photo_url"),
   cartoonPhotoUrl: text("cartoon_photo_url"),
+  aboutMe: text("about_me"),
+  aboutMeSource: text("about_me_source").default("user"),
+  aboutMeUpdatedAt: timestamp("about_me_updated_at"),
   aboutSummary: text("about_summary"),
   personalitySummary: text("personality_summary"),
   isVerified: boolean("is_verified").default(false),
@@ -307,6 +310,57 @@ export const questionSchedule = pgTable("question_schedule", {
   nextAskAt: timestamp("next_ask_at"),
 });
 
+export const stories = pgTable("stories", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
+export const storyMedia = pgTable("story_media", {
+  id: serial("id").primaryKey(),
+  storyId: integer("story_id").notNull().references(() => stories.id),
+  type: text("type").notNull().default("image"),
+  url: text("url").notNull(),
+  caption: text("caption"),
+  orderIndex: integer("order_index").default(0),
+});
+
+export const storyLikes = pgTable("story_likes", {
+  id: serial("id").primaryKey(),
+  storyId: integer("story_id").notNull().references(() => stories.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const storyComments = pgTable("story_comments", {
+  id: serial("id").primaryKey(),
+  storyId: integer("story_id").notNull().references(() => stories.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  text: text("text").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const storyViews = pgTable("story_views", {
+  id: serial("id").primaryKey(),
+  storyId: integer("story_id").notNull().references(() => stories.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const plans = pgTable("plans", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  durationDays: integer("duration_days").notNull(),
+  priceUsd: decimal("price_usd", { precision: 10, scale: 2 }).notNull(),
+  weeklyEquivalent: decimal("weekly_equivalent", { precision: 10, scale: 2 }),
+  isBestValue: boolean("is_best_value").default(false),
+  features: text("features").array(),
+  stripePriceId: varchar("stripe_price_id"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const auditLogs = pgTable("audit_logs", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").references(() => users.id),
@@ -411,6 +465,25 @@ export const insertMessageReactionSchema = createInsertSchema(messageReactions).
   createdAt: true,
 });
 
+export const insertStorySchema = createInsertSchema(stories).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertStoryMediaSchema = createInsertSchema(storyMedia).omit({
+  id: true,
+});
+
+export const insertStoryCommentSchema = createInsertSchema(storyComments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPlanSchema = createInsertSchema(plans).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type Profile = typeof profiles.$inferSelect;
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
 export type Match = typeof matches.$inferSelect;
@@ -443,6 +516,13 @@ export type Question = typeof questions.$inferSelect;
 export type UserAnswer = typeof userAnswers.$inferSelect;
 export type QuestionScheduleEntry = typeof questionSchedule.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
+
+export type Story = typeof stories.$inferSelect;
+export type StoryMedia = typeof storyMedia.$inferSelect;
+export type StoryLike = typeof storyLikes.$inferSelect;
+export type StoryComment = typeof storyComments.$inferSelect;
+export type StoryView = typeof storyViews.$inferSelect;
+export type Plan = typeof plans.$inferSelect;
 
 export type CreateProfileRequest = InsertProfile;
 export type UpdateProfileRequest = Partial<InsertProfile>;

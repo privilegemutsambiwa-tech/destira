@@ -270,7 +270,8 @@ export default function TwinChat() {
                   )
                 );
               } else if (event.type === "quick_replies" && event.replies) {
-                setQuickReplies(event.replies);
+                const uniqueReplies = Array.from(new Set(event.replies as string[]));
+                setQuickReplies(uniqueReplies);
                 if (assistantAdded) {
                   setMessages(prev =>
                     prev.map(m =>
@@ -316,7 +317,7 @@ export default function TwinChat() {
           )
         );
         if (data.quickReplies) {
-          setQuickReplies(data.quickReplies);
+          setQuickReplies(Array.from(new Set(data.quickReplies as string[])));
         }
       }
     } catch (e: any) {
@@ -517,7 +518,7 @@ export default function TwinChat() {
                     )}
                   </div>
 
-                  {!isMe && msg.quickReplies && msg.quickReplies.length > 0 && (
+                  {false && !isMe && msg.quickReplies && msg.quickReplies.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2 ml-1">
                       {msg.quickReplies.map((reply, ri) => (
                         <Badge

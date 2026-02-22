@@ -1,8 +1,15 @@
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Sparkles, ArrowRight, Brain, Heart, Shield, Play } from "lucide-react";
+import { ArrowRight, Brain, Heart, Shield, Play } from "lucide-react";
 import { motion } from "framer-motion";
-import heroCoupleImg from "@assets/images/hero-couple_1.jpg";
+
+const ROMANCE_IMAGES = [
+  "/romance/couple-1_1.jpg",
+  "/romance/couple-1_2.jpg",
+  "/romance/couple-1_3.jpg",
+  "/romance/couple-walk_1.jpg",
+  "/romance/couple-walk_2.jpg",
+];
 
 export default function Landing() {
   const [, setLocation] = useLocation();
@@ -19,9 +26,7 @@ export default function Landing() {
       <nav className="fixed w-full z-50 bg-background/80 backdrop-blur-md border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="gradient-bg text-white p-1.5 rounded-md">
-              <Sparkles className="w-5 h-5" />
-            </div>
+            <img src="/brand/logo.png" alt="VibeFlow" className="w-9 h-9 rounded-md object-cover" data-testid="img-logo" />
             <span className="font-display font-bold text-xl tracking-tight">VibeFlow</span>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -39,7 +44,7 @@ export default function Landing() {
 
       <section className="relative pt-16 overflow-hidden">
         <div className="relative h-[85vh] min-h-[600px]">
-          <img src={heroCoupleImg} alt="Couple connecting" className="w-full h-full object-cover" />
+          <img src={ROMANCE_IMAGES[0]} alt="Couple connecting" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20" />
           <div className="absolute inset-0 flex items-center">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">

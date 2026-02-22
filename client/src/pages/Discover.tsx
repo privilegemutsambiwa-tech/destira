@@ -2,11 +2,13 @@ import { useState, useMemo } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { Button } from "@/components/ui/button";
 import { CompatibilityRing } from "@/components/compatibility-ring";
-import { Brain, X, Loader2, MapPin, Heart } from "lucide-react";
-import { useDiscoverProfiles, useStartInterview, useCreateMatch } from "@/hooks/use-interactions";
+import { Brain, X, Loader2, MapPin, Heart, Plus } from "lucide-react";
+import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { StoryViewer } from "@/components/story-viewer";
 import heroCoupleImg1 from "@assets/images/hero-couple_1.jpg";
 import heroCoupleImg2 from "@assets/images/hero-couple_2.jpg";
 import heroCoupleImg3 from "@assets/images/hero-couple_3.jpg";
@@ -53,6 +55,58 @@ function HeroBanner({ onStartMatching, onInterviewTwin }: { onStartMatching: () 
         </div>
       </div>
     </div>
+  );
+}
+
+function StoriesCarousel() {
+  const { data: stories } = useFeedStories();
+  const [viewingStory, setViewingStory] = useState<any>(null);
+
+  const grouped = useMemo(() => {
+    if (!stories || stories.length === 0) return [];
+    const byUser: Record<string, { userId: string; displayName: string; photoUrl: string; stories: any[] }> = {};
+    stories.forEach((s: any) => {
+      if (!byUser[s.userId]) {
+        byUser[s.userId] = { userId: s.userId, displayName: s.displayName || "User", photoUrl: s.photoUrl || "", stories: [] };
+      }
+      byUser[s.userId].stories.push(s);
+    });
+    return Object.values(byUser);
+  }, [stories]);
+
+  if (grouped.length === 0) return null;
+
+  return (
+    <>
+      <div className="flex gap-3 overflow-x-auto pb-3 mb-4 scrollbar-hide" data-testid="stories-carousel">
+        {grouped.map((user) => (
+          <button
+            key={user.userId}
+            onClick={() => setViewingStory(user)}
+            className="flex flex-col items-center gap-1 shrink-0"
+            data-testid={`story-avatar-${user.userId}`}
+          >
+            <div className="w-16 h-16 rounded-full p-0.5 bg-gradient-to-tr from-pink-500 via-red-500 to-yellow-500">
+              <Avatar className="w-full h-full border-2 border-background">
+                {user.photoUrl ? (
+                  <AvatarImage src={user.photoUrl} alt={user.displayName} />
+                ) : (
+                  <AvatarFallback className="text-sm">{user.displayName[0]}</AvatarFallback>
+                )}
+              </Avatar>
+            </div>
+            <span className="text-[11px] text-muted-foreground truncate w-16 text-center">{user.displayName.split(" ")[0]}</span>
+          </button>
+        ))}
+      </div>
+      {viewingStory && (
+        <StoryViewer
+          stories={viewingStory.stories}
+          initialIndex={0}
+          onClose={() => setViewingStory(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -135,6 +189,7 @@ export default function Discover() {
   return (
     <LayoutShell>
       <div className="max-w-2xl mx-auto">
+        <StoriesCarousel />
         <HeroBanner onStartMatching={handleMatchRequest} onInterviewTwin={handleInterview} />
 
         <AnimatePresence mode="wait">

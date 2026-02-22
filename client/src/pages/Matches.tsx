@@ -66,7 +66,7 @@ function UpgradeBanner() {
             </p>
             <Button
               variant="secondary"
-              onClick={() => setLocation("/billing")}
+              onClick={() => setLocation("/upgrade")}
               data-testid="button-upgrade-now"
             >
               <Sparkles className="w-4 h-4 mr-1" />
@@ -119,7 +119,7 @@ function LikeCard({ like, isBlurred }: { like: any; isBlurred: boolean }) {
     return (
       <Card
         className="cursor-pointer hover-elevate"
-        onClick={() => setLocation("/billing")}
+        onClick={() => setLocation("/upgrade")}
         data-testid={`card-like-blurred-${like.id}`}
       >
         <CardContent className="p-4">

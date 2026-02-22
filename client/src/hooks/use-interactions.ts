@@ -906,3 +906,24 @@ export function useUpdateGroupSettings(groupId: number) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] }),
   });
 }
+
+export function useFeedStories() {
+  return useQuery<any[]>({
+    queryKey: ["/api/stories/feed"],
+  });
+}
+
+export function useCreateStory() {
+  return useMutation({
+    mutationFn: async (formData: FormData) => {
+      const res = await fetch("/api/stories", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to create story");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/stories/feed"] }),
+  });
+}

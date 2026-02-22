@@ -118,7 +118,19 @@ shared/
 - PhotoManagementDialog: upload/delete/set-cover, up to 6 photos
 - Privacy: GET /api/photos/:userId requires auth; private profiles return empty array for other users
 
-## Recent Changes (Feb 19, 2026)
+## Recent Changes (Feb 22, 2026)
+- **Logo Rebranding**: VibeFlow logo in `/public/brand/logo.png`, red heart variant instructions in `/docs/logo-edit.md`, favicon updated
+- **Romantic Theme**: Red-tinted CSS color tokens, romantic couple stock images in `attached_assets/images/`
+- **Global Navigation**: Back/Forward arrows added to layout-shell header (mobile + desktop)
+- **Instagram Stories**: Full stories system with 24-hour expiry, story viewer (tap navigation, auto-advance, like, comment with owner-only visibility), stories carousel on Discover page. DB: stories, storyMedia, storyLikes, storyComments, storyViews tables. API: /api/stories/feed (enriched), /api/stories CRUD, view/like/comment endpoints
+- **Facebook-Style Profile**: Cover photo header, circular avatar overlay, 6 photo thumbnails, About Me only (no AI Summary display), Twin Intelligence progress bar with motivational messages
+- **Upgrade Page**: `/upgrade` route with Tinder-style subscription cards (1 Week $4.99, 1 Month $19.99, 6 Months $54), plans editable in DB `plans` table, Stripe checkout
+- **AI Twin Improvements**: Shorter 1-3 sentence responses, human-like chat prompts, interview prompts enforce natural conversation, quick reply deduplication fix
+- **Likes Paywall**: Blurred photos with CSS blur for free tier, upgrade links point to /upgrade
+- **Rate Limiting**: In-memory rate limiter for AI chat endpoints (10 requests/minute per user)
+- **Security**: PII detection, PRIVACY_GUARDRAIL in all AI prompts, audit logging, rate limiting
+
+## Changes (Feb 19, 2026)
 - **AI Twin System Upgrade**: Comprehensive overhaul of AI Twin functionality:
   - **SSE Streaming**: POST /api/twin/chat and /api/interviews/:id/chat now support `stream: true` for real-time token-by-token rendering via Server-Sent Events (typing/delta/done/quick_replies events)
   - **Two-Layer Memory**: Structured profile (twin_profiles_structured) + conversational facts (twin_memory_facts) + rolling summary (twin_memory_summary). extractMemoryAfterChat() runs asynchronously every 6 messages

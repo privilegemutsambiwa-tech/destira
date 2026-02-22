@@ -6,7 +6,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
 import { useEffect } from "react";
-import { Loader2 } from "lucide-react";
 
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
@@ -20,6 +19,7 @@ import Lounge from "@/pages/Lounge";
 import DirectChat from "@/pages/DirectChat";
 import TwinChat from "@/pages/TwinChat";
 import Billing from "@/pages/Billing";
+import Upgrade from "@/pages/Upgrade";
 import GroupChatPage from "@/pages/GroupChat";
 import GroupInfoPage from "@/pages/GroupInfo";
 
@@ -36,7 +36,7 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <img src="/brand/logo.png" alt="VibeFlow" className="w-16 h-16 rounded-md object-cover animate-pulse" />
       </div>
     );
   }
@@ -62,7 +62,7 @@ function AuthenticatedHome() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <img src="/brand/logo.png" alt="VibeFlow" className="w-16 h-16 rounded-md object-cover animate-pulse" />
     </div>
   );
 }
@@ -73,7 +73,7 @@ function Router() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <img src="/brand/logo.png" alt="VibeFlow" className="w-16 h-16 rounded-md object-cover animate-pulse" />
       </div>
     );
   }
@@ -117,6 +117,9 @@ function Router() {
       </Route>
       <Route path="/billing">
         <ProtectedRoute component={Billing} />
+      </Route>
+      <Route path="/upgrade">
+        <ProtectedRoute component={Upgrade} />
       </Route>
 
       <Route component={NotFound} />

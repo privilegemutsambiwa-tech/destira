@@ -17,8 +17,9 @@ import {
   Loader2, MapPin, Eye, EyeOff,
   Camera, Crown, Wand2, Trash2, ImagePlus,
   CheckCircle2, Zap, Rocket, ArrowRight, Check, X, Pencil,
-  Brain, Sparkles, RefreshCw, Shield, MessageSquare, Volume2
+  Brain, Sparkles, RefreshCw, Shield, MessageSquare, Volume2, Plus
 } from "lucide-react";
+import { AddStoryButton } from "@/components/story-viewer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -46,7 +47,6 @@ export default function Profile() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showToneDialog, setShowToneDialog] = useState(false);
   const [aboutMePreview, setAboutMePreview] = useState<string | null>(null);
-  const [aiSummaryPreview, setAiSummaryPreview] = useState<string | null>(null);
   const [toneValues, setToneValues] = useState({
     tone_style: "supportive",
     verbosity_level: "balanced",
@@ -128,27 +128,6 @@ export default function Profile() {
       await updateProfile.mutateAsync({ userId: user!.id, data: { bio: aboutMePreview } });
       setAboutMePreview(null);
       toast({ title: "About Me updated!" });
-      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to save.", variant: "destructive" });
-    }
-  };
-
-  const handleGenerateAISummary = async () => {
-    try {
-      const result = await generateAISummary.mutateAsync();
-      setAiSummaryPreview(result.aiSummaryText);
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to generate summary.", variant: "destructive" });
-    }
-  };
-
-  const handleApproveAISummary = async () => {
-    if (!aiSummaryPreview) return;
-    try {
-      await updateProfile.mutateAsync({ userId: user!.id, data: { personalitySummary: aiSummaryPreview } });
-      setAiSummaryPreview(null);
-      toast({ title: "AI Summary updated!" });
       queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
     } catch (e) {
       toast({ title: "Error", description: "Failed to save.", variant: "destructive" });
@@ -243,10 +222,15 @@ export default function Profile() {
 
   return (
     <LayoutShell>
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex flex-col items-center text-center py-8">
-            <Avatar className="w-28 h-28 border-4 border-background" data-testid="avatar-profile">
+      <div className="space-y-6">
+        <div className="relative">
+          <div className="h-48 md:h-56 rounded-md overflow-hidden bg-gradient-to-r from-primary/30 to-secondary/30">
+            {profile.coverPhotoUrl && (
+              <img src={profile.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
+            )}
+          </div>
+          <div className="flex flex-col items-center -mt-16 relative z-10">
+            <Avatar className="w-32 h-32 border-4 border-background shadow-lg" data-testid="avatar-profile">
               {avatarUrl ? (
                 <AvatarImage src={avatarUrl} alt={profile.displayName || "Profile"} />
               ) : null}
@@ -255,7 +239,7 @@ export default function Profile() {
               </AvatarFallback>
             </Avatar>
 
-            <div className="mt-4 flex items-center gap-2">
+            <div className="mt-3 flex items-center gap-2">
               <h1 className="text-2xl font-bold" data-testid="text-display-name">
                 {profile.displayName || user?.firstName}
               </h1>
@@ -271,10 +255,9 @@ export default function Profile() {
               </div>
             )}
 
-            <div className="flex items-center gap-3 mt-4 flex-wrap justify-center">
+            <div className="flex items-center gap-2 mt-3 flex-wrap justify-center">
               <Button
                 variant="outline"
-                className="btn-press"
                 onClick={() => setShowEditDialog(true)}
                 data-testid="button-edit-profile"
               >
@@ -283,15 +266,36 @@ export default function Profile() {
               </Button>
               <Button
                 variant="outline"
-                className="btn-press"
                 onClick={() => setShowPhotoDialog(true)}
                 data-testid="button-add-photos"
               >
                 <ImagePlus className="w-4 h-4 mr-1.5" />
-                Add Photos
+                Photos
               </Button>
+              <AddStoryButton />
             </div>
           </div>
+        </div>
+
+        <div className="flex gap-3 justify-center overflow-x-auto px-4">
+          {photos?.slice(0, 6).map((photo: any) => (
+            <div key={photo.id} className="w-16 h-16 rounded-full overflow-hidden border-2 border-muted shrink-0" data-testid={`photo-circle-${photo.id}`}>
+              <img src={photo.photoUrl} alt="" className="w-full h-full object-cover" />
+            </div>
+          ))}
+          {(photos?.length || 0) < 6 && (
+            <button
+              onClick={() => setShowPhotoDialog(true)}
+              className="w-16 h-16 rounded-full border-2 border-dashed border-muted-foreground/30 flex items-center justify-center shrink-0 cursor-pointer"
+              data-testid="button-add-photo-circle"
+            >
+              <Plus className="w-5 h-5 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
 
           {completionScore < 100 && (
             <Card>
@@ -353,7 +357,7 @@ export default function Profile() {
             </Card>
             <Card
               className="text-center cursor-pointer hover-elevate"
-              onClick={() => setLocation("/billing")}
+              onClick={() => setLocation("/upgrade")}
               data-testid="tile-subscription"
             >
               <CardContent className="pt-6 pb-4">
@@ -404,38 +408,8 @@ export default function Profile() {
                 </p>
               )}
               <p className="text-muted-foreground leading-relaxed" data-testid="text-bio">
-                {profile.bio || "No bio yet."}
+                {profile.aboutMe || profile.bio || "No bio yet."}
               </p>
-              {profile.personalitySummary && (
-                <div className="mt-3 pt-3 border-t">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <p className="text-xs text-muted-foreground font-medium">AI Summary</p>
-                    <Button variant="ghost" size="sm" onClick={handleGenerateAISummary} disabled={generateAISummary.isPending} data-testid="button-generate-ai-summary">
-                      {generateAISummary.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                    </Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground italic" data-testid="text-personality-summary">
-                    {profile.personalitySummary}
-                  </p>
-                </div>
-              )}
-              {aiSummaryPreview && (
-                <div className="mt-3 p-3 rounded-md bg-muted border border-dashed" data-testid="ai-summary-preview">
-                  <p className="text-xs text-muted-foreground mb-2 font-medium">AI Summary Preview</p>
-                  <p className="text-sm leading-relaxed mb-3 italic">{aiSummaryPreview}</p>
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleApproveAISummary} data-testid="button-approve-ai-summary">
-                      <Check className="w-3 h-3 mr-1" /> Use This
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={handleGenerateAISummary} disabled={generateAISummary.isPending} data-testid="button-regenerate-ai-summary">
-                      <RefreshCw className="w-3 h-3 mr-1" /> Regenerate
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setAiSummaryPreview(null)} data-testid="button-discard-ai-summary">
-                      <X className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </div>
-              )}
               {highlightChips.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t">
                   {highlightChips.map(([trait]) => (
@@ -499,17 +473,30 @@ export default function Profile() {
                     </Button>
                   </div>
                 )}
-                {questionsProgress && (
-                  <div className="pt-3 border-t">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs text-muted-foreground">Questions Progress</p>
-                      <Badge variant="secondary" className="text-xs">{questionsProgress.totalAnswered}/{questionsProgress.total}</Badge>
+                {questionsProgress && (() => {
+                  const answered = questionsProgress.totalAnswered || 0;
+                  const total = 100;
+                  const pct = Math.min(Math.round((answered / total) * 100), 100);
+                  let message = "Just getting started! Keep answering to help your Twin learn.";
+                  if (pct > 75) message = "Amazing! Your Twin knows you deeply.";
+                  else if (pct > 50) message = "Great work! Your Twin understands you well.";
+                  else if (pct > 25) message = "Making progress! Your Twin is getting smarter.";
+                  return (
+                    <div className="pt-3 border-t">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <p className="text-xs text-muted-foreground font-medium">Questions Progress</p>
+                        <span className="text-xs font-semibold">{pct}%</span>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-2.5">
+                        <div className="gradient-bg h-2.5 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} data-testid="progress-questions" />
+                      </div>
+                      <div className="flex items-center justify-between gap-2 mt-1.5">
+                        <p className="text-xs text-muted-foreground">{answered} of {total} answered</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 italic" data-testid="text-progress-message">{message}</p>
                     </div>
-                    <div className="w-full bg-muted rounded-full h-1.5 mt-1">
-                      <div className="gradient-bg h-1.5 rounded-full transition-all" style={{ width: `${questionsProgress.total > 0 ? (questionsProgress.totalAnswered / questionsProgress.total) * 100 : 0}%` }} />
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             </CardContent>
           </Card>
@@ -542,24 +529,6 @@ export default function Profile() {
               </div>
             </CardContent>
           </Card>
-
-          {photos && photos.length > 0 && (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2">
-                <CardTitle className="text-base">My Photos</CardTitle>
-                <Badge variant="secondary" className="text-xs">{photos.length}</Badge>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 gap-3">
-                  {photos.map((photo: any) => (
-                    <div key={photo.id} className="aspect-square rounded-md overflow-hidden bg-muted" data-testid={`photo-${photo.id}`}>
-                      <img src={photo.photoUrl} alt="" className="w-full h-full object-cover" />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           <Card>
             <CardHeader>
@@ -627,7 +596,7 @@ export default function Profile() {
                   )}
                   <Button
                     className="w-full btn-press"
-                    onClick={() => setLocation("/billing")}
+                    onClick={() => setLocation("/upgrade")}
                     data-testid="button-upgrade"
                   >
                     Upgrade Now
@@ -637,6 +606,7 @@ export default function Profile() {
             </CardContent>
           </Card>
         </div>
+      </div>
       </div>
 
       <EditProfileDialog

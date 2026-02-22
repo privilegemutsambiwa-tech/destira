@@ -6,6 +6,7 @@ import {
   twinMemory, twinNotifications, subscriptions, payments, entitlements,
   twinProfilesStructured, twinMemoryFacts, twinMemorySummary,
   questions, userAnswers, questionSchedule, auditLogs,
+  stories, storyMedia, storyLikes, storyComments, storyViews, plans,
   type Profile, type InsertProfile, type UpdateProfileRequest,
   type Match, type Interview, type Group, type GroupMember, type DirectMessage, type GroupMessage,
   type GroupJoinRequest, type GroupInviteLink, type GroupModerationLog,
@@ -13,10 +14,11 @@ import {
   type UserPhoto, type TwinMemoryEntry, type TwinNotification,
   type Subscription, type Payment, type Entitlement,
   type TwinProfileStructured, type TwinMemoryFact, type TwinMemorySummaryEntry,
-  type Question, type UserAnswer, type QuestionScheduleEntry, type AuditLog
+  type Question, type UserAnswer, type QuestionScheduleEntry, type AuditLog,
+  type Story, type StoryMedia, type StoryLike, type StoryComment, type StoryView, type Plan
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
-import { eq, or, and, ne, asc, desc, ilike, sql, count } from "drizzle-orm";
+import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, lte } from "drizzle-orm";
 
 export interface IStorage {
   getProfile(userId: string): Promise<Profile | undefined>;
@@ -142,6 +144,26 @@ export interface IStorage {
 
   createAuditLog(userId: string | null, eventType: string, details?: any): Promise<AuditLog>;
   getAuditLogs(userId?: string, limit?: number): Promise<AuditLog[]>;
+
+  createStory(userId: string, expiresAt: Date): Promise<Story>;
+  getStory(id: number): Promise<Story | undefined>;
+  getActiveStories(): Promise<any[]>;
+  getUserStories(userId: string): Promise<Story[]>;
+  deleteExpiredStories(): Promise<void>;
+  addStoryMedia(storyId: number, type: string, url: string, caption?: string): Promise<StoryMedia>;
+  getStoryMedia(storyId: number): Promise<StoryMedia[]>;
+  likeStory(storyId: number, userId: string): Promise<StoryLike>;
+  unlikeStory(storyId: number, userId: string): Promise<void>;
+  getStoryLikes(storyId: number): Promise<StoryLike[]>;
+  addStoryComment(storyId: number, userId: string, text: string): Promise<StoryComment>;
+  getStoryComments(storyId: number): Promise<StoryComment[]>;
+  addStoryView(storyId: number, userId: string): Promise<StoryView>;
+  getStoryViews(storyId: number): Promise<StoryView[]>;
+
+  getPlans(): Promise<Plan[]>;
+  getPlan(id: number): Promise<Plan | undefined>;
+  createPlan(data: { name: string; durationDays: number; priceUsd: string; weeklyEquivalent?: string; isBestValue?: boolean; features?: string[]; stripePriceId?: string }): Promise<Plan>;
+  updatePlan(id: number, updates: Partial<Plan>): Promise<Plan>;
 
   seedDemoData(): Promise<void>;
 }
@@ -820,6 +842,15 @@ export class DatabaseStorage implements IStorage {
         await db.insert(profiles).values(demoProfile);
       }
     }
+
+    const existingPlans = await db.select().from(plans).limit(1);
+    if (existingPlans.length === 0) {
+      await db.insert(plans).values([
+        { name: "1 Week", durationDays: 7, priceUsd: "4.99", weeklyEquivalent: "4.99", isBestValue: false, features: ["See who likes you", "Unlimited likes", "1 Super Match/week"] },
+        { name: "1 Month", durationDays: 30, priceUsd: "19.99", weeklyEquivalent: "4.99", isBestValue: false, features: ["See who likes you", "Unlimited likes", "5 Super Matches/month", "Read receipts", "Priority in Discover"] },
+        { name: "6 Months", durationDays: 180, priceUsd: "54.00", weeklyEquivalent: "2.25", isBestValue: true, features: ["See who likes you", "Unlimited likes", "Unlimited Super Matches", "Read receipts", "Priority in Discover", "Profile boost/month", "AI Twin premium features"] },
+      ]);
+    }
   }
 
   async starMessage(messageId: number, userId: string, groupId: number): Promise<StarredMessage> {
@@ -1068,6 +1099,126 @@ export class DatabaseStorage implements IStorage {
     }
     const q = db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt));
     return limit ? await q.limit(limit) : await q;
+  }
+
+  async createStory(userId: string, expiresAt: Date): Promise<Story> {
+    const [story] = await db.insert(stories).values({ userId, expiresAt }).returning();
+    return story;
+  }
+
+  async getStory(id: number): Promise<Story | undefined> {
+    const [story] = await db.select().from(stories).where(eq(stories.id, id));
+    return story;
+  }
+
+  async getActiveStories(): Promise<any[]> {
+    const activeStories = await db
+      .select({
+        id: stories.id,
+        userId: stories.userId,
+        createdAt: stories.createdAt,
+        expiresAt: stories.expiresAt,
+        firstName: users.firstName,
+        profileImageUrl: users.profileImageUrl,
+      })
+      .from(stories)
+      .innerJoin(users, eq(stories.userId, users.id))
+      .where(gt(stories.expiresAt, new Date()))
+      .orderBy(desc(stories.createdAt));
+
+    const grouped: Record<string, { userId: string; user: { firstName: string | null; profileImageUrl: string | null }; stories: any[] }> = {};
+    for (const row of activeStories) {
+      if (!grouped[row.userId]) {
+        grouped[row.userId] = {
+          userId: row.userId,
+          user: { firstName: row.firstName, profileImageUrl: row.profileImageUrl },
+          stories: [],
+        };
+      }
+      grouped[row.userId].stories.push({
+        id: row.id,
+        userId: row.userId,
+        createdAt: row.createdAt,
+        expiresAt: row.expiresAt,
+      });
+    }
+    return Object.values(grouped);
+  }
+
+  async getUserStories(userId: string): Promise<Story[]> {
+    return db.select().from(stories).where(eq(stories.userId, userId)).orderBy(desc(stories.createdAt));
+  }
+
+  async deleteExpiredStories(): Promise<void> {
+    await db.delete(stories).where(lte(stories.expiresAt, new Date()));
+  }
+
+  async addStoryMedia(storyId: number, type: string, url: string, caption?: string): Promise<StoryMedia> {
+    const values: any = { storyId, type, url };
+    if (caption) values.caption = caption;
+    const [media] = await db.insert(storyMedia).values(values).returning();
+    return media;
+  }
+
+  async getStoryMedia(storyId: number): Promise<StoryMedia[]> {
+    return db.select().from(storyMedia).where(eq(storyMedia.storyId, storyId));
+  }
+
+  async likeStory(storyId: number, userId: string): Promise<StoryLike> {
+    const existing = await db.select().from(storyLikes)
+      .where(and(eq(storyLikes.storyId, storyId), eq(storyLikes.userId, userId)));
+    if (existing.length > 0) return existing[0];
+    const [like] = await db.insert(storyLikes).values({ storyId, userId }).returning();
+    return like;
+  }
+
+  async unlikeStory(storyId: number, userId: string): Promise<void> {
+    await db.delete(storyLikes)
+      .where(and(eq(storyLikes.storyId, storyId), eq(storyLikes.userId, userId)));
+  }
+
+  async getStoryLikes(storyId: number): Promise<StoryLike[]> {
+    return db.select().from(storyLikes).where(eq(storyLikes.storyId, storyId));
+  }
+
+  async addStoryComment(storyId: number, userId: string, text: string): Promise<StoryComment> {
+    const [comment] = await db.insert(storyComments).values({ storyId, userId, text }).returning();
+    return comment;
+  }
+
+  async getStoryComments(storyId: number): Promise<StoryComment[]> {
+    return db.select().from(storyComments).where(eq(storyComments.storyId, storyId)).orderBy(asc(storyComments.createdAt));
+  }
+
+  async addStoryView(storyId: number, userId: string): Promise<StoryView> {
+    const existing = await db.select().from(storyViews)
+      .where(and(eq(storyViews.storyId, storyId), eq(storyViews.userId, userId)));
+    if (existing.length > 0) return existing[0];
+    const [view] = await db.insert(storyViews).values({ storyId, userId }).returning();
+    return view;
+  }
+
+  async getStoryViews(storyId: number): Promise<StoryView[]> {
+    return db.select().from(storyViews).where(eq(storyViews.storyId, storyId));
+  }
+
+  async getPlans(): Promise<Plan[]> {
+    return db.select().from(plans).where(eq(plans.isActive, true));
+  }
+
+  async getPlan(id: number): Promise<Plan | undefined> {
+    const [plan] = await db.select().from(plans).where(eq(plans.id, id));
+    return plan;
+  }
+
+  async createPlan(data: { name: string; durationDays: number; priceUsd: string; weeklyEquivalent?: string; isBestValue?: boolean; features?: string[]; stripePriceId?: string }): Promise<Plan> {
+    const [plan] = await db.insert(plans).values(data).returning();
+    return plan;
+  }
+
+  async updatePlan(id: number, updates: Partial<Plan>): Promise<Plan> {
+    const [updated] = await db.update(plans).set(updates).where(eq(plans.id, id)).returning();
+    return updated;
   }
 }
 
