@@ -11,7 +11,7 @@ async function getCredentials() {
       : null;
 
   if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
+    throw new Error('X-Replit-Token not found for repl/depl');
   }
 
   const connectorName = 'stripe';
@@ -26,7 +26,7 @@ async function getCredentials() {
   const response = await fetch(url.toString(), {
     headers: {
       'Accept': 'application/json',
-      'X_REPLIT_TOKEN': xReplitToken
+      'X-Replit-Token': xReplitToken
     }
   });
 
