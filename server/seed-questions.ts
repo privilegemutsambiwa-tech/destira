@@ -143,7 +143,8 @@ export async function seedQuestions() {
   console.log("Successfully seeded all 100 questions!");
 }
 
-if (require.main === module) {
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
   (async () => {
     try {
       const existing = await db.select({ count: sql<number>`count(*)` }).from(questions);
