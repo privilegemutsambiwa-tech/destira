@@ -17,7 +17,7 @@ import {
   Loader2, MapPin, Eye, EyeOff,
   Camera, Crown, Wand2, Trash2, ImagePlus,
   CheckCircle2, Zap, Rocket, ArrowRight, Check, X, Pencil,
-  Brain, Sparkles, RefreshCw, Shield, MessageSquare, Volume2, Plus
+  Brain, Sparkles, RefreshCw, Shield, MessageSquare, Volume2, Plus, LogOut
 } from "lucide-react";
 import { AddStoryButton } from "@/components/story-viewer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -31,7 +31,7 @@ export default function Profile() {
   const { data: profile, isLoading } = useProfile();
   const { data: subscription } = useSubscription();
   const { data: completion } = useProfileCompletion();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const updateProfile = useUpdateProfile();
@@ -639,6 +639,20 @@ export default function Profile() {
           </Card>
         </div>
       </div>
+
+      {/* Mobile-only sign out — desktop uses sidebar */}
+      <div className="md:hidden mt-6">
+        <Button
+          variant="outline"
+          className="w-full justify-center gap-2 rounded-xl border-[#E5E7EB] text-[#6B7280]"
+          onClick={() => logout()}
+          data-testid="button-logout-profile"
+        >
+          <LogOut className="w-4 h-4" />
+          Sign Out
+        </Button>
+      </div>
+
       </div>
 
       <EditProfileDialog
