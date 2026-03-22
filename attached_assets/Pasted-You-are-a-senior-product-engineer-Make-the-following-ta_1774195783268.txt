@@ -1,0 +1,287 @@
+You are a senior product engineer. Make the following targeted 
+improvements to VibeFlow. Do NOT break anything that is currently 
+working. Apply each change carefully.
+
+=======================================================
+CHANGE 1 — LANDING PAGE: Add Photos, Stats & Rich Content
+=======================================================
+
+The landing page currently has a gradient hero with text but NO 
+photos and very little content below. Make it rich, exciting, 
+and conversion-focused.
+
+HERO SECTION (keep existing gradient, enhance it):
+- The hero background stays as the purple-to-pink gradient
+- Add an animated floating profile card mockup on the hero:
+  → A rounded card (radius 20px) showing a mock user profile
+  → Contains: circular avatar placeholder with gradient background,
+    name "Amara, 24", location pin icon + "New York", 
+    compatibility badge "✦ 94% Match" in gradient text
+  → Position it center-bottom of the hero, slightly overlapping 
+    into the next section
+  → Add subtle floating animation: 
+    @keyframes float { 
+      0%,100% { transform: translateY(0px) } 
+      50% { transform: translateY(-10px) } 
+    }
+    animation: float 3s ease-in-out infinite;
+
+- Hero text:
+  → H1: "Find Your Perfect Vibe" (keep, bold, large)
+  → Subtitle: "AI-powered matching. Real connections." (keep)
+  → Add below subtitle: three small trust badges in a row:
+    🔒 Private  ·  ✦ AI-Powered  ·  ❤️ Real Matches
+
+STATISTICS SECTION (dark background, after hero):
+  - Full width, background #1A1A24
+  - 3 stats in a row, each with:
+    → Large number in gradient text (bold, 32px)
+    → Label below in #9090A8 (13px)
+  - Stats to show:
+    → "50K+" / "Active Users"
+    → "89%" / "Match Satisfaction" 
+    → "2M+" / "Conversations Started"
+  - Add count-up animation using JavaScript:
+    When section scrolls into view, numbers count up from 0
+
+FEATURES SECTION (3 cards, stacked vertically):
+  Each card:
+  - Background: #1A1A24, border: 1px solid #2E2E42, radius: 20px
+  - Padding: 24px
+  - Left: icon circle (52px, gradient background)
+  - Content:
+    Card 1: 🧠 "Meet Your AI Twin"
+      "Your personal AI learns your personality, values, and 
+      communication style. It represents you before you even 
+      say hello."
+    Card 2: ❤️ "Deep Compatibility Matching"
+      "We match on personality, not just photos. Our algorithm 
+      compares values, communication styles, and life goals."
+    Card 3: 🛡️ "Privacy First, Always"
+      "Your personal data is never shared. Chat with AI Twins 
+      before revealing yourself. You are always in control."
+
+HOW IT WORKS SECTION:
+  Title: "How VibeFlow Works" centered, bold white 24px
+  3 steps in vertical flow with connector line:
+  
+  Step 1: Create Your Profile
+    "Answer a few questions. Your AI Twin is born."
+  Step 2: Discover Matches
+    "Browse personality-matched profiles. Interview their AI Twin."
+  Step 3: Connect for Real
+    "When you both vibe — unlock real conversation."
+  
+  Each step: numbered circle (gradient), title bold white, 
+  description #9090A8. Connector: dashed vertical line between steps.
+
+TESTIMONIALS SECTION:
+  Title: "What Our Users Say"
+  2 cards side by side (horizontal scroll on mobile):
+  
+  Card 1:
+    Avatar: gradient circle with "K"
+    Name: "Kemi, 26 · Lagos"
+    Stars: ★★★★★
+    Quote: "I was skeptical about AI dating but VibeFlow is different. 
+    I talked to my match's Twin for a week before we spoke. We're 
+    now dating for 3 months."
+  
+  Card 2:
+    Avatar: gradient circle with "J"  
+    Name: "James, 31 · London"
+    Stars: ★★★★★
+    Quote: "The AI Twin feature is genius. No more awkward first 
+    messages. By the time we chatted for real, it felt like we 
+    already knew each other."
+  
+  Card styling: #1A1A24, border #2E2E42, radius 20px, padding 20px
+
+FINAL CTA SECTION:
+  Background: gradient (purple to pink)
+  Title: "Ready to Meet Someone Real?" bold white 26px
+  Subtitle: "Join thousands building genuine connections" white 80%
+  Button: white background, gradient text "Create Your Profile"
+  Below button: "Free to join · No credit card required" in white 60%
+
+=======================================================
+CHANGE 2 — PROFILE PAGE: Clean Up + Add Settings
+=======================================================
+
+PROFILE PAGE should only show these sections:
+1. Hero banner + avatar + name
+2. Edit Profile | Photos | Settings (3 buttons in a row)
+3. Story section (improved — see Change 3)
+4. Photo grid (2 uploaded photos + add more slot)
+5. About Me card (bio text only, no numbered buttons)
+6. Twin Intelligence card (Interview AI Twin button + progress bar)
+7. Your Plan card (current plan + Upgrade Now button)
+
+REMOVE from profile page (move to Settings):
+- Twin Tone card
+- Privacy Settings card  
+- Add More Photos action row
+- Get Verified action row
+- Generate AI Summary action row
+- Super Matches / Boosts stats row
+
+ADD a Settings button:
+- Place it as the third button next to "Edit Profile" and "Photos"
+- Icon: gear/settings icon
+- Label: "Settings"
+- Opens a new Settings page (full screen, back arrow to return)
+
+SETTINGS PAGE (new screen):
+  Header: back arrow + "Settings" title
+
+  Sections:
+
+  ACCOUNT
+  - Edit Profile (name, bio, location, age, gender)
+  - Change Email
+  - Change Password
+  - Phone Number
+
+  TWIN SETTINGS
+  - Twin Tone (style, verbosity, formality, expression)
+  - Twin Memory (view/clear learned traits)
+  - Interview AI Twin (link to twin chat)
+
+  DISCOVERY PREFERENCES  
+  - Age Range slider
+  - Distance radius
+  - Gender preference
+  - Relationship goal
+
+  PRIVACY
+  - Public Profile toggle
+  - Show distance toggle
+  - Read receipts toggle
+  - Who can message me (Everyone / Matches only)
+
+  NOTIFICATIONS
+  - New matches toggle
+  - Messages toggle
+  - Likes toggle
+  - Story views toggle
+
+  PROFILE TOOLS
+  - Add More Photos
+  - Get Verified
+  - Generate AI Summary
+  - Boost Profile
+
+  SUBSCRIPTION
+  - Your current plan badge
+  - Upgrade to Premium button
+  - Restore Purchase
+
+  SUPPORT
+  - Help Center
+  - Contact Us
+  - Privacy Policy
+  - Terms of Service
+
+  DANGER ZONE
+  - Pause Account (grey button)
+  - Delete Account (red outlined button)
+
+  Each setting row: 52px tall, icon left, label, chevron or toggle right
+  Section headers: 11px uppercase, #9090A8, letter-spacing 1.5px
+  Divider lines between sections: 1px #2E2E42
+
+=======================================================
+CHANGE 3 — STORY SYSTEM: View Own Story + Multiple Stories
+=======================================================
+
+CURRENT PROBLEM:
+The "Add Story" button only lets you create a story but you cannot 
+view your own story after posting, and you cannot add multiple stories.
+
+FIX THE STORY BUTTON on Profile page:
+
+STATE 1 — No active story:
+  - Show dashed gradient circle (56px), "+" inside, label "Add Story"
+  - Tapping opens story creator modal
+
+STATE 2 — Has active story (story posted):
+  - Show solid gradient ring around profile avatar circle
+  - The avatar circle itself becomes tappable
+  - Tapping the avatar ring → opens Story Viewer (your own story)
+  - The "Add Story" dashed circle still shows BESIDE the avatar, 
+    allowing user to add another story
+  - Show "Story active" text below in gradient color, 12px
+
+STORY CREATOR MODAL (improve existing):
+  - Title: "Share a Story" 
+  - Two options shown as large tappable cards:
+    Option 1: 📷 "Add Photo"
+      Subtitle: "Share a photo from your gallery"
+    Option 2: ✍️ "Write a Text Story"
+      Subtitle: "Share a thought, feeling or moment"
+  - Below: Caption input (optional)
+  - "Post Story" gradient button (full width)
+  - "Cancel" text link below
+
+STORY VIEWER (when viewing own story):
+  - Full screen takeover
+  - Top: progress bar showing story duration
+    → Each segment = one story (5 seconds each, auto-advance)
+    → Shows all stories if multiple
+  - Top-left: your avatar (36px) + "Your Story" + time posted
+  - Top-right: 
+    → "+" button to add another story (opens creator)
+    → "×" button to close
+  - Bottom bar (dark semi-transparent):
+    → Left: "👁 X views" (view count, can be 0 for now)
+    → Right: "🗑 Delete Story" red text button
+  - If multiple stories: swipe or tap right side to advance
+
+STORY RING on Discover page (other users' cards):
+  - If the user being viewed has an active story:
+    → Show animated gradient ring around their avatar at top-left of card
+    → Ring animation: rotating conic gradient (2 second rotation)
+    → Tapping the ring opens full-screen story viewer for that user
+  - Story viewer for other users:
+    → Same full screen layout
+    → Bottom bar shows: "🧠 Interview their Twin" gradient button
+    → NO add/delete controls (those are only for own story)
+
+SUPABASE: Ensure stories table has:
+  - id, user_id, media_url (nullable), text_content (nullable), 
+    caption (nullable), created_at, expires_at (created_at + 24 hours)
+  - Query always filters: WHERE expires_at > NOW()
+  - Multiple stories per user allowed (one-to-many)
+
+=======================================================
+CHANGE 4 — FIX numbered buttons (0-5) in About Me
+=======================================================
+
+The About Me section has pink numbered buttons labeled 0 1 2 3 4 5.
+These are confusing and unprofessional.
+
+REPLACE them with:
+  - A simple grey "Add interests or prompts..." placeholder text 
+    in #9090A8 italic if no prompts are set
+  - OR if these represent something functional, convert them into 
+    proper labeled interest tags, e.g.:
+    "Music" "Travel" "Fitness" styled as small gradient-border pills
+  - If they are photo slots, convert to a 3-column mini photo grid
+    with "+" slots for empty positions
+
+Determine what they represent from the code and replace accordingly.
+Do NOT leave raw numbers as buttons under any circumstances.
+
+=======================================================
+GLOBAL RULES — DO NOT BREAK EXISTING FEATURES
+=======================================================
+
+- Keep all existing navigation working (Discover, Chat, Likes, 
+  Lounge, Profile tabs)
+- Keep dark theme (#0F0F14 background) everywhere
+- Keep existing photo upload functionality
+- Keep existing group/lounge functionality
+- Keep existing Twin Intelligence card and its button
+- Keep the gradient (purple to pink) on all primary buttons
+- Test on 390px mobile viewport
+- After each change, verify the previous change still works
