@@ -26,7 +26,13 @@ export function getSession() {
     createTableIfMissing: true,
     ttl: sessionTtl,
     tableName: "express_sessions",
+    errorLog: (err: any) => console.error("[SESSION STORE ERROR]", err),
   });
+
+  sessionStore.on("error", (err: any) => {
+    console.error("[SESSION STORE EVENT ERROR]", err);
+  });
+
   return session({
     secret: process.env.SESSION_SECRET!,
     store: sessionStore,
@@ -35,6 +41,7 @@ export function getSession() {
     cookie: {
       httpOnly: true,
       secure: true,
+      sameSite: "none",
       maxAge: sessionTtl,
     },
   });
@@ -72,25 +79,32 @@ export async function setupAuth(app: Express) {
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
     verified: passport.AuthenticateCallback
   ) => {
-    const user = {};
-    updateUserSession(user, tokens);
-    await upsertUser(tokens.claims());
-    verified(null, user);
+    try {
+      const user = {};
+      updateUserSession(user, tokens);
+      console.log("[AUTH VERIFY] Token claims:", JSON.stringify(tokens.claims()));
+      await upsertUser(tokens.claims());
+      console.log("[AUTH VERIFY] User upserted successfully, sub:", tokens.claims()?.sub ?? "unknown");
+      verified(null, user);
+    } catch (err: any) {
+      console.error("[AUTH VERIFY ERROR]", err?.message || err);
+      verified(err);
+    }
   };
 
-  // Keep track of registered strategies
   const registeredStrategies = new Set<string>();
 
-  // Helper function to ensure strategy exists for a domain
   const ensureStrategy = (domain: string) => {
     const strategyName = `replitauth:${domain}`;
     if (!registeredStrategies.has(strategyName)) {
+      const callbackURL = `https://${domain}/api/callback`;
+      console.log("[AUTH] Registering strategy for domain:", domain, "callbackURL:", callbackURL);
       const strategy = new Strategy(
         {
           name: strategyName,
           config,
           scope: "openid email profile offline_access",
-          callbackURL: `https://${domain}/api/callback`,
+          callbackURL,
         },
         verify
       );
@@ -99,10 +113,18 @@ export async function setupAuth(app: Express) {
     }
   };
 
-  passport.serializeUser((user: Express.User, cb) => cb(null, user));
-  passport.deserializeUser((user: Express.User, cb) => cb(null, user));
+  passport.serializeUser((user: Express.User, cb) => {
+    console.log("[AUTH SERIALIZE] serializing user");
+    cb(null, user);
+  });
+
+  passport.deserializeUser((user: Express.User, cb) => {
+    cb(null, user);
+  });
 
   app.get("/api/login", (req, res, next) => {
+    const callbackURL = `https://${req.hostname}/api/callback`;
+    console.log("[AUTH LOGIN] hostname:", req.hostname, "callbackURL:", callbackURL);
     ensureStrategy(req.hostname);
     passport.authenticate(`replitauth:${req.hostname}`, {
       prompt: "login consent",
@@ -111,7 +133,9 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/callback", (req, res, next) => {
-    console.log("[CALLBACK HIT] hostname:", req.hostname, "sessionID:", (req as any).sessionID, "session keys:", Object.keys((req as any).session || {}));
+    const sessionID = (req as any).sessionID;
+    const sessionKeys = Object.keys((req as any).session || {});
+    console.log("[AUTH CALLBACK] Hit. hostname:", req.hostname, "sessionID:", sessionID, "sessionKeys:", sessionKeys, "query:", JSON.stringify(req.query));
     ensureStrategy(req.hostname);
     passport.authenticate(`replitauth:${req.hostname}`, {
       successReturnToOrRedirect: "/",
@@ -121,13 +145,33 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/auth-debug", (req: any, res) => {
     const sessionData = req.session ? JSON.stringify(req.session, null, 2) : "no session";
-    console.log("[AUTH DEBUG] session:", sessionData);
-    res.status(200).send(`<html><body>
+    const queryData = JSON.stringify(req.query, null, 2);
+    console.log("[AUTH DEBUG PAGE] session:", sessionData, "query:", queryData);
+    res.status(200).send(`<!DOCTYPE html><html><head><title>Auth Debug</title></head><body>
       <h2>Auth Callback Failed</h2>
-      <p><b>Session ID:</b> ${req.sessionID || "none"}</p>
-      <p><b>Session Data:</b><pre>${sessionData}</pre></p>
-      <p><b>Query Params:</b><pre>${JSON.stringify(req.query, null, 2)}</pre></p>
+      <p><strong>Session ID:</strong> ${req.sessionID || "none"}</p>
+      <p><strong>Is Authenticated:</strong> ${req.isAuthenticated?.() || false}</p>
+      <p><strong>Session Data:</strong></p><pre>${sessionData}</pre>
+      <p><strong>Query Params:</strong></p><pre>${queryData}</pre>
+      <p><strong>Hostname:</strong> ${req.hostname}</p>
+      <p><strong>Expected callback URL:</strong> https://${req.hostname}/api/callback</p>
+      <hr/>
       <a href="/api/login">Try Again</a>
+    </body></html>`);
+  });
+
+  app.get("/debug/auth", (req: any, res) => {
+    const sessionData = req.session ? JSON.stringify(req.session, null, 2) : "no session";
+    res.status(200).send(`<!DOCTYPE html><html><head><title>Auth State</title></head><body>
+      <h2>Current Auth State</h2>
+      <p><strong>Session ID:</strong> ${req.sessionID || "none"}</p>
+      <p><strong>Is Authenticated:</strong> ${req.isAuthenticated?.() || false}</p>
+      <p><strong>User:</strong> <pre>${JSON.stringify(req.user, null, 2) || "none"}</pre></p>
+      <p><strong>Session Data:</strong></p><pre>${sessionData}</pre>
+      <p><strong>Hostname:</strong> ${req.hostname}</p>
+      <p><strong>Cookies:</strong> <pre>${JSON.stringify(req.headers.cookie)}</pre></p>
+      <hr/>
+      <a href="/api/login">Log In</a> | <a href="/api/logout">Log Out</a> | <a href="/">Home</a>
     </body></html>`);
   });
 
@@ -144,9 +188,13 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
   const user = req.user as any;
 
-  if (!req.isAuthenticated() || !user.expires_at) {
+  if (!user?.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
@@ -157,8 +205,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 
   const refreshToken = user.refresh_token;
   if (!refreshToken) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
+    return res.status(401).json({ message: "Unauthorized" });
   }
 
   try {
@@ -167,7 +214,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     updateUserSession(user, tokenResponse);
     return next();
   } catch (error) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
+    console.error("[AUTH REFRESH ERROR]", error);
+    return res.status(401).json({ message: "Unauthorized" });
   }
 };

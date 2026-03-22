@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Brain, Heart, Shield, Play } from "lucide-react";
+import { ArrowRight, Brain, Heart, Shield, Play, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 
 const ROMANCE_IMAGES = [
@@ -10,7 +10,17 @@ const ROMANCE_IMAGES = [
   "/romance/couple-walk_2.jpg",
 ];
 
+function isInIframe() {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
+
 export default function Landing() {
+  const inIframe = isInIframe();
+
   const handleLogin = () => {
     window.location.href = "/api/login";
   };
@@ -24,7 +34,24 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="fixed w-full z-50 bg-background/80 backdrop-blur-md border-b">
+      {inIframe && (
+        <div className="fixed top-0 inset-x-0 z-[100] bg-amber-500 text-black px-4 py-2 flex items-center gap-2 text-sm font-medium" data-testid="banner-iframe-warning">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>
+            <strong>Dev note:</strong> Login won't work in the Replit preview pane. Open the app directly in a new browser tab:{" "}
+            <a
+              href={window.location.origin}
+              target="_blank"
+              rel="noreferrer"
+              className="underline font-bold"
+              data-testid="link-open-direct"
+            >
+              {window.location.origin}
+            </a>
+          </span>
+        </div>
+      )}
+      <nav className={`fixed w-full z-50 bg-background/80 backdrop-blur-md border-b${inIframe ? " top-9" : ""}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <img src="/brand/logo.png" alt="VibeFlow" className="w-9 h-9 rounded-md object-cover" data-testid="img-logo" />

@@ -1,10 +1,12 @@
 import { sql } from "drizzle-orm";
 import { index, jsonb, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
 
-// Session storage table.
-// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
+// Session storage table used by connect-pg-simple.
+// The actual table in Supabase is named "express_sessions" (renamed to avoid conflict
+// with Supabase Auth's internal "sessions" table). This table is managed directly by
+// connect-pg-simple, NOT by Drizzle migrations.
 export const sessions = pgTable(
-  "sessions",
+  "express_sessions",
   {
     sid: varchar("sid").primaryKey(),
     sess: jsonb("sess").notNull(),
