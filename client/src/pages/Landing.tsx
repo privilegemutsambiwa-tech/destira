@@ -12,14 +12,14 @@ const ROMANCE_IMAGES = [
 
 export default function Landing() {
   const handleLogin = () => {
-    window.open("/api/login", "_blank");
+    window.location.href = "/api/login";
   };
 
   const handleDemo = async () => {
     try {
       await fetch("/api/demo/seed", { method: "POST" });
     } catch (e) {}
-    window.open("/api/login", "_blank");
+    window.location.href = "/api/login";
   };
 
   return (
