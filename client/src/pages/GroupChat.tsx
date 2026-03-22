@@ -25,6 +25,14 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 
+interface MessageAction {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  testId: string;
+  danger?: boolean;
+}
+
 const REACTION_ICONS: Record<string, any> = {
   heart: Heart,
   thumbsup: ThumbsUp,
@@ -349,7 +357,6 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
 
   return (
     <div className="h-screen flex flex-col" style={{ background: "#0F0F14" }}>
-      {/* Dark header */}
       <div
         className="px-4 py-3 flex items-center gap-3 sticky top-0 z-50"
         style={{
@@ -383,7 +390,6 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
         </button>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-1" onClick={() => setActiveMessageId(null)}>
         {msgsLoading ? (
           <div className="flex justify-center p-12">
@@ -405,7 +411,6 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
 
             return (
               <div key={msg.id}>
-                {/* Date separator */}
                 {showDate && (
                   <div className="flex justify-center my-4">
                     <span
@@ -425,7 +430,6 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                 )}
 
                 <div className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2`} data-testid={`message-${msg.id}`}>
-                  {/* 32px avatar for other users */}
                   {!isMe && (
                     <div
                       className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-2 self-end"
@@ -436,7 +440,6 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                   )}
 
                   <div className="max-w-[75%]">
-                    {/* Username label */}
                     {!isMe && (
                       <span
                         className="block ml-1 mb-0.5"
@@ -510,7 +513,6 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                           align="start"
                           style={{ background: "#1A1A24", border: "1px solid #2E2E42" }}
                         >
-                          {/* Reactions row */}
                           <div className="flex items-center gap-1 mb-2 flex-wrap">
                             {REACTIONS.map(({ key, Icon }) => (
                               <button
@@ -525,7 +527,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                             ))}
                           </div>
                           <div className="flex flex-col gap-0.5">
-                            {[
+                            {((): MessageAction[] => [
                               {
                                 icon: <Reply className="w-4 h-4 mr-2" />,
                                 label: "Reply",
@@ -569,7 +571,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                                 testId: `action-admin-delete-${msg.id}`,
                                 danger: true,
                               }] : []),
-                            ].map((action: any) => (
+                            ])().map((action) => (
                               <button
                                 key={action.testId}
                                 onClick={action.onClick}
@@ -589,7 +591,6 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                       )}
                     </Popover>
 
-                    {/* Reactions */}
                     {Object.keys(groupedReactions).length > 0 && (
                       <div className={`flex items-center gap-1 mt-1 flex-wrap ${isMe ? "justify-end" : "justify-start"} px-2`}>
                         {Object.entries(groupedReactions).map(([reaction, count]) => {
@@ -608,7 +609,6 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                       </div>
                     )}
 
-                    {/* Timestamp */}
                     <p
                       className={`mt-0.5 px-2 ${isMe ? "text-right" : "text-left"}`}
                       style={{ fontSize: "10px", color: "#9090A8" }}
@@ -630,7 +630,6 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input bar — dark #1A1A24 with top border */}
       <div style={{ background: "#1A1A24", borderTop: "1px solid #2E2E42" }}>
         {replyTo && (
           <div className="px-4 pt-2 flex items-center gap-2">
@@ -715,7 +714,6 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                 }}
                 data-testid="input-group-message"
               />
-              {/* Gradient 40px send circle */}
               <button
                 type="submit"
                 disabled={!input.trim() || sendMessage.isPending}

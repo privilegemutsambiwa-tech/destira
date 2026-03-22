@@ -173,7 +173,6 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
 
   return (
     <div className="h-screen flex flex-col" style={{ background: "#0F0F14" }}>
-      {/* Dark header */}
       <div
         className="px-4 py-3 flex items-center gap-3 sticky top-0 z-50"
         style={{ background: "#1A1A24", borderBottom: "1px solid #2E2E42" }}
@@ -190,7 +189,6 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* 160px gradient banner */}
         <div className="relative">
           <div
             style={{
@@ -207,7 +205,6 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
               />
             )}
           </div>
-          {/* 64px icon overlapping banner bottom by 32px */}
           <div className="flex flex-col items-center">
             <div
               className="flex items-center justify-center"
@@ -264,7 +261,6 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
           </div>
         </div>
 
-        {/* 4-button action row — 52px circles, #1A1A24 bg, #2E2E42 border */}
         <div className="flex items-center justify-center gap-5 py-5 mt-2">
           {canAddMembers && (
             <button
@@ -347,7 +343,6 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
         </div>
 
         <div className="px-4 pb-4 space-y-3 max-w-lg mx-auto">
-          {/* Description / Rules card */}
           {(group?.description || group?.rulesText || isAdmin) && (
             <div
               style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px", padding: "16px" }}
@@ -378,7 +373,6 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             </div>
           )}
 
-          {/* Section rows — Media | Starred | Members — #1A1A24, #2E2E42 border, 12px radius, 52px height */}
           {[
             {
               icon: <ImageIcon className="w-5 h-5" />,
@@ -459,7 +453,6 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             </button>
           ))}
 
-          {/* Members card */}
           <div
             style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px" }}
             data-testid="card-members"
@@ -527,7 +520,6 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             </div>
           </div>
 
-          {/* Admin: Invite links */}
           {isAdmin && (
             <div
               style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px", padding: "16px" }}
@@ -579,7 +571,6 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             </div>
           )}
 
-          {/* Admin: Group settings */}
           {isAdmin && (
             <div
               style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px", padding: "16px" }}
@@ -639,9 +630,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             </div>
           )}
 
-          {/* Danger zone */}
           <div className="pt-2 pb-4 space-y-3">
-            {/* Leave Group — red danger styling */}
             <button
               onClick={handleLeave}
               disabled={leaveGroup.isPending}
@@ -682,7 +671,6 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
         </div>
       </div>
 
-      {/* Edit description dialog */}
       <Dialog open={editDescOpen} onOpenChange={setEditDescOpen}>
         <DialogContent>
           <DialogHeader>

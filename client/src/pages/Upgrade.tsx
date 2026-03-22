@@ -36,6 +36,7 @@ const PREMIUM_EXTRAS = [
 
 export default function Upgrade() {
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const [checkingOutPlanId, setCheckingOutPlanId] = useState<number | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -57,6 +58,7 @@ export default function Upgrade() {
       if (data.url) window.location.href = data.url;
     },
     onError: (error: Error) => {
+      setCheckingOutPlanId(null);
       toast({
         title: "Checkout Error",
         description: error.message || "Failed to start checkout. Please try again.",
@@ -65,13 +67,14 @@ export default function Upgrade() {
     },
   });
 
-  const handleContinue = (planId?: number) => {
-    const plan = planId ? activePlans.find((p) => p.id === planId) : selectedPlan;
+  const handleContinue = (planId: number) => {
+    const plan = activePlans.find((p) => p.id === planId);
     if (!plan) return;
     if (!plan.stripePriceId) {
       toast({ title: "Coming Soon", description: "This plan is not available for purchase yet. Stay tuned!" });
       return;
     }
+    setCheckingOutPlanId(planId);
     checkoutMutation.mutate(plan.stripePriceId);
   };
 
@@ -280,9 +283,8 @@ export default function Upgrade() {
                         </ul>
                       )}
 
-                      {/* Full-width "Choose Plan" gradient button inside each card */}
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleContinue(plan.id); }}
+                        onClick={(e) => { e.stopPropagation(); setSelectedPlanId(plan.id); handleContinue(plan.id); }}
                         disabled={checkoutMutation.isPending}
                         className="w-full flex items-center justify-center gap-2 font-semibold btn-press"
                         style={{
@@ -296,7 +298,7 @@ export default function Upgrade() {
                         }}
                         data-testid={`button-choose-plan-${plan.id}`}
                       >
-                        {checkoutMutation.isPending && effectiveSelectedId === plan.id ? (
+                        {checkingOutPlanId === plan.id ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
                           <Crown className="w-4 h-4" />
