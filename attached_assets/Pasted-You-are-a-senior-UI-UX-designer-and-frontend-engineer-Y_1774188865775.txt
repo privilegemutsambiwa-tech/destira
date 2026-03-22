@@ -1,0 +1,267 @@
+You are a senior UI/UX designer and frontend engineer. Your task is to redesign VibeFlow's entire user interface to be maximally professional and polished. Every detail matters: spacing, color, typography, visual hierarchy, and interaction feedback.
+
+---
+
+DESIGN SYSTEM (Apply Everywhere)
+
+Color Palette:
+- Primary: #7C3AED (Purple) — Use for CTAs, active states
+- Secondary: #EC4899 (Pink) — Use for accents, highlights
+- Accent: #F59E0B (Amber) — Use for stories, badges, notifications
+- Neutral Dark: #1F2937 (for text)
+- Neutral Light: #F3F4F6 (for backgrounds)
+- Success: #10B981 (green, for verified badges)
+- Danger: #EF4444 (red, for reject/dislike)
+
+Typography:
+- Headlines (H1): 28px, Bold, #1F2937
+- Subheads (H2): 20px, Semibold, #1F2937
+- Body: 16px, Regular, #374151
+- Small text: 14px, Regular, #6B7280
+- All fonts: Use system fonts (SF Pro Display on iOS, Segoe on Windows)
+
+Spacing:
+- Use 8px base unit (8, 16, 24, 32, 40, 48px)
+- Card padding: 16px or 24px
+- Section gap: 24px to 32px
+
+Shadows & Depth:
+- Card shadows: 0 2px 8px rgba(0,0,0,0.08)
+- Hover shadows: 0 8px 16px rgba(0,0,0,0.12)
+- Use subtle elevation, not dark shadows
+
+Border Radius:
+- Cards: 12px
+- Buttons: 8px
+- Profile images: 16px (slightly rounded)
+- Story rings: 2px (thin border)
+
+---
+
+LANDING PAGE (First Screen)
+
+1. Hero Section (Remove the children photo):
+   - Background: Gradient (135deg, #7C3AED → #EC4899 → #F59E0B)
+   - Hero text: "Find Your Perfect Vibe" (white, 36px bold, centered)
+   - Subtext: "AI-powered matching. Real connections." (white, 18px, centered)
+   - CTA Button: "Start Matching" (white text, purple background, 48px height, full width, 8px radius)
+   - Spacing: 48px top, 48px bottom padding
+   - IMPORTANT: NO stock photos. Pure gradient only.
+
+2. Feature Highlights (Below hero):
+   - Three feature cards in a row (mobile: stack vertically)
+   - Card 1: Icon (brain), "AI Twin Coach", "Get personalized dating advice"
+   - Card 2: Icon (heart), "Smart Matching", "Find compatible partners"
+   - Card 3: Icon (shield), "Your Privacy", "End-to-end encrypted chats"
+   - Each card: 16px padding, white background, subtle shadow, 12px radius
+
+3. CTA Section (Bottom):
+   - Text: "Ready to meet someone special?"
+   - Button: "Create Your Profile" (purple, 48px height, full width)
+
+---
+
+DISCOVER PAGE (Main Swiping Interface) ⭐ MOST IMPORTANT
+
+This is where users spend 80% of their time. Make it PERFECT.
+
+Layout Structure:
+- Top bar: Simple back arrow (optional), centered name "Discover", no other elements
+- Main content: Full-screen card (95% width, centered, 16px margin)
+- Bottom: Two action buttons side by side
+
+Card Design (Shows one profile at a time):
+1. Profile Image Container (Top):
+   - Aspect ratio: 1:1.2 (portrait)
+   - Border radius: 16px
+   - Image fills entire container with subtle gradient overlay on bottom
+   - Overlay gradient: transparent → rgba(31, 41, 55, 0.6) (dark fade at bottom)
+   - STORY RING (if user has stories):
+     * Thin circle border (2px) around top-left corner
+     * Border color: #F59E0B (amber)
+     * Diameter: 48px
+     * Centered position: top-left with 12px margin
+     * Contains: Small centered text "Story" or just show a play icon (▶️)
+     * Interactive: Tappable to view their story carousel
+
+2. Profile Info (Overlay on bottom of image):
+   - Position: Absolute, bottom of card
+   - Background: Dark overlay (rgba(31, 41, 55, 0.8))
+   - Text color: White
+   - Padding: 24px
+   - Name: 28px bold, white
+   - Age & Location: 16px regular, light gray
+   - Example: "Sarah, 28 • San Francisco, CA"
+   - Add subtle location icon (📍) before location
+
+3. About Section (Below image, inside card):
+   - Padding: 24px
+   - Background: White
+   - "About": 16px bold, dark gray
+   - Bio text: 16px regular, #374151, line-height 1.5
+   - Margin bottom: 16px
+
+4. Personality Traits (Below bio):
+   - Show 3-4 traits as badges/pills
+   - Badge style: Light purple background (#EDE9FE), purple text (#7C3AED)
+   - Badge spacing: 8px between each
+   - Example: "Openness: 92%" | "Extroversion: 65%" | "Neuroticism: 35%"
+   - Font: 12px, semibold
+
+5. Actions Section (Below personality):
+   - Padding: 24px
+   - Two buttons side by side (equal width, 16px gap):
+     * LEFT button (REJECT): 
+       - Icon: ❌ (or X symbol)
+       - Background: #FEE2E2 (light red)
+       - Text color: #EF4444 (red)
+       - Label: "Pass" (optional, can be icon-only)
+       - On tap: Slight bounce animation, card slides left
+     * RIGHT button (LIKE):
+       - Icon: ❤️ (or heart symbol)
+       - Background: #FCE7F3 (light pink)
+       - Text color: #EC4899 (pink)
+       - Label: "Like" (optional, can be icon-only)
+       - On tap: Slight bounce animation, card slides right
+
+6. Card Transitions:
+   - When user taps Pass → Card slides out to left (0.3s animation)
+   - When user taps Like → Card slides out to right (0.3s animation)
+   - Show next card with a fade-in + subtle scale animation (0.2s)
+   - Add haptic feedback (vibration) on each action
+
+---
+
+PROFILE CARD (When viewing another user's full profile)
+
+This appears when user taps on a profile card to see more details.
+
+Top Section:
+- Header: Left arrow (back), centered name, info icon (i) top right
+- Background: Gradient (135deg, light purple → light pink)
+
+Main Image:
+- Full width, height 300px
+- Border radius: 0 (full screen bleed is OK here)
+- Story ring: Top-left corner, same as Discover
+
+Profile Header (Overlay on image):
+- Name, age, location (white text, dark overlay)
+
+Content Scroll Section (Below image):
+1. About Section:
+   - Padding: 24px
+   - Background: White
+   - Title: "About Me" (20px bold)
+   - Bio: 16px regular
+   - Buttons below bio:
+     * "Generate" (small gray outline button) — for AI summary
+     * "Quick Summary" (small gray outline button)
+
+2. Personality Intelligence:
+   - Card with icon (🧠)
+   - Title: "Twin Intelligence"
+   - Subtitle: "Chat with your Twin..."
+   - Central button: "Interview AI Twin" (purple, full width, 48px)
+   - Below: "Questions Progress: X%"
+   - Subtext: "Just getting started! Keep answering to help your Twin learn."
+
+3. Twin Tone Section:
+   - Small card showing: Style, Verbosity, Formality, Expression
+   - Example: Style: Supportive | Verbosity: Balanced | Formality: Neutral | Expression: Minimal
+   - Edit button (small, top right of card)
+
+4. Privacy Settings:
+   - "Public Profile" toggle (ON/OFF)
+   - Text: "Others can see your real photos"
+
+---
+
+CHAT PAGE (Conversation List)
+
+Top Section:
+- Centered title: "Chat"
+- Subtitle: "All your conversations in one place"
+
+Featured Card (Chat With My Twin):
+- Purple background (#7C3AED)
+- Icon: Brain (🧠)
+- Title: "Chat With My Twin"
+- Subtitle: "Train, coach, and reflect with your personal AI Twin"
+- Badge: "Private" (pink background, white text)
+- Status indicators: Green dot "Active" + "Memory enabled" (brain icon)
+- Full width, tappable, 16px padding, 12px radius
+
+Search Bar:
+- Placeholder: "Search conversations..."
+- Width: Full (24px margin each side)
+- Background: Light gray (#F3F4F6)
+- Border: None, 8px radius
+
+Filter Tabs (Horizontal):
+- "All" (purple, selected state)
+- "Matches" (outline style)
+- "AI Twin" (outline style)
+- Spacing: 8px between tabs
+
+Conversation List:
+- Each conversation item:
+  * Left: Profile image (48px diameter, 8px radius, subtle border)
+  * Middle: Name (16px bold) + last message preview (14px gray)
+  * Right: Timestamp (12px gray)
+  * Divider: Light gray line between items (1px)
+  * Tap state: Subtle background highlight (#F3F4F6)
+  * Swipe left: Show delete option (red background)
+
+Empty State (No conversations):
+- Icon: Chat bubble (💬)
+- Title: "No conversations yet"
+- Text: "Go to Discover to start meeting people."
+- CTA Button: "Discover People" (purple, 48px)
+
+---
+
+LIKES PAGE (Saved Matches)
+
+Structure:
+- Title: "Likes"
+- Empty state icon: Heart (❤️)
+- Empty state title: "No likes yet"
+- Empty state text: "Keep exploring! Your perfect match is out there."
+- CTA: "Discover People" (purple, 48px, full width)
+
+If likes exist:
+- Grid layout: 2 columns on mobile, 3 on tablet
+- Each profile tile:
+  * Square image (1:1) with 12px radius
+  * Name overlay (bottom left, white text)
+  * Age overlay (bottom right, small gray text)
+  * Tap: Opens profile details
+
+---
+
+LOUNGE PAGE (Group Chat)
+
+Top Section:
+- Title: "Lounge"
+- Subtitle: "Connect organically in interest-based groups. Chat anonymously and discover unexpected connections."
+
+Search + Create:
+- Search bar: "Search groups..." (full width, 24px margin, 8px radius)
+- Create Button: "+ Create Group" (purple, right side, fixed width)
+
+Filter Tabs:
+- "All" (purple, selected)
+- "Joined" (outline)
+- "Popular" (outline)
+- "New" (outline)
+
+Group Cards (Each group):
+- Layout: Horizontal card (full width)
+- Left: Group icon (48px circle, colored background)
+- Middle: 
+  * Title: 18px bold
+  * Description: 14px gray (max 2 lines, truncate)
+  * Member count: 12px gray + icon (👥)
+- Right: CTA button
+  * If not​​​​​​​​​​​​​​​​
