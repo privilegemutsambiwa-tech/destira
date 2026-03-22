@@ -332,30 +332,6 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Photo row */}
-        <div className="flex gap-3 justify-center overflow-x-auto px-4 scrollbar-hide">
-          {photos?.slice(0, 6).map((photo: any) => (
-            <div
-              key={photo.id}
-              className="w-16 h-16 rounded-full overflow-hidden shrink-0"
-              style={{ border: "2px solid #2E2E42" }}
-              data-testid={`photo-circle-${photo.id}`}
-            >
-              <img src={photo.photoUrl} alt="" className="w-full h-full object-cover" />
-            </div>
-          ))}
-          {(photos?.length || 0) < 6 && (
-            <button
-              onClick={() => setShowPhotoDialog(true)}
-              className="w-16 h-16 rounded-full flex items-center justify-center shrink-0 cursor-pointer"
-              style={{ border: "2px dashed #2E2E42" }}
-              data-testid="button-add-photo-circle"
-            >
-              <Plus className="w-5 h-5" style={{ color: "#9090A8" }} />
-            </button>
-          )}
-        </div>
-
         {/* Story section */}
         <div className="flex items-center gap-4 px-4 py-3" data-testid="section-profile-stories">
           {hasStories ? (
@@ -409,53 +385,32 @@ export default function Profile() {
           )}
         </div>
 
+        {/* Photo row */}
+        <div className="flex gap-3 justify-center overflow-x-auto px-4 scrollbar-hide">
+          {photos?.slice(0, 6).map((photo: any) => (
+            <div
+              key={photo.id}
+              className="w-16 h-16 rounded-full overflow-hidden shrink-0"
+              style={{ border: "2px solid #2E2E42" }}
+              data-testid={`photo-circle-${photo.id}`}
+            >
+              <img src={photo.photoUrl} alt="" className="w-full h-full object-cover" />
+            </div>
+          ))}
+          {(photos?.length || 0) < 6 && (
+            <button
+              onClick={() => setShowPhotoDialog(true)}
+              className="w-16 h-16 rounded-full flex items-center justify-center shrink-0 cursor-pointer"
+              style={{ border: "2px dashed #2E2E42" }}
+              data-testid="button-add-photo-circle"
+            >
+              <Plus className="w-5 h-5" style={{ color: "#9090A8" }} />
+            </button>
+          )}
+        </div>
+
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-
-            {/* Completion progress */}
-            {completionScore < 100 && (
-              <div style={CARD_STYLE} className="p-5">
-                <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
-                  <span className="text-sm font-semibold text-white" data-testid="text-completion-score">
-                    {completionScore}% Complete
-                  </span>
-                </div>
-                <p className="text-xs mb-3" style={{ color: "#9090A8" }}>
-                  Complete your profile to be seen by more people
-                </p>
-                <div className="h-2 rounded-full overflow-hidden" style={{ background: "#242433" }}>
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${completionScore}%`,
-                      background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-                    }}
-                    data-testid="progress-completion"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Incomplete tasks */}
-            {incompleteTasks.length > 0 && (
-              <div className="space-y-3">
-                {incompleteTasks.map((task) => (
-                  <div
-                    key={task.key}
-                    className="cursor-pointer card-lift flex items-center justify-between gap-4 p-4"
-                    style={CARD_STYLE}
-                    onClick={() => handleTaskAction(task.key)}
-                    data-testid={`task-card-${task.key}`}
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-white">{task.label}</p>
-                      <p className="text-xs" style={{ color: "#9090A8" }}>{task.benefit}</p>
-                    </div>
-                    <ArrowRight className="w-4 h-4 shrink-0" style={{ color: "#9090A8" }} />
-                  </div>
-                ))}
-              </div>
-            )}
 
             {/* About Me */}
             <div style={CARD_STYLE} className="p-5">

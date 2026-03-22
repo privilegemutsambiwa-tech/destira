@@ -1109,7 +1109,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getStory(id: number): Promise<Story | undefined> {
-    const [story] = await db.select().from(stories).where(eq(stories.id, id));
+    const [story] = await db.select().from(stories).where(
+      and(eq(stories.id, id), gt(stories.expiresAt, new Date()))
+    );
     return story;
   }
 

@@ -580,13 +580,17 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
       const formData = new FormData();
       formData.append("media", selectedFile);
       if (caption.trim()) formData.append("caption", caption.trim());
-      await fetch("/api/stories", { method: "POST", body: formData, credentials: "include" });
+      const res = await fetch("/api/stories", { method: "POST", body: formData, credentials: "include" });
+      if (!res.ok) {
+        toast({ title: "Upload failed", description: "Could not post your story.", variant: "destructive" });
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] });
       reset();
       onStoryAdded?.();
     } catch {
-      /* silent */
+      toast({ title: "Upload failed", description: "Could not post your story.", variant: "destructive" });
     } finally {
       setIsUploading(false);
     }
@@ -596,18 +600,22 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
     if (!textContent.trim()) return;
     setIsUploading(true);
     try {
-      await fetch("/api/stories/text", {
+      const res = await fetch("/api/stories/text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ textContent: textContent.trim(), caption: caption.trim() || undefined }),
         credentials: "include",
       });
+      if (!res.ok) {
+        toast({ title: "Post failed", description: "Could not post your text story.", variant: "destructive" });
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] });
       reset();
       onStoryAdded?.();
     } catch {
-      /* silent */
+      toast({ title: "Post failed", description: "Could not post your text story.", variant: "destructive" });
     } finally {
       setIsUploading(false);
     }
@@ -619,6 +627,7 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
     setTextContent("");
     setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    onOpenChange?.(false);
   };
 
   const ringStyle: React.CSSProperties = mode === "solid"
