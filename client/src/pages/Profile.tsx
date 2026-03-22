@@ -224,13 +224,16 @@ export default function Profile() {
     <LayoutShell>
       <div className="space-y-6">
         <div className="relative">
-          <div className="h-48 md:h-56 rounded-md overflow-hidden bg-gradient-to-r from-primary/30 to-secondary/30">
+          <div
+            className="h-48 md:h-56 rounded-2xl overflow-hidden"
+            style={{ background: "linear-gradient(135deg, #EDE9FE 0%, #FCE7F3 100%)" }}
+          >
             {profile.coverPhotoUrl && (
               <img src={profile.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
             )}
           </div>
           <div className="flex flex-col items-center -mt-16 relative z-10">
-            <Avatar className="w-32 h-32 border-4 border-background shadow-lg" data-testid="avatar-profile">
+            <Avatar className="w-32 h-32 border-4 border-white shadow-lg" style={{ borderRadius: "16px" }} data-testid="avatar-profile">
               {avatarUrl ? (
                 <AvatarImage src={avatarUrl} alt={profile.displayName || "Profile"} />
               ) : null}
@@ -422,125 +425,154 @@ export default function Profile() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-2">
-              <CardTitle className="text-base flex items-center gap-2"><Brain className="w-4 h-4" /> Twin Intelligence</CardTitle>
-              <Button variant="ghost" size="sm" onClick={handleExtractProfile} disabled={extractProfile.isPending} data-testid="button-extract-profile">
-                {extractProfile.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Sparkles className="w-3 h-3 mr-1" />}
-                Refresh
-              </Button>
-            </CardHeader>
-            <CardContent>
+          <Card className="rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+            <CardContent className="p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#EDE9FE" }}>
+                  <Brain className="w-4 h-4" style={{ color: "#7C3AED" }} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-[#1F2937]" style={{ fontSize: "16px" }}>Twin Intelligence</h3>
+                  <p className="text-[#6B7280]" style={{ fontSize: "12px" }}>Chat with your Twin to train it</p>
+                </div>
+                <button
+                  onClick={handleExtractProfile}
+                  disabled={extractProfile.isPending}
+                  className="text-xs text-[#7C3AED] font-medium hover:opacity-80"
+                  data-testid="button-extract-profile"
+                >
+                  {extractProfile.isPending ? <Loader2 className="w-3 h-3 animate-spin inline" /> : <Sparkles className="w-3 h-3 inline" />}
+                  {" "}Refresh
+                </button>
+              </div>
+
+              {/* Interview AI Twin CTA */}
+              <button
+                onClick={() => setLocation("/twin-chat")}
+                className="w-full font-semibold text-white py-3 rounded-xl mb-4 btn-press"
+                style={{ background: "#7C3AED", height: "48px", fontSize: "15px", border: "none" }}
+                data-testid="button-interview-ai-twin"
+              >
+                <Brain className="w-4 h-4 inline mr-2" />
+                Interview AI Twin
+              </button>
+
+              {/* Structured profile data */}
               <div className="space-y-3">
                 {structuredProfile?.topValues?.length > 0 && (
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Core Values</p>
+                    <p className="text-xs text-[#9CA3AF] font-medium mb-1">Core Values</p>
                     <div className="flex flex-wrap gap-1">
                       {structuredProfile.topValues.map((v: string) => (
-                        <Badge key={v} variant="secondary" className="text-xs">{v}</Badge>
+                        <span key={v} className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
+                          style={{ background: "#EDE9FE", color: "#7C3AED" }}>{v}</span>
                       ))}
                     </div>
                   </div>
                 )}
                 {structuredProfile?.interests?.length > 0 && (
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Interests</p>
+                    <p className="text-xs text-[#9CA3AF] font-medium mb-1">Interests</p>
                     <div className="flex flex-wrap gap-1">
                       {structuredProfile.interests.map((i: string) => (
-                        <Badge key={i} variant="outline" className="text-xs">{i}</Badge>
+                        <span key={i} className="text-xs px-2 py-0.5 rounded-full border border-[#E5E7EB] text-[#374151]">{i}</span>
                       ))}
                     </div>
                   </div>
                 )}
                 {structuredProfile?.communicationStyle && (
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Communication Style</p>
-                    <p className="text-sm">{structuredProfile.communicationStyle}</p>
-                  </div>
-                )}
-                {structuredProfile?.relationshipGoals && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Relationship Goals</p>
-                    <p className="text-sm">{structuredProfile.relationshipGoals}</p>
+                    <p className="text-xs text-[#9CA3AF] font-medium mb-1">Communication Style</p>
+                    <p className="text-sm text-[#374151]">{structuredProfile.communicationStyle}</p>
                   </div>
                 )}
                 {(!structuredProfile?.topValues?.length && !structuredProfile?.interests?.length) && (
-                  <div className="text-center py-4">
-                    <Brain className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">Chat with your Twin or answer questions to build your profile</p>
-                    <Button variant="outline" size="sm" className="mt-2" onClick={() => setLocation("/twin-chat")} data-testid="button-goto-twin-chat">
-                      <MessageSquare className="w-3 h-3 mr-1" /> Chat with Twin
-                    </Button>
-                  </div>
+                  <p className="text-sm text-[#9CA3AF] text-center py-2">Answer questions to help your Twin learn about you.</p>
                 )}
-                {questionsProgress && (() => {
-                  const answered = questionsProgress.totalAnswered || 0;
-                  const total = 100;
-                  const pct = Math.min(Math.round((answered / total) * 100), 100);
-                  let message = "Just getting started! Keep answering to help your Twin learn.";
-                  if (pct > 75) message = "Amazing! Your Twin knows you deeply.";
-                  else if (pct > 50) message = "Great work! Your Twin understands you well.";
-                  else if (pct > 25) message = "Making progress! Your Twin is getting smarter.";
-                  return (
-                    <div className="pt-3 border-t">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <p className="text-xs text-muted-foreground font-medium">Questions Progress</p>
-                        <span className="text-xs font-semibold">{pct}%</span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2.5">
-                        <div className="gradient-bg h-2.5 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} data-testid="progress-questions" />
-                      </div>
-                      <div className="flex items-center justify-between gap-2 mt-1.5">
-                        <p className="text-xs text-muted-foreground">{answered} of {total} answered</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1 italic" data-testid="text-progress-message">{message}</p>
+              </div>
+
+              {/* Questions progress */}
+              {questionsProgress && (() => {
+                const answered = questionsProgress.totalAnswered || 0;
+                const total = 100;
+                const pct = Math.min(Math.round((answered / total) * 100), 100);
+                let message = "Just getting started! Keep answering to help your Twin learn.";
+                if (pct > 75) message = "Amazing! Your Twin knows you deeply.";
+                else if (pct > 50) message = "Great work! Your Twin understands you well.";
+                else if (pct > 25) message = "Making progress! Your Twin is getting smarter.";
+                return (
+                  <div className="pt-3 mt-3 border-t border-[#F3F4F6]">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className="text-xs text-[#6B7280] font-medium">Questions Progress</p>
+                      <span className="text-xs font-bold text-[#7C3AED]">{pct}%</span>
                     </div>
-                  );
-                })()}
-              </div>
+                    <div className="w-full rounded-full h-2" style={{ background: "#F3F4F6" }}>
+                      <div
+                        className="h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%`, background: "#7C3AED" }}
+                        data-testid="progress-questions"
+                      />
+                    </div>
+                    <p className="text-xs text-[#9CA3AF] mt-2 italic" data-testid="text-progress-message">{message}</p>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-2">
-              <CardTitle className="text-base flex items-center gap-2"><Volume2 className="w-4 h-4" /> Twin Tone</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => { if (toneProfile) setToneValues(toneProfile); setShowToneDialog(true); }} data-testid="button-edit-tone">
-                <Pencil className="w-3 h-3 mr-1" /> Edit
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">Style</p>
-                  <p className="text-sm capitalize">{toneProfile?.tone_style || "supportive"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Verbosity</p>
-                  <p className="text-sm capitalize">{toneProfile?.verbosity_level || "balanced"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Formality</p>
-                  <p className="text-sm capitalize">{toneProfile?.formality_level || "neutral"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Expression</p>
-                  <p className="text-sm capitalize">{toneProfile?.emoji_usage || "minimal"}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Privacy Settings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between gap-4">
+          <Card className="rounded-2xl" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  {profile.isPublic ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#EDE9FE" }}>
+                    <Volume2 className="w-4 h-4" style={{ color: "#7C3AED" }} />
+                  </div>
+                  <h3 className="font-bold text-[#1F2937]" style={{ fontSize: "16px" }}>Twin Tone</h3>
+                </div>
+                <button
+                  onClick={() => { if (toneProfile) setToneValues(toneProfile); setShowToneDialog(true); }}
+                  className="text-xs font-medium flex items-center gap-1"
+                  style={{ color: "#7C3AED" }}
+                  data-testid="button-edit-tone"
+                >
+                  <Pencil className="w-3 h-3" />
+                  Edit
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: "Style", value: toneProfile?.tone_style || "Supportive" },
+                  { label: "Verbosity", value: toneProfile?.verbosity_level || "Balanced" },
+                  { label: "Formality", value: toneProfile?.formality_level || "Neutral" },
+                  { label: "Expression", value: toneProfile?.emoji_usage || "Minimal" },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-[#F9FAFB] rounded-xl p-3">
+                    <p className="text-xs text-[#9CA3AF] mb-0.5">{label}</p>
+                    <p className="text-sm font-medium text-[#374151] capitalize">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+            <CardContent className="p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#EDE9FE" }}>
+                  <Shield className="w-4 h-4" style={{ color: "#7C3AED" }} />
+                </div>
+                <h3 className="font-bold text-[#1F2937]" style={{ fontSize: "16px" }}>Privacy Settings</h3>
+              </div>
+              <div className="flex items-center justify-between gap-4 p-3 rounded-xl" style={{ background: "#F9FAFB" }}>
+                <div className="flex items-center gap-3">
+                  {profile.isPublic ? (
+                    <Eye className="w-5 h-5" style={{ color: "#7C3AED" }} />
+                  ) : (
+                    <EyeOff className="w-5 h-5 text-[#9CA3AF]" />
+                  )}
                   <div>
-                    <p className="text-sm font-medium">{profile.isPublic ? "Public Profile" : "Private Profile"}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm font-semibold text-[#1F2937]">Public Profile</p>
+                    <p className="text-xs text-[#6B7280]">
                       {profile.isPublic ? "Others can see your real photos" : "Others see your AI cartoon avatar instead"}
                     </p>
                   </div>

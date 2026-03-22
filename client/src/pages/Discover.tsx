@@ -1,62 +1,12 @@
-import { useState, useMemo } from "react";
+import { useState, useRef, useMemo } from "react";
 import { LayoutShell } from "@/components/layout-shell";
-import { Button } from "@/components/ui/button";
-import { CompatibilityRing } from "@/components/compatibility-ring";
-import { Brain, X, Loader2, MapPin, Heart, Plus } from "lucide-react";
+import { Brain, X, Loader2, MapPin, Heart, Play } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { StoryViewer } from "@/components/story-viewer";
-import heroCoupleImg1 from "@assets/images/hero-couple_1.jpg";
-import heroCoupleImg2 from "@assets/images/hero-couple_2.jpg";
-import heroCoupleImg3 from "@assets/images/hero-couple_3.jpg";
-
-
-const HERO_IMAGES = [heroCoupleImg1, heroCoupleImg2, heroCoupleImg3];
-
-function HeroBanner({ onStartMatching, onInterviewTwin }: { onStartMatching: () => void; onInterviewTwin: () => void }) {
-  const heroImg = useMemo(() => HERO_IMAGES[Math.floor(Math.random() * HERO_IMAGES.length)], []);
-
-  return (
-    <div className="relative rounded-md overflow-hidden mb-8" data-testid="hero-banner">
-      <img
-        src={heroImg}
-        alt="Couple connecting"
-        className="w-full h-64 md:h-80 object-cover"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20" />
-      <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-8">
-        <h2 className="text-white text-2xl md:text-3xl font-display font-bold mb-2">
-          Find your perfect vibe
-        </h2>
-        <p className="text-white/80 text-sm md:text-base mb-5 max-w-lg">
-          Discover people who resonate with your personality. Interview their AI Twin before you connect.
-        </p>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Button
-            onClick={onStartMatching}
-            className="gradient-bg text-white btn-press rounded-full px-6"
-            data-testid="button-hero-match"
-          >
-            <Heart className="w-4 h-4 mr-2" />
-            Start Matching
-          </Button>
-          <Button
-            variant="outline"
-            onClick={onInterviewTwin}
-            className="text-white border-white/30 bg-white/10 backdrop-blur-sm btn-press rounded-full px-6"
-            data-testid="button-hero-interview"
-          >
-            <Brain className="w-4 h-4 mr-2" />
-            Interview AI Twin
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function StoriesCarousel() {
   const { data: stories } = useFeedStories();
@@ -78,24 +28,28 @@ function StoriesCarousel() {
 
   return (
     <>
-      <div className="flex gap-3 overflow-x-auto pb-3 mb-4 scrollbar-hide" data-testid="stories-carousel">
-        {grouped.map((user) => (
+      <div className="flex gap-3 overflow-x-auto pb-3 mb-5 scrollbar-hide" data-testid="stories-carousel">
+        {grouped.map((u) => (
           <button
-            key={user.userId}
-            onClick={() => setViewingStory(user)}
+            key={u.userId}
+            onClick={() => setViewingStory(u)}
             className="flex flex-col items-center gap-1 shrink-0"
-            data-testid={`story-avatar-${user.userId}`}
+            data-testid={`story-avatar-${u.userId}`}
           >
-            <div className="w-16 h-16 rounded-full p-0.5 bg-gradient-to-tr from-pink-500 via-red-500 to-yellow-500">
-              <Avatar className="w-full h-full border-2 border-background">
-                {user.photoUrl ? (
-                  <AvatarImage src={user.photoUrl} alt={user.displayName} />
+            {/* Amber story ring per spec */}
+            <div
+              className="w-16 h-16 rounded-full p-0.5 story-ring flex items-center justify-center"
+              style={{ border: "2px solid #F59E0B" }}
+            >
+              <Avatar className="w-full h-full border-2 border-white">
+                {u.photoUrl ? (
+                  <AvatarImage src={u.photoUrl} alt={u.displayName} />
                 ) : (
-                  <AvatarFallback className="text-sm">{user.displayName[0]}</AvatarFallback>
+                  <AvatarFallback className="text-sm">{u.displayName[0]}</AvatarFallback>
                 )}
               </Avatar>
             </div>
-            <span className="text-[11px] text-muted-foreground truncate w-16 text-center">{user.displayName.split(" ")[0]}</span>
+            <span className="text-[11px] text-[#6B7280] truncate w-16 text-center">{u.displayName.split(" ")[0]}</span>
           </button>
         ))}
       </div>
@@ -112,6 +66,8 @@ function StoriesCarousel() {
 
 export default function Discover() {
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [swipeDir, setSwipeDir] = useState<"left" | "right">("left");
+  const [isExiting, setIsExiting] = useState(false);
   const { data: profiles, isLoading } = useDiscoverProfiles();
   const startInterview = useStartInterview();
   const createMatch = useCreateMatch();
@@ -131,25 +87,31 @@ export default function Discover() {
   if (!profiles || profiles.length === 0) {
     return (
       <LayoutShell>
-        <HeroBanner onStartMatching={() => {}} onInterviewTwin={() => {}} />
-        <div className="text-center py-20 px-6 bg-card rounded-md border border-dashed">
-          <div className="w-20 h-20 bg-accent rounded-full flex items-center justify-center mx-auto mb-6">
-            <Brain className="w-10 h-10 text-accent-foreground/50" />
+        <div className="max-w-sm mx-auto">
+          <div className="text-center py-20 px-6 bg-white rounded-2xl shadow-card border">
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
+              style={{ background: "#EDE9FE" }}>
+              <Brain className="w-10 h-10" style={{ color: "#7C3AED" }} />
+            </div>
+            <h3 className="text-xl font-display font-bold mb-2 text-[#1F2937]">No one to discover yet</h3>
+            <p className="text-[#6B7280] max-w-xs mx-auto text-sm">
+              Complete your onboarding first, then check back as more people join VibeFlow.
+            </p>
           </div>
-          <h3 className="text-2xl font-display font-bold mb-2">No one to discover yet</h3>
-          <p className="text-muted-foreground max-w-md mx-auto">
-            Complete your onboarding first, then check back as more people join VibeFlow.
-          </p>
         </div>
       </LayoutShell>
     );
   }
 
   const currentProfile = profiles[currentIdx % profiles.length];
-  const matchScore = Math.floor(Math.random() * 15) + 80;
 
-  const handleNext = () => {
-    setCurrentIdx(prev => (prev + 1) % profiles.length);
+  const handleNext = (direction: "left" | "right") => {
+    setSwipeDir(direction);
+    setIsExiting(true);
+    setTimeout(() => {
+      setIsExiting(false);
+      setCurrentIdx(prev => (prev + 1) % profiles.length);
+    }, 300);
   };
 
   const handleInterview = async () => {
@@ -160,130 +122,227 @@ export default function Discover() {
         description: `Chat with ${currentProfile.displayName}'s AI Twin now.`,
       });
       setLocation(`/interviews/${interview.id}/chat`);
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Could not start interview.",
-        variant: "destructive"
+        variant: "destructive",
       });
     }
   };
 
-  const handleMatchRequest = async () => {
+  const handlePass = () => {
+    handleNext("left");
+  };
+
+  const handleLike = async () => {
+    handleNext("right");
     try {
       await createMatch.mutateAsync(currentProfile.userId);
       toast({
-        title: "Match Request Sent",
+        title: "Liked!",
         description: `${currentProfile.displayName} will be notified.`,
       });
-      handleNext();
     } catch (error: any) {
       if (error.message?.includes("already exists")) {
         toast({ title: "Already Connected", description: "You already have a match request with this person." });
-      } else {
-        toast({ title: "Error", description: "Could not send match request.", variant: "destructive" });
       }
     }
   };
 
+  const personalityTraits = currentProfile.personalityProfile && typeof currentProfile.personalityProfile === "object"
+    ? Object.entries(currentProfile.personalityProfile as Record<string, number>).slice(0, 4)
+    : [];
+
   return (
     <LayoutShell>
-      <div className="max-w-2xl mx-auto">
-        <StoriesCarousel />
-        <HeroBanner onStartMatching={handleMatchRequest} onInterviewTwin={handleInterview} />
+      <div className="max-w-sm mx-auto">
+        {/* Page title */}
+        <div className="text-center mb-5">
+          <h1 className="font-display font-bold text-[#1F2937] text-xl">Discover</h1>
+        </div>
 
-        <AnimatePresence mode="wait">
+        <StoriesCarousel />
+
+        {/* Profile Card — portrait 1:1.2 aspect ratio */}
+        <AnimatePresence mode="popLayout">
           <motion.div
             key={currentIdx}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.25 }}
-            className="relative bg-card rounded-md overflow-hidden shadow-lg dark:shadow-none border flex flex-col card-lift"
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={
+              isExiting
+                ? { opacity: 0, x: swipeDir === "left" ? -280 : 280, rotate: swipeDir === "left" ? -10 : 10 }
+                : { opacity: 1, scale: 1, x: 0, y: 0, rotate: 0 }
+            }
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.28, ease: "easeInOut" }}
+            className="bg-white rounded-2xl overflow-hidden mb-4"
+            style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
+            data-testid="card-profile"
           >
-            <div className="h-56 md:h-64 bg-gradient-to-br from-primary/20 to-secondary/20 relative">
-              {currentProfile.coverPhotoUrl && (
-                <img src={currentProfile.coverPhotoUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-              )}
-              {!currentProfile.coverPhotoUrl && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-8xl font-display font-bold text-primary/10">
+            {/* Image area — portrait 1:1.2 */}
+            <div className="relative" style={{ paddingBottom: "120%" }}>
+              {currentProfile.coverPhotoUrl ? (
+                <img
+                  src={currentProfile.coverPhotoUrl}
+                  alt={currentProfile.displayName}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              ) : (
+                <div
+                  className="absolute inset-0 flex items-center justify-center gradient-bg"
+                >
+                  <span className="text-9xl font-display font-bold text-white/20">
                     {currentProfile.displayName?.[0] || "?"}
                   </span>
                 </div>
               )}
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 pt-16 text-white">
-                <h2 className="text-3xl font-display font-bold mb-1" data-testid="text-profile-name">
-                  {currentProfile.displayName}{currentProfile.age ? `, ${currentProfile.age}` : ""}
+
+              {/* Story ring indicator top-left */}
+              <div
+                className="absolute top-3 left-3 w-12 h-12 rounded-full flex items-center justify-center bg-black/30 backdrop-blur-sm"
+                style={{ border: "2px solid #F59E0B" }}
+                data-testid="story-ring-indicator"
+              >
+                <Play className="w-4 h-4 text-white fill-white" />
+              </div>
+
+              {/* Dark gradient overlay at bottom of image */}
+              <div
+                className="absolute inset-x-0 bottom-0"
+                style={{
+                  background: "linear-gradient(to top, rgba(31,41,55,0.85) 0%, rgba(31,41,55,0.4) 50%, transparent 100%)",
+                  height: "55%",
+                }}
+              />
+
+              {/* Name / age / location overlay */}
+              <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                <h2
+                  className="font-display font-bold text-white leading-tight mb-1"
+                  style={{ fontSize: "28px" }}
+                  data-testid="text-profile-name"
+                >
+                  {currentProfile.displayName}
+                  {currentProfile.age ? `, ${currentProfile.age}` : ""}
                 </h2>
-                <div className="flex items-center gap-3 flex-wrap">
-                  {currentProfile.location && (
-                    <div className="flex items-center gap-1 text-sm text-white/80">
-                      <MapPin className="w-3.5 h-3.5" />
-                      {currentProfile.location}
-                    </div>
-                  )}
-                </div>
+                {currentProfile.location && (
+                  <div className="flex items-center gap-1 text-white/80" style={{ fontSize: "15px" }}>
+                    <MapPin className="w-3.5 h-3.5 shrink-0" />
+                    <span data-testid="text-profile-location">{currentProfile.location}</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="p-6 flex flex-col gap-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <h3 className="font-bold mb-2">About</h3>
-                  <p className="text-muted-foreground leading-relaxed text-sm" data-testid="text-profile-bio">{currentProfile.bio}</p>
-                </div>
-                <div className="shrink-0" data-testid="text-match-score">
-                  <CompatibilityRing percentage={matchScore} size={64} />
-                </div>
+            {/* About section */}
+            <div className="bg-white px-6 pt-5 pb-3">
+              <h3 className="font-bold text-[#1F2937] mb-2" style={{ fontSize: "16px" }}>About</h3>
+              <p
+                className="text-[#374151] leading-relaxed"
+                style={{ fontSize: "15px", lineHeight: "1.5" }}
+                data-testid="text-profile-bio"
+              >
+                {currentProfile.bio || "No bio yet."}
+              </p>
+            </div>
+
+            {/* Personality trait pills */}
+            {personalityTraits.length > 0 && (
+              <div className="px-6 pb-4 flex flex-wrap gap-2">
+                {personalityTraits.map(([trait, score]) => (
+                  <span
+                    key={trait}
+                    className="capitalize font-semibold"
+                    style={{
+                      background: "#EDE9FE",
+                      color: "#7C3AED",
+                      fontSize: "12px",
+                      padding: "4px 12px",
+                      borderRadius: "999px",
+                    }}
+                    data-testid={`badge-trait-${trait}`}
+                  >
+                    {trait}: {typeof score === "number" ? `${score}%` : score}
+                  </span>
+                ))}
               </div>
+            )}
 
-              {currentProfile.personalityProfile && typeof currentProfile.personalityProfile === 'object' && (
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(currentProfile.personalityProfile as Record<string, number>).slice(0, 3).map(([trait, score]) => (
-                    <span key={trait} className="text-xs px-3 py-1 rounded-full bg-accent text-accent-foreground font-medium capitalize">
-                      {trait}: {score}%
-                    </span>
-                  ))}
-                </div>
-              )}
+            {/* Action buttons */}
+            <div className="px-6 pb-6 pt-2 flex items-center gap-3">
+              {/* Pass — light red */}
+              <button
+                onClick={handlePass}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold btn-press transition-all"
+                style={{
+                  background: "#FEE2E2",
+                  color: "#EF4444",
+                  fontSize: "15px",
+                  height: "48px",
+                  border: "none",
+                  borderRadius: "8px",
+                }}
+                data-testid="button-pass"
+              >
+                <X className="w-5 h-5" />
+                Pass
+              </button>
 
-              <div className="flex items-center gap-3 mt-2">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={handleNext}
-                  className="rounded-md btn-press"
-                  data-testid="button-skip"
-                >
-                  <X className="w-5 h-5" />
-                </Button>
+              {/* Interview AI Twin */}
+              <button
+                onClick={handleInterview}
+                disabled={startInterview.isPending}
+                className="flex items-center justify-center btn-press transition-all"
+                style={{
+                  background: "#7C3AED",
+                  color: "#fff",
+                  height: "48px",
+                  width: "48px",
+                  borderRadius: "50%",
+                  border: "none",
+                  flexShrink: 0,
+                }}
+                title="Interview AI Twin"
+                data-testid="button-interview"
+              >
+                {startInterview.isPending ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Brain className="w-5 h-5" />
+                )}
+              </button>
 
-                <Button
-                  size="lg"
-                  onClick={handleInterview}
-                  disabled={startInterview.isPending}
-                  className="flex-1 gradient-bg text-white text-lg font-semibold rounded-md btn-press"
-                  data-testid="button-interview"
-                >
-                  <Brain className="w-5 h-5 mr-2" />
-                  Interview AI Twin
-                </Button>
-
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={handleMatchRequest}
-                  disabled={createMatch.isPending}
-                  className="rounded-md btn-press border-secondary/30 text-secondary"
-                  data-testid="button-match-request"
-                >
+              {/* Like — light pink */}
+              <button
+                onClick={handleLike}
+                disabled={createMatch.isPending}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold btn-press transition-all"
+                style={{
+                  background: "#FCE7F3",
+                  color: "#EC4899",
+                  fontSize: "15px",
+                  height: "48px",
+                  border: "none",
+                  borderRadius: "8px",
+                }}
+                data-testid="button-like"
+              >
+                {createMatch.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
                   <Heart className="w-5 h-5" />
-                </Button>
-              </div>
+                )}
+                Like
+              </button>
             </div>
           </motion.div>
         </AnimatePresence>
+
+        {/* Profile counter */}
+        <p className="text-center text-[#9CA3AF] text-xs mb-8">
+          {(currentIdx % profiles.length) + 1} of {profiles.length} profiles
+        </p>
       </div>
     </LayoutShell>
   );

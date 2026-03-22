@@ -8,74 +8,80 @@
   --font-sans: 'DM Sans', sans-serif;
   --font-display: 'Outfit', sans-serif;
 
-  /* Romantic Modern Design System */
-  --background: 260 30% 98%;
-  --foreground: 0 0% 10%;
+  /* VibeFlow Design System — spec-aligned */
+  --background: 0 0% 96%;
+  --foreground: 220 13% 13%;
 
-  --primary: 269 83% 56%;
+  /* Primary: #7C3AED — HSL 262 84% 58% */
+  --primary: 262 84% 58%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 325 90% 52%;
+  /* Secondary: #EC4899 — HSL 330 81% 60% */
+  --secondary: 330 81% 60%;
   --secondary-foreground: 0 0% 100%;
 
-  --muted: 260 20% 95%;
-  --muted-foreground: 0 0% 42%;
+  --muted: 220 14% 93%;
+  --muted-foreground: 220 9% 46%;
 
-  --accent: 280 50% 95%;
-  --accent-foreground: 269 83% 56%;
+  /* Accent: light purple bg for trait pills */
+  --accent: 262 55% 94%;
+  --accent-foreground: 262 84% 58%;
+
+  /* Amber: #F59E0B — for story rings, notifications */
+  --amber: 38 92% 50%;
 
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 0 0% 92%;
-  --input: 0 0% 92%;
-  --ring: 269 83% 56%;
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 262 84% 58%;
 
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 10%;
+  --card-foreground: 220 13% 13%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 10%;
+  --popover-foreground: 220 13% 13%;
 
-  --radius: 1rem;
+  /* Cards: 12px radius per spec */
+  --radius: 0.75rem;
 
-  --gradient-primary: linear-gradient(135deg, hsl(269 83% 56%), hsl(325 90% 52%));
-  --accent-spark: 350 80% 60%;
-  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.06);
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, hsl(262 84% 58%), hsl(330 81% 60%));
+  --gradient-hero: linear-gradient(135deg, #7C3AED, #EC4899, #F59E0B);
 
-  --romantic-red: 0 78% 55%;
-  --romantic-red-foreground: 0 0% 100%;
-  --romantic-pink: 325 90% 52%;
-  --gradient-romantic: linear-gradient(135deg, hsl(0 78% 55%), hsl(340 80% 50%));
+  /* Shadows per spec */
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-hover: 0 8px 16px rgba(0, 0, 0, 0.12);
 }
 
 .dark {
-  --background: 260 20% 8%;
+  --background: 262 20% 8%;
   --foreground: 0 0% 92%;
 
-  --primary: 269 83% 62%;
+  --primary: 262 84% 65%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 325 80% 58%;
+  --secondary: 330 75% 62%;
   --secondary-foreground: 0 0% 100%;
 
-  --muted: 260 15% 16%;
+  --muted: 262 15% 16%;
   --muted-foreground: 0 0% 60%;
 
-  --accent: 269 30% 18%;
-  --accent-foreground: 269 70% 75%;
+  --accent: 262 30% 18%;
+  --accent-foreground: 262 70% 78%;
 
   --destructive: 0 70% 50%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 260 15% 20%;
-  --input: 260 15% 20%;
-  --ring: 269 83% 62%;
+  --border: 262 15% 20%;
+  --input: 262 15% 20%;
+  --ring: 262 84% 65%;
 
-  --card: 260 15% 12%;
+  --card: 262 15% 12%;
   --card-foreground: 0 0% 92%;
 
-  --popover: 260 15% 12%;
+  --popover: 262 15% 12%;
   --popover-foreground: 0 0% 92%;
 }
 
@@ -90,8 +96,9 @@
     @apply font-bold tracking-tight text-foreground;
   }
 
-  h1 { @apply text-[30px] leading-tight; }
-  h2 { @apply text-[22px] leading-snug; }
+  /* Spec typography */
+  h1 { @apply text-[28px] leading-tight; }
+  h2 { @apply text-[20px] leading-snug; }
   h3 { @apply text-lg; }
 
   * {
@@ -120,6 +127,18 @@
     background: var(--gradient-primary);
   }
 
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  /* Spec card shadow */
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  .shadow-hover {
+    box-shadow: var(--shadow-hover);
+  }
+
   .btn-press {
     transition: transform 150ms ease-out;
   }
@@ -129,10 +148,16 @@
 
   .card-lift {
     transition: transform 250ms ease, box-shadow 250ms ease;
+    box-shadow: var(--shadow-card);
   }
   .card-lift:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-hover);
+  }
+
+  /* Story ring: amber 2px border per spec */
+  .story-ring {
+    border: 2px solid #F59E0B;
   }
 
   .fade-slide-in {
@@ -141,6 +166,51 @@
 
   .pulse-glow {
     animation: pulseGlow 2s ease-in-out infinite;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Filter tab styles */
+  .filter-tab-active {
+    @apply bg-primary text-white;
+  }
+  .filter-tab-inactive {
+    @apply bg-transparent border border-border text-muted-foreground;
+  }
+
+  /* Elevation utilities used by Badge, Button, and page components */
+  .hover-elevate {
+    transition: transform 200ms ease, box-shadow 200ms ease;
+  }
+  .hover-elevate:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+  }
+
+  .active-elevate-2:active {
+    transform: scale(0.97);
+  }
+
+  .toggle-elevate {
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+  .toggle-elevated {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-card);
+  }
+
+  .no-default-hover-elevate:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  .no-default-active-elevate:active {
+    transform: none !important;
   }
 }
 
@@ -163,10 +233,10 @@
 
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 0 0 0 hsla(269, 83%, 56%, 0.4);
+    box-shadow: 0 0 0 0 hsla(262, 84%, 58%, 0.4);
   }
   50% {
-    box-shadow: 0 0 0 12px hsla(269, 83%, 56%, 0);
+    box-shadow: 0 0 0 12px hsla(262, 84%, 58%, 0);
   }
 }
 
