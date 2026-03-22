@@ -128,6 +128,10 @@ function Router() {
 }
 
 function App() {
+  useEffect(() => {
+    document.documentElement.classList.add("dark");
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { Brain, X, Loader2, MapPin, Heart, Play } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
@@ -28,28 +28,30 @@ function StoriesCarousel() {
 
   return (
     <>
-      <div className="flex gap-3 overflow-x-auto pb-3 mb-5 scrollbar-hide" data-testid="stories-carousel">
+      <div className="flex gap-4 overflow-x-auto pb-3 mb-5 scrollbar-hide" data-testid="stories-carousel">
         {grouped.map((u) => (
           <button
             key={u.userId}
             onClick={() => setViewingStory(u)}
-            className="flex flex-col items-center gap-1 shrink-0"
+            className="flex flex-col items-center gap-1.5 shrink-0"
             data-testid={`story-avatar-${u.userId}`}
           >
-            {/* Amber story ring per spec */}
-            <div
-              className="w-16 h-16 rounded-full p-0.5 story-ring flex items-center justify-center"
-              style={{ border: "2px solid #F59E0B" }}
-            >
-              <Avatar className="w-full h-full border-2 border-white">
-                {u.photoUrl ? (
-                  <AvatarImage src={u.photoUrl} alt={u.displayName} />
-                ) : (
-                  <AvatarFallback className="text-sm">{u.displayName[0]}</AvatarFallback>
-                )}
-              </Avatar>
+            <div className="story-ring-active p-[2.5px] rounded-full" style={{ width: "60px", height: "60px" }}>
+              <div className="w-full h-full rounded-full overflow-hidden" style={{ background: "#1A1A24" }}>
+                <Avatar className="w-full h-full">
+                  {u.photoUrl ? (
+                    <AvatarImage src={u.photoUrl} alt={u.displayName} />
+                  ) : (
+                    <AvatarFallback style={{ background: "#242433", color: "#FFFFFF", fontSize: "14px" }}>
+                      {u.displayName[0]}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+              </div>
             </div>
-            <span className="text-[11px] text-[#6B7280] truncate w-16 text-center">{u.displayName.split(" ")[0]}</span>
+            <span style={{ fontSize: "11px", color: "#9090A8", maxWidth: "56px", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {u.displayName.split(" ")[0]}
+            </span>
           </button>
         ))}
       </div>
@@ -78,7 +80,7 @@ export default function Discover() {
     return (
       <LayoutShell>
         <div className="h-[60vh] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <Loader2 className="w-8 h-8 animate-spin" style={{ color: "#7C3AED" }} />
         </div>
       </LayoutShell>
     );
@@ -88,13 +90,18 @@ export default function Discover() {
     return (
       <LayoutShell>
         <div className="max-w-sm mx-auto">
-          <div className="text-center py-20 px-6 bg-white rounded-2xl shadow-card border">
-            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
-              style={{ background: "#EDE9FE" }}>
+          <div
+            className="text-center py-20 px-6 rounded-2xl"
+            style={{ background: "#1A1A24", boxShadow: "0 8px 32px rgba(0,0,0,0.4)", border: "1px solid #2E2E42" }}
+          >
+            <div
+              className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
+              style={{ background: "rgba(124,58,237,0.15)" }}
+            >
               <Brain className="w-10 h-10" style={{ color: "#7C3AED" }} />
             </div>
-            <h3 className="text-xl font-display font-bold mb-2 text-[#1F2937]">No one to discover yet</h3>
-            <p className="text-[#6B7280] max-w-xs mx-auto text-sm">
+            <h3 className="text-xl font-bold mb-2 text-white">No one to discover yet</h3>
+            <p className="text-sm" style={{ color: "#9090A8" }}>
               Complete your onboarding first, then check back as more people join VibeFlow.
             </p>
           </div>
@@ -131,9 +138,7 @@ export default function Discover() {
     }
   };
 
-  const handlePass = () => {
-    handleNext("left");
-  };
+  const handlePass = () => handleNext("left");
 
   const handleLike = async () => {
     try {
@@ -160,14 +165,12 @@ export default function Discover() {
   return (
     <LayoutShell>
       <div className="max-w-sm mx-auto">
-        {/* Page title */}
         <div className="text-center mb-5">
-          <h1 className="font-display font-bold text-[#1F2937] text-xl">Discover</h1>
+          <h1 className="font-bold text-white" style={{ fontSize: "22px", letterSpacing: "-0.5px" }}>Discover</h1>
         </div>
 
         <StoriesCarousel />
 
-        {/* Profile Card — portrait 1:1.2 aspect ratio */}
         <AnimatePresence mode="popLayout">
           <motion.div
             key={currentIdx}
@@ -179,11 +182,16 @@ export default function Discover() {
             }
             exit={{ opacity: 0 }}
             transition={{ duration: 0.28, ease: "easeInOut" }}
-            className="bg-white rounded-2xl overflow-hidden mb-4"
-            style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
+            className="overflow-hidden mb-4"
+            style={{
+              background: "#1A1A24",
+              borderRadius: "20px",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+              border: "1px solid #2E2E42",
+            }}
             data-testid="card-profile"
           >
-            {/* Image area — portrait 1:1.2 */}
+            {/* Image — portrait 1:1.2 */}
             <div className="relative" style={{ paddingBottom: "120%" }}>
               {currentProfile.coverPhotoUrl ? (
                 <img
@@ -193,44 +201,45 @@ export default function Discover() {
                 />
               ) : (
                 <div
-                  className="absolute inset-0 flex items-center justify-center gradient-bg"
+                  className="absolute inset-0 flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
                 >
-                  <span className="text-9xl font-display font-bold text-white/20">
+                  <span className="font-bold text-white/20" style={{ fontSize: "96px" }}>
                     {currentProfile.displayName?.[0] || "?"}
                   </span>
                 </div>
               )}
 
-              {/* Story ring indicator top-left */}
+              {/* Story play indicator */}
               <div
-                className="absolute top-3 left-3 w-12 h-12 rounded-full flex items-center justify-center bg-black/30 backdrop-blur-sm"
-                style={{ border: "2px solid #F59E0B" }}
+                className="absolute top-3 left-3 w-11 h-11 rounded-full flex items-center justify-center"
+                style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)", border: "1.5px solid rgba(255,255,255,0.2)" }}
                 data-testid="story-ring-indicator"
               >
                 <Play className="w-4 h-4 text-white fill-white" />
               </div>
 
-              {/* Dark gradient overlay at bottom of image */}
+              {/* Dark gradient overlay */}
               <div
                 className="absolute inset-x-0 bottom-0"
                 style={{
-                  background: "linear-gradient(to top, rgba(31,41,55,0.85) 0%, rgba(31,41,55,0.4) 50%, transparent 100%)",
-                  height: "55%",
+                  background: "linear-gradient(to top, rgba(15,15,20,0.9) 0%, rgba(15,15,20,0.4) 50%, transparent 100%)",
+                  height: "60%",
                 }}
               />
 
-              {/* Name / age / location overlay */}
-              <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+              {/* Name / age / location */}
+              <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
                 <h2
-                  className="font-display font-bold text-white leading-tight mb-1"
-                  style={{ fontSize: "28px" }}
+                  className="font-bold text-white leading-tight mb-1"
+                  style={{ fontSize: "26px", letterSpacing: "-0.5px" }}
                   data-testid="text-profile-name"
                 >
                   {currentProfile.displayName}
                   {currentProfile.age ? `, ${currentProfile.age}` : ""}
                 </h2>
                 {currentProfile.location && (
-                  <div className="flex items-center gap-1 text-white/80" style={{ fontSize: "15px" }}>
+                  <div className="flex items-center gap-1" style={{ color: "rgba(255,255,255,0.7)", fontSize: "14px" }}>
                     <MapPin className="w-3.5 h-3.5 shrink-0" />
                     <span data-testid="text-profile-location">{currentProfile.location}</span>
                   </div>
@@ -239,11 +248,13 @@ export default function Discover() {
             </div>
 
             {/* About section */}
-            <div className="bg-white px-6 pt-5 pb-3">
-              <h3 className="font-bold text-[#1F2937] mb-2" style={{ fontSize: "16px" }}>About</h3>
+            <div className="px-5 pt-4 pb-3" style={{ background: "#1A1A24" }}>
+              <h3 className="font-bold text-white mb-1.5" style={{ fontSize: "14px", letterSpacing: "0.5px", textTransform: "uppercase", color: "#9090A8" }}>
+                About
+              </h3>
               <p
-                className="text-[#374151] leading-relaxed"
-                style={{ fontSize: "15px", lineHeight: "1.5" }}
+                className="leading-relaxed text-white"
+                style={{ fontSize: "14px", lineHeight: "1.55", color: "rgba(255,255,255,0.85)" }}
                 data-testid="text-profile-bio"
               >
                 {currentProfile.bio || "No bio yet."}
@@ -252,17 +263,18 @@ export default function Discover() {
 
             {/* Personality trait pills */}
             {personalityTraits.length > 0 && (
-              <div className="px-6 pb-4 flex flex-wrap gap-2">
+              <div className="px-5 pb-4 flex flex-wrap gap-2">
                 {personalityTraits.map(([trait, score]) => (
                   <span
                     key={trait}
                     className="capitalize font-semibold"
                     style={{
-                      background: "#EDE9FE",
-                      color: "#7C3AED",
+                      background: "rgba(124,58,237,0.15)",
+                      color: "#A78BFA",
                       fontSize: "12px",
                       padding: "4px 12px",
-                      borderRadius: "999px",
+                      borderRadius: "100px",
+                      border: "1px solid rgba(124,58,237,0.3)",
                     }}
                     data-testid={`badge-trait-${trait}`}
                   >
@@ -272,78 +284,80 @@ export default function Discover() {
               </div>
             )}
 
-            {/* Action buttons */}
-            <div className="px-6 pb-6 pt-2 flex items-center gap-3">
-              {/* Pass — light red */}
+            {/* 3-button action row */}
+            <div className="px-5 pb-5 pt-1 flex items-center justify-center gap-4">
+              {/* Pass — circle with red border */}
               <button
                 onClick={handlePass}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold btn-press transition-all"
+                className="flex items-center justify-center btn-press transition-all"
                 style={{
-                  background: "#FEE2E2",
+                  width: "64px",
+                  height: "64px",
+                  borderRadius: "50%",
+                  background: "transparent",
+                  border: "2px solid #EF4444",
                   color: "#EF4444",
-                  fontSize: "15px",
-                  height: "48px",
-                  border: "none",
-                  borderRadius: "8px",
+                  flexShrink: 0,
                 }}
                 data-testid="button-pass"
               >
-                <X className="w-5 h-5" />
-                Pass
+                <X className="w-6 h-6" />
               </button>
 
-              {/* Interview AI Twin */}
+              {/* Interview AI Twin — gradient rectangle, center CTA */}
               <button
                 onClick={handleInterview}
                 disabled={startInterview.isPending}
-                className="flex items-center justify-center btn-press transition-all"
+                className="flex items-center justify-center gap-2 font-semibold btn-press transition-all flex-1"
                 style={{
-                  background: "#7C3AED",
-                  color: "#fff",
-                  height: "48px",
-                  width: "48px",
-                  borderRadius: "50%",
+                  background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                  color: "#FFFFFF",
+                  height: "52px",
+                  borderRadius: "14px",
                   border: "none",
-                  flexShrink: 0,
+                  fontSize: "14px",
+                  boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
                 }}
-                title="Interview AI Twin"
                 data-testid="button-interview"
               >
                 {startInterview.isPending ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  <Brain className="w-5 h-5" />
+                  <>
+                    <Brain className="w-4 h-4" />
+                    Interview Twin
+                  </>
                 )}
               </button>
 
-              {/* Like — light pink */}
+              {/* Like — circle with pink border */}
               <button
                 onClick={handleLike}
                 disabled={createMatch.isPending}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold btn-press transition-all"
+                className="flex items-center justify-center btn-press transition-all"
                 style={{
-                  background: "#FCE7F3",
+                  width: "64px",
+                  height: "64px",
+                  borderRadius: "50%",
+                  background: "transparent",
+                  border: "2px solid #EC4899",
                   color: "#EC4899",
-                  fontSize: "15px",
-                  height: "48px",
-                  border: "none",
-                  borderRadius: "8px",
+                  flexShrink: 0,
                 }}
                 data-testid="button-like"
               >
                 {createMatch.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  <Heart className="w-5 h-5" />
+                  <Heart className="w-6 h-6" />
                 )}
-                Like
               </button>
             </div>
           </motion.div>
         </AnimatePresence>
 
-        {/* Profile counter */}
-        <p className="text-center text-[#9CA3AF] text-xs mb-8">
+        {/* Counter */}
+        <p className="text-center text-xs mb-8" style={{ color: "#9090A8" }}>
           {(currentIdx % profiles.length) + 1} of {profiles.length} profiles
         </p>
       </div>

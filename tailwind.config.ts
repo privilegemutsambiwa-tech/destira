@@ -6,12 +6,12 @@ export default {
   theme: {
     extend: {
       borderRadius: {
-        lg: "0.75rem", /* 12px — card radius */
-        md: "0.5rem",  /* 8px  — button radius */
-        sm: "0.25rem", /* 4px  — small elements */
+        lg: "1.25rem",  /* 20px — card radius */
+        md: "0.875rem", /* 14px — button radius */
+        sm: "0.25rem",  /* 4px  — small elements */
+        pill: "6.25rem", /* 100px — pill tabs */
       },
       colors: {
-        // Flat / base colors (regular buttons)
         background: "hsl(var(--background) / <alpha-value>)",
         foreground: "hsl(var(--foreground) / <alpha-value>)",
         border: "hsl(var(--border) / <alpha-value>)",
@@ -73,7 +73,7 @@ export default {
         "sidebar-accent": {
           DEFAULT: "hsl(var(--sidebar-accent) / <alpha-value>)",
           foreground: "hsl(var(--sidebar-accent-foreground) / <alpha-value>)",
-          border: "var(--sidebar-accent-border)"
+          border: "var(--sidebar-accent-border)",
         },
         status: {
           online: "rgb(34 197 94)",
@@ -83,11 +83,11 @@ export default {
         },
       },
       fontFamily: {
-        sans: ["var(--font-sans)"],
+        sans: ["Inter", "var(--font-sans)", "sans-serif"],
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
-        display: ["'Outfit'", "sans-serif"],
-        body: ["'DM Sans'", "sans-serif"],
+        display: ["Inter", "sans-serif"],
+        body: ["Inter", "sans-serif"],
       },
       keyframes: {
         "accordion-down": {

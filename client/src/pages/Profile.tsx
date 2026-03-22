@@ -4,7 +4,6 @@ import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useSubscription, useGenerateSummary, useProfileCompletion, useGenerateAboutMe, useGenerateAISummary, useTwinToneProfile, useUpdateTwinToneProfile, useTwinStructuredProfile, useExtractTwinProfile, useQuestionsProgress } from "@/hooks/use-interactions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -17,7 +16,7 @@ import {
   Loader2, MapPin, Eye, EyeOff,
   Camera, Crown, Wand2, Trash2, ImagePlus,
   CheckCircle2, Zap, Rocket, ArrowRight, Check, X, Pencil,
-  Brain, Sparkles, RefreshCw, Shield, MessageSquare, Volume2, Plus, LogOut
+  Brain, Sparkles, RefreshCw, Shield, Volume2, Plus, LogOut
 } from "lucide-react";
 import { AddStoryButton } from "@/components/story-viewer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -26,6 +25,15 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+
+const CARD_STYLE = {
+  background: "#1A1A24",
+  borderRadius: "20px",
+  border: "1px solid #2E2E42",
+  boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+};
+
+const SURFACE2 = { background: "#242433", borderRadius: "12px", padding: "12px" };
 
 export default function Profile() {
   const { data: profile, isLoading } = useProfile();
@@ -68,7 +76,7 @@ export default function Profile() {
     return (
       <LayoutShell>
         <div className="h-[60vh] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <Loader2 className="w-8 h-8 animate-spin" style={{ color: "#7C3AED" }} />
         </div>
       </LayoutShell>
     );
@@ -78,11 +86,22 @@ export default function Profile() {
     return (
       <LayoutShell>
         <div className="text-center mt-20">
-          <h2 className="text-2xl font-bold">Welcome to VibeFlow!</h2>
-          <p className="text-muted-foreground mt-2 mb-6">Complete your Soul-Mapping to get started.</p>
-          <Button size="lg" onClick={() => setLocation("/onboarding")} className="btn-press" data-testid="button-start-onboarding">
+          <h2 className="text-2xl font-bold text-white">Welcome to VibeFlow!</h2>
+          <p className="mt-2 mb-6" style={{ color: "#9090A8" }}>Complete your Soul-Mapping to get started.</p>
+          <button
+            onClick={() => setLocation("/onboarding")}
+            className="font-semibold btn-press px-8 py-3 text-white"
+            style={{
+              background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+              height: "48px",
+              borderRadius: "14px",
+              border: "none",
+              boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
+            }}
+            data-testid="button-start-onboarding"
+          >
             Start Soul-Mapping
-          </Button>
+          </button>
         </div>
       </LayoutShell>
     );
@@ -161,23 +180,12 @@ export default function Profile() {
 
   const handleTaskAction = (key: string) => {
     switch (key) {
-      case "bio":
-        setShowEditDialog(true);
-        break;
-      case "photos":
-        setShowPhotoDialog(true);
-        break;
-      case "onboarding":
-        setLocation("/onboarding");
-        break;
-      case "verify":
-        toast({ title: "Verification coming soon" });
-        break;
-      case "personality":
-        handleGenerateSummary();
-        break;
-      default:
-        break;
+      case "bio": setShowEditDialog(true); break;
+      case "photos": setShowPhotoDialog(true); break;
+      case "onboarding": setLocation("/onboarding"); break;
+      case "verify": toast({ title: "Verification coming soon" }); break;
+      case "personality": handleGenerateSummary(); break;
+      default: break;
     }
   };
 
@@ -186,7 +194,6 @@ export default function Profile() {
     : profile.coverPhotoUrl || null;
 
   const avatarFallbackLetter = profile.displayName?.[0] || user?.firstName?.[0] || "?";
-
   const highlightChips = personalityTraits.slice(0, 6);
 
   const planFeatures = {
@@ -223,222 +230,315 @@ export default function Profile() {
   return (
     <LayoutShell>
       <div className="space-y-6">
+
+        {/* Hero Section */}
         <div className="relative">
           <div
-            className="h-48 md:h-56 rounded-2xl overflow-hidden"
-            style={{ background: "linear-gradient(135deg, #EDE9FE 0%, #FCE7F3 100%)" }}
+            className="h-48 md:h-56 overflow-hidden"
+            style={{
+              background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+              borderRadius: "20px",
+            }}
           >
             {profile.coverPhotoUrl && (
               <img src={profile.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
             )}
           </div>
           <div className="flex flex-col items-center -mt-16 relative z-10">
-            <Avatar className="w-32 h-32 border-4 border-white shadow-lg" style={{ borderRadius: "16px" }} data-testid="avatar-profile">
+            <Avatar
+              className="border-4"
+              style={{
+                width: "128px",
+                height: "128px",
+                borderRadius: "16px",
+                borderColor: "#0F0F14",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+              }}
+              data-testid="avatar-profile"
+            >
               {avatarUrl ? (
                 <AvatarImage src={avatarUrl} alt={profile.displayName || "Profile"} />
               ) : null}
-              <AvatarFallback className="text-3xl font-bold">
+              <AvatarFallback
+                className="text-3xl font-bold"
+                style={{ background: "#242433", color: "#FFFFFF" }}
+              >
                 {avatarFallbackLetter}
               </AvatarFallback>
             </Avatar>
 
             <div className="mt-3 flex items-center gap-2">
-              <h1 className="text-2xl font-bold" data-testid="text-display-name">
+              <h1 className="text-2xl font-bold text-white" data-testid="text-display-name">
                 {profile.displayName || user?.firstName}
               </h1>
               {profile.isVerified && (
-                <CheckCircle2 className="w-5 h-5 text-blue-500" data-testid="icon-verified" />
+                <CheckCircle2 className="w-5 h-5" style={{ color: "#60A5FA" }} data-testid="icon-verified" />
               )}
             </div>
 
             {profile.location && (
-              <div className="flex items-center gap-1 text-muted-foreground text-sm mt-1" data-testid="text-location">
+              <div className="flex items-center gap-1 text-sm mt-1" style={{ color: "#9090A8" }} data-testid="text-location">
                 <MapPin className="w-3.5 h-3.5" />
                 <span>{profile.location}</span>
               </div>
             )}
 
             <div className="flex items-center gap-2 mt-3 flex-wrap justify-center">
-              <Button
-                variant="outline"
+              <button
                 onClick={() => setShowEditDialog(true)}
+                className="flex items-center gap-1.5 font-medium text-sm btn-press px-4 py-2"
+                style={{
+                  background: "#1A1A24",
+                  color: "#FFFFFF",
+                  borderRadius: "10px",
+                  border: "1px solid #2E2E42",
+                }}
                 data-testid="button-edit-profile"
               >
-                <Pencil className="w-4 h-4 mr-1.5" />
+                <Pencil className="w-4 h-4" />
                 Edit Profile
-              </Button>
-              <Button
-                variant="outline"
+              </button>
+              <button
                 onClick={() => setShowPhotoDialog(true)}
+                className="flex items-center gap-1.5 font-medium text-sm btn-press px-4 py-2"
+                style={{
+                  background: "#1A1A24",
+                  color: "#FFFFFF",
+                  borderRadius: "10px",
+                  border: "1px solid #2E2E42",
+                }}
                 data-testid="button-add-photos"
               >
-                <ImagePlus className="w-4 h-4 mr-1.5" />
+                <ImagePlus className="w-4 h-4" />
                 Photos
-              </Button>
+              </button>
               <AddStoryButton />
             </div>
           </div>
         </div>
 
-        <div className="flex gap-3 justify-center overflow-x-auto px-4">
+        {/* Photo row */}
+        <div className="flex gap-3 justify-center overflow-x-auto px-4 scrollbar-hide">
           {photos?.slice(0, 6).map((photo: any) => (
-            <div key={photo.id} className="w-16 h-16 rounded-full overflow-hidden border-2 border-muted shrink-0" data-testid={`photo-circle-${photo.id}`}>
+            <div
+              key={photo.id}
+              className="w-16 h-16 rounded-full overflow-hidden shrink-0"
+              style={{ border: "2px solid #2E2E42" }}
+              data-testid={`photo-circle-${photo.id}`}
+            >
               <img src={photo.photoUrl} alt="" className="w-full h-full object-cover" />
             </div>
           ))}
           {(photos?.length || 0) < 6 && (
             <button
               onClick={() => setShowPhotoDialog(true)}
-              className="w-16 h-16 rounded-full border-2 border-dashed border-muted-foreground/30 flex items-center justify-center shrink-0 cursor-pointer"
+              className="w-16 h-16 rounded-full flex items-center justify-center shrink-0 cursor-pointer"
+              style={{ border: "2px dashed #2E2E42" }}
               data-testid="button-add-photo-circle"
             >
-              <Plus className="w-5 h-5 text-muted-foreground" />
+              <Plus className="w-5 h-5" style={{ color: "#9090A8" }} />
             </button>
           )}
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6">
 
-          {completionScore < 100 && (
-            <Card>
-              <CardContent className="pt-6">
+            {/* Completion progress */}
+            {completionScore < 100 && (
+              <div style={CARD_STYLE} className="p-5">
                 <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
-                  <span className="text-sm font-semibold" data-testid="text-completion-score">
+                  <span className="text-sm font-semibold text-white" data-testid="text-completion-score">
                     {completionScore}% Complete
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">
+                <p className="text-xs mb-3" style={{ color: "#9090A8" }}>
                   Complete your profile to be seen by more people
                 </p>
-                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div className="h-2 rounded-full overflow-hidden" style={{ background: "#242433" }}>
                   <div
-                    className="h-full rounded-full gradient-bg transition-all duration-500"
-                    style={{ width: `${completionScore}%` }}
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${completionScore}%`,
+                      background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                    }}
                     data-testid="progress-completion"
                   />
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {incompleteTasks.length > 0 && (
-            <div className="space-y-3">
-              {incompleteTasks.map((task) => (
-                <Card
-                  key={task.key}
-                  className="cursor-pointer hover-elevate"
-                  onClick={() => handleTaskAction(task.key)}
-                  data-testid={`task-card-${task.key}`}
-                >
-                  <CardContent className="flex items-center justify-between gap-4 py-4">
-                    <div>
-                      <p className="text-sm font-medium">{task.label}</p>
-                      <p className="text-xs text-muted-foreground">{task.benefit}</p>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          <div className="grid grid-cols-3 gap-3">
-            <Card className="text-center" data-testid="tile-super-matches">
-              <CardContent className="pt-6 pb-4">
-                <Zap className="w-5 h-5 mx-auto mb-1 text-amber-500" />
-                <p className="text-xl font-bold">{profile.superMatchesRemaining || 0}</p>
-                <p className="text-xs text-muted-foreground">Super Matches</p>
-              </CardContent>
-            </Card>
-            <Card className="text-center" data-testid="tile-boosts">
-              <CardContent className="pt-6 pb-4">
-                <Rocket className="w-5 h-5 mx-auto mb-1 text-blue-500" />
-                <p className="text-xl font-bold">{profile.boostsRemaining || 0}</p>
-                <p className="text-xs text-muted-foreground">Boosts</p>
-              </CardContent>
-            </Card>
-            <Card
-              className="text-center cursor-pointer hover-elevate"
-              onClick={() => setLocation("/upgrade")}
-              data-testid="tile-subscription"
-            >
-              <CardContent className="pt-6 pb-4">
-                <Crown className="w-5 h-5 mx-auto mb-1 text-yellow-500" />
-                <p className="text-xl font-bold">{tierLabel}</p>
-                <p className="text-xs text-muted-foreground">Subscription</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-2">
-              <CardTitle className="text-base">About Me</CardTitle>
-              <div className="flex gap-1 flex-wrap">
-                <Button variant="ghost" size="sm" onClick={handleGenerateAboutMe} disabled={generateAboutMe.isPending} data-testid="button-generate-about-me">
-                  {generateAboutMe.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Wand2 className="w-3 h-3 mr-1" />}
-                  Generate
-                </Button>
-                {!profile.aboutSummary && (
-                  <Button variant="ghost" size="sm" onClick={handleGenerateSummary} disabled={generateSummary.isPending} data-testid="button-generate-summary">
-                    {generateSummary.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Sparkles className="w-3 h-3 mr-1" />}
-                    Quick Summary
-                  </Button>
-                )}
               </div>
-            </CardHeader>
-            <CardContent>
+            )}
+
+            {/* Incomplete tasks */}
+            {incompleteTasks.length > 0 && (
+              <div className="space-y-3">
+                {incompleteTasks.map((task) => (
+                  <div
+                    key={task.key}
+                    className="cursor-pointer card-lift flex items-center justify-between gap-4 p-4"
+                    style={CARD_STYLE}
+                    onClick={() => handleTaskAction(task.key)}
+                    data-testid={`task-card-${task.key}`}
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-white">{task.label}</p>
+                      <p className="text-xs" style={{ color: "#9090A8" }}>{task.benefit}</p>
+                    </div>
+                    <ArrowRight className="w-4 h-4 shrink-0" style={{ color: "#9090A8" }} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Stats row */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="text-center p-5" style={CARD_STYLE} data-testid="tile-super-matches">
+                <Zap className="w-5 h-5 mx-auto mb-1" style={{ color: "#F59E0B" }} />
+                <p className="text-xl font-bold text-white">{profile.superMatchesRemaining || 0}</p>
+                <p className="text-xs" style={{ color: "#9090A8" }}>Super Matches</p>
+              </div>
+              <div className="text-center p-5" style={CARD_STYLE} data-testid="tile-boosts">
+                <Rocket className="w-5 h-5 mx-auto mb-1" style={{ color: "#60A5FA" }} />
+                <p className="text-xl font-bold text-white">{profile.boostsRemaining || 0}</p>
+                <p className="text-xs" style={{ color: "#9090A8" }}>Boosts</p>
+              </div>
+              <div
+                className="text-center p-5 cursor-pointer card-lift"
+                style={CARD_STYLE}
+                onClick={() => setLocation("/upgrade")}
+                data-testid="tile-subscription"
+              >
+                <Crown className="w-5 h-5 mx-auto mb-1" style={{ color: "#F59E0B" }} />
+                <p className="text-xl font-bold text-white">{tierLabel}</p>
+                <p className="text-xs" style={{ color: "#9090A8" }}>Subscription</p>
+              </div>
+            </div>
+
+            {/* About Me */}
+            <div style={CARD_STYLE} className="p-5">
+              <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+                <h3 className="font-bold text-white" style={{ fontSize: "16px" }}>About Me</h3>
+                <div className="flex gap-1 flex-wrap">
+                  <button
+                    className="text-xs font-medium flex items-center gap-1 btn-press px-3 py-1.5"
+                    style={{
+                      background: "rgba(124,58,237,0.15)",
+                      color: "#A78BFA",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(124,58,237,0.3)",
+                    }}
+                    onClick={handleGenerateAboutMe}
+                    disabled={generateAboutMe.isPending}
+                    data-testid="button-generate-about-me"
+                  >
+                    {generateAboutMe.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                    Generate
+                  </button>
+                  {!profile.aboutSummary && (
+                    <button
+                      className="text-xs font-medium flex items-center gap-1 btn-press px-3 py-1.5"
+                      style={{
+                        background: "rgba(124,58,237,0.15)",
+                        color: "#A78BFA",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(124,58,237,0.3)",
+                      }}
+                      onClick={handleGenerateSummary}
+                      disabled={generateSummary.isPending}
+                      data-testid="button-generate-summary"
+                    >
+                      {generateSummary.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                      Quick Summary
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {aboutMePreview && (
-                <div className="mb-4 p-3 rounded-md bg-muted border border-dashed" data-testid="about-me-preview">
-                  <p className="text-xs text-muted-foreground mb-2 font-medium">AI-Generated Preview</p>
-                  <p className="text-sm leading-relaxed mb-3">{aboutMePreview}</p>
+                <div
+                  className="mb-4 p-3"
+                  style={{ background: "#242433", borderRadius: "12px", border: "1px dashed #2E2E42" }}
+                  data-testid="about-me-preview"
+                >
+                  <p className="text-xs font-medium mb-2" style={{ color: "#9090A8" }}>AI-Generated Preview</p>
+                  <p className="text-sm leading-relaxed mb-3 text-white">{aboutMePreview}</p>
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={handleApproveAboutMe} data-testid="button-approve-about-me">
-                      <Check className="w-3 h-3 mr-1" /> Use This
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={handleGenerateAboutMe} disabled={generateAboutMe.isPending} data-testid="button-regenerate-about-me">
-                      <RefreshCw className="w-3 h-3 mr-1" /> Regenerate
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setAboutMePreview(null)} data-testid="button-discard-about-me">
+                    <button
+                      className="text-xs font-medium btn-press px-3 py-1.5 text-white"
+                      style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", borderRadius: "8px", border: "none" }}
+                      onClick={handleApproveAboutMe}
+                      data-testid="button-approve-about-me"
+                    >
+                      <Check className="w-3 h-3 inline mr-1" /> Use This
+                    </button>
+                    <button
+                      className="text-xs font-medium btn-press px-3 py-1.5"
+                      style={{ background: "#1A1A24", color: "#FFFFFF", borderRadius: "8px", border: "1px solid #2E2E42" }}
+                      onClick={handleGenerateAboutMe}
+                      disabled={generateAboutMe.isPending}
+                      data-testid="button-regenerate-about-me"
+                    >
+                      <RefreshCw className="w-3 h-3 inline mr-1" /> Regenerate
+                    </button>
+                    <button
+                      className="text-xs btn-press px-2 py-1.5"
+                      style={{ color: "#9090A8" }}
+                      onClick={() => setAboutMePreview(null)}
+                      data-testid="button-discard-about-me"
+                    >
                       <X className="w-3 h-3" />
-                    </Button>
+                    </button>
                   </div>
                 </div>
               )}
+
               {profile.aboutSummary && (
-                <p className="text-sm text-primary font-medium mb-3 italic" data-testid="text-about-summary">
+                <p className="text-sm font-medium mb-3 italic" style={{ color: "#A78BFA" }} data-testid="text-about-summary">
                   {profile.aboutSummary}
                 </p>
               )}
-              <p className="text-muted-foreground leading-relaxed" data-testid="text-bio">
+
+              <p className="leading-relaxed" style={{ color: "#9090A8" }} data-testid="text-bio">
                 {profile.aboutMe || profile.bio || "No bio yet."}
               </p>
+
               {highlightChips.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t">
+                <div className="flex flex-wrap gap-2 mt-4 pt-3" style={{ borderTop: "1px solid #2E2E42" }}>
                   {highlightChips.map(([trait]) => (
-                    <Badge key={trait} variant="secondary" className="capitalize text-xs">
+                    <span
+                      key={trait}
+                      className="capitalize text-xs font-medium px-2 py-0.5"
+                      style={{
+                        background: "rgba(124,58,237,0.15)",
+                        color: "#A78BFA",
+                        borderRadius: "100px",
+                        border: "1px solid rgba(124,58,237,0.3)",
+                      }}
+                    >
                       {trait}
-                    </Badge>
+                    </span>
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
 
-          <Card className="rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
-            <CardContent className="p-5">
+            {/* Twin Intelligence */}
+            <div style={CARD_STYLE} className="p-5">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#EDE9FE" }}>
-                  <Brain className="w-4 h-4" style={{ color: "#7C3AED" }} />
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center"
+                  style={{ background: "rgba(124,58,237,0.18)" }}
+                >
+                  <Brain className="w-4 h-4" style={{ color: "#A78BFA" }} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-bold text-[#1F2937]" style={{ fontSize: "16px" }}>Twin Intelligence</h3>
-                  <p className="text-[#6B7280]" style={{ fontSize: "12px" }}>Chat with your Twin to train it</p>
+                  <h3 className="font-bold text-white" style={{ fontSize: "16px" }}>Twin Intelligence</h3>
+                  <p style={{ fontSize: "12px", color: "#9090A8" }}>Chat with your Twin to train it</p>
                 </div>
                 <button
                   onClick={handleExtractProfile}
                   disabled={extractProfile.isPending}
-                  className="text-xs text-[#7C3AED] font-medium hover:opacity-80"
+                  className="text-xs font-medium hover:opacity-80"
+                  style={{ color: "#A78BFA" }}
                   data-testid="button-extract-profile"
                 >
                   {extractProfile.isPending ? <Loader2 className="w-3 h-3 animate-spin inline" /> : <Sparkles className="w-3 h-3 inline" />}
@@ -446,52 +546,77 @@ export default function Profile() {
                 </button>
               </div>
 
-              {/* Interview AI Twin CTA */}
               <button
                 onClick={() => setLocation("/twin-chat")}
-                className="w-full font-semibold text-white py-3 rounded-xl mb-4 btn-press"
-                style={{ background: "#7C3AED", height: "48px", fontSize: "15px", border: "none" }}
+                className="w-full font-semibold text-white py-3 mb-4 btn-press"
+                style={{
+                  background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                  height: "48px",
+                  fontSize: "15px",
+                  border: "none",
+                  borderRadius: "14px",
+                  boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
+                }}
                 data-testid="button-interview-ai-twin"
               >
                 <Brain className="w-4 h-4 inline mr-2" />
                 Interview AI Twin
               </button>
 
-              {/* Structured profile data */}
               <div className="space-y-3">
                 {structuredProfile?.topValues?.length > 0 && (
                   <div>
-                    <p className="text-xs text-[#9CA3AF] font-medium mb-1">Core Values</p>
+                    <p className="text-xs font-medium mb-1" style={{ color: "#9090A8" }}>Core Values</p>
                     <div className="flex flex-wrap gap-1">
                       {structuredProfile.topValues.map((v: string) => (
-                        <span key={v} className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
-                          style={{ background: "#EDE9FE", color: "#7C3AED" }}>{v}</span>
+                        <span
+                          key={v}
+                          className="text-xs px-2 py-0.5 font-medium capitalize"
+                          style={{
+                            background: "rgba(124,58,237,0.15)",
+                            color: "#A78BFA",
+                            borderRadius: "100px",
+                            border: "1px solid rgba(124,58,237,0.25)",
+                          }}
+                        >
+                          {v}
+                        </span>
                       ))}
                     </div>
                   </div>
                 )}
                 {structuredProfile?.interests?.length > 0 && (
                   <div>
-                    <p className="text-xs text-[#9CA3AF] font-medium mb-1">Interests</p>
+                    <p className="text-xs font-medium mb-1" style={{ color: "#9090A8" }}>Interests</p>
                     <div className="flex flex-wrap gap-1">
                       {structuredProfile.interests.map((i: string) => (
-                        <span key={i} className="text-xs px-2 py-0.5 rounded-full border border-[#E5E7EB] text-[#374151]">{i}</span>
+                        <span
+                          key={i}
+                          className="text-xs px-2 py-0.5"
+                          style={{
+                            background: "#242433",
+                            color: "#FFFFFF",
+                            borderRadius: "100px",
+                            border: "1px solid #2E2E42",
+                          }}
+                        >
+                          {i}
+                        </span>
                       ))}
                     </div>
                   </div>
                 )}
                 {structuredProfile?.communicationStyle && (
                   <div>
-                    <p className="text-xs text-[#9CA3AF] font-medium mb-1">Communication Style</p>
-                    <p className="text-sm text-[#374151]">{structuredProfile.communicationStyle}</p>
+                    <p className="text-xs font-medium mb-1" style={{ color: "#9090A8" }}>Communication Style</p>
+                    <p className="text-sm text-white">{structuredProfile.communicationStyle}</p>
                   </div>
                 )}
                 {(!structuredProfile?.topValues?.length && !structuredProfile?.interests?.length) && (
-                  <p className="text-sm text-[#9CA3AF] text-center py-2">Answer questions to help your Twin learn about you.</p>
+                  <p className="text-sm text-center py-2" style={{ color: "#9090A8" }}>Answer questions to help your Twin learn about you.</p>
                 )}
               </div>
 
-              {/* Questions progress */}
               {questionsProgress && (() => {
                 const answered = questionsProgress.totalAnswered || 0;
                 const total = 100;
@@ -501,38 +626,40 @@ export default function Profile() {
                 else if (pct > 50) message = "Great work! Your Twin understands you well.";
                 else if (pct > 25) message = "Making progress! Your Twin is getting smarter.";
                 return (
-                  <div className="pt-3 mt-3 border-t border-[#F3F4F6]">
+                  <div className="pt-3 mt-3" style={{ borderTop: "1px solid #2E2E42" }}>
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <p className="text-xs text-[#6B7280] font-medium">Questions Progress</p>
-                      <span className="text-xs font-bold text-[#7C3AED]">{pct}%</span>
+                      <p className="text-xs font-medium" style={{ color: "#9090A8" }}>Questions Progress</p>
+                      <span className="text-xs font-bold" style={{ color: "#A78BFA" }}>{pct}%</span>
                     </div>
-                    <div className="w-full rounded-full h-2" style={{ background: "#F3F4F6" }}>
+                    <div className="w-full rounded-full h-2" style={{ background: "#242433" }}>
                       <div
                         className="h-2 rounded-full transition-all duration-500"
-                        style={{ width: `${pct}%`, background: "#7C3AED" }}
+                        style={{
+                          width: `${pct}%`,
+                          background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                        }}
                         data-testid="progress-questions"
                       />
                     </div>
-                    <p className="text-xs text-[#9CA3AF] mt-2 italic" data-testid="text-progress-message">{message}</p>
+                    <p className="text-xs mt-2 italic" style={{ color: "#9090A8" }} data-testid="text-progress-message">{message}</p>
                   </div>
                 );
               })()}
-            </CardContent>
-          </Card>
+            </div>
 
-          <Card className="rounded-2xl" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
-            <CardContent className="p-5">
+            {/* Twin Tone */}
+            <div style={CARD_STYLE} className="p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#EDE9FE" }}>
-                    <Volume2 className="w-4 h-4" style={{ color: "#7C3AED" }} />
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(124,58,237,0.18)" }}>
+                    <Volume2 className="w-4 h-4" style={{ color: "#A78BFA" }} />
                   </div>
-                  <h3 className="font-bold text-[#1F2937]" style={{ fontSize: "16px" }}>Twin Tone</h3>
+                  <h3 className="font-bold text-white" style={{ fontSize: "16px" }}>Twin Tone</h3>
                 </div>
                 <button
                   onClick={() => { if (toneProfile) setToneValues(toneProfile); setShowToneDialog(true); }}
                   className="text-xs font-medium flex items-center gap-1"
-                  style={{ color: "#7C3AED" }}
+                  style={{ color: "#A78BFA" }}
                   data-testid="button-edit-tone"
                 >
                   <Pencil className="w-3 h-3" />
@@ -546,33 +673,32 @@ export default function Profile() {
                   { label: "Formality", value: toneProfile?.formality_level || "Neutral" },
                   { label: "Expression", value: toneProfile?.emoji_usage || "Minimal" },
                 ].map(({ label, value }) => (
-                  <div key={label} className="bg-[#F9FAFB] rounded-xl p-3">
-                    <p className="text-xs text-[#9CA3AF] mb-0.5">{label}</p>
-                    <p className="text-sm font-medium text-[#374151] capitalize">{value}</p>
+                  <div key={label} style={SURFACE2}>
+                    <p className="text-xs mb-0.5" style={{ color: "#9090A8" }}>{label}</p>
+                    <p className="text-sm font-medium text-white capitalize">{value}</p>
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          <Card className="rounded-2xl" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
-            <CardContent className="p-5">
+            {/* Privacy */}
+            <div style={CARD_STYLE} className="p-5">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#EDE9FE" }}>
-                  <Shield className="w-4 h-4" style={{ color: "#7C3AED" }} />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(124,58,237,0.18)" }}>
+                  <Shield className="w-4 h-4" style={{ color: "#A78BFA" }} />
                 </div>
-                <h3 className="font-bold text-[#1F2937]" style={{ fontSize: "16px" }}>Privacy Settings</h3>
+                <h3 className="font-bold text-white" style={{ fontSize: "16px" }}>Privacy Settings</h3>
               </div>
-              <div className="flex items-center justify-between gap-4 p-3 rounded-xl" style={{ background: "#F9FAFB" }}>
+              <div className="flex items-center justify-between gap-4 p-3" style={{ background: "#242433", borderRadius: "12px" }}>
                 <div className="flex items-center gap-3">
                   {profile.isPublic ? (
-                    <Eye className="w-5 h-5" style={{ color: "#7C3AED" }} />
+                    <Eye className="w-5 h-5" style={{ color: "#A78BFA" }} />
                   ) : (
-                    <EyeOff className="w-5 h-5 text-[#9CA3AF]" />
+                    <EyeOff className="w-5 h-5" style={{ color: "#9090A8" }} />
                   )}
                   <div>
-                    <p className="text-sm font-semibold text-[#1F2937]">Public Profile</p>
-                    <p className="text-xs text-[#6B7280]">
+                    <p className="text-sm font-semibold text-white">Public Profile</p>
+                    <p className="text-xs" style={{ color: "#9090A8" }}>
                       {profile.isPublic ? "Others can see your real photos" : "Others see your AI cartoon avatar instead"}
                     </p>
                   </div>
@@ -583,31 +709,39 @@ export default function Profile() {
                   data-testid="switch-visibility"
                 />
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </div>
 
-        <div className="lg:col-span-1 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Your Plan</CardTitle>
-            </CardHeader>
-            <CardContent>
+          {/* Sidebar — Your Plan */}
+          <div className="lg:col-span-1 space-y-6">
+            <div style={CARD_STYLE} className="p-5">
+              <h3 className="font-bold text-white mb-4" style={{ fontSize: "16px" }}>Your Plan</h3>
               <div className="flex items-center gap-2 mb-4">
-                <Crown className="w-5 h-5 text-yellow-500" />
-                <Badge variant="secondary" data-testid="badge-tier">{tierLabel}</Badge>
-                <span className="text-xs text-muted-foreground ml-auto">{subscription?.status || "active"}</span>
+                <Crown className="w-5 h-5" style={{ color: "#F59E0B" }} />
+                <span
+                  className="text-sm font-semibold px-2 py-0.5"
+                  style={{
+                    background: "rgba(245,158,11,0.15)",
+                    color: "#FCD34D",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(245,158,11,0.3)",
+                  }}
+                  data-testid="badge-tier"
+                >
+                  {tierLabel}
+                </span>
+                <span className="text-xs ml-auto" style={{ color: "#9090A8" }}>{subscription?.status || "active"}</span>
               </div>
 
               <div className="space-y-2 mb-4">
                 {currentFeatures.map((feature) => (
                   <div key={feature.label} className="flex items-center gap-2 text-sm">
                     {feature.included ? (
-                      <Check className="w-4 h-4 text-green-500 shrink-0" />
+                      <Check className="w-4 h-4 shrink-0" style={{ color: "#22C55E" }} />
                     ) : (
-                      <X className="w-4 h-4 text-muted-foreground/40 shrink-0" />
+                      <X className="w-4 h-4 shrink-0" style={{ color: "#9090A8" }} />
                     )}
-                    <span className={feature.included ? "" : "text-muted-foreground/60"}>
+                    <span style={{ color: feature.included ? "#FFFFFF" : "#9090A8" }}>
                       {feature.label}
                     </span>
                   </div>
@@ -615,43 +749,55 @@ export default function Profile() {
               </div>
 
               {currentTierKey !== "vip" && (
-                <div className="space-y-2 pt-3 border-t">
+                <div className="space-y-2 pt-3" style={{ borderTop: "1px solid #2E2E42" }}>
                   {currentTierKey === "free" && (
-                    <p className="text-xs text-muted-foreground mb-2">
+                    <p className="text-xs mb-2" style={{ color: "#9090A8" }}>
                       Upgrade to Plus for $9.99/mo or VIP for $19.99/mo
                     </p>
                   )}
                   {currentTierKey === "plus" && (
-                    <p className="text-xs text-muted-foreground mb-2">
+                    <p className="text-xs mb-2" style={{ color: "#9090A8" }}>
                       Upgrade to VIP for $19.99/mo
                     </p>
                   )}
-                  <Button
-                    className="w-full btn-press"
+                  <button
+                    className="w-full font-semibold text-white btn-press py-3"
+                    style={{
+                      background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                      borderRadius: "14px",
+                      border: "none",
+                      fontSize: "15px",
+                      boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
+                    }}
                     onClick={() => setLocation("/upgrade")}
                     data-testid="button-upgrade"
                   >
                     Upgrade Now
-                  </Button>
+                  </button>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Mobile-only sign out — desktop uses sidebar */}
-      <div className="md:hidden mt-6">
-        <Button
-          variant="outline"
-          className="w-full justify-center gap-2 rounded-xl border-[#E5E7EB] text-[#6B7280]"
-          onClick={() => logout()}
-          data-testid="button-logout-profile"
-        >
-          <LogOut className="w-4 h-4" />
-          Sign Out
-        </Button>
-      </div>
+        {/* Mobile sign out */}
+        <div className="md:hidden mt-2">
+          <button
+            className="w-full flex justify-center items-center gap-2 font-medium btn-press py-3"
+            style={{
+              background: "transparent",
+              color: "#9090A8",
+              border: "1px solid #2E2E42",
+              borderRadius: "14px",
+              fontSize: "14px",
+            }}
+            onClick={() => logout()}
+            data-testid="button-logout-profile"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </button>
+        </div>
 
       </div>
 
@@ -916,30 +1062,39 @@ function PhotoManagementDialog({
 
         <div className="grid grid-cols-3 gap-3">
           {photos.map((photo: any) => (
-            <div key={photo.id} className="aspect-square rounded-md overflow-hidden bg-muted relative group" data-testid={`edit-photo-${photo.id}`}>
+            <div key={photo.id} className="aspect-square rounded-xl overflow-hidden relative group" style={{ background: "#242433" }} data-testid={`edit-photo-${photo.id}`}>
               <img src={photo.photoUrl} alt="" className="w-full h-full object-cover" />
               {profile.coverPhotoUrl === photo.photoUrl && (
-                <Badge className="absolute top-1 left-1 text-[10px] gradient-bg text-white border-0">Cover</Badge>
+                <span
+                  className="absolute top-1 left-1 text-white font-semibold px-1.5 py-0.5"
+                  style={{
+                    background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                    borderRadius: "6px",
+                    fontSize: "10px",
+                  }}
+                >
+                  Cover
+                </span>
               )}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 {profile.coverPhotoUrl !== photo.photoUrl && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
+                  <button
+                    className="w-8 h-8 rounded-full flex items-center justify-center"
+                    style={{ background: "rgba(255,255,255,0.2)" }}
                     onClick={() => handleSetCover(photo.photoUrl)}
                     data-testid={`button-set-cover-${photo.id}`}
                   >
-                    <Camera className="w-4 h-4" />
-                  </Button>
+                    <Camera className="w-4 h-4 text-white" />
+                  </button>
                 )}
-                <Button
-                  size="icon"
-                  variant="ghost"
+                <button
+                  className="w-8 h-8 rounded-full flex items-center justify-center"
+                  style={{ background: "rgba(239,68,68,0.3)" }}
                   onClick={() => handleDelete(photo.id)}
                   data-testid={`button-delete-photo-${photo.id}`}
                 >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                  <Trash2 className="w-4 h-4 text-white" />
+                </button>
               </div>
             </div>
           ))}
@@ -948,7 +1103,8 @@ function PhotoManagementDialog({
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="aspect-square rounded-md border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1 text-muted-foreground cursor-pointer transition-colors"
+              className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors"
+              style={{ border: "2px dashed #2E2E42", color: "#9090A8" }}
               data-testid="button-upload-photo"
             >
               {uploading ? (

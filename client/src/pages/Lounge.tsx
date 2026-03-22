@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { LayoutShell } from "@/components/layout-shell";
-import { Input } from "@/components/ui/input";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription
 } from "@/components/ui/dialog";
@@ -24,11 +23,12 @@ const GROUP_ICONS: Record<string, any> = {
   "Mindfulness & Growth": Sparkles,
 };
 
-const GROUP_COLORS: string[] = [
-  "#EDE9FE", "#FCE7F3", "#FEF3C7", "#D1FAE5", "#DBEAFE",
-];
-const GROUP_TEXT_COLORS: string[] = [
-  "#7C3AED", "#EC4899", "#D97706", "#059669", "#2563EB",
+const GROUP_ICON_COLORS = [
+  { bg: "rgba(124,58,237,0.18)", color: "#A78BFA" },
+  { bg: "rgba(236,72,153,0.18)", color: "#F472B6" },
+  { bg: "rgba(245,158,11,0.18)", color: "#FCD34D" },
+  { bg: "rgba(34,197,94,0.18)", color: "#4ADE80" },
+  { bg: "rgba(59,130,246,0.18)", color: "#60A5FA" },
 ];
 
 const PRIVACY_LABELS: Record<string, { icon: any; label: string }> = {
@@ -70,10 +70,10 @@ export default function Lounge() {
     <LayoutShell>
       {/* Header */}
       <div className="mb-6">
-        <h1 className="font-display font-bold text-[#1F2937]" style={{ fontSize: "28px" }} data-testid="text-lounge-title">
+        <h1 className="font-bold text-white" style={{ fontSize: "28px", letterSpacing: "-0.5px" }} data-testid="text-lounge-title">
           Lounge
         </h1>
-        <p className="text-[#6B7280] mt-1" style={{ fontSize: "14px" }}>
+        <p className="mt-1" style={{ fontSize: "14px", color: "#9090A8" }}>
           Connect organically in interest-based groups. Chat anonymously and discover unexpected connections.
         </p>
       </div>
@@ -81,25 +81,38 @@ export default function Lounge() {
       {/* Search + Create */}
       <div className="flex items-center gap-3 mb-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
-          <Input
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#9090A8" }} />
+          <input
             placeholder="Search groups..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 rounded-lg border-0"
-            style={{ background: "#F3F4F6", height: "44px" }}
+            className="w-full pl-9 pr-4 text-white focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+            style={{
+              background: "#1A1A24",
+              border: "1px solid #2E2E42",
+              borderRadius: "12px",
+              height: "44px",
+              fontSize: "14px",
+            }}
             data-testid="input-search-groups"
           />
         </div>
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
             <button
-              className="flex items-center gap-2 font-semibold px-4 py-2 rounded-lg text-white btn-press shrink-0"
-              style={{ background: "#7C3AED", height: "44px", fontSize: "14px", border: "none" }}
+              className="flex items-center gap-2 font-semibold px-4 py-2 text-white btn-press shrink-0"
+              style={{
+                background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                height: "44px",
+                fontSize: "14px",
+                borderRadius: "12px",
+                border: "none",
+                boxShadow: "0 4px 20px rgba(124,58,237,0.35)",
+              }}
               data-testid="button-create-group"
             >
               <Plus className="w-4 h-4" />
-              Create Group
+              Create
             </button>
           </DialogTrigger>
           <CreateGroupDialog onClose={() => setShowCreateDialog(false)} />
@@ -112,11 +125,21 @@ export default function Lounge() {
           <button
             key={f.value}
             onClick={() => setActiveFilter(f.value)}
-            className="px-4 py-1.5 rounded-full text-sm font-medium transition-colors btn-press"
+            className="px-4 py-1.5 text-sm font-medium transition-colors btn-press"
             style={
               activeFilter === f.value
-                ? { background: "#7C3AED", color: "#fff", border: "none" }
-                : { background: "transparent", color: "#6B7280", border: "1px solid #E5E7EB" }
+                ? {
+                    background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                    color: "#FFFFFF",
+                    borderRadius: "100px",
+                    border: "none",
+                  }
+                : {
+                    background: "transparent",
+                    color: "#9090A8",
+                    borderRadius: "100px",
+                    border: "1px solid #2E2E42",
+                  }
             }
             data-testid={`filter-${f.value}`}
           >
@@ -142,7 +165,7 @@ function GroupList({ groups, onNavigate }: { groups: any[]; onNavigate: (id: str
 
   if (groups.length === 0) {
     return (
-      <div className="text-center py-12 text-[#6B7280]" data-testid="text-no-groups">
+      <div className="text-center py-12" style={{ color: "#9090A8" }} data-testid="text-no-groups">
         No groups found. Create one to get started!
       </div>
     );
@@ -152,7 +175,11 @@ function GroupList({ groups, onNavigate }: { groups: any[]; onNavigate: (id: str
     <div className="space-y-8">
       {joinedGroups.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-[#9CA3AF] uppercase tracking-wider mb-3" data-testid="text-section-joined">
+          <h2
+            className="mb-3 font-semibold uppercase tracking-wider"
+            style={{ fontSize: "11px", color: "#9090A8", letterSpacing: "1px" }}
+            data-testid="text-section-joined"
+          >
             Your Groups
           </h2>
           <div className="space-y-2">
@@ -164,7 +191,11 @@ function GroupList({ groups, onNavigate }: { groups: any[]; onNavigate: (id: str
       )}
       {discoverGroups.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-[#9CA3AF] uppercase tracking-wider mb-3" data-testid="text-section-discover">
+          <h2
+            className="mb-3 font-semibold uppercase tracking-wider"
+            style={{ fontSize: "11px", color: "#9090A8", letterSpacing: "1px" }}
+            data-testid="text-section-discover"
+          >
             Discover Groups
           </h2>
           <div className="space-y-2">
@@ -185,10 +216,7 @@ function GroupCard({ group, idx, onNavigate, isJoinCard = false }: {
   isJoinCard?: boolean;
 }) {
   const Icon = GROUP_ICONS[group.name] || Users;
-  const colorIdx = idx % GROUP_COLORS.length;
-  const bgColor = GROUP_COLORS[colorIdx];
-  const textColor = GROUP_TEXT_COLORS[colorIdx];
-  const privacy = PRIVACY_LABELS[group.privacyMode] || PRIVACY_LABELS["open"];
+  const colorSet = GROUP_ICON_COLORS[idx % GROUP_ICON_COLORS.length];
 
   return (
     <motion.div
@@ -197,36 +225,43 @@ function GroupCard({ group, idx, onNavigate, isJoinCard = false }: {
       transition={{ delay: idx * 0.04 }}
     >
       <div
-        className="flex items-center gap-4 p-4 bg-white rounded-2xl cursor-pointer transition-all"
-        style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}
+        className="flex items-center gap-4 p-4 cursor-pointer transition-all card-lift"
+        style={{
+          background: "#1A1A24",
+          borderRadius: "16px",
+          border: "1px solid #2E2E42",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+        }}
         onClick={() => onNavigate(group.id)}
         data-testid={`card-group-${group.id}`}
-        onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 8px 16px rgba(0,0,0,0.10)")}
-        onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.06)")}
       >
-        {/* Left: colored circle icon */}
+        {/* Icon */}
         <div
           className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
-          style={{ background: bgColor }}
+          style={{ background: colorSet.bg }}
         >
-          <Icon className="w-6 h-6" style={{ color: textColor }} />
+          <Icon className="w-6 h-6" style={{ color: colorSet.color }} />
         </div>
 
-        {/* Middle: name / description / members */}
+        {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <span className="font-bold text-[#1F2937] truncate" style={{ fontSize: "16px" }} data-testid={`text-group-name-${group.id}`}>
+            <span className="font-bold text-white truncate" style={{ fontSize: "15px" }} data-testid={`text-group-name-${group.id}`}>
               {group.name}
             </span>
-            {group.myRole === "owner" && <Crown className="w-3.5 h-3.5 text-[#F59E0B] shrink-0" />}
-            {group.myRole === "admin" && <Shield className="w-3.5 h-3.5 text-[#9CA3AF] shrink-0" />}
+            {group.myRole === "owner" && <Crown className="w-3.5 h-3.5 shrink-0" style={{ color: "#F59E0B" }} />}
+            {group.myRole === "admin" && <Shield className="w-3.5 h-3.5 shrink-0" style={{ color: "#9090A8" }} />}
           </div>
-          <p className="text-[#6B7280] text-sm truncate line-clamp-1 mb-1" style={{ fontSize: "13px" }} data-testid={`text-group-preview-${group.id}`}>
+          <p
+            className="truncate line-clamp-1 mb-1"
+            style={{ fontSize: "13px", color: "#9090A8" }}
+            data-testid={`text-group-preview-${group.id}`}
+          >
             {group.lastMessageContent
               ? `${group.lastMessageNickname || ""}: ${group.lastMessageContent}`
               : group.description}
           </p>
-          <div className="flex items-center gap-3 text-[#9CA3AF]" style={{ fontSize: "12px" }}>
+          <div className="flex items-center gap-3" style={{ fontSize: "12px", color: "#9090A8" }}>
             <div className="flex items-center gap-1">
               <Users className="w-3 h-3" />
               <span>{group.memberCount} members</span>
@@ -235,12 +270,12 @@ function GroupCard({ group, idx, onNavigate, isJoinCard = false }: {
           </div>
         </div>
 
-        {/* Right: CTA button or unread badge */}
+        {/* Right CTA / unread */}
         <div className="shrink-0 flex items-center gap-2">
           {group.unreadCount > 0 && (
             <span
               className="text-xs font-bold text-white rounded-full px-2 py-0.5 min-w-[20px] text-center"
-              style={{ background: "#7C3AED", fontSize: "10px" }}
+              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", fontSize: "10px" }}
               data-testid={`badge-unread-${group.id}`}
             >
               {group.unreadCount}
@@ -248,17 +283,22 @@ function GroupCard({ group, idx, onNavigate, isJoinCard = false }: {
           )}
           {isJoinCard ? (
             <button
-              className="text-sm font-semibold px-3 py-1.5 rounded-lg text-white btn-press"
-              style={{ background: "#7C3AED", border: "none", fontSize: "13px" }}
+              className="text-sm font-semibold px-3 py-1.5 text-white btn-press"
+              style={{
+                background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                border: "none",
+                fontSize: "13px",
+                borderRadius: "10px",
+              }}
             >
               {group.privacyMode === "request-to-join" ? "Request" : "Join"}
             </button>
           ) : (
             <div
               className="w-8 h-8 rounded-full flex items-center justify-center"
-              style={{ background: "#F3F4F6" }}
+              style={{ background: "#242433" }}
             >
-              <MessageCircle className="w-4 h-4 text-[#6B7280]" />
+              <MessageCircle className="w-4 h-4" style={{ color: "#9090A8" }} />
             </div>
           )}
         </div>
@@ -285,6 +325,17 @@ function CreateGroupDialog({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const inputStyle = {
+    background: "#1A1A24",
+    border: "1px solid #2E2E42",
+    borderRadius: "10px",
+    color: "#FFFFFF",
+    padding: "10px 14px",
+    fontSize: "14px",
+    width: "100%",
+    outline: "none",
+  };
+
   return (
     <DialogContent>
       <DialogHeader>
@@ -293,25 +344,27 @@ function CreateGroupDialog({ onClose }: { onClose: () => void }) {
       </DialogHeader>
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-medium mb-1 block text-[#1F2937]">Group Name</label>
-          <Input
+          <label className="text-sm font-medium mb-1 block" style={{ color: "#9090A8" }}>Group Name</label>
+          <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g., Photography Enthusiasts"
+            style={inputStyle}
             data-testid="input-group-name"
           />
         </div>
         <div>
-          <label className="text-sm font-medium mb-1 block text-[#1F2937]">Description</label>
-          <Input
+          <label className="text-sm font-medium mb-1 block" style={{ color: "#9090A8" }}>Description</label>
+          <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What's this group about?"
+            style={inputStyle}
             data-testid="input-group-description"
           />
         </div>
         <div>
-          <label className="text-sm font-medium mb-1 block text-[#1F2937]">Privacy</label>
+          <label className="text-sm font-medium mb-1 block" style={{ color: "#9090A8" }}>Privacy</label>
           <Select value={privacyMode} onValueChange={setPrivacyMode}>
             <SelectTrigger data-testid="select-privacy">
               <SelectValue />
@@ -327,15 +380,20 @@ function CreateGroupDialog({ onClose }: { onClose: () => void }) {
       <DialogFooter>
         <button
           onClick={onClose}
-          className="px-4 py-2 rounded-lg border text-[#374151] text-sm font-medium hover:bg-[#F3F4F6] transition-colors"
+          className="px-4 py-2 text-sm font-medium transition-colors"
+          style={{ borderRadius: "10px", border: "1px solid #2E2E42", color: "#9090A8", background: "transparent" }}
         >
           Cancel
         </button>
         <button
           onClick={handleCreate}
           disabled={!name.trim() || createGroup.isPending}
-          className="px-4 py-2 rounded-lg text-white text-sm font-semibold btn-press disabled:opacity-50"
-          style={{ background: "#7C3AED", border: "none" }}
+          className="px-4 py-2 text-sm font-semibold text-white btn-press disabled:opacity-50"
+          style={{
+            background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+            border: "none",
+            borderRadius: "10px",
+          }}
           data-testid="button-submit-group"
         >
           {createGroup.isPending ? <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> : null}

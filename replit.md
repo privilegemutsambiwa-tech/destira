@@ -3,6 +3,17 @@
 ## Overview
 VibeFlow is a personality-first dating platform that uses AI Twins to facilitate meaningful connections. Instead of swiping on photos, users complete a "Soul-Mapping" questionnaire, which generates an AI Twin persona that represents them in conversations with potential matches.
 
+## Design System (Dark Mode)
+Always-dark UI. No light/dark toggle. Key tokens:
+- **Background**: #0F0F14 | **Card surface**: #1A1A24 | **Elevated**: #242433 | **Border**: #2E2E42
+- **Text primary**: #FFFFFF | **Text muted**: #9090A8
+- **Gradient accent**: linear-gradient(135deg, #7C3AED, #EC4899)
+- **Card radius**: 20px | **Button radius**: 14px | **Pill/tag radius**: 100px
+- **Font**: Inter (Google Fonts), 700 -0.5px letter-spacing for headings
+- **Card shadow**: 0 8px 32px rgba(0,0,0,0.4) | **Button glow**: 0 4px 20px rgba(124,58,237,0.4)
+- **Bottom nav**: 64px tall, #0F0F14 bg, top border #2E2E42, 2px gradient underline active indicator
+- **Story rings**: animated conic-gradient border via `.story-ring-active` CSS class
+
 ## Architecture
 - **Frontend**: React + Vite + TypeScript, wouter routing, TanStack Query, shadcn/ui, Tailwind CSS, Framer Motion
 - **Backend**: Express.js + TypeScript

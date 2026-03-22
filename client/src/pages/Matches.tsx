@@ -1,9 +1,10 @@
 import { LayoutShell } from "@/components/layout-shell";
 import { useIncomingLikes, useLikeBack, useRespondToMatch } from "@/hooks/use-interactions";
-import { Button } from "@/components/ui/button";
 import { Heart, Crown, Check, X, Search, Loader2, Lock, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+
+type TabType = "liked-you" | "you-liked" | "matches";
 
 export default function Matches() {
   const { data, isLoading } = useIncomingLikes();
@@ -17,10 +18,10 @@ export default function Matches() {
     <LayoutShell>
       {/* Header */}
       <div className="mb-6">
-        <h1 className="font-display font-bold text-[#1F2937]" style={{ fontSize: "28px" }} data-testid="text-likes-title">
+        <h1 className="font-bold text-white" style={{ fontSize: "28px", letterSpacing: "-0.5px" }} data-testid="text-likes-title">
           Likes
         </h1>
-        <p className="text-[#6B7280] mt-1" style={{ fontSize: "14px" }} data-testid="text-likes-count">
+        <p className="mt-1" style={{ fontSize: "14px", color: "#9090A8" }} data-testid="text-likes-count">
           {totalCount > 0 ? `${totalCount} people liked you` : "No likes yet"}
         </p>
       </div>
@@ -53,21 +54,31 @@ function UpgradeBanner() {
 
   return (
     <div
-      className="mb-6 rounded-2xl p-5 text-white"
-      style={{ background: "linear-gradient(135deg, #EC4899, #7C3AED)" }}
+      className="mb-6 p-5 text-white"
+      style={{
+        background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+        borderRadius: "20px",
+        boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
+      }}
       data-testid="card-upgrade-banner"
     >
       <div className="flex items-start gap-3">
         <Crown className="w-7 h-7 shrink-0 mt-0.5" />
         <div className="flex-1">
           <h2 className="font-bold mb-1" style={{ fontSize: "16px" }}>See who likes you</h2>
-          <p className="text-white/85 mb-4" style={{ fontSize: "13px" }}>
+          <p className="mb-4" style={{ fontSize: "13px", color: "rgba(255,255,255,0.85)" }}>
             Upgrade to Plus or VIP to see clear photos and names of people who liked you
           </p>
           <button
             onClick={() => setLocation("/upgrade")}
-            className="btn-press font-semibold px-4 py-2 rounded-lg bg-white"
-            style={{ color: "#7C3AED", fontSize: "14px" }}
+            className="btn-press font-semibold px-4 py-2"
+            style={{
+              background: "rgba(255,255,255,0.95)",
+              color: "#7C3AED",
+              fontSize: "14px",
+              borderRadius: "10px",
+              border: "none",
+            }}
             data-testid="button-upgrade-now"
           >
             <Sparkles className="w-4 h-4 inline mr-1" />
@@ -111,29 +122,34 @@ function LikeCard({ like, isBlurred }: { like: any; isBlurred: boolean }) {
   if (isBlurred) {
     return (
       <div
-        className="relative cursor-pointer overflow-hidden rounded-xl"
+        className="relative cursor-pointer overflow-hidden"
         onClick={() => setLocation("/upgrade")}
-        style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.08)", aspectRatio: "1/1" }}
+        style={{ borderRadius: "16px", aspectRatio: "1/1", boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}
         data-testid={`card-like-blurred-${like.id}`}
       >
-        {/* Square image */}
         <div className="absolute inset-0" style={{ filter: "blur(10px)" }}>
           {photoUrl ? (
             <img src={photoUrl} alt="Blurred" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full gradient-bg" />
+            <div
+              className="w-full h-full"
+              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
+            />
           )}
         </div>
-        {/* Lock overlay */}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-          <div className="bg-white/90 rounded-lg px-3 py-1.5 flex items-center gap-1">
-            <Lock className="w-3 h-3 text-[#7C3AED]" />
-            <span className="text-[#7C3AED] font-semibold text-xs">Unlock</span>
+        <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.25)" }}>
+          <div
+            className="px-3 py-1.5 flex items-center gap-1"
+            style={{ background: "rgba(255,255,255,0.95)", borderRadius: "10px" }}
+          >
+            <Lock className="w-3 h-3" style={{ color: "#7C3AED" }} />
+            <span className="font-semibold text-xs" style={{ color: "#7C3AED" }}>Unlock</span>
           </div>
         </div>
-        {/* Name overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-2"
-          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)" }}>
+        <div
+          className="absolute bottom-0 left-0 right-0 p-2"
+          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.75), transparent)" }}
+        >
           <p className="text-white font-bold text-sm">???</p>
         </div>
       </div>
@@ -142,40 +158,40 @@ function LikeCard({ like, isBlurred }: { like: any; isBlurred: boolean }) {
 
   return (
     <div
-      className="relative overflow-hidden rounded-xl"
-      style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.08)", aspectRatio: "1/1" }}
+      className="relative overflow-hidden"
+      style={{ borderRadius: "16px", aspectRatio: "1/1", boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}
       data-testid={`card-like-${like.id}`}
     >
-      {/* Square image */}
       {photoUrl ? (
         <img src={photoUrl} alt={displayName} className="w-full h-full object-cover" />
       ) : (
-        <div className="w-full h-full gradient-bg flex items-center justify-center">
-          <span className="text-5xl font-display font-bold text-white/30">{displayName[0]}</span>
+        <div
+          className="w-full h-full flex items-center justify-center"
+          style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
+        >
+          <span className="font-bold text-white/30" style={{ fontSize: "48px" }}>{displayName[0]}</span>
         </div>
       )}
 
-      {/* Gradient overlay */}
       <div
         className="absolute inset-0"
-        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.65) 30%, transparent 70%)" }}
+        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7) 30%, transparent 70%)" }}
       />
 
-      {/* Name bottom-left, age bottom-right */}
       <div className="absolute bottom-0 left-0 right-0 p-3 flex items-end justify-between">
         <p className="text-white font-bold text-sm leading-tight" data-testid={`text-name-${like.id}`}>
           {displayName}
         </p>
         {age && (
-          <p className="text-white/75 text-xs">{age}</p>
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>{age}</p>
         )}
       </div>
 
-      {/* Accept/Decline buttons */}
+      {/* Accept / Decline */}
       <div className="absolute top-2 right-2 flex gap-1">
         <button
           className="w-8 h-8 rounded-full flex items-center justify-center btn-press"
-          style={{ background: "#DCF5E5", color: "#059669" }}
+          style={{ background: "rgba(34,197,94,0.2)", color: "#22C55E", border: "1px solid rgba(34,197,94,0.4)" }}
           onClick={handleAccept}
           disabled={likeBack.isPending}
           data-testid={`button-accept-${like.id}`}
@@ -184,7 +200,7 @@ function LikeCard({ like, isBlurred }: { like: any; isBlurred: boolean }) {
         </button>
         <button
           className="w-8 h-8 rounded-full flex items-center justify-center btn-press"
-          style={{ background: "#FEE2E2", color: "#EF4444" }}
+          style={{ background: "rgba(239,68,68,0.2)", color: "#EF4444", border: "1px solid rgba(239,68,68,0.4)" }}
           onClick={handleDecline}
           disabled={respondToMatch.isPending}
           data-testid={`button-decline-${like.id}`}
@@ -203,20 +219,27 @@ function EmptyState() {
     <div className="text-center py-20 px-6">
       <div
         className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
-        style={{ background: "#FCE7F3" }}
+        style={{ background: "rgba(236,72,153,0.15)" }}
       >
         <Heart className="w-10 h-10" style={{ color: "#EC4899" }} />
       </div>
-      <h3 className="font-display font-bold mb-2 text-[#1F2937]" style={{ fontSize: "22px" }} data-testid="text-empty-title">
+      <h3 className="font-bold mb-2 text-white" style={{ fontSize: "22px" }} data-testid="text-empty-title">
         No likes yet
       </h3>
-      <p className="text-[#6B7280] max-w-xs mx-auto mb-8" style={{ fontSize: "15px" }}>
+      <p className="max-w-xs mx-auto mb-8" style={{ fontSize: "15px", color: "#9090A8" }}>
         Keep exploring! Your perfect match is out there.
       </p>
       <button
         onClick={() => setLocation("/discover")}
-        className="font-semibold btn-press px-8 py-3 rounded-lg text-white"
-        style={{ background: "#7C3AED", height: "48px", fontSize: "15px", borderRadius: "8px", border: "none" }}
+        className="font-semibold btn-press px-8 py-3 text-white"
+        style={{
+          background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+          height: "48px",
+          fontSize: "15px",
+          borderRadius: "14px",
+          border: "none",
+          boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
+        }}
         data-testid="button-discover"
       >
         <Search className="w-4 h-4 inline mr-2" />
