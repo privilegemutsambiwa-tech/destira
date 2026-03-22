@@ -111,11 +111,24 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/callback", (req, res, next) => {
+    console.log("[CALLBACK HIT] hostname:", req.hostname, "sessionID:", (req as any).sessionID, "session keys:", Object.keys((req as any).session || {}));
     ensureStrategy(req.hostname);
     passport.authenticate(`replitauth:${req.hostname}`, {
       successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
+      failureRedirect: "/api/auth-debug",
     })(req, res, next);
+  });
+
+  app.get("/api/auth-debug", (req: any, res) => {
+    const sessionData = req.session ? JSON.stringify(req.session, null, 2) : "no session";
+    console.log("[AUTH DEBUG] session:", sessionData);
+    res.status(200).send(`<html><body>
+      <h2>Auth Callback Failed</h2>
+      <p><b>Session ID:</b> ${req.sessionID || "none"}</p>
+      <p><b>Session Data:</b><pre>${sessionData}</pre></p>
+      <p><b>Query Params:</b><pre>${JSON.stringify(req.query, null, 2)}</pre></p>
+      <a href="/api/login">Try Again</a>
+    </body></html>`);
   });
 
   app.get("/api/logout", (req, res) => {
