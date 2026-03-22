@@ -289,10 +289,20 @@
   50% { box-shadow: 0 0 0 12px rgba(124, 58, 237, 0); }
 }
 
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .btn-press:active { transform: none; }
   .story-ring-active { animation: none; }
   .fade-slide-in { animation: none; opacity: 1; transform: none; }
   .card-lift:hover { transform: none; }
+  .animate-float { animation: none; }
 }
