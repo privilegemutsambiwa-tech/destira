@@ -262,27 +262,27 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
         </div>
 
         <div className="flex items-center justify-center gap-5 py-5 mt-2">
-          {canAddMembers && (
-            <button
-              className="flex flex-col items-center gap-1.5 btn-press"
-              onClick={handleCreateInvite}
-              data-testid="button-action-add-members"
+          <button
+            className="flex flex-col items-center gap-1.5 btn-press"
+            onClick={canAddMembers ? handleCreateInvite : undefined}
+            disabled={!canAddMembers}
+            data-testid="button-action-add-members"
+            style={{ opacity: canAddMembers ? 1 : 0.4 }}
+          >
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: "52px",
+                height: "52px",
+                borderRadius: "50%",
+                background: "#1A1A24",
+                border: "1px solid #2E2E42",
+              }}
             >
-              <div
-                className="flex items-center justify-center"
-                style={{
-                  width: "52px",
-                  height: "52px",
-                  borderRadius: "50%",
-                  background: "#1A1A24",
-                  border: "1px solid #2E2E42",
-                }}
-              >
-                <UserPlus className="w-5 h-5 text-white" />
-              </div>
-              <span style={{ fontSize: "11px", color: "#9090A8", fontWeight: 500 }}>Add</span>
-            </button>
-          )}
+              <UserPlus className="w-5 h-5 text-white" />
+            </div>
+            <span style={{ fontSize: "11px", color: "#9090A8", fontWeight: 500 }}>Add</span>
+          </button>
           <button
             className="flex flex-col items-center gap-1.5 btn-press"
             onClick={() => toast({ title: "Search coming soon" })}
