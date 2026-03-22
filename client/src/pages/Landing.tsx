@@ -1,3 +1,4 @@
+import type React from "react";
 import { Brain, Heart, Shield, AlertTriangle, MapPin, Star } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRef, useEffect, useState } from "react";
@@ -48,8 +49,15 @@ function useCountUp(target: number, duration: number = 1800) {
   return { count, ref };
 }
 
-function StatItem({ value, suffix, label }: { value: number; suffix: string; label: string }) {
-  const { count, ref } = useCountUp(value);
+function compactFormat(n: number): string {
+  if (n >= 1_000_000) return `${Math.floor(n / 100_000) / 10}M+`;
+  if (n >= 1_000) return `${Math.floor(n / 1_000)}K+`;
+  return `${n}`;
+}
+
+function StatItem({ target, suffix, label }: { target: number; suffix: string; label: string }) {
+  const { count, ref } = useCountUp(target);
+  const display = suffix === "%" ? `${count}%` : compactFormat(count);
   return (
     <div ref={ref} className="text-center" data-testid={`stat-${label.toLowerCase().replace(/\s+/g, "-")}`}>
       <p
@@ -63,7 +71,7 @@ function StatItem({ value, suffix, label }: { value: number; suffix: string; lab
           backgroundClip: "text",
         }}
       >
-        {count.toLocaleString()}{suffix}
+        {display}
       </p>
       <p className="mt-1" style={{ fontSize: "13px", color: "#9090A8" }}>{label}</p>
     </div>
@@ -75,7 +83,7 @@ function FeatureCard({
   title,
   description,
 }: {
-  icon: any;
+  icon: React.ComponentType<{ className?: string; size?: number }>;
   title: string;
   description: string;
 }) {
@@ -343,9 +351,9 @@ export default function Landing() {
         data-testid="section-stats"
       >
         <div className="max-w-2xl mx-auto grid grid-cols-3 gap-6">
-          <StatItem value={50} suffix="K+" label="Active Users" />
-          <StatItem value={89} suffix="%" label="Match Satisfaction" />
-          <StatItem value={2} suffix="M+" label="Conversations Started" />
+          <StatItem target={50_000} suffix="K+" label="Active Users" />
+          <StatItem target={89} suffix="%" label="Match Satisfaction" />
+          <StatItem target={2_000_000} suffix="M+" label="Conversations Started" />
         </div>
       </section>
 
