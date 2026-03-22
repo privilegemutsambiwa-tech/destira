@@ -24,7 +24,7 @@ function StoriesCarousel() {
     return Object.values(byUser);
   }, [stories]);
 
-  const STORY_SIZE = 60;
+  const STORY_SIZE = 56;
 
   return (
     <>

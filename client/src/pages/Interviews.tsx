@@ -2,7 +2,6 @@ import { useState, useMemo } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { useChatThreads } from "@/hooks/use-interactions";
 import { useProfile } from "@/hooks/use-profiles";
-import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Link, useLocation } from "wouter";
 import { Loader2, Search, Brain, Shield, MessageCircle, ArrowRight } from "lucide-react";

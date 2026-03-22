@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { Brain, Heart, Shield, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 
