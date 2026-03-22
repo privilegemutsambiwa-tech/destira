@@ -31,7 +31,7 @@ const SECTION_HEADER_STYLE: React.CSSProperties = {
 };
 
 function ToggleRow({ icon: Icon, label, value, onChange, testId }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   label: string;
   value: boolean;
   onChange: (v: boolean) => void;
@@ -70,7 +70,7 @@ function ToggleRow({ icon: Icon, label, value, onChange, testId }: {
 }
 
 function ChevronRow({ icon: Icon, label, sublabel, onClick, destructive, testId }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   label: string;
   sublabel?: string;
   onClick: () => void;

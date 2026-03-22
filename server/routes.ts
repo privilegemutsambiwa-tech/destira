@@ -2079,7 +2079,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (!textContent?.trim()) return res.status(400).json({ message: "textContent is required" });
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       const story = await storage.createStory(userId, expiresAt);
-      await storage.addStoryMedia(story.id, "text", "", caption || "", textContent.trim());
+      await storage.addStoryMedia(story.id, "text", null, caption || undefined, textContent.trim());
       const media = await storage.getStoryMedia(story.id);
       res.json({ ...story, media });
     } catch (e) {
