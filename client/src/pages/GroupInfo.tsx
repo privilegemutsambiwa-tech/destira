@@ -2,12 +2,8 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
@@ -17,7 +13,7 @@ import {
 import {
   ArrowLeft, Crown, Shield, Loader2, Users, Globe, Lock, UserPlus,
   Link2, Copy, Check, X, Trash2, Pencil, Image as ImageIcon, Star,
-  Search, BellOff, Settings, ChevronRight
+  Search, BellOff, Settings, ChevronRight, Share2
 } from "lucide-react";
 import {
   useGroup, useGroupMembers, useGroupMedia, useUpdateGroup,
@@ -164,8 +160,8 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
 
   if (groupLoading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="h-screen flex items-center justify-center" style={{ background: "#0F0F14" }}>
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: "#7C3AED" }} />
       </div>
     );
   }
@@ -176,109 +172,226 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   const canAddMembers = isAdmin || group?.canMembersAddOthers;
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      <div className="border-b px-4 py-3 flex items-center gap-3 sticky top-0 z-50 bg-background">
-        <Button variant="ghost" size="icon" onClick={() => setLocation(`/lounge/group/${groupId}`)} data-testid="button-back-chat">
+    <div className="h-screen flex flex-col" style={{ background: "#0F0F14" }}>
+      {/* Dark header */}
+      <div
+        className="px-4 py-3 flex items-center gap-3 sticky top-0 z-50"
+        style={{ background: "#1A1A24", borderBottom: "1px solid #2E2E42" }}
+      >
+        <button
+          onClick={() => setLocation(`/lounge/group/${groupId}`)}
+          className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
+          style={{ color: "#FFFFFF", background: "transparent" }}
+          data-testid="button-back-chat"
+        >
           <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <h2 className="font-bold text-sm">Group Info</h2>
+        </button>
+        <h2 className="font-bold text-white" style={{ fontSize: "15px" }}>Group Info</h2>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col items-center p-6 gap-3">
-          {group?.groupPhotoUrl ? (
-            <img src={group.groupPhotoUrl} alt={group.name} className="w-24 h-24 rounded-full object-cover" data-testid="img-group-photo" />
-          ) : (
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary/60 to-primary flex items-center justify-center" data-testid="placeholder-group-photo">
-              <Users className="w-10 h-10 text-primary-foreground" />
+        {/* 160px gradient banner */}
+        <div className="relative">
+          <div
+            style={{
+              height: "160px",
+              background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+              position: "relative",
+            }}
+          >
+            {group?.groupPhotoUrl && (
+              <img
+                src={group.groupPhotoUrl}
+                alt={group.name}
+                className="w-full h-full object-cover"
+              />
+            )}
+          </div>
+          {/* 64px icon overlapping banner bottom by 32px */}
+          <div className="flex flex-col items-center">
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: "64px",
+                height: "64px",
+                borderRadius: "50%",
+                border: "3px solid #0F0F14",
+                background: "#242433",
+                marginTop: "-32px",
+                zIndex: 10,
+                overflow: "hidden",
+              }}
+              data-testid="placeholder-group-photo"
+            >
+              {group?.groupPhotoUrl ? (
+                <img src={group.groupPhotoUrl} alt={group.name} className="w-full h-full object-cover" data-testid="img-group-photo" />
+              ) : (
+                <Users className="w-8 h-8" style={{ color: "#9090A8" }} />
+              )}
             </div>
-          )}
-          <h2 className="font-bold text-xl text-center" data-testid="text-group-info-name">{group?.name}</h2>
-          <p className="text-sm text-muted-foreground text-center" data-testid="text-group-subtitle">
-            {group?.memberCount || sortedMembers.length} Members {privacy.label !== "Open" ? `- ${privacy.label}` : ""}
-          </p>
-          {group?.categoryTags && group.categoryTags.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap justify-center">
-              {group.categoryTags.map((tag: string) => (
-                <Badge key={tag} variant="secondary" className="text-xs" data-testid={`tag-${tag}`}>{tag}</Badge>
-              ))}
-            </div>
-          )}
+
+            <h2
+              className="font-bold text-white text-center mt-3"
+              style={{ fontSize: "22px", letterSpacing: "-0.5px" }}
+              data-testid="text-group-info-name"
+            >
+              {group?.name}
+            </h2>
+            <p className="text-center mt-0.5" style={{ fontSize: "13px", color: "#9090A8" }} data-testid="text-group-subtitle">
+              {group?.memberCount || sortedMembers.length} Members{privacy.label !== "Open" ? ` · ${privacy.label}` : ""}
+            </p>
+
+            {group?.categoryTags && group.categoryTags.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap justify-center mt-2">
+                {group.categoryTags.map((tag: string) => (
+                  <span
+                    key={tag}
+                    style={{
+                      background: "rgba(124,58,237,0.15)",
+                      color: "#A78BFA",
+                      fontSize: "12px",
+                      padding: "3px 10px",
+                      borderRadius: "100px",
+                      border: "1px solid rgba(124,58,237,0.3)",
+                    }}
+                    data-testid={`tag-${tag}`}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center justify-center gap-6 pb-4">
+        {/* 4-button action row — 52px circles, #1A1A24 bg, #2E2E42 border */}
+        <div className="flex items-center justify-center gap-5 py-5 mt-2">
           {canAddMembers && (
             <button
-              className="flex flex-col items-center gap-1 text-primary"
+              className="flex flex-col items-center gap-1.5 btn-press"
               onClick={handleCreateInvite}
               data-testid="button-action-add-members"
             >
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <UserPlus className="w-5 h-5" />
+              <div
+                className="flex items-center justify-center"
+                style={{
+                  width: "52px",
+                  height: "52px",
+                  borderRadius: "50%",
+                  background: "#1A1A24",
+                  border: "1px solid #2E2E42",
+                }}
+              >
+                <UserPlus className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xs font-medium">Add</span>
+              <span style={{ fontSize: "11px", color: "#9090A8", fontWeight: 500 }}>Add</span>
             </button>
           )}
           <button
-            className="flex flex-col items-center gap-1 text-primary"
+            className="flex flex-col items-center gap-1.5 btn-press"
             onClick={() => toast({ title: "Search coming soon" })}
             data-testid="button-action-search"
           >
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <Search className="w-5 h-5" />
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: "52px",
+                height: "52px",
+                borderRadius: "50%",
+                background: "#1A1A24",
+                border: "1px solid #2E2E42",
+              }}
+            >
+              <Search className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xs font-medium">Search</span>
+            <span style={{ fontSize: "11px", color: "#9090A8", fontWeight: 500 }}>Search</span>
           </button>
           <button
-            className="flex flex-col items-center gap-1 text-primary"
+            className="flex flex-col items-center gap-1.5 btn-press"
             onClick={() => toast({ title: "Mute coming soon" })}
             data-testid="button-action-mute"
           >
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <BellOff className="w-5 h-5" />
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: "52px",
+                height: "52px",
+                borderRadius: "50%",
+                background: "#1A1A24",
+                border: "1px solid #2E2E42",
+              }}
+            >
+              <BellOff className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xs font-medium">Mute</span>
+            <span style={{ fontSize: "11px", color: "#9090A8", fontWeight: 500 }}>Mute</span>
+          </button>
+          <button
+            className="flex flex-col items-center gap-1.5 btn-press"
+            onClick={() => toast({ title: "Share coming soon" })}
+            data-testid="button-action-share"
+          >
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: "52px",
+                height: "52px",
+                borderRadius: "50%",
+                background: "#1A1A24",
+                border: "1px solid #2E2E42",
+              }}
+            >
+              <Share2 className="w-5 h-5 text-white" />
+            </div>
+            <span style={{ fontSize: "11px", color: "#9090A8", fontWeight: 500 }}>Share</span>
           </button>
         </div>
 
-        <div className="px-4 pb-4 space-y-4 max-w-lg mx-auto">
+        <div className="px-4 pb-4 space-y-3 max-w-lg mx-auto">
+          {/* Description / Rules card */}
           {(group?.description || group?.rulesText || isAdmin) && (
-            <Card>
-              <CardContent className="p-4 space-y-3">
-                {group?.description && (
-                  <p className="text-sm" data-testid="text-group-description">{group.description}</p>
-                )}
-                {(group?.description && (group?.rulesText || isAdmin)) && <Separator />}
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-1">Group Rules</p>
-                  <p className="text-sm" data-testid="text-group-rules">
-                    {group?.rulesText || "No rules set"}
-                  </p>
-                </div>
-                {isAdmin && (
-                  <Button variant="ghost" size="sm" onClick={openEditDescDialog} data-testid="button-edit-desc-rules">
-                    <Pencil className="w-3.5 h-3.5 mr-1.5" /> Edit
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
+            <div
+              style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px", padding: "16px" }}
+              data-testid="card-group-info"
+            >
+              {group?.description && (
+                <p className="text-sm text-white mb-3" data-testid="text-group-description">{group.description}</p>
+              )}
+              {(group?.description && (group?.rulesText || isAdmin)) && (
+                <div className="my-3" style={{ height: "1px", background: "#2E2E42" }} />
+              )}
+              <p className="font-semibold mb-1" style={{ fontSize: "11px", color: "#9090A8", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                Group Rules
+              </p>
+              <p className="text-sm text-white/80" data-testid="text-group-rules">
+                {group?.rulesText || "No rules set"}
+              </p>
+              {isAdmin && (
+                <button
+                  onClick={openEditDescDialog}
+                  className="mt-3 flex items-center gap-1.5 text-sm btn-press font-medium"
+                  style={{ color: "#A78BFA", background: "transparent", border: "none" }}
+                  data-testid="button-edit-desc-rules"
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Edit
+                </button>
+              )}
+            </div>
           )}
 
-          <Card className="hover-elevate cursor-pointer" onClick={() => setMediaExpanded(!mediaExpanded)} data-testid="card-media">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <ImageIcon className="w-5 h-5 text-muted-foreground" />
-                  <span className="text-sm font-medium">{mediaCount} Media</span>
-                </div>
-                <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${mediaExpanded ? "rotate-90" : ""}`} />
-              </div>
-              {mediaExpanded && (
-                <div className="mt-3">
+          {/* Section rows — Media | Starred | Members — #1A1A24, #2E2E42 border, 12px radius, 52px height */}
+          {[
+            {
+              icon: <ImageIcon className="w-5 h-5" />,
+              label: `${mediaCount} Media`,
+              testId: "card-media",
+              onClick: () => setMediaExpanded(!mediaExpanded),
+              expanded: mediaExpanded,
+              content: mediaExpanded ? (
+                <div className="mt-3 px-1">
                   {mediaCount > 0 ? (
                     <div className="grid grid-cols-3 gap-2">
                       {media!.map((item: any, idx: number) => (
-                        <div key={idx} className="aspect-square rounded-md overflow-hidden bg-muted" data-testid={`media-${idx}`}>
+                        <div key={idx} className="aspect-square rounded-lg overflow-hidden" style={{ background: "#242433" }} data-testid={`media-${idx}`}>
                           {item.contentType === "video" ? (
                             <video src={item.mediaUrl} className="w-full h-full object-cover" />
                           ) : (
@@ -288,84 +401,217 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No shared media yet</p>
+                    <p className="text-sm" style={{ color: "#9090A8" }}>No shared media yet</p>
                   )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="hover-elevate cursor-pointer" onClick={() => setStarredExpanded(!starredExpanded)} data-testid="card-starred">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <Star className="w-5 h-5 text-muted-foreground" />
-                  <span className="text-sm font-medium">Starred Messages ({starredCount})</span>
-                </div>
-                <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${starredExpanded ? "rotate-90" : ""}`} />
-              </div>
-              {starredExpanded && (
-                <div className="mt-3 space-y-2">
+              ) : null,
+            },
+            {
+              icon: <Star className="w-5 h-5" />,
+              label: `Starred Messages (${starredCount})`,
+              testId: "card-starred",
+              onClick: () => setStarredExpanded(!starredExpanded),
+              expanded: starredExpanded,
+              content: starredExpanded ? (
+                <div className="mt-3 space-y-2 px-1">
                   {starredCount > 0 ? (
                     starredMessages!.map((msg: any) => (
-                      <div key={msg.id} className="rounded-md bg-muted p-3" data-testid={`starred-msg-${msg.id}`}>
+                      <div key={msg.id} className="rounded-lg p-3" style={{ background: "#242433" }} data-testid={`starred-msg-${msg.id}`}>
                         <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="text-xs font-semibold">{msg.nickname || "Unknown"}</span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs font-semibold text-white">{msg.nickname || "Unknown"}</span>
+                          <span className="text-xs" style={{ color: "#9090A8" }}>
                             {msg.createdAt ? new Date(msg.createdAt).toLocaleDateString() : ""}
                           </span>
                         </div>
-                        <p className="text-sm text-muted-foreground line-clamp-2">{msg.content}</p>
+                        <p className="text-sm line-clamp-2" style={{ color: "#9090A8" }}>{msg.content}</p>
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-muted-foreground">No starred messages</p>
+                    <p className="text-sm" style={{ color: "#9090A8" }}>No starred messages</p>
                   )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              ) : null,
+            },
+          ].map((row) => (
+            <button
+              key={row.testId}
+              onClick={row.onClick}
+              className="w-full text-left"
+              style={{
+                background: "#1A1A24",
+                border: "1px solid #2E2E42",
+                borderRadius: "12px",
+                padding: "0 16px",
+              }}
+              data-testid={row.testId}
+            >
+              <div className="flex items-center justify-between gap-2" style={{ height: "52px" }}>
+                <div className="flex items-center gap-3">
+                  <span style={{ color: "#9090A8" }}>{row.icon}</span>
+                  <span className="text-sm font-medium text-white">{row.label}</span>
+                </div>
+                <ChevronRight
+                  className="w-4 h-4 transition-transform"
+                  style={{ color: "#9090A8", transform: row.expanded ? "rotate(90deg)" : "rotate(0deg)" }}
+                />
+              </div>
+              {row.content}
+            </button>
+          ))}
 
+          {/* Members card */}
+          <div
+            style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px" }}
+            data-testid="card-members"
+          >
+            <div
+              className="flex items-center gap-3 px-4"
+              style={{ height: "52px", borderBottom: sortedMembers.length > 0 ? "1px solid #2E2E42" : "none" }}
+            >
+              <Users className="w-5 h-5" style={{ color: "#9090A8" }} />
+              <span className="text-sm font-medium text-white">Members ({sortedMembers.length})</span>
+            </div>
+            <div className="divide-y" style={{ borderColor: "#2E2E42" }}>
+              {sortedMembers.map((member: any) => (
+                <div key={member.id} className="flex items-center justify-between gap-2 px-4 py-3" data-testid={`member-${member.id}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold text-white"
+                      style={{ background: "#242433", border: "1px solid #2E2E42" }}
+                    >
+                      {member.nickname?.[0]?.toUpperCase() || "?"}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium text-white truncate">{member.nickname || "Anonymous"}</p>
+                        {member.role === "owner" && <Crown className="w-3.5 h-3.5 shrink-0" style={{ color: "#F59E0B" }} />}
+                        {member.role === "admin" && <Shield className="w-3.5 h-3.5 shrink-0" style={{ color: "#60A5FA" }} />}
+                      </div>
+                      <span className="text-xs capitalize" style={{ color: "#9090A8" }}>{member.role}</span>
+                    </div>
+                  </div>
+                  {isOwner && member.userId !== user?.id && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {member.role === "member" && (
+                        <button
+                          onClick={() => handlePromote(member.userId, "admin")}
+                          className="px-2 py-1 text-xs rounded btn-press"
+                          style={{ background: "#242433", color: "#FFFFFF", border: "1px solid #2E2E42" }}
+                          data-testid={`button-promote-${member.id}`}
+                        >
+                          <Shield className="w-3 h-3 inline mr-1" />Admin
+                        </button>
+                      )}
+                      {member.role === "admin" && (
+                        <button
+                          onClick={() => handlePromote(member.userId, "member")}
+                          className="px-2 py-1 text-xs rounded btn-press"
+                          style={{ background: "#242433", color: "#FFFFFF", border: "1px solid #2E2E42" }}
+                          data-testid={`button-demote-${member.id}`}
+                        >
+                          Demote
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleRemove(member.userId)}
+                        className="w-7 h-7 rounded-full flex items-center justify-center btn-press"
+                        style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)" }}
+                        data-testid={`button-remove-${member.id}`}
+                      >
+                        <X className="w-4 h-4" style={{ color: "#EF4444" }} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Admin: Invite links */}
           {isAdmin && (
-            <Card data-testid="card-group-settings">
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Settings className="w-4 h-4" /> Group Settings
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-2 space-y-4">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-sm">Members can send messages</label>
-                  <Switch
-                    checked={group?.canMembersSendMessages ?? true}
-                    onCheckedChange={(v) => handleSettingToggle("canMembersSendMessages", v)}
-                    data-testid="switch-send-messages"
-                  />
+            <div
+              style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px", padding: "16px" }}
+              data-testid="card-invite-links"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Link2 className="w-4 h-4" style={{ color: "#9090A8" }} />
+                <span className="text-sm font-medium text-white">Invite Links</span>
+              </div>
+              <button
+                onClick={handleCreateInvite}
+                disabled={createInvite.isPending}
+                className="w-full flex items-center justify-center gap-2 text-sm font-medium btn-press"
+                style={{
+                  height: "40px",
+                  borderRadius: "10px",
+                  background: "#242433",
+                  border: "1px solid #2E2E42",
+                  color: "#FFFFFF",
+                }}
+                data-testid="button-create-invite"
+              >
+                {createInvite.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                Generate Invite Link
+              </button>
+              {inviteLinks && inviteLinks.filter((l: any) => l.isActive).length > 0 && (
+                <div className="space-y-2 mt-3">
+                  {inviteLinks.filter((l: any) => l.isActive).map((link: any) => (
+                    <div key={link.id} className="flex items-center gap-2">
+                      <input
+                        value={`${window.location.origin}/join/${link.token}`}
+                        readOnly
+                        className="text-xs flex-1 px-3 py-2 outline-none"
+                        style={{ background: "#242433", border: "1px solid #2E2E42", borderRadius: "8px", color: "#9090A8" }}
+                        data-testid={`input-invite-${link.id}`}
+                      />
+                      <button
+                        onClick={() => handleCopyLink(link.token)}
+                        className="w-9 h-9 flex items-center justify-center rounded-lg btn-press"
+                        style={{ background: "#242433", border: "1px solid #2E2E42", color: "#FFFFFF" }}
+                        data-testid={`button-copy-invite-${link.id}`}
+                      >
+                        {copiedLink === link.token ? <Check className="w-4 h-4" style={{ color: "#22C55E" }} /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  ))}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Admin: Group settings */}
+          {isAdmin && (
+            <div
+              style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px", padding: "16px" }}
+              data-testid="card-group-settings"
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <Settings className="w-4 h-4" style={{ color: "#9090A8" }} />
+                <span className="text-sm font-medium text-white">Group Settings</span>
+              </div>
+              <div className="space-y-4">
+                {[
+                  { label: "Members can send messages", key: "canMembersSendMessages", value: group?.canMembersSendMessages ?? true, testId: "switch-send-messages" },
+                  { label: "Members can edit group info", key: "canMembersEditInfo", value: group?.canMembersEditInfo ?? true, testId: "switch-edit-info" },
+                  { label: "Members can add others", key: "canMembersAddOthers", value: group?.canMembersAddOthers ?? true, testId: "switch-add-others" },
+                ].map((setting) => (
+                  <div key={setting.key} className="flex items-center justify-between gap-2">
+                    <label className="text-sm text-white">{setting.label}</label>
+                    <Switch
+                      checked={setting.value}
+                      onCheckedChange={(v) => handleSettingToggle(setting.key, v)}
+                      data-testid={setting.testId}
+                    />
+                  </div>
+                ))}
+                <div style={{ height: "1px", background: "#2E2E42" }} />
                 <div className="flex items-center justify-between gap-2">
-                  <label className="text-sm">Members can edit group info</label>
-                  <Switch
-                    checked={group?.canMembersEditInfo ?? true}
-                    onCheckedChange={(v) => handleSettingToggle("canMembersEditInfo", v)}
-                    data-testid="switch-edit-info"
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-sm">Members can add others</label>
-                  <Switch
-                    checked={group?.canMembersAddOthers ?? true}
-                    onCheckedChange={(v) => handleSettingToggle("canMembersAddOthers", v)}
-                    data-testid="switch-add-others"
-                  />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-sm">Posting permission</label>
+                  <label className="text-sm text-white">Posting permission</label>
                   <Select
                     value={group?.postingPermission || "everyone"}
                     onValueChange={(v) => handleSettingSelect("postingPermission", v)}
                   >
-                    <SelectTrigger className="w-36" data-testid="select-posting-permission">
+                    <SelectTrigger className="w-36" data-testid="select-posting-permission" style={{ background: "#242433", border: "1px solid #2E2E42" }}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -375,12 +621,12 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                   </Select>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <label className="text-sm">Media permission</label>
+                  <label className="text-sm text-white">Media permission</label>
                   <Select
                     value={group?.mediaPermission || "everyone"}
                     onValueChange={(v) => handleSettingSelect("mediaPermission", v)}
                   >
-                    <SelectTrigger className="w-36" data-testid="select-media-permission">
+                    <SelectTrigger className="w-36" data-testid="select-media-permission" style={{ background: "#242433", border: "1px solid #2E2E42" }}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -389,97 +635,46 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                     </SelectContent>
                   </Select>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
 
-          <Card data-testid="card-members">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Users className="w-4 h-4" /> Members ({sortedMembers.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-2 space-y-1">
-              {sortedMembers.map((member: any) => (
-                <div key={member.id} className="flex items-center justify-between gap-2 py-2" data-testid={`member-${member.id}`}>
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Avatar className="w-9 h-9">
-                      <AvatarFallback className="text-xs font-bold">
-                        {member.nickname?.[0]?.toUpperCase() || "?"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium truncate">{member.nickname || "Anonymous"}</p>
-                        {member.role === "owner" && <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
-                        {member.role === "admin" && <Shield className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
-                      </div>
-                      <span className="text-xs text-muted-foreground capitalize">{member.role}</span>
-                    </div>
-                  </div>
-                  {isOwner && member.userId !== user?.id && (
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {member.role === "member" && (
-                        <Button variant="ghost" size="sm" onClick={() => handlePromote(member.userId, "admin")} data-testid={`button-promote-${member.id}`}>
-                          <Shield className="w-3 h-3 mr-1" /> Admin
-                        </Button>
-                      )}
-                      {member.role === "admin" && (
-                        <Button variant="ghost" size="sm" onClick={() => handlePromote(member.userId, "member")} data-testid={`button-demote-${member.id}`}>
-                          Demote
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="icon" onClick={() => handleRemove(member.userId)} data-testid={`button-remove-${member.id}`}>
-                        <X className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          {isAdmin && (
-            <Card data-testid="card-invite-links">
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Link2 className="w-4 h-4" /> Invite Links
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-2 space-y-3">
-                <Button variant="outline" className="w-full" onClick={handleCreateInvite} disabled={createInvite.isPending} data-testid="button-create-invite">
-                  {createInvite.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Link2 className="w-4 h-4 mr-2" />}
-                  Generate Invite Link
-                </Button>
-                {inviteLinks && inviteLinks.filter((l: any) => l.isActive).length > 0 && (
-                  <div className="space-y-2">
-                    {inviteLinks.filter((l: any) => l.isActive).map((link: any) => (
-                      <div key={link.id} className="flex items-center gap-2">
-                        <Input
-                          value={`${window.location.origin}/join/${link.token}`}
-                          readOnly
-                          className="text-xs flex-1"
-                          data-testid={`input-invite-${link.id}`}
-                        />
-                        <Button size="icon" variant="outline" onClick={() => handleCopyLink(link.token)} data-testid={`button-copy-invite-${link.id}`}>
-                          {copiedLink === link.token ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
+          {/* Danger zone */}
           <div className="pt-2 pb-4 space-y-3">
-            <Button variant="destructive" className="w-full" onClick={handleLeave} data-testid="button-leave-group">
+            {/* Leave Group — red danger styling */}
+            <button
+              onClick={handleLeave}
+              disabled={leaveGroup.isPending}
+              className="w-full flex items-center justify-center gap-2 text-sm font-semibold btn-press"
+              style={{
+                height: "48px",
+                borderRadius: "12px",
+                background: "rgba(239,68,68,0.1)",
+                border: "1.5px solid #EF4444",
+                color: "#EF4444",
+              }}
+              data-testid="button-leave-group"
+            >
+              {leaveGroup.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               Leave Group
-            </Button>
+            </button>
             {isOwner && (
-              <Button variant="destructive" className="w-full" onClick={handleDelete} data-testid="button-delete-group">
-                <Trash2 className="w-4 h-4 mr-2" /> Delete Group
-              </Button>
+              <button
+                onClick={handleDelete}
+                disabled={deleteGroup.isPending}
+                className="w-full flex items-center justify-center gap-2 text-sm font-semibold btn-press"
+                style={{
+                  height: "48px",
+                  borderRadius: "12px",
+                  background: "rgba(239,68,68,0.15)",
+                  border: "1.5px solid #EF4444",
+                  color: "#EF4444",
+                }}
+                data-testid="button-delete-group"
+              >
+                {deleteGroup.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Delete Group
+              </button>
             )}
           </div>
 
@@ -487,6 +682,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
         </div>
       </div>
 
+      {/* Edit description dialog */}
       <Dialog open={editDescOpen} onOpenChange={setEditDescOpen}>
         <DialogContent>
           <DialogHeader>
@@ -517,7 +713,12 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDescOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveDescRules} disabled={updateGroup.isPending || updateSettings.isPending} data-testid="button-save-desc-rules">
+            <Button
+              onClick={handleSaveDescRules}
+              disabled={updateGroup.isPending || updateSettings.isPending}
+              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", border: "none", color: "#fff" }}
+              data-testid="button-save-desc-rules"
+            >
               {(updateGroup.isPending || updateSettings.isPending) && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               Save
             </Button>

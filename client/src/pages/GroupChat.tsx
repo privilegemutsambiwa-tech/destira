@@ -85,8 +85,8 @@ function PollBubble({ messageId, groupId }: { messageId: number; groupId: number
 
   return (
     <div className="space-y-2 min-w-[200px]" data-testid={`poll-bubble-${messageId}`}>
-      <p className="font-medium text-sm">{poll.question}</p>
-      {poll.allowMultiple && <p className="text-xs opacity-70">Multiple answers allowed</p>}
+      <p className="font-medium text-sm text-white">{poll.question}</p>
+      {poll.allowMultiple && <p className="text-xs" style={{ color: "#9090A8" }}>Multiple answers allowed</p>}
       <div className="space-y-1.5">
         {options?.map((opt: any) => {
           const optVotes = votes?.filter((v: any) => v.optionId === opt.id).length || 0;
@@ -97,24 +97,27 @@ function PollBubble({ messageId, groupId }: { messageId: number; groupId: number
               key={opt.id}
               onClick={() => handleVote(opt.id)}
               disabled={votePoll.isPending}
-              className={`w-full text-left rounded-md p-2 text-xs relative overflow-hidden border transition-colors ${
-                isVoted ? "border-primary bg-primary/10" : "border-border hover-elevate"
-              }`}
+              className="w-full text-left p-2 text-xs relative overflow-hidden transition-colors"
+              style={{
+                borderRadius: "8px",
+                border: isVoted ? "1px solid rgba(124,58,237,0.6)" : "1px solid #2E2E42",
+                background: isVoted ? "rgba(124,58,237,0.12)" : "#1A1A24",
+              }}
               data-testid={`poll-option-${opt.id}`}
             >
               <div
-                className="absolute inset-0 bg-primary/10 rounded-md"
-                style={{ width: `${pct}%` }}
+                className="absolute inset-0 rounded-md"
+                style={{ width: `${pct}%`, background: "rgba(124,58,237,0.1)" }}
               />
               <div className="relative flex items-center justify-between gap-2">
-                <span className={isVoted ? "font-medium" : ""}>{opt.text}</span>
-                <span className="text-muted-foreground shrink-0">{optVotes} ({pct}%)</span>
+                <span className={isVoted ? "font-medium text-white" : "text-white/80"}>{opt.text}</span>
+                <span style={{ color: "#9090A8" }}>{optVotes} ({pct}%)</span>
               </div>
             </button>
           );
         })}
       </div>
-      <p className="text-xs text-muted-foreground">{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</p>
+      <p className="text-xs" style={{ color: "#9090A8" }}>{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</p>
     </div>
   );
 }
@@ -164,7 +167,7 @@ function PollComposerDialog({ groupId, open, onClose }: { groupId: number; open:
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <label className="text-sm font-medium mb-1 block">Question</label>
+            <label className="text-sm font-medium mb-1 block text-white">Question</label>
             <Input
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
@@ -173,7 +176,7 @@ function PollComposerDialog({ groupId, open, onClose }: { groupId: number; open:
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium mb-1 block">Options</label>
+            <label className="text-sm font-medium mb-1 block text-white">Options</label>
             {options.map((opt, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <Input
@@ -196,7 +199,7 @@ function PollComposerDialog({ groupId, open, onClose }: { groupId: number; open:
             )}
           </div>
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <label className="text-sm font-medium">Allow multiple answers</label>
+            <label className="text-sm font-medium text-white">Allow multiple answers</label>
             <Switch checked={allowMultiple} onCheckedChange={setAllowMultiple} data-testid="switch-allow-multiple" />
           </div>
         </div>
@@ -206,6 +209,7 @@ function PollComposerDialog({ groupId, open, onClose }: { groupId: number; open:
             onClick={handleSubmit}
             disabled={!question.trim() || options.filter((o) => o.trim()).length < 2 || createPoll.isPending}
             className="btn-press"
+            style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", border: "none", color: "#fff" }}
             data-testid="button-submit-poll"
           >
             {createPoll.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
@@ -344,24 +348,46 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      <div className="border-b px-4 py-3 flex items-center gap-3 sticky top-0 z-50 bg-background">
-        <Button variant="ghost" size="icon" onClick={() => setLocation("/lounge")} data-testid="button-back-lounge" className="btn-press">
+    <div className="h-screen flex flex-col" style={{ background: "#0F0F14" }}>
+      {/* Dark header */}
+      <div
+        className="px-4 py-3 flex items-center gap-3 sticky top-0 z-50"
+        style={{
+          background: "#1A1A24",
+          borderBottom: "1px solid #2E2E42",
+        }}
+      >
+        <button
+          onClick={() => setLocation("/lounge")}
+          className="w-9 h-9 flex items-center justify-center btn-press rounded-full transition-colors"
+          style={{ color: "#FFFFFF", background: "transparent" }}
+          data-testid="button-back-lounge"
+        >
           <ArrowLeft className="w-5 h-5" />
-        </Button>
+        </button>
         <div className="flex-1 min-w-0">
-          <h2 className="font-bold text-sm truncate" data-testid="text-group-name">{group?.name || "Group"}</h2>
-          <p className="text-xs text-muted-foreground">{group?.memberCount || 0} members</p>
+          <h2 className="font-bold text-white truncate" style={{ fontSize: "15px" }} data-testid="text-group-name">
+            {group?.name || "Group"}
+          </h2>
+          <p style={{ fontSize: "12px", color: "#9090A8" }}>
+            {group?.memberCount || 0} members
+          </p>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setLocation(`/lounge/group/${groupId}/info`)} data-testid="button-group-info" className="btn-press">
+        <button
+          onClick={() => setLocation(`/lounge/group/${groupId}/info`)}
+          className="w-9 h-9 flex items-center justify-center btn-press rounded-full transition-colors"
+          style={{ color: "#FFFFFF", background: "transparent" }}
+          data-testid="button-group-info"
+        >
           <Info className="w-5 h-5" />
-        </Button>
+        </button>
       </div>
 
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-1" onClick={() => setActiveMessageId(null)}>
         {msgsLoading ? (
           <div className="flex justify-center p-12">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <Loader2 className="w-6 h-6 animate-spin" style={{ color: "#7C3AED" }} />
           </div>
         ) : messages && messages.length > 0 ? (
           messages.map((msg: any, idx: number) => {
@@ -375,51 +401,101 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
               groupedReactions[r.reaction] = (groupedReactions[r.reaction] || 0) + 1;
             });
 
+            const initials = (msg.nickname || "?")[0]?.toUpperCase();
+
             return (
               <div key={msg.id}>
+                {/* Date separator */}
                 {showDate && (
-                  <div className="flex justify-center my-3">
-                    <Badge variant="secondary" className="text-xs" data-testid={`date-separator-${idx}`}>
+                  <div className="flex justify-center my-4">
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: "#9090A8",
+                        background: "#1A1A24",
+                        borderRadius: "100px",
+                        padding: "2px 12px",
+                        border: "1px solid #2E2E42",
+                      }}
+                      data-testid={`date-separator-${idx}`}
+                    >
                       {formatDateSeparator(msg.createdAt)}
-                    </Badge>
+                    </span>
                   </div>
                 )}
-                <div className={`flex ${isMe ? "justify-end" : "justify-start"} mb-1`} data-testid={`message-${msg.id}`}>
-                  <div className="max-w-[80%]">
+
+                <div className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2`} data-testid={`message-${msg.id}`}>
+                  {/* 32px avatar for other users */}
+                  {!isMe && (
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-2 self-end"
+                      style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", fontSize: "12px", fontWeight: 700, color: "#fff" }}
+                    >
+                      {initials}
+                    </div>
+                  )}
+
+                  <div className="max-w-[75%]">
+                    {/* Username label */}
                     {!isMe && (
-                      <span className="text-xs text-primary font-medium ml-3 mb-0.5 block" data-testid={`nickname-${msg.id}`}>
+                      <span
+                        className="block ml-1 mb-0.5"
+                        style={{ fontSize: "11px", color: "#9090A8", fontWeight: 600 }}
+                        data-testid={`nickname-${msg.id}`}
+                      >
                         {msg.nickname || "Anonymous"}
                       </span>
                     )}
+
                     <Popover open={activeMessageId === msg.id} onOpenChange={(open) => setActiveMessageId(open ? msg.id : null)}>
                       <PopoverTrigger asChild>
                         <div
-                          className={`rounded-md px-4 py-2.5 text-sm leading-relaxed cursor-pointer ${
-                            isDeleted
-                              ? "bg-muted text-muted-foreground italic"
+                          className="px-4 py-2.5 text-sm leading-relaxed cursor-pointer"
+                          style={{
+                            borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                            ...(isDeleted
+                              ? { background: "#242433", color: "#9090A8", fontStyle: "italic" }
                               : isMe
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-card border text-card-foreground"
-                          }`}
+                                ? {
+                                    background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                                    color: "#FFFFFF",
+                                    boxShadow: "0 2px 12px rgba(124,58,237,0.3)",
+                                  }
+                                : {
+                                    background: "#1A1A24",
+                                    color: "#FFFFFF",
+                                    border: "1px solid #2E2E42",
+                                  }),
+                          }}
                           onClick={(e) => {
                             e.stopPropagation();
                             if (!isDeleted) setActiveMessageId(activeMessageId === msg.id ? null : msg.id);
                           }}
                         >
                           {repliedMsg && !isDeleted && (
-                            <div className={`text-xs mb-1.5 p-1.5 rounded-md border-l-2 ${
-                              isMe ? "bg-primary-foreground/10 border-primary-foreground/40" : "bg-muted border-primary"
-                            }`}>
-                              <span className="font-medium">{repliedMsg.nickname || "Anonymous"}</span>
-                              <p className="truncate opacity-80">{repliedMsg.content}</p>
+                            <div
+                              className="mb-1.5 p-1.5"
+                              style={{
+                                borderRadius: "6px",
+                                borderLeft: isMe ? "2px solid rgba(255,255,255,0.4)" : "2px solid #7C3AED",
+                                background: isMe ? "rgba(255,255,255,0.1)" : "rgba(124,58,237,0.12)",
+                                fontSize: "12px",
+                              }}
+                            >
+                              <span className="font-medium" style={{ color: isMe ? "rgba(255,255,255,0.9)" : "#A78BFA" }}>
+                                {repliedMsg.nickname || "Anonymous"}
+                              </span>
+                              <p className="truncate" style={{ color: isMe ? "rgba(255,255,255,0.7)" : "#9090A8" }}>
+                                {repliedMsg.content}
+                              </p>
                             </div>
                           )}
                           {isDeleted ? (
                             "[Message deleted]"
                           ) : msg.contentType === "image" && msg.mediaUrl ? (
-                            <img src={msg.mediaUrl} alt="shared" className="rounded-md max-w-[250px] max-h-[300px] object-cover" data-testid={`image-${msg.id}`} />
+                            <img src={msg.mediaUrl} alt="shared" className="rounded-lg max-w-[250px] max-h-[300px] object-cover" data-testid={`image-${msg.id}`} />
                           ) : msg.contentType === "video" && msg.mediaUrl ? (
-                            <video src={msg.mediaUrl} className="rounded-md max-w-[250px] max-h-[300px]" controls data-testid={`video-${msg.id}`} />
+                            <video src={msg.mediaUrl} className="rounded-lg max-w-[250px] max-h-[300px]" controls data-testid={`video-${msg.id}`} />
                           ) : msg.contentType === "poll" ? (
                             <PollBubble messageId={msg.id} groupId={groupId} />
                           ) : (
@@ -428,104 +504,115 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                         </div>
                       </PopoverTrigger>
                       {!isDeleted && (
-                        <PopoverContent className="w-auto p-2" side={isMe ? "left" : "right"} align="start">
+                        <PopoverContent
+                          className="w-auto p-2"
+                          side={isMe ? "left" : "right"}
+                          align="start"
+                          style={{ background: "#1A1A24", border: "1px solid #2E2E42" }}
+                        >
+                          {/* Reactions row */}
                           <div className="flex items-center gap-1 mb-2 flex-wrap">
                             {REACTIONS.map(({ key, Icon }) => (
-                              <Button
+                              <button
                                 key={key}
-                                variant="ghost"
-                                size="icon"
                                 onClick={() => handleReact(msg.id, key)}
+                                className="w-8 h-8 rounded-full flex items-center justify-center btn-press transition-colors"
+                                style={{ color: "#9090A8" }}
                                 data-testid={`reaction-${key}-${msg.id}`}
-                                className="btn-press"
                               >
                                 <Icon className="w-4 h-4" />
-                              </Button>
+                              </button>
                             ))}
                           </div>
-                          <div className="flex flex-col gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="justify-start btn-press"
-                              onClick={() => { setReplyTo(msg); setActiveMessageId(null); }}
-                              data-testid={`action-reply-${msg.id}`}
-                            >
-                              <Reply className="w-4 h-4 mr-2" /> Reply
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="justify-start btn-press"
-                              onClick={async () => {
-                                try {
-                                  if (msg.isStarred) {
-                                    await unstarMessage.mutateAsync({ messageId: msg.id });
-                                    toast({ title: "Message unstarred" });
-                                  } else {
-                                    await starMessage.mutateAsync({ messageId: msg.id });
-                                    toast({ title: "Message starred" });
-                                  }
-                                } catch {}
-                                setActiveMessageId(null);
-                              }}
-                              data-testid={`action-star-${msg.id}`}
-                            >
-                              <Star className={`w-4 h-4 mr-2 ${msg.isStarred ? "fill-yellow-400 text-yellow-400" : ""}`} />
-                              {msg.isStarred ? "Unstar" : "Star"}
-                            </Button>
-                            {msg.contentType === "text" && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="justify-start btn-press"
-                                onClick={() => handleCopy(msg.content)}
-                                data-testid={`action-copy-${msg.id}`}
+                          <div className="flex flex-col gap-0.5">
+                            {[
+                              {
+                                icon: <Reply className="w-4 h-4 mr-2" />,
+                                label: "Reply",
+                                onClick: () => { setReplyTo(msg); setActiveMessageId(null); },
+                                testId: `action-reply-${msg.id}`,
+                              },
+                              {
+                                icon: <Star className={`w-4 h-4 mr-2 ${msg.isStarred ? "fill-yellow-400 text-yellow-400" : ""}`} />,
+                                label: msg.isStarred ? "Unstar" : "Star",
+                                onClick: async () => {
+                                  try {
+                                    if (msg.isStarred) {
+                                      await unstarMessage.mutateAsync({ messageId: msg.id });
+                                      toast({ title: "Message unstarred" });
+                                    } else {
+                                      await starMessage.mutateAsync({ messageId: msg.id });
+                                      toast({ title: "Message starred" });
+                                    }
+                                  } catch {}
+                                  setActiveMessageId(null);
+                                },
+                                testId: `action-star-${msg.id}`,
+                              },
+                              ...(msg.contentType === "text" ? [{
+                                icon: <Copy className="w-4 h-4 mr-2" />,
+                                label: "Copy",
+                                onClick: () => handleCopy(msg.content),
+                                testId: `action-copy-${msg.id}`,
+                              }] : []),
+                              ...(isMe ? [{
+                                icon: <Trash2 className="w-4 h-4 mr-2" />,
+                                label: "Delete",
+                                onClick: () => handleDeleteOwn(msg.id),
+                                testId: `action-delete-${msg.id}`,
+                                danger: true,
+                              }] : []),
+                              ...(isAdmin && !isMe ? [{
+                                icon: <Trash2 className="w-4 h-4 mr-2" />,
+                                label: "Admin Delete",
+                                onClick: () => handleAdminDelete(msg.id),
+                                testId: `action-admin-delete-${msg.id}`,
+                                danger: true,
+                              }] : []),
+                            ].map((action: any) => (
+                              <button
+                                key={action.testId}
+                                onClick={action.onClick}
+                                className="flex items-center w-full px-3 py-1.5 text-sm rounded-md btn-press transition-colors text-left"
+                                style={{
+                                  color: action.danger ? "#EF4444" : "#FFFFFF",
+                                  background: "transparent",
+                                }}
+                                data-testid={action.testId}
                               >
-                                <Copy className="w-4 h-4 mr-2" /> Copy
-                              </Button>
-                            )}
-                            {isMe && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="justify-start text-destructive btn-press"
-                                onClick={() => handleDeleteOwn(msg.id)}
-                                data-testid={`action-delete-${msg.id}`}
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" /> Delete
-                              </Button>
-                            )}
-                            {isAdmin && !isMe && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="justify-start text-destructive btn-press"
-                                onClick={() => handleAdminDelete(msg.id)}
-                                data-testid={`action-admin-delete-${msg.id}`}
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" /> Admin Delete
-                              </Button>
-                            )}
+                                {action.icon}
+                                {action.label}
+                              </button>
+                            ))}
                           </div>
                         </PopoverContent>
                       )}
                     </Popover>
 
+                    {/* Reactions */}
                     {Object.keys(groupedReactions).length > 0 && (
                       <div className={`flex items-center gap-1 mt-1 flex-wrap ${isMe ? "justify-end" : "justify-start"} px-2`}>
                         {Object.entries(groupedReactions).map(([reaction, count]) => {
                           const RIcon = REACTION_ICONS[reaction];
                           return RIcon ? (
-                            <Badge key={reaction} variant="secondary" className="text-xs gap-1 px-1.5" data-testid={`reactions-${reaction}-${msg.id}`}>
+                            <span
+                              key={reaction}
+                              className="text-xs gap-1 px-1.5 py-0.5 flex items-center"
+                              style={{ background: "#242433", borderRadius: "100px", border: "1px solid #2E2E42", color: "#9090A8" }}
+                              data-testid={`reactions-${reaction}-${msg.id}`}
+                            >
                               <RIcon className="w-3 h-3" /> {count}
-                            </Badge>
+                            </span>
                           ) : null;
                         })}
                       </div>
                     )}
 
-                    <p className={`text-[10px] text-muted-foreground mt-0.5 px-2 ${isMe ? "text-right" : "text-left"}`}>
+                    {/* Timestamp */}
+                    <p
+                      className={`mt-0.5 px-2 ${isMe ? "text-right" : "text-left"}`}
+                      style={{ fontSize: "10px", color: "#9090A8" }}
+                    >
                       {formatTime(msg.createdAt)}
                     </p>
                   </div>
@@ -534,61 +621,123 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
             );
           })
         ) : (
-          <div className="text-center py-12 text-muted-foreground">
-            <Users className="w-12 h-12 mx-auto mb-3 opacity-40" />
-            <p className="text-lg font-medium mb-1">Welcome to {group?.name}!</p>
-            <p className="text-sm">Be the first to start the conversation.</p>
+          <div className="text-center py-12">
+            <Users className="w-12 h-12 mx-auto mb-3 opacity-30" style={{ color: "#9090A8" }} />
+            <p className="font-medium mb-1 text-white">Welcome to {group?.name}!</p>
+            <p className="text-sm" style={{ color: "#9090A8" }}>Be the first to start the conversation.</p>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t bg-background">
+      {/* Input bar — dark #1A1A24 with top border */}
+      <div style={{ background: "#1A1A24", borderTop: "1px solid #2E2E42" }}>
         {replyTo && (
           <div className="px-4 pt-2 flex items-center gap-2">
-            <div className="flex-1 min-w-0 bg-muted rounded-md p-2 text-xs">
-              <span className="font-medium text-primary">{replyTo.nickname || "Anonymous"}</span>
-              <p className="truncate text-muted-foreground">{replyTo.content}</p>
+            <div
+              className="flex-1 min-w-0 p-2 text-xs"
+              style={{ background: "#242433", borderRadius: "8px", borderLeft: "2px solid #7C3AED" }}
+            >
+              <span className="font-medium" style={{ color: "#A78BFA" }}>{replyTo.nickname || "Anonymous"}</span>
+              <p className="truncate" style={{ color: "#9090A8" }}>{replyTo.content}</p>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setReplyTo(null)} data-testid="button-cancel-reply" className="btn-press">
+            <button
+              className="w-7 h-7 flex items-center justify-center btn-press rounded-full"
+              style={{ color: "#9090A8", background: "transparent" }}
+              onClick={() => setReplyTo(null)}
+              data-testid="button-cancel-reply"
+            >
               <X className="w-4 h-4" />
-            </Button>
+            </button>
           </div>
         )}
         <div className="p-3">
           {!isMember ? (
-            <Button className="w-full btn-press" onClick={handleJoin} disabled={joinGroup.isPending} data-testid="button-join-group">
-              <Users className="w-5 h-5 mr-2" />
+            <button
+              className="w-full flex items-center justify-center gap-2 font-semibold btn-press"
+              onClick={handleJoin}
+              disabled={joinGroup.isPending}
+              style={{
+                background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                color: "#FFFFFF",
+                height: "48px",
+                borderRadius: "14px",
+                border: "none",
+                boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
+              }}
+              data-testid="button-join-group"
+            >
+              {joinGroup.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Users className="w-5 h-5" />}
               {group?.privacyMode === "request-to-join" ? "Request to Join" : "Join Group to Chat"}
-            </Button>
+            </button>
           ) : (
             <form
               className="flex items-center gap-2"
               onSubmit={(e) => { e.preventDefault(); handleSend(); }}
             >
-              <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageUpload} data-testid="input-file-upload" />
-              <Button type="button" variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} data-testid="button-attach" className="btn-press shrink-0">
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageUpload}
+                data-testid="input-file-upload"
+              />
+              <button
+                type="button"
+                className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
+                style={{ color: "#9090A8", background: "transparent" }}
+                onClick={() => fileInputRef.current?.click()}
+                data-testid="button-attach"
+              >
                 <Paperclip className="w-4 h-4" />
-              </Button>
-              <Button type="button" variant="ghost" size="icon" onClick={() => setShowPollDialog(true)} data-testid="button-poll" className="btn-press shrink-0">
+              </button>
+              <button
+                type="button"
+                className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
+                style={{ color: "#9090A8", background: "transparent" }}
+                onClick={() => setShowPollDialog(true)}
+                data-testid="button-poll"
+              >
                 <BarChart3 className="w-4 h-4" />
-              </Button>
-              <Input
+              </button>
+              <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Type a message..."
-                className="flex-1"
+                className="flex-1 px-4 py-2 text-sm outline-none"
+                style={{
+                  background: "#242433",
+                  borderRadius: "100px",
+                  border: "1px solid #2E2E42",
+                  color: "#FFFFFF",
+                  height: "40px",
+                }}
                 data-testid="input-group-message"
               />
-              <Button
+              {/* Gradient 40px send circle */}
+              <button
                 type="submit"
-                size="icon"
                 disabled={!input.trim() || sendMessage.isPending}
-                className="btn-press shrink-0"
+                className="flex items-center justify-center btn-press shrink-0"
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  background: input.trim() ? "linear-gradient(135deg, #7C3AED, #EC4899)" : "#242433",
+                  border: "none",
+                  color: "#FFFFFF",
+                  boxShadow: input.trim() ? "0 2px 12px rgba(124,58,237,0.4)" : "none",
+                  transition: "all 0.2s ease",
+                }}
                 data-testid="button-send-group"
               >
-                <Send className="w-4 h-4" />
-              </Button>
+                {sendMessage.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </button>
             </form>
           )}
         </div>
