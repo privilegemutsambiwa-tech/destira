@@ -6,10 +6,11 @@ export default {
   theme: {
     extend: {
       borderRadius: {
-        lg: "1.25rem",  /* 20px — card radius */
-        md: "0.875rem", /* 14px — button radius */
-        sm: "0.25rem",  /* 4px  — small elements */
-        pill: "6.25rem", /* 100px — pill tabs */
+        lg: "1.25rem",   /* 20px — card radius */
+        md: "0.875rem",  /* 14px — button radius */
+        sm: "0.25rem",   /* 4px  — small elements */
+        xl: "6.25rem",   /* 100px — pill/tag radius */
+        pill: "6.25rem", /* 100px — alias */
       },
       colors: {
         background: "hsl(var(--background) / <alpha-value>)",

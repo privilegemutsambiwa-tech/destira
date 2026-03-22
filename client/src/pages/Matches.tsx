@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { useIncomingLikes, useLikeBack, useRespondToMatch } from "@/hooks/use-interactions";
 import { Heart, Crown, Check, X, Search, Loader2, Lock, Sparkles } from "lucide-react";
@@ -6,9 +7,16 @@ import { useToast } from "@/hooks/use-toast";
 
 type TabType = "liked-you" | "you-liked" | "matches";
 
+const TABS: { label: string; value: TabType }[] = [
+  { label: "Liked You", value: "liked-you" },
+  { label: "You Liked", value: "you-liked" },
+  { label: "Matches", value: "matches" },
+];
+
 export default function Matches() {
   const { data, isLoading } = useIncomingLikes();
   const [, setLocation] = useLocation();
+  const [activeTab, setActiveTab] = useState<TabType>("liked-you");
 
   const likes = data?.likes || [];
   const totalCount = data?.totalCount || 0;
@@ -17,7 +25,7 @@ export default function Matches() {
   return (
     <LayoutShell>
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-5">
         <h1 className="font-bold text-white" style={{ fontSize: "28px", letterSpacing: "-0.5px" }} data-testid="text-likes-title">
           Likes
         </h1>
@@ -26,22 +34,64 @@ export default function Matches() {
         </p>
       </div>
 
+      {/* Tabs — Liked You | You Liked | Matches */}
+      <div className="flex items-center gap-0 mb-6" style={{ borderBottom: "1px solid #2E2E42" }}>
+        {TABS.map((tab) => {
+          const isActive = activeTab === tab.value;
+          return (
+            <button
+              key={tab.value}
+              onClick={() => setActiveTab(tab.value)}
+              className="relative pb-3 pt-1 px-4 text-sm font-medium transition-colors"
+              style={{
+                color: isActive ? "#FFFFFF" : "#9090A8",
+                background: "transparent",
+                border: "none",
+              }}
+              data-testid={`tab-${tab.value}`}
+            >
+              {tab.label}
+              {isActive && (
+                <div
+                  className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
+                  style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {isLoading ? (
         <div className="flex justify-center p-12">
           <Loader2 className="w-8 h-8 animate-spin" style={{ color: "#7C3AED" }} />
         </div>
       ) : (
         <>
-          {isBlurred && totalCount > 0 && <UpgradeBanner />}
+          {activeTab === "liked-you" && (
+            <>
+              {isBlurred && totalCount > 0 && <UpgradeBanner />}
+              {likes.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3" data-testid="grid-likes">
+                  {likes.map((like: any) => (
+                    <LikeCard key={like.id} like={like} isBlurred={isBlurred} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState message="No one has liked you yet. Keep exploring!" />
+              )}
+            </>
+          )}
 
-          {likes.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3" data-testid="grid-likes">
-              {likes.map((like: any) => (
-                <LikeCard key={like.id} like={like} isBlurred={isBlurred} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState />
+          {activeTab === "you-liked" && (
+            <EmptyState message="People you've liked will appear here." icon="heart" />
+          )}
+
+          {activeTab === "matches" && (
+            <EmptyState
+              message="Mutual matches will appear here. Like someone back to start chatting!"
+              cta={{ label: "Discover People", onClick: () => setLocation("/discover") }}
+            />
           )}
         </>
       )}
@@ -212,39 +262,49 @@ function LikeCard({ like, isBlurred }: { like: any; isBlurred: boolean }) {
   );
 }
 
-function EmptyState() {
+function EmptyState({
+  message,
+  icon = "heart",
+  cta,
+}: {
+  message: string;
+  icon?: "heart" | "search";
+  cta?: { label: string; onClick: () => void };
+}) {
   const [, setLocation] = useLocation();
 
   return (
     <div className="text-center py-20 px-6">
       <div
         className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
-        style={{ background: "rgba(236,72,153,0.15)" }}
+        style={{ background: icon === "heart" ? "rgba(236,72,153,0.15)" : "rgba(124,58,237,0.15)" }}
       >
-        <Heart className="w-10 h-10" style={{ color: "#EC4899" }} />
+        {icon === "heart" ? (
+          <Heart className="w-10 h-10" style={{ color: "#EC4899" }} />
+        ) : (
+          <Search className="w-10 h-10" style={{ color: "#7C3AED" }} />
+        )}
       </div>
-      <h3 className="font-bold mb-2 text-white" style={{ fontSize: "22px" }} data-testid="text-empty-title">
-        No likes yet
-      </h3>
-      <p className="max-w-xs mx-auto mb-8" style={{ fontSize: "15px", color: "#9090A8" }}>
-        Keep exploring! Your perfect match is out there.
+      <p className="max-w-xs mx-auto mb-8" style={{ fontSize: "15px", color: "#9090A8" }} data-testid="text-empty-title">
+        {message}
       </p>
-      <button
-        onClick={() => setLocation("/discover")}
-        className="font-semibold btn-press px-8 py-3 text-white"
-        style={{
-          background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-          height: "48px",
-          fontSize: "15px",
-          borderRadius: "14px",
-          border: "none",
-          boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
-        }}
-        data-testid="button-discover"
-      >
-        <Search className="w-4 h-4 inline mr-2" />
-        Discover People
-      </button>
+      {cta && (
+        <button
+          onClick={cta.onClick}
+          className="font-semibold btn-press px-8 py-3 text-white"
+          style={{
+            background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+            height: "48px",
+            fontSize: "15px",
+            borderRadius: "14px",
+            border: "none",
+            boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
+          }}
+          data-testid="button-discover"
+        >
+          {cta.label}
+        </button>
+      )}
     </div>
   );
 }

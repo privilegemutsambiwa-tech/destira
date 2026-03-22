@@ -5,7 +5,6 @@ import { useSubscription, useGenerateSummary, useProfileCompletion, useGenerateA
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -231,11 +230,12 @@ export default function Profile() {
     <LayoutShell>
       <div className="space-y-6">
 
-        {/* Hero Section */}
+        {/* Hero Section — 200px banner, 96px circular avatar overlapping */}
         <div className="relative">
           <div
-            className="h-48 md:h-56 overflow-hidden"
+            className="overflow-hidden"
             style={{
+              height: "200px",
               background: "linear-gradient(135deg, #7C3AED, #EC4899)",
               borderRadius: "20px",
             }}
@@ -244,28 +244,30 @@ export default function Profile() {
               <img src={profile.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
             )}
           </div>
-          <div className="flex flex-col items-center -mt-16 relative z-10">
-            <Avatar
-              className="border-4"
+          {/* 96px circular avatar, overlapping banner by half */}
+          <div className="flex flex-col items-center" style={{ marginTop: "-48px" }}>
+            <div
+              className="relative"
               style={{
-                width: "128px",
-                height: "128px",
-                borderRadius: "16px",
-                borderColor: "#0F0F14",
+                width: "96px",
+                height: "96px",
+                borderRadius: "50%",
+                border: "4px solid #0F0F14",
                 boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+                overflow: "hidden",
+                background: "#242433",
+                zIndex: 10,
               }}
               data-testid="avatar-profile"
             >
               {avatarUrl ? (
-                <AvatarImage src={avatarUrl} alt={profile.displayName || "Profile"} />
-              ) : null}
-              <AvatarFallback
-                className="text-3xl font-bold"
-                style={{ background: "#242433", color: "#FFFFFF" }}
-              >
-                {avatarFallbackLetter}
-              </AvatarFallback>
-            </Avatar>
+                <img src={avatarUrl} alt={profile.displayName || "Profile"} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <span className="text-2xl font-bold text-white">{avatarFallbackLetter}</span>
+                </div>
+              )}
+            </div>
 
             <div className="mt-3 flex items-center gap-2">
               <h1 className="text-2xl font-bold text-white" data-testid="text-display-name">

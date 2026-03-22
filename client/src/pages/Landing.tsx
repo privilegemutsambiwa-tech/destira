@@ -100,12 +100,12 @@ export default function Landing() {
             onClick={handleLogin}
             className="w-full font-semibold btn-press text-white"
             style={{
-              background: "rgba(255,255,255,0.18)",
-              backdropFilter: "blur(12px)",
-              border: "1.5px solid rgba(255,255,255,0.3)",
+              background: "linear-gradient(135deg, #7C3AED, #EC4899)",
               height: "52px",
               borderRadius: "14px",
               fontSize: "17px",
+              border: "none",
+              boxShadow: "0 4px 20px rgba(124,58,237,0.45)",
               maxWidth: "340px",
               display: "block",
               margin: "0 auto",

@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { LayoutShell } from "@/components/layout-shell";
-import { Brain, X, Loader2, MapPin, Heart, Play } from "lucide-react";
+import { Brain, X, Loader2, MapPin, Heart, Play, Plus } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -24,7 +24,7 @@ function StoriesCarousel() {
     return Object.values(byUser);
   }, [stories]);
 
-  if (grouped.length === 0) return null;
+  const STORY_SIZE = 60;
 
   return (
     <>
@@ -36,7 +36,8 @@ function StoriesCarousel() {
             className="flex flex-col items-center gap-1.5 shrink-0"
             data-testid={`story-avatar-${u.userId}`}
           >
-            <div className="story-ring-active p-[2.5px] rounded-full" style={{ width: "60px", height: "60px" }}>
+            {/* Animated gradient ring for active story */}
+            <div className="story-ring-active p-[2.5px] rounded-full" style={{ width: `${STORY_SIZE}px`, height: `${STORY_SIZE}px` }}>
               <div className="w-full h-full rounded-full overflow-hidden" style={{ background: "#1A1A24" }}>
                 <Avatar className="w-full h-full">
                   {u.photoUrl ? (
@@ -54,7 +55,27 @@ function StoriesCarousel() {
             </span>
           </button>
         ))}
+
+        {/* Empty add-story slot — dashed ring + plus icon */}
+        <button
+          className="flex flex-col items-center gap-1.5 shrink-0"
+          data-testid="story-add-slot"
+        >
+          <div
+            className="rounded-full flex items-center justify-center"
+            style={{
+              width: `${STORY_SIZE}px`,
+              height: `${STORY_SIZE}px`,
+              border: "2px dashed #9090A8",
+              background: "transparent",
+            }}
+          >
+            <Plus className="w-5 h-5" style={{ color: "#9090A8" }} />
+          </div>
+          <span style={{ fontSize: "11px", color: "#9090A8" }}>Add</span>
+        </button>
       </div>
+
       {viewingStory && (
         <StoryViewer
           stories={viewingStory.stories}
@@ -68,7 +89,7 @@ function StoriesCarousel() {
 
 export default function Discover() {
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [swipeDir, setSwipeDir] = useState<"left" | "right">("left");
+  const [swipeDir, setSwipeDir] = useState<"left" | "right" | null>(null);
   const [isExiting, setIsExiting] = useState(false);
   const { data: profiles, isLoading } = useDiscoverProfiles();
   const startInterview = useStartInterview();
@@ -117,6 +138,7 @@ export default function Discover() {
     setIsExiting(true);
     setTimeout(() => {
       setIsExiting(false);
+      setSwipeDir(null);
       setCurrentIdx(prev => (prev + 1) % profiles.length);
     }, 300);
   };
@@ -182,7 +204,7 @@ export default function Discover() {
             }
             exit={{ opacity: 0 }}
             transition={{ duration: 0.28, ease: "easeInOut" }}
-            className="overflow-hidden mb-4"
+            className="overflow-hidden mb-4 relative"
             style={{
               background: "#1A1A24",
               borderRadius: "20px",
@@ -191,6 +213,52 @@ export default function Discover() {
             }}
             data-testid="card-profile"
           >
+            {/* Directional swipe stamp overlays */}
+            {isExiting && swipeDir === "left" && (
+              <div
+                className="absolute inset-0 z-30 flex items-center justify-center"
+                style={{ pointerEvents: "none" }}
+              >
+                <div
+                  className="font-black tracking-widest"
+                  style={{
+                    color: "#EF4444",
+                    fontSize: "48px",
+                    border: "4px solid #EF4444",
+                    borderRadius: "12px",
+                    padding: "4px 20px",
+                    opacity: 0.9,
+                    transform: "rotate(-15deg)",
+                    textShadow: "0 0 20px rgba(239,68,68,0.5)",
+                  }}
+                >
+                  PASS
+                </div>
+              </div>
+            )}
+            {isExiting && swipeDir === "right" && (
+              <div
+                className="absolute inset-0 z-30 flex items-center justify-center"
+                style={{ pointerEvents: "none" }}
+              >
+                <div
+                  className="font-black tracking-widest"
+                  style={{
+                    color: "#22C55E",
+                    fontSize: "48px",
+                    border: "4px solid #22C55E",
+                    borderRadius: "12px",
+                    padding: "4px 20px",
+                    opacity: 0.9,
+                    transform: "rotate(15deg)",
+                    textShadow: "0 0 20px rgba(34,197,94,0.5)",
+                  }}
+                >
+                  LIKE
+                </div>
+              </div>
+            )}
+
             {/* Image — portrait 1:1.2 */}
             <div className="relative" style={{ paddingBottom: "120%" }}>
               {currentProfile.coverPhotoUrl ? (
@@ -219,19 +287,17 @@ export default function Discover() {
                 <Play className="w-4 h-4 text-white fill-white" />
               </div>
 
-              {/* Dark gradient overlay */}
+              {/* Frosted glass info overlay — spec: backdrop-blur 20px */}
               <div
-                className="absolute inset-x-0 bottom-0"
+                className="absolute inset-x-0 bottom-0 p-5"
                 style={{
-                  background: "linear-gradient(to top, rgba(15,15,20,0.9) 0%, rgba(15,15,20,0.4) 50%, transparent 100%)",
-                  height: "60%",
+                  background: "rgba(0,0,0,0.5)",
+                  backdropFilter: "blur(20px)",
+                  WebkitBackdropFilter: "blur(20px)",
                 }}
-              />
-
-              {/* Name / age / location */}
-              <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
+              >
                 <h2
-                  className="font-bold text-white leading-tight mb-1"
+                  className="font-bold text-white leading-tight mb-0.5"
                   style={{ fontSize: "26px", letterSpacing: "-0.5px" }}
                   data-testid="text-profile-name"
                 >
@@ -239,31 +305,26 @@ export default function Discover() {
                   {currentProfile.age ? `, ${currentProfile.age}` : ""}
                 </h2>
                 {currentProfile.location && (
-                  <div className="flex items-center gap-1" style={{ color: "rgba(255,255,255,0.7)", fontSize: "14px" }}>
+                  <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.7)", fontSize: "14px" }}>
                     <MapPin className="w-3.5 h-3.5 shrink-0" />
                     <span data-testid="text-profile-location">{currentProfile.location}</span>
                   </div>
                 )}
+                {currentProfile.bio && (
+                  <p
+                    className="text-sm leading-snug"
+                    style={{ color: "rgba(255,255,255,0.75)", fontSize: "13px", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+                    data-testid="text-profile-bio"
+                  >
+                    {currentProfile.bio}
+                  </p>
+                )}
               </div>
-            </div>
-
-            {/* About section */}
-            <div className="px-5 pt-4 pb-3" style={{ background: "#1A1A24" }}>
-              <h3 className="font-bold text-white mb-1.5" style={{ fontSize: "14px", letterSpacing: "0.5px", textTransform: "uppercase", color: "#9090A8" }}>
-                About
-              </h3>
-              <p
-                className="leading-relaxed text-white"
-                style={{ fontSize: "14px", lineHeight: "1.55", color: "rgba(255,255,255,0.85)" }}
-                data-testid="text-profile-bio"
-              >
-                {currentProfile.bio || "No bio yet."}
-              </p>
             </div>
 
             {/* Personality trait pills */}
             {personalityTraits.length > 0 && (
-              <div className="px-5 pb-4 flex flex-wrap gap-2">
+              <div className="px-4 py-3 flex flex-wrap gap-2" style={{ background: "#1A1A24" }}>
                 {personalityTraits.map(([trait, score]) => (
                   <span
                     key={trait}
@@ -285,7 +346,7 @@ export default function Discover() {
             )}
 
             {/* 3-button action row */}
-            <div className="px-5 pb-5 pt-1 flex items-center justify-center gap-4">
+            <div className="px-5 pb-5 pt-2 flex items-center justify-center gap-4" style={{ background: "#1A1A24" }}>
               {/* Pass — circle with red border */}
               <button
                 onClick={handlePass}
@@ -304,7 +365,7 @@ export default function Discover() {
                 <X className="w-6 h-6" />
               </button>
 
-              {/* Interview AI Twin — gradient rectangle, center CTA */}
+              {/* Interview AI Twin — gradient rect CTA */}
               <button
                 onClick={handleInterview}
                 disabled={startInterview.isPending}
