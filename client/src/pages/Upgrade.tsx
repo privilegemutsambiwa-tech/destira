@@ -85,7 +85,6 @@ export default function Upgrade() {
   return (
     <LayoutShell>
       <div className="max-w-2xl mx-auto" data-testid="page-upgrade">
-        {/* Back button */}
         <button
           onClick={() => setLocation("/billing")}
           className="flex items-center gap-1.5 text-sm mb-0 btn-press"
@@ -96,7 +95,6 @@ export default function Upgrade() {
           Back
         </button>
 
-        {/* Gradient header — 200px */}
         <div
           className="text-center flex flex-col items-center justify-center -mx-4 sm:-mx-6 mb-8"
           style={{
@@ -116,11 +114,9 @@ export default function Upgrade() {
           </p>
         </div>
 
-        {/* Free vs Premium comparison — side-by-side */}
         <div className="mb-8 px-0" data-testid="section-free-vs-premium">
           <h2 className="font-bold text-white mb-4" style={{ fontSize: "17px" }}>Free vs Premium</h2>
           <div className="grid grid-cols-2 gap-3">
-            {/* Free card */}
             <div
               style={{
                 background: "#1A1A24",
@@ -144,7 +140,6 @@ export default function Upgrade() {
               </ul>
             </div>
 
-            {/* Premium card — 2px gradient border, purple tint, "Most Popular" badge */}
             <div
               className="relative"
               style={{
@@ -163,7 +158,6 @@ export default function Upgrade() {
                   height: "100%",
                 }}
               >
-                {/* Most Popular pill badge */}
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <span
                     className="flex items-center gap-1 text-white font-semibold"
@@ -196,7 +190,6 @@ export default function Upgrade() {
           </div>
         </div>
 
-        {/* Pricing tier cards */}
         {isLoading ? (
           <div className="flex justify-center py-12" data-testid="loading-plans">
             <Loader2 className="w-8 h-8 animate-spin" style={{ color: "#7C3AED" }} />
@@ -209,7 +202,6 @@ export default function Upgrade() {
           <>
             <h2 className="font-bold text-white mb-4" style={{ fontSize: "17px" }}>Choose Your Plan</h2>
 
-            {/* Stacked full-width cards */}
             <div className="space-y-3" data-testid="section-plan-cards">
               {activePlans.map((plan) => {
                 const isSelected = plan.id === effectiveSelectedId;
@@ -235,9 +227,7 @@ export default function Upgrade() {
                         padding: "16px",
                       }}
                     >
-                      {/* Row 1: duration label (left) + gradient price/week (center) + total (right) */}
                       <div className="flex items-center justify-between gap-2 mb-4">
-                        {/* Duration label */}
                         <div>
                           <p className="font-semibold text-white" style={{ fontSize: "15px" }} data-testid={`text-plan-name-${plan.id}`}>
                             {plan.name}
@@ -245,7 +235,6 @@ export default function Upgrade() {
                           <p style={{ fontSize: "12px", color: "#9090A8" }}>{plan.durationDays} days</p>
                         </div>
 
-                        {/* Large gradient price-per-week (center) */}
                         {plan.weeklyEquivalent && (
                           <div className="text-center">
                             <p
@@ -266,7 +255,6 @@ export default function Upgrade() {
                           </div>
                         )}
 
-                        {/* Total price (right) */}
                         <div className="text-right">
                           <p className="font-bold text-white" style={{ fontSize: "18px" }} data-testid={`text-plan-price-${plan.id}`}>
                             ${plan.priceUsd}
@@ -275,7 +263,6 @@ export default function Upgrade() {
                         </div>
                       </div>
 
-                      {/* Plan features */}
                       {plan.features && plan.features.length > 0 && (
                         <ul className="space-y-1.5 mb-4">
                           {plan.features.map((feature, i) => (
