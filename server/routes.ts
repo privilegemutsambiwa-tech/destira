@@ -56,13 +56,16 @@ const upload = multer({
   },
 });
 
+const vertexSaJson = process.env.GOOGLE_VERTEX_SA_JSON
+  ? (() => { try { return JSON.parse(process.env.GOOGLE_VERTEX_SA_JSON!); } catch { return undefined; } })()
+  : undefined;
+
 const ai = new GoogleGenAI({
-  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
-  httpOptions: {
-    apiVersion: "",
-    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
-  },
-});
+  vertexai: true,
+  project: "gen-lang-client-0303273462",
+  location: "us-central1",
+  ...(vertexSaJson ? { googleAuthOptions: { credentials: vertexSaJson } } : {}),
+} as any);
 
 export async function registerRoutes(
   httpServer: Server,
@@ -102,7 +105,7 @@ export async function registerRoutes(
     const { answers } = req.body;
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.0-flash-001",
         contents: [{ role: "user", parts: [{ text: JSON.stringify(answers) }] }],
         config: {
           systemInstruction: `You are an expert personality profiler for a dating app called VibeFlow. Based on the user's answers to soul-mapping questions, create a rich, warm, first-person AI Twin persona description. Write in first person as "I'm [the user]'s AI Twin." Include key values, interests, communication style, what they look for in a partner, and personality traits. Keep it to 2-3 paragraphs.`,
@@ -124,7 +127,7 @@ export async function registerRoutes(
       const profile = await storage.getProfile(userId);
       if (!profile) return res.status(404).json({ message: "Profile not found" });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.0-flash-001",
         contents: [{ role: "user", parts: [{ text: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName }) }] }],
         config: {
           systemInstruction: `Generate two short summaries for a dating profile. Return JSON with: {"aboutSummary": "A 1-2 sentence witty 'About Me' summary", "personalitySummary": "A 1-2 sentence personality passage based on their traits"}. Make them warm, genuine, and engaging.`,
@@ -457,7 +460,7 @@ ${PRIVACY_GUARDRAIL}`;
       if (lastFew.length < 2) return;
 
       const completion = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.0-flash-001",
         contents: [{ role: "user", parts: [{ text: JSON.stringify(lastFew) }] }],
         config: {
           systemInstruction: `You analyze conversations to extract key facts and a brief summary. Return JSON with:
@@ -538,7 +541,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         }));
 
         const stream = await ai.models.generateContentStream({
-          model: "gemini-3-flash-preview",
+          model: "gemini-2.0-flash-001",
           contents: geminiHistory,
           config: {
             systemInstruction: systemPrompt,
@@ -568,7 +571,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         }));
 
         const completion = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
+          model: "gemini-2.0-flash-001",
           contents: geminiHistory,
           config: {
             systemInstruction: systemPrompt,
@@ -640,7 +643,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         ];
 
         const stream = await ai.models.generateContentStream({
-          model: "gemini-3-flash-preview",
+          model: "gemini-2.0-flash-001",
           contents: geminiMsgs,
           config: {
             systemInstruction: systemPrompt + questionInjection,
@@ -682,7 +685,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         ];
 
         const completion = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
+          model: "gemini-2.0-flash-001",
           contents: geminiMsgs,
           config: {
             systemInstruction: systemPrompt + questionInjection,
@@ -793,7 +796,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
       const answers = await storage.getUserAnswers(userId);
 
       const completion = await ai.models.generateContent({
-        model: "gemini-3-pro-preview",
+        model: "gemini-1.5-pro-001",
         contents: [{ role: "user", parts: [{ text: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName, structured: structured || {}, answers: answers.slice(0, 20).map(a => a.answerText) }) }] }],
         config: {
           systemInstruction: `Generate an attractive, emotionally intelligent, and dating-appropriate "About Me" section (2-3 paragraphs) for a VibeFlow user. Base this solely on the provided profile data and question answers. Highlight their positive traits, interests, and what they seek in a partner. Ensure it is engaging and encourages connection. Strictly adhere to the privacy guardrail. Do not include any PII, exact locations, or sensitive information.\n\n${PRIVACY_GUARDRAIL}`,
@@ -820,7 +823,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
       const structured = await storage.getTwinProfileStructured(userId);
 
       const completion = await ai.models.generateContent({
-        model: "gemini-3-pro-preview",
+        model: "gemini-1.5-pro-001",
         contents: [{ role: "user", parts: [{ text: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName, structured: structured || {} }) }] }],
         config: {
           systemInstruction: `Generate a concise (2-4 lines) and elegant AI summary for a VibeFlow user's profile. This summary should capture their core personality, key values, and relationship style, designed to entice potential matches. Base it solely on the provided structured profile. Strictly adhere to the privacy guardrail. Do not include any PII or sensitive content.\n\n${PRIVACY_GUARDRAIL}`,
@@ -909,7 +912,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
       const personality = profile.personalityProfile;
 
       const completion = await ai.models.generateContent({
-        model: "gemini-3-pro-preview",
+        model: "gemini-1.5-pro-001",
         contents: [{ role: "user", parts: [{ text: JSON.stringify({ bio: profile.bio, personality, twinPersona: profile.twinPersona, answers: answers.map(a => a.answerText) }) }] }],
         config: {
           systemInstruction: `Analyze the user's profile data and question answers to extract structured personality traits. Return JSON with:

@@ -18,7 +18,7 @@ Always-dark UI. No light/dark toggle. Key tokens:
 - **Frontend**: React + Vite + TypeScript, wouter routing, TanStack Query, shadcn/ui, Tailwind CSS, Framer Motion
 - **Backend**: Express.js + TypeScript
 - **Database**: PostgreSQL (Neon via Replit) + Stripe schema (managed by stripe-replit-sync)
-- **AI**: Google Gemini (via Replit AI Integrations) - models: gemini-3-flash-preview (chat), gemini-3-pro-preview (profile generation/extraction)
+- **AI**: Google Gemini via Vertex AI (project: gen-lang-client-0303273462, us-central1) — models: gemini-2.0-flash-001 (chat/extraction), gemini-1.5-pro-001 (profile generation). Credentials from GOOGLE_VERTEX_SA_JSON secret (service account: globalintercessors@gen-lang-client-0303273462.iam.gserviceaccount.com)
 - **Auth**: Replit Auth (OIDC)
 - **Payments**: Stripe (via Replit Stripe Integration + stripe-replit-sync)
 
