@@ -10,9 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 interface StoryMedia {
   id: number;
   type: string;
-  url: string;
-  textContent?: string;
-  caption?: string;
+  url: string | null;
+  textContent?: string | null;
+  caption?: string | null;
 }
 
 interface StoryData {
@@ -24,6 +24,8 @@ interface StoryData {
   likeCount?: number;
   viewCount?: number;
 }
+
+export type OwnStory = StoryData & { viewCount: number; likeCount: number };
 
 interface StoryGroup {
   userId: string;
@@ -337,7 +339,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
 }
 
 interface OwnStoryViewerProps {
-  stories: (StoryData & { viewCount: number; likeCount: number })[];
+  stories: OwnStory[];
   onClose: () => void;
   onAddStory: () => void;
   userName?: string;
@@ -546,10 +548,17 @@ type StoryCreatorMode = null | "choose" | "photo-caption" | "text";
 interface AddStoryButtonProps {
   onStoryAdded?: () => void;
   mode?: "dashed" | "solid";
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function AddStoryButton({ onStoryAdded, mode = "dashed" }: AddStoryButtonProps) {
-  const [creatorMode, setCreatorMode] = useState<StoryCreatorMode>(null);
+export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlledOpen, onOpenChange }: AddStoryButtonProps) {
+  const [creatorMode, setCreatorMode] = useState<StoryCreatorMode>(controlledOpen ? "choose" : null);
+
+  useEffect(() => {
+    if (controlledOpen) setCreatorMode("choose");
+  }, [controlledOpen]);
+
   const [caption, setCaption] = useState("");
   const [textContent, setTextContent] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);

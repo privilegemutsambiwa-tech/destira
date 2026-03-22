@@ -150,7 +150,7 @@ export interface IStorage {
   getActiveStories(): Promise<any[]>;
   getUserStories(userId: string): Promise<Story[]>;
   deleteExpiredStories(): Promise<void>;
-  addStoryMedia(storyId: number, type: string, url: string, caption?: string, textContent?: string): Promise<StoryMedia>;
+  addStoryMedia(storyId: number, type: string, url: string | null, caption?: string, textContent?: string): Promise<StoryMedia>;
   deleteStory(id: number): Promise<void>;
   getStoryMedia(storyId: number): Promise<StoryMedia[]>;
   likeStory(storyId: number, userId: string): Promise<StoryLike>;
@@ -1148,15 +1148,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserStories(userId: string): Promise<Story[]> {
-    return db.select().from(stories).where(eq(stories.userId, userId)).orderBy(desc(stories.createdAt));
+    await db.delete(stories).where(lte(stories.expiresAt, new Date()));
+    return db.select().from(stories)
+      .where(and(eq(stories.userId, userId), gt(stories.expiresAt, new Date())))
+      .orderBy(desc(stories.createdAt));
   }
 
   async deleteExpiredStories(): Promise<void> {
     await db.delete(stories).where(lte(stories.expiresAt, new Date()));
   }
 
-  async addStoryMedia(storyId: number, type: string, url: string, caption?: string, textContent?: string): Promise<StoryMedia> {
-    const values: any = { storyId, type, url };
+  async addStoryMedia(storyId: number, type: string, url: string | null, caption?: string, textContent?: string): Promise<StoryMedia> {
+    const values: any = { storyId, type };
+    if (url !== null) values.url = url;
     if (caption) values.caption = caption;
     if (textContent) values.textContent = textContent;
     const [media] = await db.insert(storyMedia).values(values).returning();

@@ -16,7 +16,7 @@ import {
   CheckCircle2, ArrowRight, Check, X, Pencil,
   Brain, Sparkles, RefreshCw, Plus, LogOut, Settings
 } from "lucide-react";
-import { AddStoryButton, OwnStoryViewer } from "@/components/story-viewer";
+import { AddStoryButton, OwnStoryViewer, type OwnStory } from "@/components/story-viewer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -394,10 +394,18 @@ export default function Profile() {
                   Story active
                 </span>
               </div>
-              <AddStoryButton onStoryAdded={() => queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] })} />
+              <AddStoryButton
+                onStoryAdded={() => { setShowStoryCreator(false); queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] }); }}
+                open={showStoryCreator}
+                onOpenChange={setShowStoryCreator}
+              />
             </>
           ) : (
-            <AddStoryButton onStoryAdded={() => queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] })} />
+            <AddStoryButton
+              onStoryAdded={() => { setShowStoryCreator(false); queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] }); }}
+              open={showStoryCreator}
+              onOpenChange={setShowStoryCreator}
+            />
           )}
         </div>
 
@@ -855,9 +863,9 @@ export default function Profile() {
 
       {showOwnStoryViewer && hasStories && (
         <OwnStoryViewer
-          stories={ownStories as any[]}
+          stories={ownStories as OwnStory[]}
           onClose={() => setShowOwnStoryViewer(false)}
-          onAddStory={() => { setShowOwnStoryViewer(false); }}
+          onAddStory={() => { setShowOwnStoryViewer(false); setShowStoryCreator(true); }}
           userName={profile.displayName || user?.firstName || "You"}
           profileImageUrl={avatarUrl || undefined}
         />

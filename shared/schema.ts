@@ -321,7 +321,7 @@ export const storyMedia = pgTable("story_media", {
   id: serial("id").primaryKey(),
   storyId: integer("story_id").notNull().references(() => stories.id),
   type: text("type").notNull().default("image"),
-  url: text("url").notNull().default(""),
+  url: text("url"),
   textContent: text("text_content"),
   caption: text("caption"),
   orderIndex: integer("order_index").default(0),
