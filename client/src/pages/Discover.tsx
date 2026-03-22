@@ -136,16 +136,19 @@ export default function Discover() {
   };
 
   const handleLike = async () => {
-    handleNext("right");
     try {
       await createMatch.mutateAsync(currentProfile.userId);
       toast({
         title: "Liked!",
         description: `${currentProfile.displayName} will be notified.`,
       });
+      handleNext("right");
     } catch (error: any) {
       if (error.message?.includes("already exists")) {
         toast({ title: "Already Connected", description: "You already have a match request with this person." });
+        handleNext("right");
+      } else {
+        toast({ title: "Could not like", description: "Something went wrong. Please try again.", variant: "destructive" });
       }
     }
   };

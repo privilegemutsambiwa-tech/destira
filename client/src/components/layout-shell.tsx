@@ -32,24 +32,15 @@ export function LayoutShell({ children }: LayoutShellProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mobile header — centered logo only */}
+      {/* Mobile header — logo only, centered */}
       <header className="sticky top-0 z-50 md:hidden bg-white border-b" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-        <div className="flex items-center justify-center h-14 relative px-4">
+        <div className="flex items-center justify-center h-14 px-4">
           <Link href="/">
             <div className="flex items-center gap-2 cursor-pointer" data-testid="link-logo-mobile">
               <img src="/brand/logo.png" alt="VibeFlow" className="w-8 h-8 rounded-lg object-cover" />
               <span className="font-display font-bold text-lg tracking-tight" style={{ color: "#1F2937" }}>VibeFlow</span>
             </div>
           </Link>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-3 h-9 w-9"
-            onClick={() => logout()}
-            data-testid="button-logout-mobile"
-          >
-            <LogOut className="w-4 h-4 text-muted-foreground" />
-          </Button>
         </div>
       </header>
 
