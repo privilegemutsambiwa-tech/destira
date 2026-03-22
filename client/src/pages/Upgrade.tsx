@@ -55,7 +55,11 @@ export default function Upgrade() {
       return await res.json();
     },
     onSuccess: (data: { url: string }) => {
-      if (data.url) window.location.href = data.url;
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setCheckingOutPlanId(null);
+      }
     },
     onError: (error: Error) => {
       setCheckingOutPlanId(null);
