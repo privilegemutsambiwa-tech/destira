@@ -45,4 +45,4 @@ expertMode = true
 [userenv]
 
 [userenv.shared]
-DATABASE_URL = "postgresql://postgres.sscpgakmkbiocugvbjmh: qmgolfT8I9p5J1lM@aws-1-eu-west-3.pooler.supabase.com:6543/postgres"
+DATABASE_URL = "postgresql://postgres.sscpgakmkbiocugvbjmh:qmgolfT8I9p5J1lM@aws-1-eu-west-3.pooler.supabase.com:6543/postgres"
