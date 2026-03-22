@@ -4,7 +4,6 @@ import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useSubscription, useGenerateSummary, useProfileCompletion, useGenerateAboutMe, useGenerateAISummary, useTwinToneProfile, useUpdateTwinToneProfile, useTwinStructuredProfile, useExtractTwinProfile, useQuestionsProgress } from "@/hooks/use-interactions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -12,12 +11,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "@/components/ui/dialog";
 import {
-  Loader2, MapPin, Eye, EyeOff,
+  Loader2, MapPin,
   Camera, Crown, Wand2, Trash2, ImagePlus,
-  CheckCircle2, Zap, Rocket, ArrowRight, Check, X, Pencil,
-  Brain, Sparkles, RefreshCw, Shield, Volume2, Plus, LogOut
+  CheckCircle2, ArrowRight, Check, X, Pencil,
+  Brain, Sparkles, RefreshCw, Plus, LogOut, Settings
 } from "lucide-react";
-import { AddStoryButton } from "@/components/story-viewer";
+import { AddStoryButton, OwnStoryViewer } from "@/components/story-viewer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -54,6 +53,8 @@ export default function Profile() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showToneDialog, setShowToneDialog] = useState(false);
   const [aboutMePreview, setAboutMePreview] = useState<string | null>(null);
+  const [showOwnStoryViewer, setShowOwnStoryViewer] = useState(false);
+  const [showStoryCreator, setShowStoryCreator] = useState(false);
   const [toneValues, setToneValues] = useState({
     tone_style: "supportive",
     verbosity_level: "balanced",
@@ -65,6 +66,16 @@ export default function Profile() {
     queryKey: ["/api/photos", user?.id],
     queryFn: async () => {
       const res = await fetch(`/api/photos/${user!.id}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
+
+  const { data: ownStories } = useQuery<any[]>({
+    queryKey: ["/api/stories/mine"],
+    queryFn: async () => {
+      const res = await fetch("/api/stories/mine", { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -107,20 +118,8 @@ export default function Profile() {
   }
 
   const personalityTraits = profile.personalityProfile && typeof profile.personalityProfile === 'object'
-    ? Object.entries(profile.personalityProfile as Record<string, any>)
+    ? Object.values(profile.personalityProfile as Record<string, any>).filter((v): v is string => typeof v === 'string')
     : [];
-
-  const handleToggleVisibility = async () => {
-    try {
-      await updateProfile.mutateAsync({
-        userId: user!.id,
-        data: { isPublic: !profile.isPublic },
-      });
-      toast({ title: profile.isPublic ? "Profile set to private" : "Profile set to public" });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to update visibility.", variant: "destructive" });
-    }
-  };
 
   const handleGenerateSummary = async () => {
     try {
@@ -193,7 +192,8 @@ export default function Profile() {
     : profile.coverPhotoUrl || null;
 
   const avatarFallbackLetter = profile.displayName?.[0] || user?.firstName?.[0] || "?";
-  const highlightChips = personalityTraits.slice(0, 6);
+  const highlightChips: string[] = personalityTraits.slice(0, 6);
+  const hasStories = (ownStories?.length ?? 0) > 0;
 
   const planFeatures = {
     free: [
@@ -314,7 +314,20 @@ export default function Profile() {
                 <ImagePlus className="w-4 h-4" />
                 Photos
               </button>
-              <AddStoryButton />
+              <button
+                onClick={() => setLocation("/settings")}
+                className="flex items-center gap-1.5 font-medium text-sm btn-press px-4 py-2"
+                style={{
+                  background: "#1A1A24",
+                  color: "#FFFFFF",
+                  borderRadius: "10px",
+                  border: "1px solid #2E2E42",
+                }}
+                data-testid="button-open-settings"
+              >
+                <Settings className="w-4 h-4" />
+                Settings
+              </button>
             </div>
           </div>
         </div>
@@ -340,6 +353,51 @@ export default function Profile() {
             >
               <Plus className="w-5 h-5" style={{ color: "#9090A8" }} />
             </button>
+          )}
+        </div>
+
+        {/* Story section */}
+        <div className="flex items-center gap-4 px-4 py-3" data-testid="section-profile-stories">
+          {hasStories ? (
+            <>
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  onClick={() => setShowOwnStoryViewer(true)}
+                  style={{
+                    padding: "2px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                  data-testid="button-view-own-story"
+                >
+                  <div style={{ padding: "2px", borderRadius: "50%", background: "#0F0F14" }}>
+                    <div
+                      className="w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl"
+                      style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", color: "#FFFFFF" }}
+                    >
+                      {(profile.displayName || user?.firstName || "U")[0]}
+                    </div>
+                  </div>
+                </button>
+                <span
+                  className="text-xs font-medium"
+                  style={{
+                    background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}
+                  data-testid="text-story-active"
+                >
+                  Story active
+                </span>
+              </div>
+              <AddStoryButton onStoryAdded={() => queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] })} />
+            </>
+          ) : (
+            <AddStoryButton onStoryAdded={() => queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] })} />
           )}
         </div>
 
@@ -390,30 +448,6 @@ export default function Profile() {
                 ))}
               </div>
             )}
-
-            {/* Stats row */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center p-5" style={CARD_STYLE} data-testid="tile-super-matches">
-                <Zap className="w-5 h-5 mx-auto mb-1" style={{ color: "#F59E0B" }} />
-                <p className="text-xl font-bold text-white">{profile.superMatchesRemaining || 0}</p>
-                <p className="text-xs" style={{ color: "#9090A8" }}>Super Matches</p>
-              </div>
-              <div className="text-center p-5" style={CARD_STYLE} data-testid="tile-boosts">
-                <Rocket className="w-5 h-5 mx-auto mb-1" style={{ color: "#60A5FA" }} />
-                <p className="text-xl font-bold text-white">{profile.boostsRemaining || 0}</p>
-                <p className="text-xs" style={{ color: "#9090A8" }}>Boosts</p>
-              </div>
-              <div
-                className="text-center p-5 cursor-pointer card-lift"
-                style={CARD_STYLE}
-                onClick={() => setLocation("/upgrade")}
-                data-testid="tile-subscription"
-              >
-                <Crown className="w-5 h-5 mx-auto mb-1" style={{ color: "#F59E0B" }} />
-                <p className="text-xl font-bold text-white">{tierLabel}</p>
-                <p className="text-xs" style={{ color: "#9090A8" }}>Subscription</p>
-              </div>
-            </div>
 
             {/* About Me */}
             <div style={CARD_STYLE} className="p-5">
@@ -505,7 +539,7 @@ export default function Profile() {
 
               {highlightChips.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-4 pt-3" style={{ borderTop: "1px solid #2E2E42" }}>
-                  {highlightChips.map(([trait]) => (
+                  {highlightChips.map((trait) => (
                     <span
                       key={trait}
                       className="capitalize text-xs font-medium px-2 py-0.5"
@@ -649,69 +683,6 @@ export default function Profile() {
               })()}
             </div>
 
-            {/* Twin Tone */}
-            <div style={CARD_STYLE} className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(124,58,237,0.18)" }}>
-                    <Volume2 className="w-4 h-4" style={{ color: "#A78BFA" }} />
-                  </div>
-                  <h3 className="font-bold text-white" style={{ fontSize: "16px" }}>Twin Tone</h3>
-                </div>
-                <button
-                  onClick={() => { if (toneProfile) setToneValues(toneProfile); setShowToneDialog(true); }}
-                  className="text-xs font-medium flex items-center gap-1"
-                  style={{ color: "#A78BFA" }}
-                  data-testid="button-edit-tone"
-                >
-                  <Pencil className="w-3 h-3" />
-                  Edit
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: "Style", value: toneProfile?.tone_style || "Supportive" },
-                  { label: "Verbosity", value: toneProfile?.verbosity_level || "Balanced" },
-                  { label: "Formality", value: toneProfile?.formality_level || "Neutral" },
-                  { label: "Expression", value: toneProfile?.emoji_usage || "Minimal" },
-                ].map(({ label, value }) => (
-                  <div key={label} style={SURFACE2}>
-                    <p className="text-xs mb-0.5" style={{ color: "#9090A8" }}>{label}</p>
-                    <p className="text-sm font-medium text-white capitalize">{value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Privacy */}
-            <div style={CARD_STYLE} className="p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(124,58,237,0.18)" }}>
-                  <Shield className="w-4 h-4" style={{ color: "#A78BFA" }} />
-                </div>
-                <h3 className="font-bold text-white" style={{ fontSize: "16px" }}>Privacy Settings</h3>
-              </div>
-              <div className="flex items-center justify-between gap-4 p-3" style={{ background: "#242433", borderRadius: "12px" }}>
-                <div className="flex items-center gap-3">
-                  {profile.isPublic ? (
-                    <Eye className="w-5 h-5" style={{ color: "#A78BFA" }} />
-                  ) : (
-                    <EyeOff className="w-5 h-5" style={{ color: "#9090A8" }} />
-                  )}
-                  <div>
-                    <p className="text-sm font-semibold text-white">Public Profile</p>
-                    <p className="text-xs" style={{ color: "#9090A8" }}>
-                      {profile.isPublic ? "Others can see your real photos" : "Others see your AI cartoon avatar instead"}
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={profile.isPublic}
-                  onCheckedChange={handleToggleVisibility}
-                  data-testid="switch-visibility"
-                />
-              </div>
-            </div>
           </div>
 
           {/* Sidebar — Your Plan */}
@@ -881,6 +852,16 @@ export default function Profile() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {showOwnStoryViewer && hasStories && (
+        <OwnStoryViewer
+          stories={ownStories as any[]}
+          onClose={() => setShowOwnStoryViewer(false)}
+          onAddStory={() => { setShowOwnStoryViewer(false); }}
+          userName={profile.displayName || user?.firstName || "You"}
+          profileImageUrl={avatarUrl || undefined}
+        />
+      )}
     </LayoutShell>
   );
 }

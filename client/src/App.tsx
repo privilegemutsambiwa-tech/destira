@@ -22,6 +22,7 @@ import Billing from "@/pages/Billing";
 import Upgrade from "@/pages/Upgrade";
 import GroupChatPage from "@/pages/GroupChat";
 import GroupInfoPage from "@/pages/GroupInfo";
+import Settings from "@/pages/Settings";
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
   const { user, isLoading } = useAuth();
@@ -120,6 +121,9 @@ function Router() {
       </Route>
       <Route path="/upgrade">
         <ProtectedRoute component={Upgrade} />
+      </Route>
+      <Route path="/settings">
+        <ProtectedRoute component={Settings} />
       </Route>
 
       <Route component={NotFound} />

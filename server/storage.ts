@@ -150,7 +150,8 @@ export interface IStorage {
   getActiveStories(): Promise<any[]>;
   getUserStories(userId: string): Promise<Story[]>;
   deleteExpiredStories(): Promise<void>;
-  addStoryMedia(storyId: number, type: string, url: string, caption?: string): Promise<StoryMedia>;
+  addStoryMedia(storyId: number, type: string, url: string, caption?: string, textContent?: string): Promise<StoryMedia>;
+  deleteStory(id: number): Promise<void>;
   getStoryMedia(storyId: number): Promise<StoryMedia[]>;
   likeStory(storyId: number, userId: string): Promise<StoryLike>;
   unlikeStory(storyId: number, userId: string): Promise<void>;
@@ -1154,11 +1155,20 @@ export class DatabaseStorage implements IStorage {
     await db.delete(stories).where(lte(stories.expiresAt, new Date()));
   }
 
-  async addStoryMedia(storyId: number, type: string, url: string, caption?: string): Promise<StoryMedia> {
+  async addStoryMedia(storyId: number, type: string, url: string, caption?: string, textContent?: string): Promise<StoryMedia> {
     const values: any = { storyId, type, url };
     if (caption) values.caption = caption;
+    if (textContent) values.textContent = textContent;
     const [media] = await db.insert(storyMedia).values(values).returning();
     return media;
+  }
+
+  async deleteStory(id: number): Promise<void> {
+    await db.delete(storyMedia).where(eq(storyMedia.storyId, id));
+    await db.delete(storyLikes).where(eq(storyLikes.storyId, id));
+    await db.delete(storyComments).where(eq(storyComments.storyId, id));
+    await db.delete(storyViews).where(eq(storyViews.storyId, id));
+    await db.delete(stories).where(eq(stories.id, id));
   }
 
   async getStoryMedia(storyId: number): Promise<StoryMedia[]> {

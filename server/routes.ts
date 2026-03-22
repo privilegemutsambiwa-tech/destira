@@ -2070,6 +2070,39 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Create a text-only story
+  app.post("/api/stories/text", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const { textContent, caption } = req.body;
+      if (!textContent?.trim()) return res.status(400).json({ message: "textContent is required" });
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const story = await storage.createStory(userId, expiresAt);
+      await storage.addStoryMedia(story.id, "text", "", caption || "", textContent.trim());
+      const media = await storage.getStoryMedia(story.id);
+      res.json({ ...story, media });
+    } catch (e) {
+      console.error("Create text story error:", e);
+      res.status(500).json({ message: "Failed to create text story" });
+    }
+  });
+
+  // Delete own story
+  app.delete("/api/stories/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const story = await storage.getStory(parseInt(req.params.id));
+      if (!story) return res.status(404).json({ message: "Story not found" });
+      if (story.userId !== userId) return res.sendStatus(403);
+      await storage.deleteStory(parseInt(req.params.id));
+      res.json({ deleted: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to delete story" });
+    }
+  });
+
   // ============ PLANS ============
 
   // Get all active plans
