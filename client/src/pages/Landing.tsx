@@ -1,4 +1,3 @@
-import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Brain, Heart, Shield, Play } from "lucide-react";
 import { motion } from "framer-motion";
@@ -12,13 +11,15 @@ const ROMANCE_IMAGES = [
 ];
 
 export default function Landing() {
-  const [, setLocation] = useLocation();
+  const handleLogin = () => {
+    window.open("/api/login", "_blank");
+  };
 
   const handleDemo = async () => {
     try {
       await fetch("/api/demo/seed", { method: "POST" });
     } catch (e) {}
-    window.location.href = "/api/login";
+    window.open("/api/login", "_blank");
   };
 
   return (
@@ -30,14 +31,10 @@ export default function Landing() {
             <span className="font-display font-bold text-xl tracking-tight">VibeFlow</span>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            <a href="/api/login">
-              <Button variant="ghost" className="font-medium btn-press" data-testid="button-login">Log In</Button>
-            </a>
-            <a href="/api/login">
-              <Button className="font-medium gradient-bg text-white rounded-full px-6 btn-press" data-testid="button-get-started">
-                Get Started
-              </Button>
-            </a>
+            <Button variant="ghost" className="font-medium btn-press" onClick={handleLogin} data-testid="button-login">Log In</Button>
+            <Button className="font-medium gradient-bg text-white rounded-full px-6 btn-press" onClick={handleLogin} data-testid="button-get-started">
+              Get Started
+            </Button>
           </div>
         </div>
       </nav>
@@ -69,11 +66,9 @@ export default function Landing() {
                   Stop swiping on faces. Start connecting with personalities. VibeFlow uses an AI Twin trained on your values to find your perfect match.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <a href="/api/login">
-                    <Button size="lg" className="rounded-full text-lg h-14 px-8 gradient-bg text-white shadow-lg shadow-primary/25 btn-press" data-testid="button-create-twin">
-                      Create Your AI Twin <ArrowRight className="ml-2 w-5 h-5" />
-                    </Button>
-                  </a>
+                  <Button size="lg" onClick={handleLogin} className="rounded-full text-lg h-14 px-8 gradient-bg text-white shadow-lg shadow-primary/25 btn-press" data-testid="button-create-twin">
+                    Create Your AI Twin <ArrowRight className="ml-2 w-5 h-5" />
+                  </Button>
                   <Button
                     size="lg"
                     variant="outline"
