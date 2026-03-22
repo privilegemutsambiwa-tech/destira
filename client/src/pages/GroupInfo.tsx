@@ -454,9 +454,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             </button>
           ))}
 
-          <button
-            onClick={() => setMembersExpanded(!membersExpanded)}
-            className="w-full text-left"
+          <div
             style={{
               background: "#1A1A24",
               border: "1px solid #2E2E42",
@@ -465,7 +463,14 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             }}
             data-testid="card-members"
           >
-            <div className="flex items-center justify-between gap-2" style={{ height: "52px" }}>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setMembersExpanded(!membersExpanded)}
+              onKeyDown={(e) => e.key === "Enter" && setMembersExpanded(!membersExpanded)}
+              className="flex items-center justify-between gap-2 cursor-pointer"
+              style={{ height: "52px" }}
+            >
               <div className="flex items-center gap-3">
                 <Users className="w-5 h-5" style={{ color: "#9090A8" }} />
                 <span className="text-sm font-medium text-white">Members ({sortedMembers.length})</span>
@@ -476,7 +481,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
               />
             </div>
             {membersExpanded && (
-              <div className="mt-1 mb-3 space-y-0" onClick={(e) => e.stopPropagation()}>
+              <div className="mb-3 space-y-0">
                 {sortedMembers.map((member: any) => (
                   <div key={member.id} className="flex items-center justify-between gap-2 py-2.5" style={{ borderTop: "1px solid #2E2E42" }} data-testid={`member-${member.id}`}>
                     <div className="flex items-center gap-3 min-w-0">
@@ -531,7 +536,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                 ))}
               </div>
             )}
-          </button>
+          </div>
 
           {isAdmin && (
             <div
