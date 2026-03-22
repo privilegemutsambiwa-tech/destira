@@ -1,0 +1,410 @@
+You are a senior UI/UX designer and frontend engineer specializing in 
+premium mobile dating applications. Redesign every screen of VibeFlow 
+to be maximally professional — the standard is Hinge meets Locket meets 
+a high-end fintech app. Every pixel must feel intentional.
+
+======================================================
+DESIGN SYSTEM — APPLY EVERYWHERE
+======================================================
+
+Colors:
+  Primary:     #7C3AED  (deep violet)
+  Secondary:   #EC4899  (hot pink)
+  Gradient:    linear-gradient(135deg, #7C3AED, #EC4899)
+  Background:  #0F0F14  (near-black, dark mode base)
+  Surface:     #1A1A24  (card background)
+  Surface2:    #242433  (elevated card)
+  Border:      #2E2E42  (subtle borders)
+  Text Primary:   #FFFFFF
+  Text Secondary: #9090A8
+  Success:     #22C55E
+  Danger:      #EF4444
+  Warning:     #F59E0B
+
+Typography:
+  Font: Inter (import from Google Fonts)
+  Headings: font-weight 700, letter-spacing -0.5px
+  Body: font-weight 400
+  Labels: font-weight 500, uppercase, letter-spacing 1px, font-size 11px
+
+Spacing: 8px grid system (8, 16, 24, 32, 48)
+
+Border Radius:
+  Cards: 20px
+  Buttons: 14px
+  Pills/Tags: 100px
+  Avatars: 50% (circle)
+
+Shadows:
+  Card: 0 8px 32px rgba(0,0,0,0.4)
+  Button: 0 4px 20px rgba(124,58,237,0.4)
+  Glow: 0 0 40px rgba(124,58,237,0.15)
+
+Bottom Navigation:
+  Background: #0F0F14 with top border #2E2E42
+  Height: 64px
+  Active icon: gradient color fill + label
+  Inactive icon: #9090A8
+  Add a 2px gradient underline indicator on active tab
+  Icons: use Lucide React icons throughout
+
+======================================================
+SCREEN 1 — DISCOVER PAGE (Full Redesign)
+======================================================
+
+Layout: Full-screen swipeable card stack (like Hinge)
+
+TOP HEADER:
+  - Left: VibeFlow logo (small, 28px)
+  - Center: "Discover" in white, font-weight 700
+  - Right: Filter icon button (sliders icon, white)
+  - Below header: horizontally scrollable story row
+
+STORY ROW (below header, above cards):
+  - Horizontal scroll, no scrollbar
+  - Each story = 56px circle with 2px gradient ring if story exists
+  - No story = grey dashed ring with + icon (labeled "Add Story" for own)
+  - Each story has user's first name below in 10px white text
+  - First circle = current user's own story slot
+  - Story ring animation: rotating gradient border (CSS animation)
+
+MAIN PROFILE CARD:
+  - Takes up ~75% of screen height
+  - Full bleed image or gradient background (if no photo)
+  - At top-left of card: story preview circle (48px)
+    → If user has a story: solid gradient ring, tappable → opens story viewer
+    → If no story: no ring shown
+  - Bottom of card has a frosted glass overlay (backdrop-blur: 20px, 
+    background: rgba(0,0,0,0.5))
+  - In the frosted overlay:
+    → Name, Age in 26px bold white
+    → Location with pin icon in 14px #9090A8
+    → Compatibility score: show "✦ 84% Match" in gradient text, 14px
+    → 3 personality trait pills: e.g. "Openness 92%" styled as small 
+       gradient-border pills
+
+BELOW THE CARD (action buttons):
+  - Three buttons in a row, centered
+  - LEFT: PASS button
+    → 64px circle
+    → Background: #1A1A24
+    → Border: 2px solid #EF4444
+    → Icon: X in #EF4444, 28px
+    → On hover/press: background becomes rgba(239,68,68,0.15)
+  - CENTER: INTERVIEW AI TWIN button  
+    → 52px circle
+    → Gradient background (#7C3AED to #EC4899)
+    → Brain icon in white, 22px
+    → Box shadow: 0 4px 20px rgba(124,58,237,0.5)
+  - RIGHT: LIKE button
+    → 64px circle
+    → Background: #1A1A24
+    → Border: 2px solid #EC4899
+    → Icon: Heart in #EC4899, 28px
+    → On hover/press: background becomes rgba(236,72,153,0.15)
+
+  - Below buttons: "X of 5 profiles" in 12px #9090A8, centered
+
+SWIPE INDICATORS:
+  - Swipe left → show red "PASS" stamp overlay (top-left of card, rotated -15deg)
+  - Swipe right → show green "LIKE" stamp overlay (top-right, rotated 15deg)
+
+======================================================
+SCREEN 2 — STORY VIEWER (New Screen)
+======================================================
+
+When a story circle is tapped on the Discover card:
+
+  - Full screen takeover with black background
+  - Top: progress bar(s) showing story duration (like Instagram)
+    → Each segment = one story item, auto-advances
+    → Duration: 5 seconds per story
+  - Top-left: user avatar (36px circle) + name + "Today"
+  - Top-right: X button to close
+  - Story content: image fills screen with object-fit: cover
+  - If no image: gradient background with user's name in large text
+  - Bottom: semi-transparent bar with "Interview their Twin" button
+  - Stories disappear after 24 hours (handle with created_at timestamp)
+
+======================================================
+SCREEN 3 — CHAT PAGE
+======================================================
+
+HEADER:
+  - "Messages" title, bold white, 22px
+  - Right: compose/edit icon
+
+TWIN CARD (pinned at top):
+  - Background: gradient (#7C3AED to #5B21B6)
+  - Rounded: 20px
+  - Left: brain icon in white circle (48px, semi-transparent white bg)
+  - Title: "My AI Twin" in white bold 17px
+  - Subtitle: "Private • Memory enabled" in white 70% opacity 13px
+  - Bottom row: green dot "Active" + memory count "3 traits learned"
+  - Right arrow in white
+
+SEARCH BAR:
+  - Background: #1A1A24
+  - Border: 1px solid #2E2E42
+  - Placeholder: "Search messages..." in #9090A8
+  - Search icon in #9090A8
+  - Border radius: 12px
+  - Height: 44px
+
+FILTER TABS: (All | Matches | AI Twin)
+  - Active: gradient background pill, white text
+  - Inactive: transparent, #9090A8 text, border #2E2E42
+
+EMPTY STATE:
+  - Icon: chat bubble with sparkle, 64px, gradient color
+  - Title: "No conversations yet" bold white 20px
+  - Subtitle: "Discover people and start connecting" #9090A8 15px
+  - Button: gradient "Discover People" button, full width, 52px height
+
+======================================================
+SCREEN 4 — LIKES PAGE
+======================================================
+
+HEADER:
+  - "Likes" title
+  - Tab row: "Liked You" | "You Liked" | "Matches"
+    → Active tab has gradient underline, white text
+    → Inactive: #9090A8
+
+EMPTY STATE (when no likes):
+  - Gradient heart icon (80px) centered
+  - "No likes yet" in white bold 22px
+  - "Keep exploring to find your match" in #9090A8
+  - "Discover People" gradient button
+
+WHEN LIKES EXIST (for future use):
+  - Grid of 2 columns
+  - Each card: blurred photo (for free users), name, age, compatibility %
+  - Unlock button overlay for premium blur effect
+
+======================================================
+SCREEN 5 — LOUNGE PAGE
+======================================================
+
+HEADER:
+  - "Lounge" bold white 28px
+  - Subtitle: "Connect in interest-based groups" #9090A8 14px
+
+SEARCH + CREATE ROW:
+  - Search: flex-1, dark input, rounded
+  - Create Group: gradient button, 44px height, "+ Create" label
+
+FILTER TABS: All | Joined | Popular | New
+  - Same pill style as chat tabs
+
+SECTION LABEL "YOUR GROUPS":
+  - 11px uppercase, #9090A8, letter-spacing 1.5px
+  - Left-aligned above group list
+
+GROUP CARDS:
+  - Background: #1A1A24
+  - Border: 1px solid #2E2E42
+  - Border radius: 16px
+  - Left: group icon in 48px circle with gradient background
+  - Title: white bold 16px
+  - Description: #9090A8 13px, truncated to 1 line
+  - Bottom row: people icon + member count + time since created
+  - Right side (for non-joined groups): "Join" pill button 
+    → gradient background, white text, 32px height
+  - Joined groups: show unread message count badge if applicable
+
+======================================================
+SCREEN 6 — GROUP CHAT PAGE
+======================================================
+
+HEADER:
+  - Back arrow (left)
+  - Center: group icon (32px) + group name bold + member count
+  - Right: info icon (ⓘ)
+
+MESSAGES:
+  - Other users: message bubble on LEFT
+    → Background: #1A1A24, border-radius: 18px 18px 18px 4px
+    → Show avatar (32px circle) to left of bubble
+    → Username above bubble in 11px #9090A8
+  - Own messages: bubble on RIGHT
+    → Gradient background
+    → Border-radius: 18px 18px 4px 18px
+  - Timestamps: centered between message groups, 11px #9090A8
+
+INPUT BAR:
+  - Background: #1A1A24
+  - Border-top: 1px solid #2E2E42
+  - Input field: 44px height, rounded, placeholder "Message..."
+  - Right: gradient send button circle (40px) with arrow icon
+
+======================================================
+SCREEN 7 — GROUP INFO PAGE
+======================================================
+
+HERO:
+  - Full-width group image or gradient banner (160px tall)
+  - Group icon centered, overlapping bottom of banner (64px circle)
+  - Group name below: bold white 22px
+  - Member count: #9090A8 14px
+
+ACTION BUTTONS ROW: (Add | Search | Mute | Share)
+  - 4 equal circle buttons
+  - 52px each, background #1A1A24, border #2E2E42
+  - Icon + label below in 11px #9090A8
+
+INFO CARD:
+  - Description text
+  - "Group Rules" section with rules or "No rules set yet"
+
+SECTION ROWS (Media | Starred | Members):
+  - Each row: icon (left) + label + count + chevron right
+  - Background: #1A1A24, border: 1px solid #2E2E42, radius: 12px
+  - 52px height each
+  - Members section expands to show avatar list
+
+LEAVE GROUP BUTTON:
+  - Full width, 52px
+  - Background: rgba(239,68,68,0.1)
+  - Border: 1px solid #EF4444
+  - Text: #EF4444 "Leave Group"
+  - Border radius: 14px
+
+======================================================
+SCREEN 8 — PROFILE PAGE
+======================================================
+
+HERO SECTION:
+  - Full-width banner: gradient (#7C3AED to #EC4899), 200px tall
+  - Profile avatar: 96px circle, centered, overlapping bottom of banner
+    → Has gradient ring border (3px) if story exists
+    → Tapping ring opens own story viewer
+  - Name: bold white 24px, centered below avatar
+  - Username/tagline: #9090A8 14px
+
+QUICK ACTION BUTTONS ROW:
+  - "Edit Profile" and "Photos" side by side (equal width)
+  - Outlined buttons: border #2E2E42, white text, 44px height, radius 12px
+  - "Add Story" circle button to the right (48px, dashed gradient border)
+
+PROFILE COMPLETION CARD (if < 100%):
+  - Background: linear-gradient(135deg, rgba(124,58,237,0.15), rgba(236,72,153,0.15))
+  - Border: 1px solid rgba(124,58,237,0.3)
+  - "45% Complete" in bold white
+  - Progress bar: gradient fill, 8px height, rounded
+  - Below bar: next step CTA with arrow button
+
+STATS ROW: (Super Matches | Boosts | Plan)
+  - 3 equal cards in a row
+  - Background: #1A1A24, border: 1px solid #2E2E42, radius: 16px
+  - Icon (colored) + number/label centered in each
+
+ABOUT ME CARD:
+  - "About Me" label bold white 16px
+  - Right: "Generate ✦" and "Quick Summary ✦" as small gradient text buttons
+  - Bio text in #9090A8 15px
+  - REMOVE the numbered pink buttons (0–5) — replace with:
+    → A row of small photo thumbnail slots (3 visible, +more indicator)
+    → Tapping a slot opens photo picker
+
+TWIN INTELLIGENCE CARD:
+  - Background: #1A1A24, border: 1px solid rgba(124,58,237,0.3)
+  - Header: brain icon (gradient) + "Twin Intelligence" bold white
+  - "Interview AI Twin" full-width gradient button
+  - Progress: "X of 100 questions answered" with gradient progress bar
+  - Motivational message in italic #9090A8
+
+TWIN TONE CARD:
+  - 2x2 grid of tone attributes
+  - Each cell: small label in #9090A8 + value in white bold
+  - Background cells: #242433, radius 10px
+  - "Edit" button top-right in gradient text
+
+PRIVACY SETTINGS CARD:
+  - Standard toggle rows
+  - Toggle: purple when on, grey when off
+
+YOUR PLAN CARD:
+  - Show current plan badge prominently
+  - Green checkmarks for included features (white text)
+  - Grey X marks for locked features (#9090A8, slightly smaller)
+  - "Upgrade Now" full-width gradient button, 52px
+
+======================================================
+SCREEN 9 — PRICING / UPGRADE PAGE
+======================================================
+
+HEADER:
+  - Background: gradient (#7C3AED to #EC4899)
+  - "Upgrade to Premium" bold white 24px
+  - "Unlock the full VibeFlow experience" white 80% 14px
+
+PLAN COMPARISON (two cards, side by side):
+  - Free: #1A1A24 background, border #2E2E42
+  - Premium: gradient border (2px), background rgba(124,58,237,0.1)
+  - "Most Popular" badge on Premium: gradient pill, top-right corner
+  - Feature list with ✓ and ✗ icons, clean spacing
+
+PRICING TIERS (stacked vertically, full width):
+  Each card:
+  - Background: #1A1A24, border: 1px solid #2E2E42, radius: 16px
+  - Left: duration label ("1 Month") in bold white
+  - Center: price per week in large gradient text
+  - Right: total price smaller
+  - "Most Popular" gets gradient border + purple tint background
+  - "Choose Plan" button inside each card, full width, 44px
+
+======================================================
+STORY SYSTEM — TECHNICAL REQUIREMENTS
+======================================================
+
+1. Add a `stories` table to Supabase:
+   - id, user_id, media_url (or text if no image), created_at
+   - Stories older than 24 hours are excluded from queries
+
+2. On Discover cards:
+   - Fetch story for each displayed user
+   - If story exists: show gradient ring on their avatar circle (top-left of card)
+   - Ring should be a CSS animated gradient border (rotating)
+   - Tapping opens the Story Viewer full-screen modal
+
+3. On Profile page:
+   - "Add Story" button opens a simple story creator:
+     → Option 1: Type a text story (shown on gradient background)
+     → Option 2: Upload an image (stored in Supabase Storage)
+   - After posting, the ring appears on own profile avatar
+   - Show "Story active — expires in Xh Xm" below story button
+
+4. Story Viewer modal:
+   - Full screen
+   - Progress bar at top auto-advances every 5 seconds
+   - Shows poster's name + avatar top-left
+   - Close (X) button top-right
+   - Bottom: "Interview their Twin" action button (gradient)
+
+======================================================
+GLOBAL POLISH RULES
+======================================================
+
+1. ALL backgrounds must be dark (#0F0F14 or #1A1A24) — no white/grey pages
+2. ALL primary action buttons use the gradient (never flat purple)
+3. ALL cards have subtle borders (#2E2E42) — no floating elements
+4. ALL empty states have: icon + headline + subtext + one CTA button
+5. Remove ALL plain white page backgrounds — replace with #0F0F14
+6. Add micro-animations:
+   - Button press: scale(0.96) transform
+   - Card appear: fadeIn + slideUp (200ms)
+   - Tab switch: smooth opacity transition
+7. The bottom navigation must be 64px tall with safe area padding
+8. Font must be Inter throughout — import from Google Fonts
+9. Remove the numbered pink buttons (0 1 2 3 4 5) from the About Me section
+10. Ensure all text is legible — minimum 13px, never pure grey on grey
+11. All icons: use Lucide React icons, consistent 20-24px sizing
+12. Story rings must use CSS animation: 
+    @keyframes spin { to { transform: rotate(360deg) } }
+    applied to a conic-gradient border wrapper
+
+Apply all changes now. Work screen by screen. 
+Do not skip any screen.
+Do not leave any screen on a white/light background.
+Test on mobile viewport (390px width) before finalizing.
