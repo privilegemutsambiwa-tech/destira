@@ -281,13 +281,23 @@ function GroupCard({ group, idx, onNavigate, isJoinCard = false }: {
 
         {/* Right CTA / unread */}
         <div className="shrink-0 flex items-center gap-2">
-          {group.unreadCount > 0 && (
+          {group.unreadCount > 0 && !group.isMuted && (
             <span
               className="text-xs font-bold text-white rounded-full px-2 py-0.5 min-w-[20px] text-center"
               style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", fontSize: "10px" }}
               data-testid={`badge-unread-${group.id}`}
             >
               {group.unreadCount}
+            </span>
+          )}
+          {group.isMuted && group.isMember && (
+            <span
+              className="text-xs"
+              style={{ color: "#9090A8" }}
+              title="Muted"
+              data-testid={`badge-muted-${group.id}`}
+            >
+              🔇
             </span>
           )}
           {isJoinCard ? (

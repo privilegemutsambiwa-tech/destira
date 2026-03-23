@@ -1733,7 +1733,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       }
       if (!req.file) return res.status(400).json({ message: "No image provided" });
       const url = `/uploads/${req.file.filename}`;
-      await storage.updateGroup(groupId, { groupPhotoUrl: url } as any);
+      await storage.updateGroup(groupId, { groupPhotoUrl: url });
       res.json({ url });
     } catch (e) {
       res.status(500).json({ message: "Failed to upload group photo" });
@@ -1752,7 +1752,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       }
       if (!req.file) return res.status(400).json({ message: "No image provided" });
       const url = `/uploads/${req.file.filename}`;
-      await storage.updateGroup(groupId, { iconUrl: url } as any);
+      await storage.updateGroup(groupId, { iconUrl: url });
       res.json({ url });
     } catch (e) {
       res.status(500).json({ message: "Failed to upload group icon" });
@@ -1771,7 +1771,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       }
       if (!req.file) return res.status(400).json({ message: "No image provided" });
       const url = `/uploads/${req.file.filename}`;
-      await storage.updateGroup(groupId, { bannerUrl: url } as any);
+      await storage.updateGroup(groupId, { bannerUrl: url });
       res.json({ url });
     } catch (e) {
       res.status(500).json({ message: "Failed to upload group banner" });
@@ -2338,8 +2338,10 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
 
       let allGroups = await Promise.all(rawGroups.map(async (g) => {
         const members = await storage.getGroupMembers(g.id);
-        const isMember = members.some(m => m.userId === userId);
-        const myRole = members.find(m => m.userId === userId)?.role;
+        const myMember = members.find(m => m.userId === userId);
+        const isMember = Boolean(myMember);
+        const myRole = myMember?.role;
+        const isMuted = myMember?.isMuted ?? false;
         const msgs = await storage.getGroupMessages(g.id, 1);
         const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
         return {
@@ -2347,6 +2349,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
           memberCount: members.length,
           isMember,
           myRole,
+          isMuted,
           lastMessage: lastMsg?.content || null,
           lastMessageNickname: lastMsg?.nickname || null,
           lastMessageAt: lastMsg?.createdAt || g.createdAt,
@@ -2428,14 +2431,19 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (!member || (member.role !== "owner" && member.role !== "admin")) {
         return res.status(403).json({ message: "Only admins can update group settings" });
       }
-      const { rulesText, canMembersEditInfo, canMembersSendMessages, canMembersAddOthers, postingPermission, mediaPermission } = req.body;
+      const {
+        rulesText, canMembersEditInfo, canMembersSendMessages, canMembersAddOthers,
+        postingPermission, mediaPermission, privacyMode, maxMembers
+      } = req.body;
       const updates: any = {};
       if (rulesText !== undefined) updates.rulesText = rulesText;
-      if (canMembersEditInfo !== undefined) updates.canMembersEditInfo = canMembersEditInfo;
-      if (canMembersSendMessages !== undefined) updates.canMembersSendMessages = canMembersSendMessages;
-      if (canMembersAddOthers !== undefined) updates.canMembersAddOthers = canMembersAddOthers;
-      if (postingPermission !== undefined) updates.postingPermission = postingPermission;
-      if (mediaPermission !== undefined) updates.mediaPermission = mediaPermission;
+      if (canMembersEditInfo !== undefined) updates.canMembersEditInfo = Boolean(canMembersEditInfo);
+      if (canMembersSendMessages !== undefined) updates.canMembersSendMessages = Boolean(canMembersSendMessages);
+      if (canMembersAddOthers !== undefined) updates.canMembersAddOthers = Boolean(canMembersAddOthers);
+      if (postingPermission !== undefined && ["everyone", "admins_only"].includes(postingPermission)) updates.postingPermission = postingPermission;
+      if (mediaPermission !== undefined && ["everyone", "admin_only"].includes(mediaPermission)) updates.mediaPermission = mediaPermission;
+      if (privacyMode !== undefined && ["open", "request-to-join", "invite-only"].includes(privacyMode)) updates.privacyMode = privacyMode;
+      if (maxMembers !== undefined) updates.maxMembers = Math.max(2, Math.min(5000, parseInt(maxMembers) || 500));
       const group = await storage.updateGroup(groupId, updates);
       res.json(group);
     } catch (e) {
