@@ -8,22 +8,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { StoryViewer } from "@/components/story-viewer";
 
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 function formatDistance(km: number): string {
   if (km < 1) return `${Math.round(km * 1000)}m away`;
   return `${km.toFixed(1)}km away`;
-}
-
-function isNearbyNow(locationUpdatedAt: string | Date | null | undefined): boolean {
-  if (!locationUpdatedAt) return false;
-  return Date.now() - new Date(locationUpdatedAt).getTime() < 30 * 60 * 1000;
 }
 
 function StoriesCarousel() {
@@ -128,7 +115,7 @@ export default function Discover() {
   const [filter, setFilter] = useState<FilterChip>(getInitialFilter);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
-  const { data: rawProfiles, isLoading } = useDiscoverProfiles(filter);
+  const { data: rawProfiles, isLoading } = useDiscoverProfiles(filter, userLat, userLng);
   const startInterview = useStartInterview();
   const createMatch = useCreateMatch();
   const [, setLocation] = useLocation();
@@ -147,24 +134,13 @@ export default function Discover() {
   const profiles = useMemo(() => {
     if (!rawProfiles) return [];
     let list = [...rawProfiles];
-
     if (filter === "nearby") {
       list = list
-        .filter((p) => p.locationLat && p.locationLng && isNearbyNow(p.locationUpdatedAt))
-        .sort((a, b) => {
-          if (userLat === null || userLng === null) return 0;
-          const dA = haversineKm(userLat, userLng, parseFloat(a.locationLat), parseFloat(a.locationLng));
-          const dB = haversineKm(userLat, userLng, parseFloat(b.locationLat), parseFloat(b.locationLng));
-          return dA - dB;
-        });
-    } else if (filter === "new") {
-      list = list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    } else if (filter === "online") {
-      list = list.filter((p) => isNearbyNow(p.locationUpdatedAt));
+        .filter((p) => p.isNearbyNow)
+        .sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
     }
-
     return list;
-  }, [rawProfiles, filter, userLat, userLng]);
+  }, [rawProfiles, filter]);
 
   if (isLoading) {
     return (
@@ -241,15 +217,9 @@ export default function Discover() {
 
   const currentProfile = profiles[currentIdx % profiles.length];
 
-  const sharesDistance = currentProfile.showDistance !== false;
-  const pLat = (sharesDistance && currentProfile.locationLat) ? parseFloat(currentProfile.locationLat) : null;
-  const pLng = (sharesDistance && currentProfile.locationLng) ? parseFloat(currentProfile.locationLng) : null;
-  const distanceKm = (sharesDistance && userLat !== null && userLng !== null && pLat !== null && pLng !== null)
-    ? haversineKm(userLat, userLng, pLat, pLng)
-    : null;
-
-  const isVeryClose = sharesDistance && distanceKm !== null && distanceKm < 1;
-  const nearby = sharesDistance && isNearbyNow(currentProfile.locationUpdatedAt);
+  const distanceKm: number | null = currentProfile.distanceKm ?? null;
+  const nearby: boolean = currentProfile.isNearbyNow ?? false;
+  const isVeryClose = distanceKm !== null && distanceKm < 1;
 
   const handleNext = (direction: "left" | "right") => {
     setSwipeDir(direction);

@@ -32,7 +32,7 @@ export interface IStorage {
   getProfile(userId: string): Promise<Profile | undefined>;
   createProfile(profile: InsertProfile & { userId: string }): Promise<Profile>;
   updateProfile(userId: string, updates: Partial<InsertProfile>): Promise<Profile>;
-  getDiscoverableProfiles(excludeUserId: string, filter?: string): Promise<any[]>;
+  getDiscoverableProfiles(excludeUserId: string, filter?: string, userLat?: number, userLng?: number): Promise<any[]>;
   getProfileWithUser(userId: string): Promise<any>;
 
   createMatch(user1Id: string, user2Id: string): Promise<Match>;
@@ -199,7 +199,7 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async getDiscoverableProfiles(excludeUserId: string, filter?: string): Promise<any[]> {
+  async getDiscoverableProfiles(excludeUserId: string, filter?: string, userLat?: number, userLng?: number): Promise<any[]> {
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
 
     const baseCondition = and(
@@ -216,7 +216,7 @@ export class DatabaseStorage implements IStorage {
       ? desc(profiles.createdAt)
       : asc(profiles.createdAt);
 
-    const result = await db
+    const rows = await db
       .select({
         id: profiles.id,
         userId: profiles.userId,
@@ -230,8 +230,8 @@ export class DatabaseStorage implements IStorage {
         onboardingCompleted: profiles.onboardingCompleted,
         isPublic: profiles.isPublic,
         createdAt: profiles.createdAt,
-        locationLat: profiles.locationLat,
-        locationLng: profiles.locationLng,
+        _lat: profiles.locationLat,
+        _lng: profiles.locationLng,
         locationName: profiles.locationName,
         locationUpdatedAt: profiles.locationUpdatedAt,
         showDistance: profiles.showDistance,
@@ -246,7 +246,21 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(users, eq(profiles.userId, users.id))
       .where(filterCondition)
       .orderBy(orderBy);
-    return result;
+
+    return rows.map(({ _lat, _lng, ...rest }) => {
+      if (!rest.showDistance) {
+        return { ...rest, locationName: null, locationUpdatedAt: null, distanceKm: null, isNearbyNow: false };
+      }
+      const pLat = _lat ? parseFloat(String(_lat)) : null;
+      const pLng = _lng ? parseFloat(String(_lng)) : null;
+      const distanceKm = (userLat !== undefined && userLng !== undefined && pLat !== null && pLng !== null)
+        ? haversineKm(userLat, userLng, pLat, pLng)
+        : null;
+      const isNearby = rest.locationUpdatedAt
+        ? Date.now() - new Date(rest.locationUpdatedAt).getTime() < 30 * 60 * 1000
+        : false;
+      return { ...rest, distanceKm, isNearbyNow: isNearby };
+    });
   }
 
   async updateLocation(userId: string, lat: number, lng: number, locationName: string): Promise<Profile> {
@@ -297,6 +311,7 @@ export class DatabaseStorage implements IStorage {
     for (const p of all) {
       if (!p.locationLat || !p.locationLng) continue;
       if (!p.locationUpdatedAt || p.locationUpdatedAt < thirtyMinutesAgo) continue;
+      if (p.showDistance === false) continue;
       if (!isCompatible(p.gender)) continue;
       const pLat = parseFloat(String(p.locationLat));
       const pLng = parseFloat(String(p.locationLng));
@@ -304,7 +319,8 @@ export class DatabaseStorage implements IStorage {
       if (dist <= radiusKm) {
         const key = p.locationName || "Unknown";
         if (!groupedMap.has(key)) groupedMap.set(key, []);
-        groupedMap.get(key)!.push({ ...p, distanceKm: dist });
+        const { locationLat: _la, locationLng: _lo, ...safeFields } = p;
+        groupedMap.get(key)!.push({ ...safeFields, distanceKm: dist });
       }
     }
 

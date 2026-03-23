@@ -88,7 +88,11 @@ export async function registerRoutes(
     if (!userId) return res.sendStatus(401);
     try {
       const filter = typeof req.query.filter === "string" ? req.query.filter : undefined;
-      const discoverable = await storage.getDiscoverableProfiles(userId, filter);
+      const lat = req.query.lat ? parseFloat(req.query.lat as string) : undefined;
+      const lng = req.query.lng ? parseFloat(req.query.lng as string) : undefined;
+      const userLat = lat !== undefined && !isNaN(lat) ? lat : undefined;
+      const userLng = lng !== undefined && !isNaN(lng) ? lng : undefined;
+      const discoverable = await storage.getDiscoverableProfiles(userId, filter, userLat, userLng);
       res.json(discoverable);
     } catch (e) {
       console.error("Discover error:", e);
