@@ -916,6 +916,125 @@ export function useUpdateGroupSettings(groupId: number) {
   });
 }
 
+export function useToggleMute(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/groups/${groupId}/mute`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to toggle mute");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "members"] }),
+  });
+}
+
+export function useAddGroupMember(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (targetUserId: string) => {
+      const res = await fetch(`/api/groups/${groupId}/members/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error((await res.json()).message || "Failed to add member");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "members"] }),
+  });
+}
+
+export function useSearchGroupMessages(groupId: number, query: string) {
+  return useQuery({
+    queryKey: ["/api/groups", groupId, "messages", "search", query],
+    queryFn: async () => {
+      if (!query.trim()) return [];
+      const res = await fetch(`/api/groups/${groupId}/messages/search?q=${encodeURIComponent(query)}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: query.trim().length > 0,
+  });
+}
+
+export function useSearchUsers(query: string) {
+  return useQuery({
+    queryKey: ["/api/users/search", query],
+    queryFn: async () => {
+      if (query.trim().length < 2) return [];
+      const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: query.trim().length >= 2,
+  });
+}
+
+export function useCreateChatRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ targetId, groupId }: { targetId: string; groupId: number }) => {
+      const res = await fetch("/api/chat-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetId, groupId }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error((await res.json()).message || "Failed to send chat request");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/chat-requests"] }),
+  });
+}
+
+export function useChatRequests() {
+  return useQuery<any[]>({
+    queryKey: ["/api/chat-requests"],
+    queryFn: async () => {
+      const res = await fetch("/api/chat-requests", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
+
+export function useRespondChatRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, action }: { id: number; action: "accept" | "decline" }) => {
+      const res = await fetch(`/api/chat-requests/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to respond to chat request");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/chat-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/matches"] });
+    },
+  });
+}
+
+export function useCheckNickname(nickname: string) {
+  return useQuery({
+    queryKey: ["/api/profiles/check-nickname", nickname],
+    queryFn: async () => {
+      if (nickname.length < 3) return { available: false };
+      const res = await fetch(`/api/profiles/check-nickname?nickname=${encodeURIComponent(nickname)}`, { credentials: "include" });
+      if (!res.ok) return { available: false };
+      return res.json();
+    },
+    enabled: nickname.length >= 3,
+  });
+}
+
 export function useFeedStories() {
   return useQuery<any[]>({
     queryKey: ["/api/stories/feed"],

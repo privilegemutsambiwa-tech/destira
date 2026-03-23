@@ -12,6 +12,7 @@ export const profiles = pgTable("profiles", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   displayName: text("display_name"),
+  groupNickname: text("group_nickname"),
   bio: text("bio"),
   age: integer("age"),
   gender: text("gender"),
@@ -29,6 +30,7 @@ export const profiles = pgTable("profiles", {
   aboutSummary: text("about_summary"),
   personalitySummary: text("personality_summary"),
   isVerified: boolean("is_verified").default(false),
+  subscriptionTier: text("subscription_tier").default("free"),
   profileCompletionScore: integer("profile_completion_score").default(0),
   superMatchesRemaining: integer("super_matches_remaining").default(0),
   boostsRemaining: integer("boosts_remaining").default(0),
@@ -81,6 +83,7 @@ export const groups = pgTable("groups", {
   type: text("type").notNull(),
   ownerId: varchar("owner_id").references(() => users.id),
   iconUrl: text("icon_url"),
+  bannerUrl: text("banner_url"),
   groupPhotoUrl: text("group_photo_url"),
   categoryTags: text("category_tags").array(),
   privacyMode: text("privacy_mode").notNull().default("open"),
@@ -93,6 +96,7 @@ export const groups = pgTable("groups", {
   canMembersEditInfo: boolean("can_members_edit_info").default(true),
   canMembersSendMessages: boolean("can_members_send_messages").default(true),
   canMembersAddOthers: boolean("can_members_add_others").default(true),
+  maxMembers: integer("max_members").default(500),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -103,6 +107,7 @@ export const groupMembers = pgTable("group_members", {
   userId: varchar("user_id").notNull().references(() => users.id),
   nickname: text("nickname"),
   role: text("role").notNull().default("member"),
+  isMuted: boolean("is_muted").default(false),
   joinedAt: timestamp("joined_at").defaultNow(),
   lastSeenMessageId: integer("last_seen_message_id"),
 });
@@ -379,6 +384,16 @@ export const auditLogs = pgTable("audit_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const chatRequests = pgTable("chat_requests", {
+  id: serial("id").primaryKey(),
+  requesterId: varchar("requester_id").notNull().references(() => users.id),
+  targetId: varchar("target_id").notNull().references(() => users.id),
+  groupId: integer("group_id").notNull().references(() => groups.id),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+});
+
 export const insertTwinProfilesStructuredSchema = createInsertSchema(twinProfilesStructured).omit({
   id: true,
   updatedAt: true,
@@ -399,6 +414,11 @@ export const insertUserAnswerSchema = createInsertSchema(userAnswers).omit({
 });
 
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertChatRequestSchema = createInsertSchema(chatRequests).omit({
   id: true,
   createdAt: true,
 });
@@ -526,6 +546,8 @@ export type Question = typeof questions.$inferSelect;
 export type UserAnswer = typeof userAnswers.$inferSelect;
 export type QuestionScheduleEntry = typeof questionSchedule.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type ChatRequest = typeof chatRequests.$inferSelect;
+export type InsertChatRequest = z.infer<typeof insertChatRequestSchema>;
 
 export type Story = typeof stories.$inferSelect;
 export type StoryMedia = typeof storyMedia.$inferSelect;

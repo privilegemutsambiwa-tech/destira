@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useGenerateTwin, useCreateProfile } from "@/hooks/use-profiles";
-import { Loader2, ArrowRight, Shield, Eye, EyeOff } from "lucide-react";
+import { useCheckNickname } from "@/hooks/use-interactions";
+import { Loader2, ArrowRight, Shield, Eye, EyeOff, Check, X, AtSign } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const QUESTIONS = [
@@ -20,9 +22,95 @@ const QUESTIONS = [
   "What would you want your partner to say about you after a year together?",
 ];
 
+const TOTAL_STEPS = QUESTIONS.length + 1;
+const NICKNAME_STEP = QUESTIONS.length;
+
+function NicknameStep({
+  value,
+  onChange,
+  onNext,
+  onBack,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onNext: () => void;
+  onBack: () => void;
+}) {
+  const { data: nicknameCheck, isFetching } = useCheckNickname(value);
+  const [touched, setTouched] = useState(false);
+
+  const isValidFormat = /^[a-zA-Z0-9_]{3,20}$/.test(value);
+  const isAvailable = nicknameCheck?.available === true;
+  const showError = touched && value.length > 0 && !isValidFormat;
+  const showTaken = touched && isValidFormat && !isFetching && !isAvailable;
+  const showOk = isValidFormat && !isFetching && isAvailable;
+
+  return (
+    <div className="bg-card rounded-md p-8 md:p-12 shadow-xl border backdrop-blur-sm">
+      <div className="flex items-center gap-3 mb-4">
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center"
+          style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
+        >
+          <AtSign className="w-5 h-5 text-white" />
+        </div>
+        <h2 className="text-2xl md:text-3xl font-display font-bold leading-tight" data-testid="text-nickname-title">
+          Choose your Group Nickname
+        </h2>
+      </div>
+      <p className="text-muted-foreground mb-8 text-base">
+        This is how you'll appear in Lounge groups. It's unique, short, and stays with you.
+      </p>
+
+      <div className="relative mb-2">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">@</span>
+        <Input
+          value={value}
+          onChange={(e) => { onChange(e.target.value.replace(/[^a-zA-Z0-9_]/g, "")); setTouched(true); }}
+          placeholder="cool_nickname"
+          className="pl-8 text-lg h-12"
+          style={{ letterSpacing: "0.02em" }}
+          maxLength={20}
+          autoFocus
+          data-testid="input-nickname"
+        />
+        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+          {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+          {!isFetching && showOk && <Check className="w-4 h-4" style={{ color: "#22C55E" }} />}
+          {!isFetching && showTaken && <X className="w-4 h-4" style={{ color: "#EF4444" }} />}
+        </div>
+      </div>
+      <p className="text-xs mb-8" style={{
+        color: showError ? "#EF4444" : showTaken ? "#EF4444" : showOk ? "#22C55E" : "#9090A8"
+      }}>
+        {showError ? "3-20 characters. Letters, numbers, and underscores only." :
+          showTaken ? "This nickname is already taken." :
+          showOk ? "Looks great! This nickname is available." :
+          "3-20 characters. Letters, numbers, and underscores only."}
+      </p>
+
+      <div className="flex justify-between">
+        <Button variant="ghost" onClick={onBack} data-testid="button-back-nickname">
+          Back
+        </Button>
+        <Button
+          size="lg"
+          onClick={onNext}
+          disabled={!showOk}
+          className="rounded-full px-8 h-12 text-base font-semibold shadow-lg btn-press"
+          data-testid="button-next-nickname"
+        >
+          Create My AI Twin
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function Onboarding() {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [nickname, setNickname] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [privacyMode, setPrivacyMode] = useState(false);
   const [, setLocation] = useLocation();
@@ -34,8 +122,8 @@ export default function Onboarding() {
   const handleNext = () => {
     if (step < QUESTIONS.length - 1) {
       setStep(step + 1);
-    } else {
-      handleComplete();
+    } else if (step === QUESTIONS.length - 1) {
+      setStep(NICKNAME_STEP);
     }
   };
 
@@ -55,7 +143,8 @@ export default function Onboarding() {
         twinPersona: twinRes.twinPersona,
         onboardingCompleted: true,
         isPublic: !privacyMode,
-      });
+        groupNickname: nickname || undefined,
+      } as any);
 
       setLocation("/discover");
     } catch (error) {
@@ -63,6 +152,9 @@ export default function Onboarding() {
       setIsGenerating(false);
     }
   };
+
+  const isNicknameStep = step === NICKNAME_STEP;
+  const progressPct = Math.round(((step + 1) / TOTAL_STEPS) * 100);
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 relative overflow-hidden">
@@ -75,18 +167,20 @@ export default function Onboarding() {
         <div className="mb-8">
           <div className="flex justify-between items-center text-sm font-medium text-muted-foreground mb-4">
             <span>Soul-Mapping in progress</span>
-            <span>{Math.round(((step + 1) / QUESTIONS.length) * 100)}%</span>
+            <span>{progressPct}%</span>
           </div>
           <div className="h-2 bg-muted rounded-full overflow-hidden">
             <motion.div
               className="h-full bg-gradient-to-r from-primary to-secondary"
               initial={{ width: 0 }}
-              animate={{ width: `${((step + 1) / QUESTIONS.length) * 100}%` }}
+              animate={{ width: `${progressPct}%` }}
               transition={{ duration: 0.5 }}
             />
           </div>
           <div className="flex justify-between items-center mt-4">
-            <span className="text-xs text-muted-foreground">Question {step + 1} of {QUESTIONS.length}</span>
+            <span className="text-xs text-muted-foreground">
+              {isNicknameStep ? "Final step" : `Question ${step + 1} of ${QUESTIONS.length}`}
+            </span>
             <button
               onClick={() => setPrivacyMode(!privacyMode)}
               className="flex items-center gap-2 text-xs text-muted-foreground px-3 py-1.5 rounded-full border transition-colors"
@@ -102,47 +196,64 @@ export default function Onboarding() {
         <div className="relative min-h-[400px]">
           <AnimatePresence mode="wait">
             {!isGenerating ? (
-              <motion.div
-                key={step}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
-                className="bg-card rounded-md p-8 md:p-12 shadow-xl border backdrop-blur-sm"
-              >
-                <h2 className="text-2xl md:text-3xl font-display font-bold mb-8 leading-tight" data-testid="text-question">
-                  {QUESTIONS[step]}
-                </h2>
-                <Textarea
-                  value={answers[step] || ""}
-                  onChange={(e) => setAnswers({ ...answers, [step]: e.target.value })}
-                  placeholder="Type your answer honestly..."
-                  className="min-h-[150px] text-lg bg-transparent border-0 border-b-2 border-border rounded-none focus-visible:ring-0 focus-visible:border-primary px-0 resize-none placeholder:text-muted-foreground/50 mb-8"
-                  autoFocus
-                  data-testid="input-answer"
-                />
+              isNicknameStep ? (
+                <motion.div
+                  key="nickname"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <NicknameStep
+                    value={nickname}
+                    onChange={setNickname}
+                    onNext={handleComplete}
+                    onBack={handleBack}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key={step}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                  className="bg-card rounded-md p-8 md:p-12 shadow-xl border backdrop-blur-sm"
+                >
+                  <h2 className="text-2xl md:text-3xl font-display font-bold mb-8 leading-tight" data-testid="text-question">
+                    {QUESTIONS[step]}
+                  </h2>
+                  <Textarea
+                    value={answers[step] || ""}
+                    onChange={(e) => setAnswers({ ...answers, [step]: e.target.value })}
+                    placeholder="Type your answer honestly..."
+                    className="min-h-[150px] text-lg bg-transparent border-0 border-b-2 border-border rounded-none focus-visible:ring-0 focus-visible:border-primary px-0 resize-none placeholder:text-muted-foreground/50 mb-8"
+                    autoFocus
+                    data-testid="input-answer"
+                  />
 
-                <div className="flex justify-between">
-                  <Button
-                    variant="ghost"
-                    onClick={handleBack}
-                    disabled={step === 0}
-                    data-testid="button-back"
-                  >
-                    Back
-                  </Button>
-                  <Button
-                    size="lg"
-                    onClick={handleNext}
-                    disabled={!answers[step]?.trim()}
-                    className="rounded-full px-8 h-12 text-base font-semibold shadow-lg shadow-primary/20 btn-press"
-                    data-testid="button-next"
-                  >
-                    {step === QUESTIONS.length - 1 ? "Create My AI Twin" : "Next Question"}
-                    {step !== QUESTIONS.length - 1 && <ArrowRight className="ml-2 w-4 h-4" />}
-                  </Button>
-                </div>
-              </motion.div>
+                  <div className="flex justify-between">
+                    <Button
+                      variant="ghost"
+                      onClick={handleBack}
+                      disabled={step === 0}
+                      data-testid="button-back"
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      size="lg"
+                      onClick={handleNext}
+                      disabled={!answers[step]?.trim()}
+                      className="rounded-full px-8 h-12 text-base font-semibold shadow-lg shadow-primary/20 btn-press"
+                      data-testid="button-next"
+                    >
+                      {step === QUESTIONS.length - 1 ? "Continue" : "Next Question"}
+                      <ArrowRight className="ml-2 w-4 h-4" />
+                    </Button>
+                  </div>
+                </motion.div>
+              )
             ) : (
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}

@@ -1557,7 +1557,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         return res.status(403).json({ message: "Only admins can post media in this group" });
       }
 
-      const msg = await storage.sendGroupMessage(groupId, userId, member.nickname || "Anonymous", content, {
+      let displayNickname = member.nickname;
+      if (!displayNickname) {
+        const profile = await storage.getProfile(userId);
+        displayNickname = profile?.groupNickname || profile?.displayName || "Anonymous";
+      }
+      const msg = await storage.sendGroupMessage(groupId, userId, displayNickname, content, {
         contentType, mediaUrl, replyToMessageId
       });
       res.status(201).json(msg);
@@ -1694,6 +1699,225 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Group icon upload
+  app.post("/api/groups/:id/upload-icon", upload.single("image"), async (req: any, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member || (member.role !== "owner" && member.role !== "admin")) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      if (!req.file) return res.status(400).json({ message: "No image provided" });
+      const url = `/uploads/${req.file.filename}`;
+      await storage.updateGroup(groupId, { iconUrl: url } as any);
+      res.json({ url });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to upload group icon" });
+    }
+  });
+
+  // Group banner upload
+  app.post("/api/groups/:id/upload-banner", upload.single("image"), async (req: any, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member || (member.role !== "owner" && member.role !== "admin")) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      if (!req.file) return res.status(400).json({ message: "No image provided" });
+      const url = `/uploads/${req.file.filename}`;
+      await storage.updateGroup(groupId, { bannerUrl: url } as any);
+      res.json({ url });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to upload group banner" });
+    }
+  });
+
+  // Toggle mute for current user in group
+  app.post("/api/groups/:id/mute", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member) return res.status(403).json({ message: "Not a member" });
+      const newMuted = !member.isMuted;
+      await storage.updateGroupMemberMute(groupId, userId, newMuted);
+      res.json({ isMuted: newMuted });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to toggle mute" });
+    }
+  });
+
+  // Add member to group (user search + add)
+  app.post("/api/groups/:id/members/add", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    const { targetUserId } = req.body;
+    if (!targetUserId) return res.status(400).json({ message: "targetUserId required" });
+    try {
+      const requester = await storage.getGroupMember(groupId, userId);
+      if (!requester) return res.status(403).json({ message: "Not a member" });
+      const group = await storage.getGroup(groupId);
+      if (!group) return res.status(404).json({ message: "Group not found" });
+      if (!group.canMembersAddOthers && requester.role === "member") {
+        return res.status(403).json({ message: "Only admins can add members" });
+      }
+      const alreadyMember = await storage.isGroupMember(groupId, targetUserId);
+      if (alreadyMember) return res.status(409).json({ message: "Already a member" });
+      const targetProfile = await storage.getProfile(targetUserId);
+      const nickname = targetProfile?.groupNickname || targetProfile?.displayName || "Anonymous";
+      const member = await storage.joinGroup(groupId, targetUserId, nickname);
+      await storage.createNotification(targetUserId, "group_added", "Added to Group", `You've been added to "${group.name}"`);
+      res.status(201).json(member);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to add member" });
+    }
+  });
+
+  // Search group messages
+  app.get("/api/groups/:id/messages/search", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    const query = (req.query.q as string || "").toLowerCase().trim();
+    if (!query) return res.json([]);
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member) return res.status(403).json({ message: "Not a member" });
+      const msgs = await storage.getGroupMessages(groupId, 500);
+      const results = msgs.filter(m =>
+        !m.deletedForEveryone && !m.isDeletedByAdmin &&
+        m.content.toLowerCase().includes(query)
+      ).slice(-50);
+      res.json(results);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to search messages" });
+    }
+  });
+
+  // User search for adding to groups
+  app.get("/api/users/search", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const query = (req.query.q as string || "").trim();
+    if (query.length < 2) return res.json([]);
+    try {
+      const results = await storage.searchUsers(query, userId);
+      res.json(results);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to search users" });
+    }
+  });
+
+  // PATCH /api/groups/:id for admin settings (alias PUT)
+  app.patch("/api/groups/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    try {
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member || (member.role !== "owner" && member.role !== "admin")) {
+        return res.status(403).json({ message: "Only admins can edit group settings" });
+      }
+      const updated = await storage.updateGroup(groupId, req.body);
+      res.json(updated);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to update group" });
+    }
+  });
+
+  // Check group nickname uniqueness
+  app.get("/api/profiles/check-nickname", async (req, res) => {
+    const nickname = (req.query.nickname as string || "").trim();
+    if (!nickname) return res.status(400).json({ message: "nickname required" });
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(nickname)) {
+      return res.json({ available: false, reason: "3-20 chars, letters/numbers/underscores only" });
+    }
+    try {
+      const taken = await storage.isGroupNicknameTaken(nickname);
+      res.json({ available: !taken });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to check nickname" });
+    }
+  });
+
+  // Chat requests (DM request system)
+  app.post("/api/chat-requests", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const { targetId, groupId } = req.body;
+    if (!targetId || !groupId) return res.status(400).json({ message: "targetId and groupId required" });
+    try {
+      const requesterProfile = await storage.getProfile(userId);
+      const targetProfile = await storage.getProfile(targetId);
+      if (!targetProfile) return res.status(404).json({ message: "Target user not found" });
+      const targetTier = targetProfile.subscriptionTier || "free";
+      if (targetTier === "vip") {
+        const existing = await storage.getMatchBetweenUsers(userId, targetId);
+        if (existing) return res.json({ status: "already_matched", match: existing });
+        const match = await storage.createMatch(userId, targetId);
+        await storage.updateMatchStatus(match.id, "matched");
+        return res.json({ status: "matched", match });
+      }
+      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      const chatReq = await storage.createChatRequest(userId, targetId, groupId, expiresAt);
+      const senderNickname = requesterProfile?.groupNickname || requesterProfile?.displayName || "Someone";
+      await storage.createNotification(targetId, "chat_request", "Private Chat Request",
+        `${senderNickname} wants to chat privately with you`);
+      res.status(201).json(chatReq);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to create chat request" });
+    }
+  });
+
+  app.get("/api/chat-requests", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const requests = await storage.getChatRequests(userId);
+      res.json(requests);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch chat requests" });
+    }
+  });
+
+  app.patch("/api/chat-requests/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const requestId = parseInt(req.params.id);
+    const { action } = req.body;
+    if (!action || !["accept", "decline"].includes(action)) return res.status(400).json({ message: "action must be accept or decline" });
+    try {
+      const chatReq = await storage.getChatRequest(requestId);
+      if (!chatReq) return res.status(404).json({ message: "Request not found" });
+      if (chatReq.targetId !== userId) return res.status(403).json({ message: "Not authorized" });
+      if (chatReq.expiresAt && new Date(chatReq.expiresAt) < new Date()) {
+        return res.status(410).json({ message: "Request expired" });
+      }
+      await storage.updateChatRequestStatus(requestId, action === "accept" ? "accepted" : "declined");
+      if (action === "accept") {
+        const existing = await storage.getMatchBetweenUsers(chatReq.requesterId, chatReq.targetId);
+        let match = existing;
+        if (!match) {
+          match = await storage.createMatch(chatReq.requesterId, chatReq.targetId);
+        }
+        await storage.updateMatchStatus(match.id, "matched");
+        await storage.createNotification(chatReq.requesterId, "chat_request_accepted", "Chat Request Accepted", "Your private chat request was accepted!");
+        return res.json({ status: "accepted", matchId: match.id });
+      }
+      await storage.createNotification(chatReq.requesterId, "chat_request_declined", "Chat Request Declined", "Your private chat request was declined.");
+      res.json({ status: "declined" });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to process chat request" });
+    }
+  });
+
   // Media gallery for group
   app.get("/api/groups/:id/media", async (req, res) => {
     const userId = getUserId(req);
@@ -1737,10 +1961,17 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       }
       const starred = await storage.getStarredMessages(groupId, userId);
       const starredMsgIds = new Set(starred.map((s: any) => s.messageId));
+      const uniqueUserIds = [...new Set(msgs.map(m => m.userId))];
+      const profilesMap: Record<string, any> = {};
+      for (const uid of uniqueUserIds) {
+        const profile = await storage.getProfile(uid);
+        if (profile) profilesMap[uid] = profile;
+      }
       const enriched = msgs.map(m => ({
         ...m,
         reactions: reactionsByMsg[m.id] || [],
         isStarred: starredMsgIds.has(m.id),
+        subscriptionTier: profilesMap[m.userId]?.subscriptionTier || "free",
       }));
       res.json(enriched);
     } catch (e) {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,16 +13,18 @@ import {
 import {
   ArrowLeft, Crown, Shield, Loader2, Users, Globe, Lock, UserPlus,
   Link2, Copy, Check, X, Trash2, Pencil, Image as ImageIcon, Star,
-  Search, BellOff, Settings, ChevronRight, Share2
+  Search, BellOff, Bell, Settings, ChevronRight, Share2
 } from "lucide-react";
 import {
   useGroup, useGroupMembers, useGroupMedia, useUpdateGroup,
   useUpdateMemberRole, useRemoveGroupMember, useCreateInviteLink,
   useGroupInviteLinks, useLeaveGroup, useDeleteGroup,
-  useStarredMessages, useUpdateGroupSettings
+  useStarredMessages, useUpdateGroupSettings,
+  useToggleMute, useAddGroupMember, useSearchUsers, useSearchGroupMessages
 } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 const PRIVACY_LABELS: Record<string, { icon: any; label: string }> = {
   "open": { icon: Globe, label: "Open" },
@@ -57,8 +59,26 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   const [starredExpanded, setStarredExpanded] = useState(false);
   const [membersExpanded, setMembersExpanded] = useState(false);
 
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [addMemberQuery, setAddMemberQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isMuted, setIsMuted] = useState(false);
+
+  const iconUploadRef = useRef<HTMLInputElement>(null);
+  const bannerUploadRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+
+  const toggleMute = useToggleMute(groupId);
+  const addGroupMember = useAddGroupMember(groupId);
+  const { data: userSearchResults } = useSearchUsers(addMemberQuery);
+  const { data: messageSearchResults } = useSearchGroupMessages(groupId, searchQuery);
+
   const isOwner = group?.myRole === "owner";
   const isAdmin = group?.myRole === "owner" || group?.myRole === "admin";
+
+  const currentMember = (members as any[])?.find((m: any) => m.userId === user?.id);
+  const actuallyMuted = isMuted !== null ? isMuted : (currentMember?.isMuted ?? false);
 
   const sortedMembers = [...(members || [])].sort((a: any, b: any) => {
     const order: Record<string, number> = { owner: 0, admin: 1, member: 2 };
@@ -154,6 +174,76 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
     }
   };
 
+  const handleToggleMute = async () => {
+    try {
+      const result = await toggleMute.mutateAsync();
+      setIsMuted(result.isMuted);
+      toast({ title: result.isMuted ? "Notifications muted" : "Notifications unmuted" });
+    } catch {
+      toast({ title: "Error", description: "Failed to toggle mute.", variant: "destructive" });
+    }
+  };
+
+  const handleAddMember = async (targetUserId: string) => {
+    try {
+      await addGroupMember.mutateAsync(targetUserId);
+      toast({ title: "Member added successfully" });
+      setAddMemberOpen(false);
+      setAddMemberQuery("");
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message || "Failed to add member.", variant: "destructive" });
+    }
+  };
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}/lounge`;
+    const shareData = { title: group?.name || "Group", text: `Join "${group?.name}" on VibeFlow`, url };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast({ title: "Link copied to clipboard" });
+      }
+    } catch {
+      toast({ title: "Share cancelled" });
+    }
+  };
+
+  const handleUploadBanner = async (file: File) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    try {
+      const res = await fetch(`/api/groups/${groupId}/upload-banner`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error();
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] });
+      toast({ title: "Banner updated" });
+    } catch {
+      toast({ title: "Error", description: "Failed to upload banner.", variant: "destructive" });
+    }
+  };
+
+  const handleUploadIcon = async (file: File) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    try {
+      const res = await fetch(`/api/groups/${groupId}/upload-icon`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error();
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] });
+      toast({ title: "Icon updated" });
+    } catch {
+      toast({ title: "Error", description: "Failed to upload icon.", variant: "destructive" });
+    }
+  };
+
   if (!groupId || isNaN(groupId)) {
     setLocation("/lounge");
     return null;
@@ -171,6 +261,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   const mediaCount = media?.length || 0;
   const starredCount = starredMessages?.length || 0;
   const canAddMembers = isAdmin || group?.canMembersAddOthers;
+  const currentlyMuted = currentMember?.isMuted ?? isMuted;
 
   return (
     <div className="h-screen flex flex-col" style={{ background: "#0F0F14" }}>
@@ -191,19 +282,44 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
 
       <div className="flex-1 overflow-y-auto">
         <div className="relative">
+          <input
+            ref={bannerUploadRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => { if (e.target.files?.[0]) handleUploadBanner(e.target.files[0]); }}
+          />
+          <input
+            ref={iconUploadRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => { if (e.target.files?.[0]) handleUploadIcon(e.target.files[0]); }}
+          />
           <div
             style={{
               height: "160px",
-              background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+              background: group?.bannerUrl ? `url(${group.bannerUrl}) center/cover` : "linear-gradient(135deg, #7C3AED, #EC4899)",
               position: "relative",
+              cursor: isAdmin ? "pointer" : "default",
             }}
+            onClick={() => isAdmin && bannerUploadRef.current?.click()}
+            data-testid="banner-area"
           >
-            {group?.groupPhotoUrl && (
+            {group?.groupPhotoUrl && !group?.bannerUrl && (
               <img
                 src={group.groupPhotoUrl}
                 alt={group.name}
                 className="w-full h-full object-cover"
               />
+            )}
+            {isAdmin && (
+              <div
+                className="absolute bottom-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium"
+                style={{ background: "rgba(0,0,0,0.6)", color: "#fff" }}
+              >
+                <Pencil className="w-3 h-3" /> Edit Banner
+              </div>
             )}
           </div>
           <div className="flex flex-col items-center">
@@ -218,11 +334,14 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                 marginTop: "-32px",
                 zIndex: 10,
                 overflow: "hidden",
+                cursor: isAdmin ? "pointer" : "default",
+                position: "relative",
               }}
+              onClick={() => isAdmin && iconUploadRef.current?.click()}
               data-testid="placeholder-group-photo"
             >
-              {group?.groupPhotoUrl ? (
-                <img src={group.groupPhotoUrl} alt={group.name} className="w-full h-full object-cover" data-testid="img-group-photo" />
+              {(group?.iconUrl || group?.groupPhotoUrl) ? (
+                <img src={group.iconUrl || group.groupPhotoUrl} alt={group.name} className="w-full h-full object-cover" data-testid="img-group-photo" />
               ) : (
                 <Users className="w-8 h-8" style={{ color: "#9090A8" }} />
               )}
@@ -265,7 +384,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
         <div className="flex items-center justify-center gap-5 py-5 mt-2">
           <button
             className="flex flex-col items-center gap-1.5 btn-press"
-            onClick={canAddMembers ? handleCreateInvite : undefined}
+            onClick={canAddMembers ? () => setAddMemberOpen(true) : undefined}
             disabled={!canAddMembers}
             data-testid="button-action-add-members"
             style={{ opacity: canAddMembers ? 1 : 0.4 }}
@@ -286,7 +405,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
           </button>
           <button
             className="flex flex-col items-center gap-1.5 btn-press"
-            onClick={() => toast({ title: "Search coming soon" })}
+            onClick={() => setSearchOpen(true)}
             data-testid="button-action-search"
           >
             <div
@@ -305,7 +424,8 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
           </button>
           <button
             className="flex flex-col items-center gap-1.5 btn-press"
-            onClick={() => toast({ title: "Mute coming soon" })}
+            onClick={handleToggleMute}
+            disabled={toggleMute.isPending}
             data-testid="button-action-mute"
           >
             <div
@@ -314,17 +434,19 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                 width: "52px",
                 height: "52px",
                 borderRadius: "50%",
-                background: "#1A1A24",
-                border: "1px solid #2E2E42",
+                background: currentlyMuted ? "rgba(124,58,237,0.15)" : "#1A1A24",
+                border: currentlyMuted ? "1px solid rgba(124,58,237,0.5)" : "1px solid #2E2E42",
               }}
             >
-              <BellOff className="w-5 h-5 text-white" />
+              {currentlyMuted ? <BellOff className="w-5 h-5" style={{ color: "#A78BFA" }} /> : <Bell className="w-5 h-5 text-white" />}
             </div>
-            <span style={{ fontSize: "11px", color: "#9090A8", fontWeight: 500 }}>Mute</span>
+            <span style={{ fontSize: "11px", color: currentlyMuted ? "#A78BFA" : "#9090A8", fontWeight: 500 }}>
+              {currentlyMuted ? "Unmute" : "Mute"}
+            </span>
           </button>
           <button
             className="flex flex-col items-center gap-1.5 btn-press"
-            onClick={() => toast({ title: "Share coming soon" })}
+            onClick={handleShare}
             data-testid="button-action-share"
           >
             <div
@@ -688,6 +810,93 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
           <div className="pb-8" />
         </div>
       </div>
+
+      <Dialog open={addMemberOpen} onOpenChange={setAddMemberOpen}>
+        <DialogContent style={{ background: "#1A1A24", border: "1px solid #2E2E42" }}>
+          <DialogHeader>
+            <DialogTitle className="text-white">Add Member</DialogTitle>
+            <DialogDescription style={{ color: "#9090A8" }}>Search for a user to add to the group.</DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Search by name or nickname..."
+            value={addMemberQuery}
+            onChange={(e) => setAddMemberQuery(e.target.value)}
+            style={{ background: "#242433", border: "1px solid #2E2E42", color: "#FFFFFF" }}
+            data-testid="input-add-member-search"
+          />
+          <div className="space-y-1 max-h-64 overflow-y-auto mt-1">
+            {addMemberQuery.trim().length >= 2 && (userSearchResults as any[] || []).length === 0 && (
+              <p className="text-sm text-center py-4" style={{ color: "#9090A8" }}>No users found</p>
+            )}
+            {(userSearchResults as any[] || []).map((u: any) => (
+              <div
+                key={u.userId}
+                className="flex items-center justify-between gap-3 py-2 px-1 rounded-lg"
+                data-testid={`result-user-${u.userId}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                    style={{ background: "#242433", border: "1px solid #2E2E42" }}
+                  >
+                    {(u.displayName || "?")[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-white">{u.displayName}</p>
+                    {u.groupNickname && <p className="text-xs" style={{ color: "#9090A8" }}>@{u.groupNickname}</p>}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => handleAddMember(u.userId)}
+                  disabled={addGroupMember.isPending}
+                  style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", border: "none", color: "#fff", height: "32px", fontSize: "12px" }}
+                  data-testid={`button-add-user-${u.userId}`}
+                >
+                  Add
+                </Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={searchOpen} onOpenChange={(open) => { setSearchOpen(open); if (!open) setSearchQuery(""); }}>
+        <DialogContent style={{ background: "#1A1A24", border: "1px solid #2E2E42" }}>
+          <DialogHeader>
+            <DialogTitle className="text-white">Search Messages</DialogTitle>
+            <DialogDescription style={{ color: "#9090A8" }}>Find messages in this group.</DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ background: "#242433", border: "1px solid #2E2E42", color: "#FFFFFF" }}
+            data-testid="input-search-messages"
+          />
+          <div className="space-y-2 max-h-80 overflow-y-auto mt-1">
+            {searchQuery.trim().length > 0 && (messageSearchResults as any[] || []).length === 0 && (
+              <p className="text-sm text-center py-4" style={{ color: "#9090A8" }}>No messages found</p>
+            )}
+            {(messageSearchResults as any[] || []).map((msg: any) => (
+              <div
+                key={msg.id}
+                className="rounded-lg p-3"
+                style={{ background: "#242433" }}
+                data-testid={`search-result-${msg.id}`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-white">{msg.nickname || "Unknown"}</span>
+                  <span className="text-xs" style={{ color: "#9090A8" }}>
+                    {msg.createdAt ? new Date(msg.createdAt).toLocaleDateString() : ""}
+                  </span>
+                </div>
+                <p className="text-sm" style={{ color: "#9090A8" }}>{msg.content}</p>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editDescOpen} onOpenChange={setEditDescOpen}>
         <DialogContent>

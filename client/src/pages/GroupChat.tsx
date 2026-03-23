@@ -13,14 +13,15 @@ import { Switch } from "@/components/ui/switch";
 import {
   ArrowLeft, Send, Info, Loader2, Paperclip, BarChart3,
   Heart, ThumbsUp, ThumbsDown, Laugh, Flame, Star,
-  Reply, Copy, Trash2, X, Plus, Users, Image as ImageIcon
+  Reply, Copy, Trash2, X, Plus, Users, Image as ImageIcon,
+  MessageSquarePlus, Crown
 } from "lucide-react";
 import {
   useGroup, useEnrichedGroupMessages, useSendGroupMessage,
   useCreatePoll, usePollByMessage, useVotePoll,
   useAddReaction, useRemoveReaction, useDeleteOwnMessage,
   useDeleteGroupMessage, useJoinGroup, useLeaveGroup,
-  useStarMessage, useUnstarMessage
+  useStarMessage, useUnstarMessage, useCreateChatRequest
 } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -245,6 +246,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   const joinGroup = useJoinGroup();
   const starMessage = useStarMessage(groupId);
   const unstarMessage = useUnstarMessage(groupId);
+  const createChatRequest = useCreateChatRequest();
 
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<any>(null);
@@ -442,11 +444,14 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                   <div className="max-w-[75%]">
                     {!isMe && (
                       <span
-                        className="block ml-1 mb-0.5"
+                        className="flex items-center gap-1 ml-1 mb-0.5"
                         style={{ fontSize: "11px", color: "#9090A8", fontWeight: 600 }}
                         data-testid={`nickname-${msg.id}`}
                       >
                         {msg.nickname || "Anonymous"}
+                        {msg.subscriptionTier === "vip" && (
+                          <Crown className="w-3 h-3 shrink-0" style={{ color: "#F59E0B" }} />
+                        )}
                       </span>
                     )}
 
@@ -563,6 +568,24 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                                 onClick: () => handleDeleteOwn(msg.id),
                                 testId: `action-delete-${msg.id}`,
                                 danger: true,
+                              }] : []),
+                              ...(!isMe ? [{
+                                icon: <MessageSquarePlus className="w-4 h-4 mr-2" />,
+                                label: "Request Private Chat",
+                                onClick: async () => {
+                                  try {
+                                    const result = await createChatRequest.mutateAsync({ targetId: msg.userId, groupId });
+                                    if (result.status === "matched" || result.status === "already_matched") {
+                                      toast({ title: "You can now chat privately!" });
+                                    } else {
+                                      toast({ title: "Request sent!", description: "They'll be notified of your request." });
+                                    }
+                                  } catch (e: any) {
+                                    toast({ title: "Error", description: e.message || "Failed to send request.", variant: "destructive" });
+                                  }
+                                  setActiveMessageId(null);
+                                },
+                                testId: `action-chat-request-${msg.id}`,
                               }] : []),
                               ...(isAdmin && !isMe ? [{
                                 icon: <Trash2 className="w-4 h-4 mr-2" />,

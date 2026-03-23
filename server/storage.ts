@@ -6,7 +6,7 @@ import {
   twinMemory, twinNotifications, subscriptions, payments, entitlements,
   twinProfilesStructured, twinMemoryFacts, twinMemorySummary,
   questions, userAnswers, questionSchedule, auditLogs,
-  stories, storyMedia, storyLikes, storyComments, storyViews, plans,
+  stories, storyMedia, storyLikes, storyComments, storyViews, plans, chatRequests,
   type Profile, type InsertProfile, type UpdateProfileRequest,
   type Match, type Interview, type Group, type GroupMember, type DirectMessage, type GroupMessage,
   type GroupJoinRequest, type GroupInviteLink, type GroupModerationLog,
@@ -15,7 +15,8 @@ import {
   type Subscription, type Payment, type Entitlement,
   type TwinProfileStructured, type TwinMemoryFact, type TwinMemorySummaryEntry,
   type Question, type UserAnswer, type QuestionScheduleEntry, type AuditLog,
-  type Story, type StoryMedia, type StoryLike, type StoryComment, type StoryView, type Plan
+  type Story, type StoryMedia, type StoryLike, type StoryComment, type StoryView, type Plan,
+  type ChatRequest
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, lte } from "drizzle-orm";
@@ -176,6 +177,16 @@ export interface IStorage {
 
   updateLocation(userId: string, lat: number, lng: number, locationName: string): Promise<Profile>;
   checkNearby(userId: string, lat: number, lng: number, radiusKm?: number): Promise<{ locationName: string; count: number; users: any[] }[]>;
+
+  updateGroupMemberMute(groupId: number, userId: string, isMuted: boolean): Promise<GroupMember>;
+  isGroupNicknameTaken(nickname: string): Promise<boolean>;
+
+  createChatRequest(requesterId: string, targetId: string, groupId: number, expiresAt: Date): Promise<ChatRequest>;
+  getChatRequest(id: number): Promise<ChatRequest | undefined>;
+  getChatRequests(userId: string): Promise<ChatRequest[]>;
+  updateChatRequestStatus(id: number, status: string): Promise<ChatRequest>;
+
+  searchUsers(query: string, excludeUserId: string): Promise<any[]>;
 
   seedDemoData(): Promise<void>;
 }
@@ -1345,6 +1356,67 @@ export class DatabaseStorage implements IStorage {
   async updatePlan(id: number, updates: Partial<Plan>): Promise<Plan> {
     const [updated] = await db.update(plans).set(updates).where(eq(plans.id, id)).returning();
     return updated;
+  }
+
+  async updateGroupMemberMute(groupId: number, userId: string, isMuted: boolean): Promise<GroupMember> {
+    const [updated] = await db.update(groupMembers)
+      .set({ isMuted })
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  async isGroupNicknameTaken(nickname: string): Promise<boolean> {
+    const [row] = await db.select().from(profiles).where(
+      sql`lower(${profiles.groupNickname}) = lower(${nickname})`
+    );
+    return !!row;
+  }
+
+  async createChatRequest(requesterId: string, targetId: string, groupId: number, expiresAt: Date): Promise<ChatRequest> {
+    const [req] = await db.insert(chatRequests).values({ requesterId, targetId, groupId, expiresAt }).returning();
+    return req;
+  }
+
+  async getChatRequest(id: number): Promise<ChatRequest | undefined> {
+    const [req] = await db.select().from(chatRequests).where(eq(chatRequests.id, id));
+    return req;
+  }
+
+  async getChatRequests(userId: string): Promise<ChatRequest[]> {
+    return db.select().from(chatRequests).where(
+      or(eq(chatRequests.requesterId, userId), eq(chatRequests.targetId, userId))
+    ).orderBy(desc(chatRequests.createdAt));
+  }
+
+  async updateChatRequestStatus(id: number, status: string): Promise<ChatRequest> {
+    const [updated] = await db.update(chatRequests).set({ status }).where(eq(chatRequests.id, id)).returning();
+    return updated;
+  }
+
+  async searchUsers(query: string, excludeUserId: string): Promise<any[]> {
+    const rows = await db
+      .select({
+        userId: profiles.userId,
+        displayName: profiles.displayName,
+        groupNickname: profiles.groupNickname,
+        subscriptionTier: profiles.subscriptionTier,
+        profileImageUrl: users.profileImageUrl,
+      })
+      .from(profiles)
+      .innerJoin(users, eq(profiles.userId, users.id))
+      .where(
+        and(
+          ne(profiles.userId, excludeUserId),
+          eq(profiles.isPublic, true),
+          or(
+            ilike(profiles.displayName, `%${query}%`),
+            ilike(profiles.groupNickname, `%${query}%`)
+          )
+        )
+      )
+      .limit(20);
+    return rows;
   }
 }
 
