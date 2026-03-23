@@ -572,22 +572,23 @@ IMPORTANT PRIVACY GUARDRAIL: Under NO circumstances reveal any of the following:
       "Describe the kind of partner energy you're looking for.",
       "What would you want your partner to say about you after a year?",
     ];
-    const unansweredQuestions = questionsAnswered < ALL_TWIN_QUESTIONS.length
-      ? ALL_TWIN_QUESTIONS.slice(questionsAnswered)
-      : [];
-    const progressTowardHundred = questionsAnswered;
-    const remainingToFull = Math.max(0, 100 - questionsAnswered);
+    const progressTowardHundred = Math.min(questionsAnswered, 100);
+    const remainingToFull = Math.max(0, 100 - progressTowardHundred);
 
     let questionWeavingSection = "";
-    if (questionsAnswered < 100 && unansweredQuestions.length > 0) {
-      const allQuestionsList = unansweredQuestions.map((q, i) => `${i + 1}. "${q}"`).join("\n");
+    if (progressTowardHundred < 100) {
+      const unansweredFromBank = questionsAnswered < ALL_TWIN_QUESTIONS.length
+        ? ALL_TWIN_QUESTIONS.slice(questionsAnswered)
+        : [];
+      const bankSection = unansweredFromBank.length > 0
+        ? `\nSpecific questions to explore:\n${unansweredFromBank.map((q, i) => `${i + 1}. "${q}"`).join("\n")}`
+        : "\nAll structured onboarding questions have been answered. Continue learning through open conversation — ask about their day-to-day life, goals, relationships, and personality naturally.";
+
       questionWeavingSection = `
 
 QUESTION WEAVING (IMPORTANT):
 CONTEXT: The user has answered ${progressTowardHundred} out of 100 personality questions. There are ${remainingToFull} remaining to fully train the Twin. You are still learning about them.
-Every 2-3 exchanges, naturally weave in ONE of these unanswered questions as part of the conversation flow. Never ask them as a list or label them. Make them feel like a natural follow-up thought, e.g. "That reminds me — I've been curious..." or "Speaking of that, what's..." or "Quick thought...". Pick whichever fits the conversation context best. Once in a while (every 10+ exchanges), you may gently mention that chatting helps train your Twin memory.
-Full unanswered question bank:
-${allQuestionsList}`;
+Every 2-3 exchanges, naturally weave in ONE personality/relationship question as part of the conversation flow. Never ask them as a list or label them. Make them feel like a natural follow-up thought, e.g. "That reminds me — I've been curious..." or "Speaking of that, what's..." or "Quick thought...". Pick whichever fits the conversation context best. Occasionally (every 10+ exchanges) you may gently mention that chatting helps train your Twin memory.${bankSection}`;
     }
 
     return `You are the user's personal AI Twin on VibeFlow, a dating app. You chat like a real friend on WhatsApp - warm, concise, and human.
@@ -698,12 +699,15 @@ Only include structured_updates fields if the conversation clearly reveals them.
           await storage.upsertTwinProfileStructured(userId, updates);
         }
       }
-      const answeredCount = typeof result.questions_answered_count === "number" ? result.questions_answered_count : 0;
+      const answeredCount = typeof result.questions_answered_count === "number" ? Math.max(0, Math.min(result.questions_answered_count, 5)) : 0;
       if (answeredCount > 0) {
         const profile = await storage.getProfile(userId);
         if (profile) {
           const current = profile.twinQuestionsAnswered || 0;
-          await storage.updateProfile(userId, { twinQuestionsAnswered: current + answeredCount });
+          const newCount = Math.min(current + answeredCount, 100);
+          if (newCount > current) {
+            await storage.updateProfile(userId, { twinQuestionsAnswered: newCount });
+          }
         }
       }
     } catch (e) {
@@ -864,10 +868,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         fullResponse = detectPII(fullResponse);
         await storage.addTwinMemory(userId, fullResponse, "assistant");
 
-        const allMsgs = [...memoryMessages, { role: "user", content: message }, { role: "assistant", content: fullResponse }];
-        if (allMsgs.length % 6 === 0) {
-          extractMemoryAfterChat(userId, allMsgs).catch(() => {});
-        }
+        extractMemoryAfterChat(userId, [{ role: "user", content: message }, { role: "assistant", content: fullResponse }]).catch(() => {});
 
         res.write(`data: ${JSON.stringify({ type: "done", content: fullResponse })}\n\n`);
         res.end();
@@ -893,10 +894,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         aiResponse = detectPII(aiResponse);
         await storage.addTwinMemory(userId, aiResponse, "assistant");
 
-        const allMsgs = [...memoryMessages, { role: "user", content: message }, { role: "assistant", content: aiResponse }];
-        if (allMsgs.length % 6 === 0) {
-          extractMemoryAfterChat(userId, allMsgs).catch(() => {});
-        }
+        extractMemoryAfterChat(userId, [{ role: "user", content: message }, { role: "assistant", content: aiResponse }]).catch(() => {});
 
         res.json({ response: aiResponse });
       }
