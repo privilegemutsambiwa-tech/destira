@@ -1299,9 +1299,11 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         ownerId: userId, iconUrl, categoryTags, privacyMode,
         mediaEnabled, stickersEnabled, postingPermission, inviteDirectJoinEnabled,
       });
+      const creatorProfile = await storage.getProfile(userId);
       const adjectives = ["Curious", "Dreamy", "Bold", "Gentle", "Witty", "Bright", "Calm", "Warm"];
       const nouns = ["Phoenix", "River", "Cloud", "Star", "Wave", "Spark", "Moon", "Breeze"];
-      const nickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
+      const fallbackNick = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
+      const nickname = creatorProfile?.groupNickname || creatorProfile?.displayName || fallbackNick;
       await storage.joinGroup(group.id, userId, nickname);
       await storage.updateGroupMemberRole(group.id, userId, "owner");
       res.status(201).json(group);

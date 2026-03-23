@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Loader2, Users, CheckCircle, XCircle, LogIn } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function JoinGroup({ params }: { params?: { token?: string } }) {
@@ -30,7 +29,11 @@ export default function JoinGroup({ params }: { params?: { token?: string } }) {
       return;
     }
     setStatus("joining");
-    apiRequest("POST", `/api/groups/join-by-invite/${parsedToken}`)
+    fetch(`/api/groups/join-by-invite/${parsedToken}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (res.status === 409) {
