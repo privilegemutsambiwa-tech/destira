@@ -308,11 +308,12 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
         setHasJoined(true);
         toast({ title: "Joined!", description: `You're now part of ${group?.name}.` });
       }
-    } catch (e: any) {
-      if (e.message?.includes("Already")) {
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "";
+      if (errMsg.includes("Already")) {
         setHasJoined(true);
       } else {
-        toast({ title: "Error", description: e.message || "Failed to join.", variant: "destructive" });
+        toast({ title: "Error", description: errMsg || "Failed to join.", variant: "destructive" });
       }
     }
   };
@@ -595,12 +596,18 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                                   try {
                                     const result = await createChatRequest.mutateAsync({ targetId: msg.userId, groupId });
                                     if (result.status === "matched" || result.status === "already_matched") {
-                                      toast({ title: "You can now chat privately!" });
+                                      const matchId = result.match?.id;
+                                      if (matchId) {
+                                        setLocation(`/chat/${matchId}`);
+                                      } else {
+                                        toast({ title: "You can now chat privately!" });
+                                      }
                                     } else {
                                       toast({ title: "Request sent!", description: "They'll be notified of your request." });
                                     }
-                                  } catch (e: any) {
-                                    toast({ title: "Error", description: e.message || "Failed to send request.", variant: "destructive" });
+                                  } catch (err) {
+                                    const msg = err instanceof Error ? err.message : "Failed to send request.";
+                                    toast({ title: "Error", description: msg, variant: "destructive" });
                                   }
                                   setActiveMessageId(null);
                                 },

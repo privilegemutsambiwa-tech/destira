@@ -5,7 +5,11 @@ import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function JoinGroup({ params }: { params?: { token?: string } }) {
-  const token = params?.token;
+  const rawParam = params?.token || "";
+  const dashIdx = rawParam.indexOf("-");
+  const parsedGroupId = dashIdx > 0 ? rawParam.slice(0, dashIdx) : "";
+  const parsedToken = dashIdx > 0 ? rawParam.slice(dashIdx + 1) : rawParam;
+
   const [, setLocation] = useLocation();
   const { user, isLoading: authLoading } = useAuth();
   const [status, setStatus] = useState<"loading" | "joining" | "success" | "requested" | "already" | "error">("loading");
@@ -16,29 +20,31 @@ export default function JoinGroup({ params }: { params?: { token?: string } }) {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      setLocation(`/?next=/join/${token}`);
+      setLocation(`/?next=/join/${rawParam}`);
       return;
     }
-    if (!token) {
+    if (!parsedToken) {
       setStatus("error");
       setErrorMsg("Invalid invite link.");
       return;
     }
     setStatus("joining");
-    apiRequest("POST", `/api/groups/join-by-invite/${token}`)
+    apiRequest("POST", `/api/groups/join-by-invite/${parsedToken}`)
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (res.status === 409) {
           setStatus("already");
-          if (data.groupId) setGroupId(data.groupId);
+          const gid = data.groupId || (parsedGroupId ? parseInt(parsedGroupId) : null);
+          if (gid) setGroupId(gid);
         } else if (res.status === 200 || res.status === 201) {
           if (data.status === "requested") {
             setStatus("requested");
             setGroupName(data.groupName || "");
+            if (data.groupId) setGroupId(data.groupId);
           } else {
             setStatus("success");
-            setGroupId(data.groupId || data.group?.id || null);
-            setGroupName(data.groupName || data.group?.name || "");
+            setGroupId(data.groupId || (parsedGroupId ? parseInt(parsedGroupId) : null));
+            setGroupName(data.groupName || "");
           }
         } else {
           setStatus("error");
@@ -49,7 +55,7 @@ export default function JoinGroup({ params }: { params?: { token?: string } }) {
         setStatus("error");
         setErrorMsg("Something went wrong. Please try again.");
       });
-  }, [user, authLoading, token]);
+  }, [user, authLoading, parsedToken]);
 
   const goToGroup = () => {
     if (groupId) setLocation(`/lounge/group/${groupId}`);

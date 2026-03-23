@@ -77,7 +77,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   const isOwner = group?.myRole === "owner";
   const isAdmin = group?.myRole === "owner" || group?.myRole === "admin";
 
-  const currentMember = (members as any[])?.find((m: any) => m.userId === user?.id);
+  const currentMember = (members || []).find((m: { userId: string; isMuted?: boolean; role?: string }) => m.userId === user?.id);
   const actuallyMuted = isMuted !== null ? isMuted : (currentMember?.isMuted ?? false);
 
   const sortedMembers = [...(members || [])].sort((a: any, b: any) => {
@@ -85,10 +85,12 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
     return (order[a.role] || 2) - (order[b.role] || 2);
   });
 
+  const makeInviteUrl = (token: string) => `${window.location.origin}/join/${groupId}-${token}`;
+
   const handleCreateInvite = async () => {
     try {
       const link = await createInvite.mutateAsync();
-      const url = `${window.location.origin}/join/${link.token}`;
+      const url = makeInviteUrl(link.token);
       navigator.clipboard.writeText(url);
       toast({ title: "Invite link copied!" });
     } catch {
@@ -97,7 +99,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   };
 
   const handleCopyLink = (token: string) => {
-    const url = `${window.location.origin}/join/${token}`;
+    const url = makeInviteUrl(token);
     navigator.clipboard.writeText(url);
     setCopiedLink(token);
     setTimeout(() => setCopiedLink(null), 2000);
@@ -190,15 +192,16 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
       toast({ title: "Member added successfully" });
       setAddMemberOpen(false);
       setAddMemberQuery("");
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message || "Failed to add member.", variant: "destructive" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to add member.";
+      toast({ title: "Error", description: message, variant: "destructive" });
     }
   };
 
   const handleShare = async () => {
     try {
       const linkRes = await createInvite.mutateAsync();
-      const inviteUrl = `${window.location.origin}/join/${linkRes.token}`;
+      const inviteUrl = makeInviteUrl(linkRes.token);
       const shareData = { title: group?.name || "Group", text: `Join "${group?.name}" on VibeFlow`, url: inviteUrl };
       if (navigator.share) {
         await navigator.share(shareData).catch(() => {});
@@ -691,7 +694,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                   {inviteLinks.filter((l: any) => l.isActive).map((link: any) => (
                     <div key={link.id} className="flex items-center gap-2">
                       <input
-                        value={`${window.location.origin}/join/${link.token}`}
+                        value={makeInviteUrl(link.token)}
                         readOnly
                         className="text-xs flex-1 px-3 py-2 outline-none"
                         style={{ background: "#242433", border: "1px solid #2E2E42", borderRadius: "8px", color: "#9090A8" }}
@@ -836,10 +839,10 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             data-testid="input-add-member-search"
           />
           <div className="space-y-1 max-h-64 overflow-y-auto mt-1">
-            {addMemberQuery.trim().length >= 2 && (userSearchResults as any[] || []).length === 0 && (
+            {addMemberQuery.trim().length >= 2 && ((userSearchResults as { userId: string; displayName: string; groupNickname?: string }[]) || []).length === 0 && (
               <p className="text-sm text-center py-4" style={{ color: "#9090A8" }}>No users found</p>
             )}
-            {(userSearchResults as any[] || []).map((u: any) => (
+            {((userSearchResults as { userId: string; displayName: string; groupNickname?: string }[]) || []).map((u) => (
               <div
                 key={u.userId}
                 className="flex items-center justify-between gap-3 py-2 px-1 rounded-lg"
@@ -886,10 +889,10 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             data-testid="input-search-messages"
           />
           <div className="space-y-2 max-h-80 overflow-y-auto mt-1">
-            {searchQuery.trim().length > 0 && (messageSearchResults as any[] || []).length === 0 && (
+            {searchQuery.trim().length > 0 && ((messageSearchResults as { id: number; content: string; nickname?: string; createdAt?: string }[]) || []).length === 0 && (
               <p className="text-sm text-center py-4" style={{ color: "#9090A8" }}>No messages found</p>
             )}
-            {(messageSearchResults as any[] || []).map((msg: any) => (
+            {((messageSearchResults as { id: number; content: string; nickname?: string; createdAt?: string }[]) || []).map((msg) => (
               <button
                 key={msg.id}
                 className="w-full text-left rounded-lg p-3 btn-press"
