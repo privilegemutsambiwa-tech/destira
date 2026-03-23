@@ -560,7 +560,7 @@ IMPORTANT PRIVACY GUARDRAIL: Under NO circumstances reveal any of the following:
     }
 
     const questionsAnswered = profile.twinQuestionsAnswered || 0;
-    const TWIN_QUESTIONS = [
+    const ALL_TWIN_QUESTIONS = [
       "What are the top 3 values you live by?",
       "Describe your ideal Sunday.",
       "How do you handle conflict in relationships?",
@@ -572,17 +572,22 @@ IMPORTANT PRIVACY GUARDRAIL: Under NO circumstances reveal any of the following:
       "Describe the kind of partner energy you're looking for.",
       "What would you want your partner to say about you after a year?",
     ];
-    const unansweredQuestions = TWIN_QUESTIONS.slice(questionsAnswered);
+    const unansweredQuestions = questionsAnswered < ALL_TWIN_QUESTIONS.length
+      ? ALL_TWIN_QUESTIONS.slice(questionsAnswered)
+      : [];
+    const progressTowardHundred = questionsAnswered;
+    const remainingToFull = Math.max(0, 100 - questionsAnswered);
 
     let questionWeavingSection = "";
     if (questionsAnswered < 100 && unansweredQuestions.length > 0) {
-      const sampleQuestions = unansweredQuestions.slice(0, 5).map((q, i) => `${i + 1}. "${q}"`).join("\n");
+      const allQuestionsList = unansweredQuestions.map((q, i) => `${i + 1}. "${q}"`).join("\n");
       questionWeavingSection = `
 
 QUESTION WEAVING (IMPORTANT):
-You are still learning about the user. Every 2-3 exchanges, naturally weave in one of these unanswered questions as part of the conversation flow. Never ask them as a list or label them. Make them feel like a natural follow-up thought, e.g. "That reminds me — I've been curious..." or "Speaking of that, what's..." Pick whichever question fits the conversation context best.
-Unanswered questions to weave in:
-${sampleQuestions}`;
+CONTEXT: The user has answered ${progressTowardHundred} out of 100 personality questions. There are ${remainingToFull} remaining to fully train the Twin. You are still learning about them.
+Every 2-3 exchanges, naturally weave in ONE of these unanswered questions as part of the conversation flow. Never ask them as a list or label them. Make them feel like a natural follow-up thought, e.g. "That reminds me — I've been curious..." or "Speaking of that, what's..." or "Quick thought...". Pick whichever fits the conversation context best. Once in a while (every 10+ exchanges), you may gently mention that chatting helps train your Twin memory.
+Full unanswered question bank:
+${allQuestionsList}`;
     }
 
     return `You are the user's personal AI Twin on VibeFlow, a dating app. You chat like a real friend on WhatsApp - warm, concise, and human.
@@ -905,6 +910,37 @@ Only include structured_updates fields if the conversation clearly reveals them.
       } else {
         res.json({ response: fallback });
       }
+    }
+  });
+
+  app.post("/api/twin/extract-trait", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    if (!checkAIRateLimit(userId)) return res.status(429).json({ message: "Too many requests. Please wait a moment." });
+    const schema = z.object({
+      userMessage: z.string(),
+      assistantMessage: z.string().optional(),
+      incrementCount: z.number().int().min(0).max(5).optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid body" });
+    const { userMessage, assistantMessage, incrementCount } = parsed.data;
+    try {
+      const messages = [
+        { role: "user", content: userMessage },
+        ...(assistantMessage ? [{ role: "assistant", content: assistantMessage }] : []),
+      ];
+      extractMemoryAfterChat(userId, messages).catch(() => {});
+      if (incrementCount && incrementCount > 0) {
+        const profile = await storage.getProfile(userId);
+        if (profile) {
+          const current = profile.twinQuestionsAnswered || 0;
+          await storage.updateProfile(userId, { twinQuestionsAnswered: current + incrementCount });
+        }
+      }
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to extract trait" });
     }
   });
 

@@ -53,6 +53,7 @@ export default function Profile() {
   const [bioEditorOpen, setBioEditorOpen] = useState(false);
   const [bioEditorValue, setBioEditorValue] = useState("");
   const [polishingBio, setPolishingBio] = useState(false);
+  const [polishedPreview, setPolishedPreview] = useState<string | null>(null);
   const [showOwnStoryViewer, setShowOwnStoryViewer] = useState(false);
   const [showStoryCreator, setShowStoryCreator] = useState(false);
   const [toneValues, setToneValues] = useState({
@@ -168,6 +169,7 @@ export default function Profile() {
   const handlePolishBio = async () => {
     if (!bioEditorValue.trim()) return;
     setPolishingBio(true);
+    setPolishedPreview(null);
     try {
       const res = await fetch("/api/profile/polish-bio", {
         method: "POST",
@@ -177,13 +179,19 @@ export default function Profile() {
       });
       if (!res.ok) throw new Error("Failed to polish");
       const data = await res.json();
-      setBioEditorValue(data.polished);
-      toast({ title: "Bio polished!", description: "Your bio has been refined by AI." });
+      setPolishedPreview(data.polished);
     } catch {
       toast({ title: "Error", description: "Failed to polish bio.", variant: "destructive" });
     } finally {
       setPolishingBio(false);
     }
+  };
+
+  const handleAcceptPolished = () => {
+    if (!polishedPreview) return;
+    setBioEditorValue(polishedPreview);
+    setPolishedPreview(null);
+    toast({ title: "Bio polished!", description: "AI refinement applied. Save when ready." });
   };
 
   const tierLabel = subscription?.tier === "vip" ? "VIP" : subscription?.tier === "plus" ? "Plus" : "Free";
@@ -504,12 +512,40 @@ export default function Profile() {
                     <button
                       className="text-xs btn-press px-2 py-1.5"
                       style={{ color: "#9090A8" }}
-                      onClick={() => setBioEditorOpen(false)}
+                      onClick={() => { setBioEditorOpen(false); setPolishedPreview(null); }}
                       data-testid="button-close-bio-editor"
                     >
                       <X className="w-3 h-3" />
                     </button>
                   </div>
+                  {polishedPreview && (
+                    <div
+                      className="mt-3 p-3"
+                      style={{ background: "rgba(124,58,237,0.08)", borderRadius: "10px", border: "1px dashed rgba(124,58,237,0.4)" }}
+                      data-testid="polished-bio-preview"
+                    >
+                      <p className="text-xs font-medium mb-2" style={{ color: "#A78BFA" }}>✦ AI-polished version</p>
+                      <p className="text-sm text-white leading-relaxed mb-3">{polishedPreview}</p>
+                      <div className="flex gap-2">
+                        <button
+                          className="text-xs font-medium btn-press px-3 py-1.5 text-white"
+                          style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", borderRadius: "8px", border: "none" }}
+                          onClick={handleAcceptPolished}
+                          data-testid="button-accept-polished"
+                        >
+                          <Check className="w-3 h-3 inline mr-1" /> Use this
+                        </button>
+                        <button
+                          className="text-xs btn-press px-3 py-1.5"
+                          style={{ background: "#1A1A24", color: "#9090A8", borderRadius: "8px", border: "1px solid #2E2E42" }}
+                          onClick={() => setPolishedPreview(null)}
+                          data-testid="button-discard-polished"
+                        >
+                          Discard
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
