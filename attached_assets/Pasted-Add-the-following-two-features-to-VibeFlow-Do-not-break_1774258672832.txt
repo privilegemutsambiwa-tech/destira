@@ -1,0 +1,323 @@
+Add the following two features to VibeFlow. Do not break 
+anything currently working.
+
+=======================================================
+FEATURE 1 — ONBOARDING ANSWERS FEED INTO TWIN MEMORY
+=======================================================
+
+CURRENT PROBLEM:
+After a user completes the 10-step onboarding questionnaire,
+the Twin Intelligence section still shows "0 of 100 questions 
+answered" and "0% complete". This is wrong — the user already 
+answered questions during onboarding. Those answers should 
+count toward their Twin's knowledge immediately.
+
+FIX THIS IN THREE PARTS:
+
+--- PART A: Save onboarding answers as Twin memory ---
+
+When the user completes onboarding, immediately:
+
+1. Save these traits to the twin_memory table in Supabase:
+
+   trait_key: "gender"
+   trait_value: user's selected gender
+
+   trait_key: "interested_in"
+   trait_value: user's selected preference (Men/Women/Everyone)
+
+   trait_key: "age_preference"
+   trait_value: "Min: X, Max: Y"
+
+   trait_key: "relationship_goal"
+   trait_value: user's selected goal
+
+   trait_key: "interests"
+   trait_value: comma-separated list of selected interests
+
+   trait_key: "location"
+   trait_value: user's entered city/location
+
+   trait_key: "age"
+   trait_value: calculated age from date of birth
+
+   trait_key: "bio"
+   trait_value: user's written bio (if provided)
+
+   trait_key: "display_name"
+   trait_value: user's chosen display name
+
+   trait_key: "communication_style"
+   trait_value: "Unknown — learning from conversations"
+
+   That is 10 traits = 10 questions answered from onboarding.
+
+2. Also update the profiles table column: 
+   twin_questions_answered = 10
+
+--- PART B: Update the progress counter correctly ---
+
+The Twin Intelligence card shows:
+"X of 100 questions answered"
+"Questions Progress: X%"
+
+Fix the logic:
+
+  total_questions = 100
+  onboarding_questions = 10 (always auto-counted after signup)
+  conversation_questions = count of additional traits learned
+    from chat interactions stored in twin_memory table
+  
+  total_answered = onboarding_questions + conversation_questions
+  percentage = Math.round((total_answered / total_questions) * 100)
+
+Display:
+  "X of 100 questions answered"
+  Progress bar fills to X%
+
+Motivational messages based on progress:
+  0-10%:  "Just getting started — your onboarding is saved!"
+  11-25%: "Good start! Chat with your Twin to teach it more."
+  26-50%: "Your Twin is learning — keep the conversations going."
+  51-75%: "Your Twin knows you well. Almost there!"
+  76-99%: "Your Twin is nearly fully trained!"
+  100%:   "✦ Twin fully trained — you're getting the best matches!"
+
+--- PART C: Inject onboarding data into ALL Twin AI prompts ---
+
+When building the system prompt for Twin Chat (POST /api/twin/chat),
+fetch ALL traits from twin_memory for that user and inject them:
+
+const memoryTraits = await supabase
+  .from('twin_memory')
+  .select('*')
+  .eq('user_id', userId)
+
+const memoryContext = memoryTraits.data
+  .map(t => `- ${t.trait_key}: ${t.trait_value}`)
+  .join('\n')
+
+Then in the system prompt:
+
+`You are ${name}'s AI Twin on VibeFlow.
+
+Everything you know about ${name}:
+${memoryContext}
+
+Use this knowledge in every response.
+Reference specific things you know about them naturally.
+Never ask for information you already have.
+If they mention something new, remember it for this conversation.`
+
+This ensures the Twin never acts like a stranger to the user —
+it already knows their basics from day one.
+
+=======================================================
+FEATURE 2 — SPECIFIC LOCATION SYSTEM + PROXIMITY ALERTS
+=======================================================
+
+CURRENT PROBLEM:
+The app either shows no location or just shows "San Francisco, CA"
+as a static city. We want something more specific and unique —
+showing the actual named place the user is at (university, 
+neighborhood, mall, etc.) and sending smart proximity notifications.
+
+--- PART A: Get and store specific location ---
+
+Use the browser Geolocation API to get user's coordinates:
+
+navigator.geolocation.getCurrentPosition(async (position) => {
+  const { latitude, longitude } = position.coords
+  // Reverse geocode to get named location
+})
+
+Reverse geocode using the FREE Nominatim API (no key needed):
+
+const response = await fetch(
+  `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+)
+const data = await response.json()
+
+Extract the specific named place in this priority order:
+1. data.address.amenity (e.g. "University of Zimbabwe")
+2. data.address.building (e.g. "Melfort Mall")  
+3. data.address.neighbourhood (e.g. "Highlands")
+4. data.address.suburb (e.g. "Borrowdale")
+5. data.address.city_district
+6. data.address.city (fallback)
+
+Store in Supabase profiles table:
+  location_lat: latitude (decimal)
+  location_lng: longitude (decimal)  
+  location_name: the specific named place (e.g. "University of Zimbabwe")
+  location_updated_at: timestamp
+
+Update location every time the app loads (on app focus).
+
+Ask for location permission with a friendly prompt:
+  Show a modal before requesting browser permission:
+  Icon: 📍 (location pin)
+  Title: "Enable Location"
+  Body: "VibeFlow uses your location to show you people 
+  nearby. Your exact location is never shared — only your 
+  general area."
+  Button: "Enable Location" (gradient)
+  Skip: "Maybe Later" text link
+
+--- PART B: Display specific location on profile cards ---
+
+On the Discover profile card, replace the current 
+"📍 San Francisco, CA" with the specific location name:
+
+Format: "📍 University of Zimbabwe" 
+or:    "📍 Highlands, Harare"
+or:    "📍 Borrowdale"
+
+If the other user's location was updated within the last 
+30 minutes, add a small live indicator:
+  Green dot + "Nearby now" in green text (12px)
+  This tells the viewer the person is currently in that area
+
+Distance calculation:
+  Use the Haversine formula to calculate distance between 
+  current user's coordinates and the other user's coordinates:
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371 // Earth radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  return R * c
+}
+
+Display format on card:
+  If < 0.5km:  "📍 University of Zimbabwe · Right here"
+  If < 1km:    "📍 Highlands · Less than 1km away"
+  If < 5km:    "📍 Borrowdale · 2.3km away"
+  If < 20km:   "📍 Harare · 8km away"
+  If >= 20km:  "📍 Bulawayo · 439km away"
+
+--- PART C: Proximity notification system ---
+
+Create a backend function that runs when users are active.
+Check: are there any potential matches (based on gender 
+preference) within 1km of the current user?
+
+Endpoint: POST /api/location/check-nearby
+Called: when app loads and every 10 minutes while app is open
+
+Logic:
+  1. Get current user's location
+  2. Query all users whose interested_in matches current 
+     user's gender AND current user's interested_in matches 
+     their gender (mutual match filter)
+  3. Calculate distance to each of them
+  4. Group by location_name (named place)
+  5. If any matches are at the same named location:
+     Trigger an in-app notification
+
+IN-APP NOTIFICATION DESIGN:
+  Appears as a banner sliding down from the top of the screen
+  Background: gradient (purple to pink)
+  Dismiss: tap anywhere on it or X button
+  Duration: stays until dismissed (not auto-dismiss)
+  
+  Message formats:
+  
+  SAME NAMED LOCATION (< 0.5km):
+  "📍 10 potential matches are also at University of Zimbabwe 
+  right now. Say hello?"
+  Button: "Discover Them →"
+
+  NEARBY (0.5km - 2km):
+  "💜 5 people near Highlands are on VibeFlow right now"
+  Button: "See Who's Nearby →"
+
+  NEW PERSON VERY CLOSE (< 200m, real-time):
+  "✨ Someone new just joined VibeFlow near you"
+  Button: "Check it out →"
+
+  Tapping "Discover Them" or "See Who's Nearby" opens the 
+  Discover page filtered to show nearby users first.
+
+--- PART D: Nearby filter on Discover page ---
+
+Add a "Nearby" filter chip at the top of Discover:
+  Filter chips row: "All"  "Nearby 📍"  "New"  "Online"
+  
+  When "Nearby" is selected:
+  - Sort profiles by distance (closest first)
+  - Show distance on each card
+  - Show a map-pin icon on cards that are < 1km away
+
+  When "All" is selected:
+  - Normal matching algorithm order
+
+--- PART E: Privacy rules for location ---
+
+NEVER show exact coordinates to any user.
+NEVER display lat/lng anywhere in the UI.
+Only show: named place + approximate distance.
+In the Twin interview system prompt, only include:
+  location_name (e.g. "Highlands, Harare") — never coordinates.
+Users can turn off location sharing in Settings → Discovery → 
+"Show Distance" toggle (already exists — connect it to this).
+When Show Distance is OFF:
+  - Still use location for matching internally
+  - But show "📍 Prefers not to share location" on their card
+
+=======================================================
+SUPABASE SCHEMA CHANGES NEEDED
+=======================================================
+
+Run this SQL in Supabase:
+
+-- Add location columns to profiles
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS 
+  location_lat DECIMAL(10, 8);
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS 
+  location_lng DECIMAL(11, 8);
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS 
+  location_name TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS 
+  location_updated_at TIMESTAMP;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS 
+  twin_questions_answered INTEGER DEFAULT 0;
+
+-- Add index for location queries
+CREATE INDEX IF NOT EXISTS profiles_location_idx 
+  ON profiles(location_lat, location_lng);
+
+-- twin_memory table (if not already created)
+CREATE TABLE IF NOT EXISTS twin_memory (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  trait_key TEXT NOT NULL,
+  trait_value TEXT NOT NULL,
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(user_id, trait_key)
+);
+
+ALTER TABLE twin_memory ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "Own memory only" 
+  ON twin_memory FOR ALL USING (auth.uid() = user_id);
+
+=======================================================
+IMPORTANT RULES
+=======================================================
+
+1. Location permission is requested politely — never forced
+2. If user denies location, app works normally without it
+3. Location is updated silently in background — no UI flash
+4. Nominatim has a usage policy: add header 
+   User-Agent: "VibeFlow/1.0" to all Nominatim requests
+5. Onboarding answers must count IMMEDIATELY after signup
+6. Twin progress % must never go backwards
+7. Proximity notifications only fire maximum once per hour
+   per location to avoid spam — track last_notified_at
+8. All existing features must continue working
+9. Test location on a real device — simulators may not 
+   give accurate location names
