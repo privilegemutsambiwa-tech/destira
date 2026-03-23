@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
-import { useSubscription, useGenerateSummary, useProfileCompletion, useGenerateAboutMe, useGenerateAISummary, useTwinToneProfile, useUpdateTwinToneProfile, useTwinStructuredProfile, useExtractTwinProfile, useTwinMemory } from "@/hooks/use-interactions";
+import { useSubscription, useGenerateSummary, useProfileCompletion, useTwinToneProfile, useUpdateTwinToneProfile, useTwinStructuredProfile, useExtractTwinProfile, useTwinMemory } from "@/hooks/use-interactions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -12,9 +12,9 @@ import {
 } from "@/components/ui/dialog";
 import {
   Loader2, MapPin,
-  Camera, Crown, Wand2, Trash2, ImagePlus,
+  Camera, Crown, Trash2, ImagePlus,
   CheckCircle2, ArrowRight, Check, X, Pencil,
-  Brain, Sparkles, RefreshCw, Plus, LogOut, Settings
+  Brain, Sparkles, Plus, LogOut, Settings
 } from "lucide-react";
 import { AddStoryButton, OwnStoryViewer, type OwnStory } from "@/components/story-viewer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -42,8 +42,6 @@ export default function Profile() {
   const { toast } = useToast();
   const updateProfile = useUpdateProfile();
   const generateSummary = useGenerateSummary();
-  const generateAboutMe = useGenerateAboutMe();
-  const generateAISummary = useGenerateAISummary();
   const { data: toneProfile } = useTwinToneProfile();
   const updateTone = useUpdateTwinToneProfile();
   const { data: structuredProfile } = useTwinStructuredProfile();
@@ -52,7 +50,9 @@ export default function Profile() {
   const [showPhotoDialog, setShowPhotoDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showToneDialog, setShowToneDialog] = useState(false);
-  const [aboutMePreview, setAboutMePreview] = useState<string | null>(null);
+  const [bioEditorOpen, setBioEditorOpen] = useState(false);
+  const [bioEditorValue, setBioEditorValue] = useState("");
+  const [polishingBio, setPolishingBio] = useState(false);
   const [showOwnStoryViewer, setShowOwnStoryViewer] = useState(false);
   const [showStoryCreator, setShowStoryCreator] = useState(false);
   const [toneValues, setToneValues] = useState({
@@ -130,27 +130,6 @@ export default function Profile() {
     }
   };
 
-  const handleGenerateAboutMe = async () => {
-    try {
-      const result = await generateAboutMe.mutateAsync();
-      setAboutMePreview(result.aboutMeText);
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to generate About Me.", variant: "destructive" });
-    }
-  };
-
-  const handleApproveAboutMe = async () => {
-    if (!aboutMePreview) return;
-    try {
-      await updateProfile.mutateAsync({ userId: user!.id, data: { bio: aboutMePreview } });
-      setAboutMePreview(null);
-      toast({ title: "About Me updated!" });
-      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to save.", variant: "destructive" });
-    }
-  };
-
   const handleSaveTone = async () => {
     try {
       await updateTone.mutateAsync(toneValues);
@@ -167,6 +146,43 @@ export default function Profile() {
       toast({ title: "Profile insights extracted!", description: "Your AI Twin now knows you better." });
     } catch (e) {
       toast({ title: "Error", description: "Failed to extract insights.", variant: "destructive" });
+    }
+  };
+
+  const handleOpenBioEditor = () => {
+    setBioEditorValue(profile.aboutMe || profile.bio || "");
+    setBioEditorOpen(true);
+  };
+
+  const handleSaveBioAsIs = async () => {
+    try {
+      await updateProfile.mutateAsync({ userId: user!.id, data: { bio: bioEditorValue } });
+      setBioEditorOpen(false);
+      toast({ title: "Bio saved!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+    } catch {
+      toast({ title: "Error", description: "Failed to save.", variant: "destructive" });
+    }
+  };
+
+  const handlePolishBio = async () => {
+    if (!bioEditorValue.trim()) return;
+    setPolishingBio(true);
+    try {
+      const res = await fetch("/api/profile/polish-bio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bio: bioEditorValue }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to polish");
+      const data = await res.json();
+      setBioEditorValue(data.polished);
+      toast({ title: "Bio polished!", description: "Your bio has been refined by AI." });
+    } catch {
+      toast({ title: "Error", description: "Failed to polish bio.", variant: "destructive" });
+    } finally {
+      setPolishingBio(false);
     }
   };
 
@@ -192,7 +208,7 @@ export default function Profile() {
     : profile.coverPhotoUrl || null;
 
   const avatarFallbackLetter = profile.displayName?.[0] || user?.firstName?.[0] || "?";
-  const highlightChips: string[] = personalityTraits.slice(0, 6);
+  const highlightChips: string[] = personalityTraits.filter(t => t.length < 20).slice(0, 6);
   const hasStories = (ownStories?.length ?? 0) > 0;
 
   const planFeatures = {
@@ -415,74 +431,81 @@ export default function Profile() {
             {/* About Me */}
             <div style={CARD_STYLE} className="p-5">
               <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
-                <h3 className="font-bold text-white" style={{ fontSize: "16px" }}>About Me</h3>
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-white" style={{ fontSize: "16px" }}>About Me</h3>
                   <button
-                    className="text-xs font-medium flex items-center gap-1 btn-press px-3 py-1.5"
-                    style={{
-                      background: "rgba(124,58,237,0.15)",
-                      color: "#A78BFA",
-                      borderRadius: "8px",
-                      border: "1px solid rgba(124,58,237,0.3)",
-                    }}
-                    onClick={handleGenerateAboutMe}
-                    disabled={generateAboutMe.isPending}
-                    data-testid="button-generate-about-me"
+                    onClick={handleOpenBioEditor}
+                    className="btn-press p-1 rounded-md"
+                    style={{ color: "#9090A8" }}
+                    data-testid="button-edit-bio-inline"
                   >
-                    {generateAboutMe.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
-                    Generate
+                    <Pencil className="w-3.5 h-3.5" />
                   </button>
-                  {!profile.aboutSummary && (
-                    <button
-                      className="text-xs font-medium flex items-center gap-1 btn-press px-3 py-1.5"
-                      style={{
-                        background: "rgba(124,58,237,0.15)",
-                        color: "#A78BFA",
-                        borderRadius: "8px",
-                        border: "1px solid rgba(124,58,237,0.3)",
-                      }}
-                      onClick={handleGenerateSummary}
-                      disabled={generateSummary.isPending}
-                      data-testid="button-generate-summary"
-                    >
-                      {generateSummary.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                      Quick Summary
-                    </button>
-                  )}
                 </div>
+                <button
+                  className="text-xs font-medium flex items-center gap-1 btn-press px-3 py-1.5"
+                  style={{
+                    background: "rgba(124,58,237,0.15)",
+                    color: "#A78BFA",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(124,58,237,0.3)",
+                  }}
+                  onClick={handleGenerateSummary}
+                  disabled={generateSummary.isPending}
+                  data-testid="button-generate-summary"
+                >
+                  {generateSummary.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  ✦ Refresh Summary
+                </button>
               </div>
 
-              {aboutMePreview && (
+              {bioEditorOpen && (
                 <div
                   className="mb-4 p-3"
-                  style={{ background: "#242433", borderRadius: "12px", border: "1px dashed #2E2E42" }}
-                  data-testid="about-me-preview"
+                  style={{ background: "#242433", borderRadius: "12px", border: "1px solid #2E2E42" }}
+                  data-testid="bio-editor"
                 >
-                  <p className="text-xs font-medium mb-2" style={{ color: "#9090A8" }}>AI-Generated Preview</p>
-                  <p className="text-sm leading-relaxed mb-3 text-white">{aboutMePreview}</p>
-                  <div className="flex gap-2">
-                    <button
-                      className="text-xs font-medium btn-press px-3 py-1.5 text-white"
-                      style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", borderRadius: "8px", border: "none" }}
-                      onClick={handleApproveAboutMe}
-                      data-testid="button-approve-about-me"
-                    >
-                      <Check className="w-3 h-3 inline mr-1" /> Use This
-                    </button>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium" style={{ color: "#9090A8" }}>Edit your bio</p>
+                    <span className="text-xs" style={{ color: bioEditorValue.length > 280 ? "#EC4899" : "#9090A8" }}>
+                      {bioEditorValue.length}/300
+                    </span>
+                  </div>
+                  <Textarea
+                    value={bioEditorValue}
+                    onChange={e => setBioEditorValue(e.target.value.slice(0, 300))}
+                    placeholder="Tell people about yourself..."
+                    rows={4}
+                    className="text-sm text-white mb-3 resize-none"
+                    style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "10px" }}
+                    data-testid="input-bio-editor"
+                  />
+                  <div className="flex gap-2 flex-wrap">
                     <button
                       className="text-xs font-medium btn-press px-3 py-1.5"
                       style={{ background: "#1A1A24", color: "#FFFFFF", borderRadius: "8px", border: "1px solid #2E2E42" }}
-                      onClick={handleGenerateAboutMe}
-                      disabled={generateAboutMe.isPending}
-                      data-testid="button-regenerate-about-me"
+                      onClick={handleSaveBioAsIs}
+                      disabled={updateProfile.isPending}
+                      data-testid="button-save-bio-as-is"
                     >
-                      <RefreshCw className="w-3 h-3 inline mr-1" /> Regenerate
+                      {updateProfile.isPending ? <Loader2 className="w-3 h-3 animate-spin inline mr-1" /> : <Check className="w-3 h-3 inline mr-1" />}
+                      Save as is
+                    </button>
+                    <button
+                      className="text-xs font-medium btn-press px-3 py-1.5 text-white"
+                      style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", borderRadius: "8px", border: "none" }}
+                      onClick={handlePolishBio}
+                      disabled={polishingBio || !bioEditorValue.trim()}
+                      data-testid="button-polish-bio"
+                    >
+                      {polishingBio ? <Loader2 className="w-3 h-3 animate-spin inline mr-1" /> : <Sparkles className="w-3 h-3 inline mr-1" />}
+                      ✦ Polish with AI
                     </button>
                     <button
                       className="text-xs btn-press px-2 py-1.5"
                       style={{ color: "#9090A8" }}
-                      onClick={() => setAboutMePreview(null)}
-                      data-testid="button-discard-about-me"
+                      onClick={() => setBioEditorOpen(false)}
+                      data-testid="button-close-bio-editor"
                     >
                       <X className="w-3 h-3" />
                     </button>

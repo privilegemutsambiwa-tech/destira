@@ -121,6 +121,30 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/profile/polish-bio", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    if (!checkAIRateLimit(userId)) return res.status(429).json({ message: "Too many requests. Please wait a moment." });
+    const { bio } = req.body;
+    if (!bio || typeof bio !== "string") return res.status(400).json({ message: "bio is required" });
+    try {
+      const profile = await storage.getProfile(userId);
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash-001",
+        contents: [{ role: "user", parts: [{ text: bio }] }],
+        config: {
+          systemInstruction: `You are polishing a dating app bio for someone named ${profile?.displayName || "the user"}. Keep their authentic voice and core ideas but make it sparkle — tighten the prose, remove filler, add warmth. Return ONLY the polished bio text, no explanations, no quotes. Max 300 characters.`,
+          maxOutputTokens: 512,
+        },
+      });
+      const polished = (response.text || bio).trim().slice(0, 300);
+      res.json({ polished });
+    } catch (e) {
+      console.error("Polish bio error:", e);
+      res.status(500).json({ message: "Failed to polish bio" });
+    }
+  });
+
   app.post("/api/profiles/generate-summary", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -525,6 +549,32 @@ IMPORTANT PRIVACY GUARDRAIL: Under NO circumstances reveal any of the following:
       }
     }
 
+    const questionsAnswered = profile.twinQuestionsAnswered || 0;
+    const TWIN_QUESTIONS = [
+      "What are the top 3 values you live by?",
+      "Describe your ideal Sunday.",
+      "How do you handle conflict in relationships?",
+      "What's a life goal you're actively working towards?",
+      "What does emotional intimacy mean to you?",
+      "What's a deal-breaker for you in a relationship?",
+      "How do you show love and appreciation?",
+      "What's something surprising about you?",
+      "Describe the kind of partner energy you're looking for.",
+      "What would you want your partner to say about you after a year?",
+    ];
+    const unansweredQuestions = TWIN_QUESTIONS.slice(questionsAnswered);
+
+    let questionWeavingSection = "";
+    if (questionsAnswered < 100 && unansweredQuestions.length > 0) {
+      const sampleQuestions = unansweredQuestions.slice(0, 5).map((q, i) => `${i + 1}. "${q}"`).join("\n");
+      questionWeavingSection = `
+
+QUESTION WEAVING (IMPORTANT):
+You are still learning about the user. Every 2-3 exchanges, naturally weave in one of these unanswered questions as part of the conversation flow. Never ask them as a list or label them. Make them feel like a natural follow-up thought, e.g. "That reminds me — I've been curious..." or "Speaking of that, what's..." Pick whichever question fits the conversation context best.
+Unanswered questions to weave in:
+${sampleQuestions}`;
+    }
+
     return `You are the user's personal AI Twin on VibeFlow, a dating app. You chat like a real friend on WhatsApp - warm, concise, and human.
 
 CONVERSATION RULES (CRITICAL):
@@ -538,7 +588,7 @@ CONVERSATION RULES (CRITICAL):
 
 TONE: You are ${toneStyle}, with ${verbosity} verbosity, ${emojiUsage} emoji usage, and ${formality} formality.
 
-Your role: Help the user reflect on dating, relationships, and self-understanding. You learn from conversations and their profile data. Occasionally ask a personality question naturally ("Quick thought - ...").
+Your role: Help the user reflect on dating, relationships, and self-understanding. You learn from conversations and their profile data.${questionWeavingSection}
 
 ${profile.twinPersona || "You are friendly, open, and genuine."}${structuredSection}${onboardingSection}${memorySection}
 
@@ -600,8 +650,9 @@ ${PRIVACY_GUARDRAIL}`;
           systemInstruction: `You analyze conversations to extract key facts and a brief summary. Return JSON with:
 {"summary": "A 2-3 sentence rolling summary of the conversation themes",
  "facts": ["fact 1", "fact 2", ...],
+ "questions_answered_count": 0,
  "structured_updates": {"top_values": [], "interests": [], "relationship_goals": "", "humor_style": "", "communication_style": "", "lifestyle_patterns": [], "desired_partner_traits": [], "boundaries": ""}}
-Only include structured_updates fields if the conversation clearly reveals them. Facts should be specific, memorable insights. Return empty arrays/strings for fields not mentioned.`,
+Only include structured_updates fields if the conversation clearly reveals them. Facts should be specific, memorable insights. Return empty arrays/strings for fields not mentioned. For questions_answered_count: count how many of the user's messages meaningfully answer a personality/relationship question (not small talk).`,
           responseMimeType: "application/json",
           maxOutputTokens: 8192,
         },
@@ -630,6 +681,14 @@ Only include structured_updates fields if the conversation clearly reveals them.
         if (su.boundaries) updates.boundaries = su.boundaries;
         if (Object.keys(updates).length > 0) {
           await storage.upsertTwinProfileStructured(userId, updates);
+        }
+      }
+      const answeredCount = typeof result.questions_answered_count === "number" ? result.questions_answered_count : 0;
+      if (answeredCount > 0) {
+        const profile = await storage.getProfile(userId);
+        if (profile) {
+          const current = profile.twinQuestionsAnswered || 0;
+          await storage.updateProfile(userId, { twinQuestionsAnswered: current + answeredCount });
         }
       }
     } catch (e) {
