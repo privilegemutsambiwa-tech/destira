@@ -6,7 +6,8 @@ import { z } from "zod";
 import { GoogleGenAI } from "@google/genai";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
+import { groupMembers } from "@shared/schema";
 import crypto from "crypto";
 import multer from "multer";
 import path from "path";
@@ -430,10 +431,24 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     const { targetId } = req.body;
     try {
+      const blockedByTarget = await storage.isBlocked(targetId, userId);
+      if (blockedByTarget) return res.status(403).json({ message: "Cannot connect with this user" });
+      const userBlockedTarget = await storage.isBlocked(userId, targetId);
+      if (userBlockedTarget) return res.status(403).json({ message: "You have blocked this user" });
+
+      const profile = await storage.getProfile(userId);
+      const tier = profile?.subscriptionTier ?? "free";
+      const likeLimit = tier === "free" ? 5 : tier === "plus" ? 50 : Infinity;
+      const currentLikes = await storage.getDailyLikeCount(userId);
+      if (currentLikes >= likeLimit) {
+        return res.status(403).json({ upgradeRequired: true, message: `Daily like limit reached (${likeLimit}/day on ${tier} tier)` });
+      }
+
       const existing = await storage.getMatchBetweenUsers(userId, targetId);
       if (existing) {
         return res.status(409).json({ message: "Match request already exists", match: existing });
       }
+      await storage.incrementDailyLikes(userId);
       const match = await storage.createMatch(userId, targetId);
       res.status(201).json(match);
     } catch (e) {
@@ -1371,6 +1386,14 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const group = await storage.getGroup(groupId);
       if (!group) return res.status(404).json({ message: "Group not found" });
 
+      const userProfile = await storage.getProfile(userId);
+      const tier = userProfile?.subscriptionTier ?? "free";
+      const groupLimit = tier === "free" ? 2 : tier === "plus" ? 10 : Infinity;
+      const userMemberships = await db.select().from(groupMembers).where(eq(groupMembers.userId, userId));
+      if (userMemberships.length >= groupLimit) {
+        return res.status(403).json({ upgradeRequired: true, message: `Group limit reached (${groupLimit} groups on ${tier} tier)` });
+      }
+
       if (group.privacyMode === "request-to-join") {
         const request = await storage.createJoinRequest(groupId, userId);
         return res.json({ status: "requested", request });
@@ -1380,7 +1403,6 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         return res.status(403).json({ message: "This group is invite-only" });
       }
 
-      const userProfile = await storage.getProfile(userId);
       const adjectives = ["Curious", "Dreamy", "Bold", "Gentle", "Witty", "Bright", "Calm", "Warm"];
       const nouns = ["Phoenix", "River", "Cloud", "Star", "Wave", "Spark", "Moon", "Breeze"];
       const fallbackNickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
@@ -2755,13 +2777,15 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       for (const e of entries) {
         await storage.deleteTwinMemoryEntry(e.id);
       }
+      await storage.deleteAllTwinMemoryFacts(userId);
+      await storage.clearTwinMemorySummary(userId);
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ message: "Failed to clear Twin memory" });
     }
   });
 
-  // Tier limits check (likes)
+  // Tier limits check — preflight only; authoritative enforcement is on /api/matches
   app.post("/api/likes", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -2771,12 +2795,11 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const limit = tier === "free" ? 5 : tier === "plus" ? 50 : Infinity;
       const currentCount = await storage.getDailyLikeCount(userId);
       if (currentCount >= limit) {
-        return res.status(403).json({ error: "upgradeRequired", message: `Daily like limit reached (${limit}/day on ${tier} tier)` });
+        return res.status(403).json({ upgradeRequired: true, message: `Daily like limit reached (${limit}/day on ${tier} tier)` });
       }
-      await storage.incrementDailyLikes(userId);
-      res.json({ success: true, count: currentCount + 1, limit });
+      res.json({ success: true, count: currentCount, limit });
     } catch (err) {
-      res.status(500).json({ message: "Failed to register like" });
+      res.status(500).json({ message: "Failed to check like limit" });
     }
   });
 

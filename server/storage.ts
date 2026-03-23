@@ -195,6 +195,9 @@ export interface IStorage {
   getBlockedUsers(blockerId: string): Promise<BlockedUser[]>;
   isBlocked(blockerId: string, blockedId: string): Promise<boolean>;
 
+  deleteAllTwinMemoryFacts(userId: string): Promise<void>;
+  clearTwinMemorySummary(userId: string): Promise<void>;
+
   createSupportTicket(userId: string, subject: string, message: string): Promise<SupportTicket>;
 
   incrementDailyLikes(userId: string): Promise<number>;
@@ -226,6 +229,23 @@ export class DatabaseStorage implements IStorage {
 
   async getDiscoverableProfiles(excludeUserId: string, filter?: string, userLat?: number, userLng?: number): Promise<any[]> {
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+    const requesterProfile = await this.getProfile(excludeUserId);
+    const maxDistanceKm = requesterProfile?.maxDistanceKm ?? null;
+    const ageMin = requesterProfile?.ageMinPreference ?? null;
+    const ageMax = requesterProfile?.ageMaxPreference ?? null;
+
+    const blockedByRequester = await db.select({ blockedId: blockedUsers.blockedId })
+      .from(blockedUsers)
+      .where(eq(blockedUsers.blockerId, excludeUserId));
+    const blockedOfRequester = await db.select({ blockerId: blockedUsers.blockerId })
+      .from(blockedUsers)
+      .where(eq(blockedUsers.blockedId, excludeUserId));
+    const excludedIds = new Set([
+      excludeUserId,
+      ...blockedByRequester.map(r => r.blockedId),
+      ...blockedOfRequester.map(r => r.blockerId),
+    ]);
 
     const baseCondition = and(
       ne(profiles.userId, excludeUserId),
@@ -272,20 +292,29 @@ export class DatabaseStorage implements IStorage {
       .where(filterCondition)
       .orderBy(orderBy);
 
-    return rows.map(({ _lat, _lng, ...rest }) => {
-      if (!rest.showDistance) {
-        return { ...rest, locationName: null, locationUpdatedAt: null, distanceKm: null, isNearbyNow: false };
-      }
-      const pLat = _lat ? parseFloat(String(_lat)) : null;
-      const pLng = _lng ? parseFloat(String(_lng)) : null;
-      const distanceKm = (userLat !== undefined && userLng !== undefined && pLat !== null && pLng !== null)
-        ? haversineKm(userLat, userLng, pLat, pLng)
-        : null;
-      const isNearby = rest.locationUpdatedAt
-        ? Date.now() - new Date(rest.locationUpdatedAt).getTime() < 30 * 60 * 1000
-        : false;
-      return { ...rest, distanceKm, isNearbyNow: isNearby };
-    });
+    return rows
+      .filter(row => !excludedIds.has(row.userId))
+      .filter(row => {
+        if (ageMin !== null && row.age !== null && row.age < ageMin) return false;
+        if (ageMax !== null && row.age !== null && row.age > ageMax) return false;
+        return true;
+      })
+      .map(({ _lat, _lng, ...rest }) => {
+        if (!rest.showDistance) {
+          return { ...rest, locationName: null, locationUpdatedAt: null, distanceKm: null, isNearbyNow: false };
+        }
+        const pLat = _lat ? parseFloat(String(_lat)) : null;
+        const pLng = _lng ? parseFloat(String(_lng)) : null;
+        const distanceKm = (userLat !== undefined && userLng !== undefined && pLat !== null && pLng !== null)
+          ? haversineKm(userLat, userLng, pLat, pLng)
+          : null;
+        if (maxDistanceKm !== null && distanceKm !== null && distanceKm > maxDistanceKm) return null;
+        const isNearby = rest.locationUpdatedAt
+          ? Date.now() - new Date(rest.locationUpdatedAt).getTime() < 30 * 60 * 1000
+          : false;
+        return { ...rest, distanceKm, isNearbyNow: isNearby };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
   }
 
   async updateLocation(userId: string, lat: number, lng: number, locationName: string): Promise<Profile> {
@@ -1096,6 +1125,14 @@ export class DatabaseStorage implements IStorage {
         sql`${twinMemoryFacts.expiresAt} IS NOT NULL`,
         sql`${twinMemoryFacts.expiresAt} < NOW()`
       ));
+  }
+
+  async deleteAllTwinMemoryFacts(userId: string): Promise<void> {
+    await db.delete(twinMemoryFacts).where(eq(twinMemoryFacts.userId, userId));
+  }
+
+  async clearTwinMemorySummary(userId: string): Promise<void> {
+    await db.delete(twinMemorySummary).where(eq(twinMemorySummary.userId, userId));
   }
 
   async upsertTwinMemorySummary(userId: string, summaryText: string): Promise<TwinMemorySummaryEntry> {

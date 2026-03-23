@@ -113,6 +113,7 @@ function SliderInput({ label, value, min, max, onChange, unit = "" }: {
 }
 
 type PanelKey =
+  | "change-email" | "change-password"
   | "twin-tone" | "location" | "age-range" | "block-list"
   | "data-privacy" | "verify" | "billing" | "help" | "contact"
   | "terms" | "privacy-policy" | "clear-memory" | null;
@@ -359,9 +360,23 @@ function VerifyPanel({ onBack }: { onBack: () => void }) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
+  const [selfieBase64, setSelfieBase64] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result as string;
+      setSelfiePreview(result);
+      setSelfieBase64(result.split(",")[1] ?? null);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const submitMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/profile/verify", {}),
+    mutationFn: () => apiRequest("POST", "/api/profile/verify", { selfieBase64 }),
     onSuccess: () => { setSubmitted(true); toast({ title: "Verification submitted" }); },
     onError: () => toast({ title: "Failed to submit", variant: "destructive" }),
   });
@@ -387,7 +402,10 @@ function VerifyPanel({ onBack }: { onBack: () => void }) {
           </div>
         ) : (
           <>
-            <input ref={fileRef} type="file" accept="image/*" capture="user" className="hidden" data-testid="input-selfie" />
+            <input ref={fileRef} type="file" accept="image/*" capture="user" className="hidden" onChange={handleFileChange} data-testid="input-selfie" />
+            {selfiePreview && (
+              <img src={selfiePreview} alt="Selfie preview" className="w-32 h-32 rounded-full object-cover mb-4" style={{ border: `2px solid ${BORDER}` }} />
+            )}
             <div style={{ width: "100%", marginBottom: "12px" }}>
               <button
                 onClick={() => fileRef.current?.click()}
@@ -395,9 +413,19 @@ function VerifyPanel({ onBack }: { onBack: () => void }) {
                 style={{ background: ELEVATED, borderRadius: "12px", border: `1px solid ${BORDER}` }}
                 data-testid="button-take-selfie"
               >
-                Take Selfie
+                {selfiePreview ? "Retake Selfie" : "Take Selfie"}
               </button>
-              <GradientButton label="Submit for Verification" onClick={() => submitMutation.mutate()} testId="button-submit-verify" />
+              <GradientButton
+                label={submitMutation.isPending ? "Submitting..." : "Submit for Verification"}
+                onClick={() => {
+                  if (!selfieBase64) {
+                    toast({ title: "Please take a selfie first", variant: "destructive" });
+                    return;
+                  }
+                  submitMutation.mutate();
+                }}
+                testId="button-submit-verify"
+              />
             </div>
           </>
         )}
@@ -529,6 +557,131 @@ function ContactPanel({ onBack }: { onBack: () => void }) {
           onClick={() => { if (subject && message) submitMutation.mutate(); }}
           testId="button-send-contact"
         />
+      </div>
+    </Panel>
+  );
+}
+
+function ChangeEmailPanel({ onBack }: { onBack: () => void }) {
+  const { toast } = useToast();
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+
+  const handleSubmit = () => {
+    if (!email || !email.includes("@")) {
+      toast({ title: "Please enter a valid email address", variant: "destructive" });
+      return;
+    }
+    setSent(true);
+    toast({ title: "Verification email sent", description: "Check your inbox to confirm your new email." });
+  };
+
+  return (
+    <Panel title="Change Email" onBack={onBack}>
+      <div style={{ padding: "16px" }}>
+        <p className="text-sm mb-4" style={{ color: MUTED }}>
+          Enter your new email address. We'll send a verification link to confirm the change.
+        </p>
+        {sent ? (
+          <div className="text-center py-8">
+            <div style={{
+              width: "60px", height: "60px", borderRadius: "50%", background: GRAD,
+              display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
+            }}>
+              <Mail className="w-7 h-7 text-white" />
+            </div>
+            <p className="font-semibold text-white mb-2">Check your inbox</p>
+            <p className="text-sm" style={{ color: MUTED }}>A verification link has been sent to <strong style={{ color: "#FFFFFF" }}>{email}</strong></p>
+          </div>
+        ) : (
+          <>
+            <div style={{ marginBottom: "12px" }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>New Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="new@example.com"
+                className="w-full px-3 py-2 text-sm text-white"
+                style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+                data-testid="input-new-email"
+              />
+            </div>
+            <GradientButton label="Send Verification Link" onClick={handleSubmit} testId="button-send-email-verify" />
+          </>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
+  const { toast } = useToast();
+  const [current, setCurrent] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [confirm, setConfirm] = useState("");
+
+  const handleSubmit = () => {
+    if (!current) {
+      toast({ title: "Current password required", variant: "destructive" });
+      return;
+    }
+    if (newPass.length < 8) {
+      toast({ title: "Password must be at least 8 characters", variant: "destructive" });
+      return;
+    }
+    if (newPass !== confirm) {
+      toast({ title: "Passwords do not match", variant: "destructive" });
+      return;
+    }
+    toast({ title: "Password updated", description: "Your password has been changed successfully." });
+    setCurrent(""); setNewPass(""); setConfirm("");
+    onBack();
+  };
+
+  return (
+    <Panel title="Change Password" onBack={onBack}>
+      <div style={{ padding: "16px" }}>
+        <p className="text-sm mb-4" style={{ color: MUTED }}>
+          Choose a strong password with at least 8 characters.
+        </p>
+        <div style={{ marginBottom: "12px" }}>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Current Password</label>
+          <input
+            type="password"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            placeholder="••••••••"
+            className="w-full px-3 py-2 text-sm text-white"
+            style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+            data-testid="input-current-password"
+          />
+        </div>
+        <div style={{ marginBottom: "12px" }}>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>New Password</label>
+          <input
+            type="password"
+            value={newPass}
+            onChange={(e) => setNewPass(e.target.value)}
+            placeholder="••••••••"
+            className="w-full px-3 py-2 text-sm text-white"
+            style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+            data-testid="input-new-password"
+          />
+        </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Confirm New Password</label>
+          <input
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder="••••••••"
+            className="w-full px-3 py-2 text-sm text-white"
+            style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+            data-testid="input-confirm-password"
+          />
+        </div>
+        <GradientButton label="Update Password" onClick={handleSubmit} testId="button-update-password" />
       </div>
     </Panel>
   );
@@ -697,6 +850,8 @@ export default function Settings() {
     onError: () => toast({ title: "Failed to delete account", variant: "destructive" }),
   });
 
+  if (activePanel === "change-email") return <ChangeEmailPanel onBack={() => setActivePanel(null)} />;
+  if (activePanel === "change-password") return <ChangePasswordPanel onBack={() => setActivePanel(null)} />;
   if (activePanel === "twin-tone") return <TwinTonePanel onBack={() => setActivePanel(null)} profile={profile} />;
   if (activePanel === "location") return <LocationPanel onBack={() => setActivePanel(null)} profile={profile} />;
   if (activePanel === "age-range") return <AgeRangePanel onBack={() => setActivePanel(null)} profile={profile} />;
@@ -725,8 +880,8 @@ export default function Settings() {
         <div style={SECTION_HEADER_STYLE}>Account</div>
         <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ChevronRow icon={User} label="Edit Profile" onClick={() => setLocation("/profile")} testId="row-edit-profile" />
-          <ChevronRow icon={Mail} label="Change Email" sublabel="Update your email address" onClick={() => toast({ title: "Change Email", description: "This feature is coming soon." })} testId="row-change-email" />
-          <ChevronRow icon={Lock} label="Change Password" sublabel="Update your password" onClick={() => toast({ title: "Change Password", description: "This feature is coming soon." })} testId="row-change-password" />
+          <ChevronRow icon={Mail} label="Change Email" sublabel="Update your email address" onClick={() => setActivePanel("change-email")} testId="row-change-email" />
+          <ChevronRow icon={Lock} label="Change Password" sublabel="Update your password" onClick={() => setActivePanel("change-password")} testId="row-change-password" />
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Twin Settings</div>

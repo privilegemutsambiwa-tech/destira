@@ -400,6 +400,8 @@ export default function Discover() {
       if (err instanceof Error && err.message?.includes("already exists")) {
         toast({ title: "Already Connected", description: "You already have a match request with this person." });
         handleNext("right");
+      } else if (err instanceof Error && err.message?.includes("upgradeRequired")) {
+        setShowUpgradePrompt(true);
       } else {
         toast({ title: "Could not like", description: "Something went wrong. Please try again.", variant: "destructive" });
       }
