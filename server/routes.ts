@@ -1473,7 +1473,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         return res.status(410).json({ message: "Invite link expired" });
       }
       const isMember = await storage.isGroupMember(link.groupId, userId);
-      if (isMember) return res.status(409).json({ message: "Already a member" });
+      if (isMember) return res.status(409).json({ message: "Already a member", groupId: link.groupId });
+
+      const inviteGroup = await storage.getGroup(link.groupId);
+      if (inviteGroup?.privacyMode === "request-to-join") {
+        const joinRequest = await storage.createJoinRequest(link.groupId, userId);
+        return res.json({ status: "requested", groupId: link.groupId, groupName: inviteGroup.name, request: joinRequest });
+      }
 
       const inviteJoinerProfile = await storage.getProfile(userId);
       const adjectives = ["Curious", "Dreamy", "Bold", "Gentle", "Witty", "Bright", "Calm", "Warm"];
@@ -1481,7 +1487,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const fallbackNickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
       const inviteNickname = inviteJoinerProfile?.groupNickname || fallbackNickname;
       const member = await storage.joinGroup(link.groupId, userId, inviteNickname);
-      res.json(member);
+      res.json({ ...member, groupId: link.groupId, groupName: inviteGroup?.name || "" });
     } catch (e) {
       res.status(500).json({ message: "Failed to join via invite" });
     }
@@ -1897,6 +1903,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const requesterMember = await storage.getGroupMember(groupId, userId);
       if (!requesterMember) return res.status(403).json({ message: "Must be a group member to send chat requests" });
 
+      const targetMember = await storage.getGroupMember(groupId, targetId);
+      if (!targetMember) return res.status(403).json({ message: "Target user is not a member of this group" });
+
       const existingMatch = await storage.getMatchBetweenUsers(userId, targetId);
       if (existingMatch) return res.json({ status: "already_matched", match: existingMatch });
 
@@ -1930,7 +1939,16 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     try {
       const requests = await storage.getChatRequests(userId);
-      res.json(requests);
+      const enriched = await Promise.all(requests.map(async (r) => {
+        const senderProfile = await storage.getProfile(r.requesterId);
+        return {
+          ...r,
+          isIncoming: r.targetId === userId,
+          senderNickname: senderProfile?.groupNickname || senderProfile?.displayName || "Someone",
+          senderAvatarUrl: null,
+        };
+      }));
+      res.json(enriched);
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch chat requests" });
     }

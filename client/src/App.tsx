@@ -23,6 +23,7 @@ import Upgrade from "@/pages/Upgrade";
 import GroupChatPage from "@/pages/GroupChat";
 import GroupInfoPage from "@/pages/GroupInfo";
 import GroupSettings from "@/pages/GroupSettings";
+import JoinGroup from "@/pages/JoinGroup";
 import Settings from "@/pages/Settings";
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
@@ -128,6 +129,9 @@ function Router() {
       </Route>
       <Route path="/settings">
         <ProtectedRoute component={Settings} />
+      </Route>
+      <Route path="/join/:token">
+        {(params) => <ProtectedRoute component={JoinGroup} params={params} />}
       </Route>
 
       <Route component={NotFound} />

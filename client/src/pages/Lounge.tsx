@@ -236,12 +236,21 @@ function GroupCard({ group, idx, onNavigate, isJoinCard = false }: {
         data-testid={`card-group-${group.id}`}
       >
         {/* Icon */}
-        <div
-          className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
-          style={{ background: colorSet.bg }}
-        >
-          <Icon className="w-6 h-6" style={{ color: colorSet.color }} />
-        </div>
+        {group.iconUrl ? (
+          <img
+            src={group.iconUrl}
+            alt={group.name}
+            className="w-12 h-12 rounded-full shrink-0 object-cover"
+            data-testid={`img-group-icon-${group.id}`}
+          />
+        ) : (
+          <div
+            className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: colorSet.bg }}
+          >
+            <Icon className="w-6 h-6" style={{ color: colorSet.color }} />
+          </div>
+        )}
 
         {/* Info */}
         <div className="flex-1 min-w-0">

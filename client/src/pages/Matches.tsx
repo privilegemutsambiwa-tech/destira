@@ -1,22 +1,30 @@
 import { useState } from "react";
 import { LayoutShell } from "@/components/layout-shell";
-import { useIncomingLikes, useLikeBack, useRespondToMatch } from "@/hooks/use-interactions";
-import { Heart, Crown, Check, X, Search, Loader2, Lock, Sparkles } from "lucide-react";
+import { useIncomingLikes, useLikeBack, useRespondToMatch, useChatRequests, useRespondChatRequest } from "@/hooks/use-interactions";
+import { Heart, Crown, Check, X, Search, Loader2, Lock, Sparkles, MessageSquarePlus } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
-type TabType = "liked-you" | "you-liked" | "matches";
+type TabType = "liked-you" | "you-liked" | "matches" | "chat-requests";
 
 const TABS: { label: string; value: TabType }[] = [
   { label: "Liked You", value: "liked-you" },
   { label: "You Liked", value: "you-liked" },
   { label: "Matches", value: "matches" },
+  { label: "Chat Requests", value: "chat-requests" },
 ];
 
 export default function Matches() {
   const { data, isLoading } = useIncomingLikes();
+  const { data: chatRequests, isLoading: crLoading } = useChatRequests();
+  const respondChatRequest = useRespondChatRequest();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<TabType>("liked-you");
+
+  const pendingIncoming = (chatRequests as any[] || []).filter(
+    (r: any) => r.status === "pending" && r.isIncoming
+  );
 
   const likes = data?.likes || [];
   const totalCount = data?.totalCount || 0;
@@ -92,6 +100,43 @@ export default function Matches() {
               message="Mutual matches will appear here. Like someone back to start chatting!"
               cta={{ label: "Discover People", onClick: () => setLocation("/discover") }}
             />
+          )}
+
+          {activeTab === "chat-requests" && (
+            crLoading ? (
+              <div className="flex justify-center p-12">
+                <Loader2 className="w-8 h-8 animate-spin" style={{ color: "#7C3AED" }} />
+              </div>
+            ) : pendingIncoming.length === 0 ? (
+              <EmptyState message="No pending chat requests from group members." icon="message" />
+            ) : (
+              <div className="space-y-3" data-testid="list-chat-requests">
+                {pendingIncoming.map((req: any) => (
+                  <ChatRequestCard
+                    key={req.id}
+                    req={req}
+                    onAccept={async () => {
+                      try {
+                        const result = await respondChatRequest.mutateAsync({ id: req.id, action: "accept" });
+                        toast({ title: "Accepted!", description: "Chat started." });
+                        if (result?.matchId) setLocation(`/chat/${result.matchId}`);
+                      } catch {
+                        toast({ title: "Error", description: "Failed to accept.", variant: "destructive" });
+                      }
+                    }}
+                    onDecline={async () => {
+                      try {
+                        await respondChatRequest.mutateAsync({ id: req.id, action: "decline" });
+                        toast({ title: "Declined" });
+                      } catch {
+                        toast({ title: "Error", description: "Failed to decline.", variant: "destructive" });
+                      }
+                    }}
+                    isPending={respondChatRequest.isPending}
+                  />
+                ))}
+              </div>
+            )
           )}
         </>
       )}
@@ -262,13 +307,73 @@ function LikeCard({ like, isBlurred }: { like: any; isBlurred: boolean }) {
   );
 }
 
+function ChatRequestCard({
+  req,
+  onAccept,
+  onDecline,
+  isPending,
+}: {
+  req: any;
+  onAccept: () => void;
+  onDecline: () => void;
+  isPending: boolean;
+}) {
+  const expiresAt = req.expiresAt ? new Date(req.expiresAt) : null;
+  const isExpired = expiresAt && expiresAt < new Date();
+
+  return (
+    <div
+      className="flex items-center gap-4 p-4"
+      style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "16px" }}
+      data-testid={`card-chat-request-${req.id}`}
+    >
+      <div
+        className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 font-bold text-white"
+        style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", fontSize: "18px" }}
+      >
+        {(req.senderNickname || "?")[0]?.toUpperCase()}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-white truncate" style={{ fontSize: "15px" }} data-testid={`text-cr-sender-${req.id}`}>
+          {req.senderNickname || "Someone"}
+        </p>
+        <p className="text-xs truncate" style={{ color: "#9090A8" }}>
+          {isExpired ? "Expired" : expiresAt ? `Expires ${expiresAt.toLocaleDateString()}` : "Wants to chat privately"}
+        </p>
+      </div>
+      {!isExpired && (
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={onAccept}
+            disabled={isPending}
+            className="w-9 h-9 rounded-full flex items-center justify-center btn-press"
+            style={{ background: "rgba(34,197,94,0.15)", color: "#22C55E", border: "1px solid rgba(34,197,94,0.3)" }}
+            data-testid={`button-accept-cr-${req.id}`}
+          >
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={onDecline}
+            disabled={isPending}
+            className="w-9 h-9 rounded-full flex items-center justify-center btn-press"
+            style={{ background: "rgba(239,68,68,0.15)", color: "#EF4444", border: "1px solid rgba(239,68,68,0.3)" }}
+            data-testid={`button-decline-cr-${req.id}`}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EmptyState({
   message,
   icon = "heart",
   cta,
 }: {
   message: string;
-  icon?: "heart" | "search";
+  icon?: "heart" | "search" | "message";
   cta?: { label: string; onClick: () => void };
 }) {
   const [, setLocation] = useLocation();
@@ -281,6 +386,8 @@ function EmptyState({
       >
         {icon === "heart" ? (
           <Heart className="w-10 h-10" style={{ color: "#EC4899" }} />
+        ) : icon === "message" ? (
+          <MessageSquarePlus className="w-10 h-10" style={{ color: "#7C3AED" }} />
         ) : (
           <Search className="w-10 h-10" style={{ color: "#7C3AED" }} />
         )}
