@@ -14,8 +14,12 @@ function initVertexCredentials() {
     return;
   }
   try {
+    const parsed = JSON.parse(saJson);
+    if (parsed.type !== "service_account") {
+      throw new Error("GOOGLE_VERTEX_SA_JSON is not a service account credential");
+    }
     const credPath = "/tmp/vertex-sa.json";
-    writeFileSync(credPath, saJson, "utf8");
+    writeFileSync(credPath, JSON.stringify(parsed), { encoding: "utf8", mode: 0o600 });
     process.env.GOOGLE_APPLICATION_CREDENTIALS = credPath;
     console.log("Vertex AI credentials initialized");
   } catch (e) {
