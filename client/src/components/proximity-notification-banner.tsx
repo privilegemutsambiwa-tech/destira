@@ -31,13 +31,15 @@ export function ProximityNotificationBanner() {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
         });
-        const nearby: any[] = await res.json();
-        if (!Array.isArray(nearby) || nearby.length === 0) return;
-        const locationName = nearby[0]?.locationName || "your area";
+        const groups: { locationName: string; count: number; users: any[] }[] = await res.json();
+        if (!Array.isArray(groups) || groups.length === 0) return;
+        const topGroup = groups.sort((a, b) => b.count - a.count)[0];
+        const locationName = topGroup.locationName;
         const locationKey = locationName.toLowerCase().replace(/\s+/g, "_");
         if (isThrottled(locationKey)) return;
         setThrottled(locationKey);
-        setBanner({ count: nearby.length, locationName });
+        const totalCount = groups.reduce((sum, g) => sum + g.count, 0);
+        setBanner({ count: totalCount, locationName });
       } catch {}
     }, () => {}, { timeout: 8000, maximumAge: 5 * 60 * 1000 });
   }, []);

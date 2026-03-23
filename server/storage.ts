@@ -175,7 +175,7 @@ export interface IStorage {
   updatePlan(id: number, updates: Partial<Plan>): Promise<Plan>;
 
   updateLocation(userId: string, lat: number, lng: number, locationName: string): Promise<Profile>;
-  checkNearby(userId: string, lat: number, lng: number, radiusKm?: number): Promise<any[]>;
+  checkNearby(userId: string, lat: number, lng: number, radiusKm?: number): Promise<{ locationName: string; count: number; users: any[] }[]>;
 
   seedDemoData(): Promise<void>;
 }
@@ -257,7 +257,7 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async checkNearby(userId: string, lat: number, lng: number, radiusKm: number = 1): Promise<any[]> {
+  async checkNearby(userId: string, lat: number, lng: number, radiusKm: number = 1): Promise<{ locationName: string; count: number; users: any[] }[]> {
     const requester = await db
       .select({ gender: profiles.gender })
       .from(profiles)
@@ -290,11 +290,10 @@ export class DatabaseStorage implements IStorage {
     function isCompatible(otherGender: string | null | undefined): boolean {
       if (!requesterGender || !otherGender) return true;
       const other = otherGender.toLowerCase();
-      if (requesterGender === other) return false;
-      return true;
+      return requesterGender !== other;
     }
 
-    const nearby: any[] = [];
+    const groupedMap = new Map<string, any[]>();
     for (const p of all) {
       if (!p.locationLat || !p.locationLng) continue;
       if (!p.locationUpdatedAt || p.locationUpdatedAt < thirtyMinutesAgo) continue;
@@ -303,10 +302,17 @@ export class DatabaseStorage implements IStorage {
       const pLng = parseFloat(String(p.locationLng));
       const dist = haversineKm(lat, lng, pLat, pLng);
       if (dist <= radiusKm) {
-        nearby.push({ ...p, distanceKm: dist });
+        const key = p.locationName || "Unknown";
+        if (!groupedMap.has(key)) groupedMap.set(key, []);
+        groupedMap.get(key)!.push({ ...p, distanceKm: dist });
       }
     }
-    return nearby;
+
+    return Array.from(groupedMap.entries()).map(([locationName, users]) => ({
+      locationName,
+      count: users.length,
+      users,
+    }));
   }
 
   async getProfileWithUser(userId: string): Promise<any> {

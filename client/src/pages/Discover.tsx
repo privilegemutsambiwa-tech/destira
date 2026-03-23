@@ -241,14 +241,15 @@ export default function Discover() {
 
   const currentProfile = profiles[currentIdx % profiles.length];
 
-  const pLat = currentProfile.locationLat ? parseFloat(currentProfile.locationLat) : null;
-  const pLng = currentProfile.locationLng ? parseFloat(currentProfile.locationLng) : null;
-  const distanceKm = (userLat !== null && userLng !== null && pLat !== null && pLng !== null)
+  const sharesDistance = currentProfile.showDistance !== false;
+  const pLat = (sharesDistance && currentProfile.locationLat) ? parseFloat(currentProfile.locationLat) : null;
+  const pLng = (sharesDistance && currentProfile.locationLng) ? parseFloat(currentProfile.locationLng) : null;
+  const distanceKm = (sharesDistance && userLat !== null && userLng !== null && pLat !== null && pLng !== null)
     ? haversineKm(userLat, userLng, pLat, pLng)
     : null;
 
-  const isVeryClose = distanceKm !== null && distanceKm < 1;
-  const nearby = isNearbyNow(currentProfile.locationUpdatedAt);
+  const isVeryClose = sharesDistance && distanceKm !== null && distanceKm < 1;
+  const nearby = sharesDistance && isNearbyNow(currentProfile.locationUpdatedAt);
 
   const handleNext = (direction: "left" | "right") => {
     setSwipeDir(direction);
