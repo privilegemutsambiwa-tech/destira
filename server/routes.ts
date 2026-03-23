@@ -933,7 +933,10 @@ Only include structured_updates fields if the conversation clearly reveals them.
         const profile = await storage.getProfile(userId);
         if (profile) {
           const current = profile.twinQuestionsAnswered || 0;
-          await storage.updateProfile(userId, { twinQuestionsAnswered: current + incrementCount });
+          const newCount = Math.min(current + incrementCount, 100);
+          if (newCount > current) {
+            await storage.updateProfile(userId, { twinQuestionsAnswered: newCount });
+          }
         }
       }
       res.json({ success: true });
