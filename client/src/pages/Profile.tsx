@@ -617,8 +617,8 @@ export default function Profile() {
               </div>
 
               {(() => {
-                const memoryFacts: any[] = twinMemory?.facts || [];
-                const chatFacts = memoryFacts.filter((f: any) => f.source !== "onboarding").length;
+                const memoryFacts = twinMemory?.facts || [];
+                const chatFacts = memoryFacts.filter(f => f.source !== "onboarding").length;
                 const onboardingAnswered = profile.twinQuestionsAnswered || 0;
                 const totalAnswered = onboardingAnswered + chatFacts;
                 const total = 100;

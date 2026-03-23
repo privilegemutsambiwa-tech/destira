@@ -464,8 +464,11 @@ export function useTwinChat() {
   });
 }
 
+export type TwinMemoryFact = { id: number; userId: string; factText: string; source?: string | null; createdAt?: string | null; expiresAt?: string | null };
+export type TwinMemoryData = { messages: { id: number; role: string; message: string }[]; facts: TwinMemoryFact[]; summary: { summaryText: string } | null };
+
 export function useTwinMemory() {
-  return useQuery({
+  return useQuery<TwinMemoryData>({
     queryKey: ["/api/twin/memory"],
     queryFn: async () => {
       const res = await fetch("/api/twin/memory", { credentials: "include" });
