@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { Brain, X, Loader2, MapPin, Heart, Play, Plus } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
@@ -103,19 +103,29 @@ function StoriesCarousel() {
   );
 }
 
-type FilterChip = "all" | "nearby" | "new";
+type FilterChip = "all" | "nearby" | "new" | "online";
 
 const CHIP_LABELS: { key: FilterChip; label: string }[] = [
   { key: "all", label: "All" },
   { key: "nearby", label: "Nearby 📍" },
   { key: "new", label: "New" },
+  { key: "online", label: "Online" },
 ];
+
+function getInitialFilter(): FilterChip {
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    const f = params.get("filter");
+    if (f === "nearby" || f === "new" || f === "online") return f;
+  }
+  return "all";
+}
 
 export default function Discover() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [swipeDir, setSwipeDir] = useState<"left" | "right" | null>(null);
   const [isExiting, setIsExiting] = useState(false);
-  const [filter, setFilter] = useState<FilterChip>("all");
+  const [filter, setFilter] = useState<FilterChip>(getInitialFilter);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
   const { data: rawProfiles, isLoading } = useDiscoverProfiles();
@@ -124,7 +134,7 @@ export default function Discover() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  useMemo(() => {
+  useEffect(() => {
     if (navigator.geolocation && localStorage.getItem("location_permission_asked") === "asked") {
       navigator.geolocation.getCurrentPosition(
         (pos) => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); },
@@ -138,16 +148,19 @@ export default function Discover() {
     if (!rawProfiles) return [];
     let list = [...rawProfiles];
 
-    if (filter === "nearby" && userLat !== null && userLng !== null) {
+    if (filter === "nearby") {
       list = list
         .filter((p) => p.locationLat && p.locationLng && isNearbyNow(p.locationUpdatedAt))
         .sort((a, b) => {
-          const dA = haversineKm(userLat!, userLng!, parseFloat(a.locationLat), parseFloat(a.locationLng));
-          const dB = haversineKm(userLat!, userLng!, parseFloat(b.locationLat), parseFloat(b.locationLng));
+          if (userLat === null || userLng === null) return 0;
+          const dA = haversineKm(userLat, userLng, parseFloat(a.locationLat), parseFloat(a.locationLng));
+          const dB = haversineKm(userLat, userLng, parseFloat(b.locationLat), parseFloat(b.locationLng));
           return dA - dB;
         });
     } else if (filter === "new") {
       list = list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else if (filter === "online") {
+      list = list.filter((p) => isNearbyNow(p.locationUpdatedAt));
     }
 
     return list;
@@ -167,6 +180,30 @@ export default function Discover() {
     return (
       <LayoutShell>
         <div className="max-w-sm mx-auto">
+          <div className="text-center mb-4">
+            <h1 className="font-bold text-white" style={{ fontSize: "22px", letterSpacing: "-0.5px" }}>Discover</h1>
+          </div>
+          <div className="flex gap-2 mb-5 overflow-x-auto scrollbar-hide" data-testid="filter-chips">
+            {CHIP_LABELS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => { setFilter(key); setCurrentIdx(0); }}
+                className="shrink-0 text-sm font-medium"
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: "100px",
+                  border: "1px solid",
+                  borderColor: filter === key ? "transparent" : "#2E2E42",
+                  background: filter === key ? "linear-gradient(135deg, #7C3AED, #EC4899)" : "transparent",
+                  color: filter === key ? "#FFFFFF" : "#9090A8",
+                  transition: "all 0.15s",
+                }}
+                data-testid={`chip-${key}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div
             className="text-center py-20 px-6 rounded-2xl"
             style={{ background: "#1A1A24", boxShadow: "0 8px 32px rgba(0,0,0,0.4)", border: "1px solid #2E2E42" }}
@@ -178,11 +215,13 @@ export default function Discover() {
               <Brain className="w-10 h-10" style={{ color: "#7C3AED" }} />
             </div>
             <h3 className="text-xl font-bold mb-2 text-white">
-              {filter === "nearby" ? "Nobody nearby right now" : "No one to discover yet"}
+              {filter === "nearby" ? "Nobody nearby right now" : filter === "online" ? "Nobody online right now" : "No one to discover yet"}
             </h3>
             <p className="text-sm" style={{ color: "#9090A8" }}>
               {filter === "nearby"
                 ? "Try All to see everyone, or check back when people are near you."
+                : filter === "online"
+                ? "Check back in a bit to see who's active."
                 : "Complete your onboarding first, then check back as more people join VibeFlow."}
             </p>
             {filter !== "all" && (
@@ -207,6 +246,9 @@ export default function Discover() {
   const distanceKm = (userLat !== null && userLng !== null && pLat !== null && pLng !== null)
     ? haversineKm(userLat, userLng, pLat, pLng)
     : null;
+
+  const isVeryClose = distanceKm !== null && distanceKm < 1;
+  const nearby = isNearbyNow(currentProfile.locationUpdatedAt);
 
   const handleNext = (direction: "left" | "right") => {
     setSwipeDir(direction);
@@ -258,8 +300,6 @@ export default function Discover() {
   const personalityTraits = currentProfile.personalityProfile && typeof currentProfile.personalityProfile === "object"
     ? Object.entries(currentProfile.personalityProfile as Record<string, number>).slice(0, 4)
     : [];
-
-  const nearby = isNearbyNow(currentProfile.locationUpdatedAt);
 
   return (
     <LayoutShell>
@@ -376,7 +416,7 @@ export default function Discover() {
                 </div>
               )}
 
-              {/* Nearby now green dot */}
+              {/* Nearby now green dot — active within 30 min */}
               {nearby && (
                 <div
                   className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full"
@@ -385,6 +425,18 @@ export default function Discover() {
                 >
                   <div className="w-2 h-2 rounded-full" style={{ background: "#22C55E", boxShadow: "0 0 6px #22C55E" }} />
                   <span style={{ color: "#22C55E", fontSize: "11px", fontWeight: 600 }}>Nearby now</span>
+                </div>
+              )}
+
+              {/* Sub-1km highlight badge */}
+              {isVeryClose && !nearby && (
+                <div
+                  className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+                  style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", border: "1px solid rgba(124,58,237,0.4)" }}
+                  data-testid="badge-very-close"
+                >
+                  <MapPin className="w-3 h-3" style={{ color: "#A78BFA" }} />
+                  <span style={{ color: "#A78BFA", fontSize: "11px", fontWeight: 600 }}>Under 1km</span>
                 </div>
               )}
 
@@ -413,7 +465,6 @@ export default function Discover() {
                   {currentProfile.age ? `, ${currentProfile.age}` : ""}
                 </h2>
 
-                {/* Location line — distance if available, or city */}
                 {currentProfile.showDistance === false ? (
                   <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.6)", fontSize: "13px" }}>
                     <MapPin className="w-3.5 h-3.5 shrink-0" />

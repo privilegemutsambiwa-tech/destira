@@ -7,18 +7,14 @@ const POLL_INTERVAL = 10 * 60 * 1000;
 const THROTTLE_KEY_PREFIX = "proximity_notif_";
 const THROTTLE_MS = 60 * 60 * 1000;
 
-function getThrottleKey(locationKey: string) {
-  return `${THROTTLE_KEY_PREFIX}${locationKey}`;
-}
-
 function isThrottled(locationKey: string) {
-  const v = localStorage.getItem(getThrottleKey(locationKey));
+  const v = localStorage.getItem(`${THROTTLE_KEY_PREFIX}${locationKey}`);
   if (!v) return false;
   return Date.now() - parseInt(v, 10) < THROTTLE_MS;
 }
 
 function setThrottled(locationKey: string) {
-  localStorage.setItem(getThrottleKey(locationKey), String(Date.now()));
+  localStorage.setItem(`${THROTTLE_KEY_PREFIX}${locationKey}`, String(Date.now()));
 }
 
 export function ProximityNotificationBanner() {
@@ -31,11 +27,12 @@ export function ProximityNotificationBanner() {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(async (pos) => {
       try {
-        const nearby = await apiRequest("POST", "/api/location/check-nearby", {
+        const res = await apiRequest("POST", "/api/location/check-nearby", {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
         });
-        if (!nearby || !Array.isArray(nearby) || nearby.length === 0) return;
+        const nearby: any[] = await res.json();
+        if (!Array.isArray(nearby) || nearby.length === 0) return;
         const locationName = nearby[0]?.locationName || "your area";
         const locationKey = locationName.toLowerCase().replace(/\s+/g, "_");
         if (isThrottled(locationKey)) return;
@@ -55,6 +52,11 @@ export function ProximityNotificationBanner() {
 
   if (!banner) return null;
 
+  const handleDiscover = () => {
+    setBanner(null);
+    setLocation("/discover?filter=nearby");
+  };
+
   return (
     <div
       className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 gap-3"
@@ -71,7 +73,7 @@ export function ProximityNotificationBanner() {
         </p>
       </div>
       <button
-        onClick={() => { setBanner(null); setLocation("/discover"); }}
+        onClick={handleDiscover}
         className="text-white text-sm font-semibold shrink-0"
         style={{ background: "rgba(255,255,255,0.2)", borderRadius: "8px", padding: "4px 12px", border: "none" }}
         data-testid="button-proximity-discover"

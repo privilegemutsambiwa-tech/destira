@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar, decimal, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
@@ -39,7 +39,10 @@ export const profiles = pgTable("profiles", {
   locationUpdatedAt: timestamp("location_updated_at"),
   showDistance: boolean("show_distance").default(true),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (t) => [
+  index("profiles_location_updated_at_idx").on(t.locationUpdatedAt),
+  index("profiles_is_public_onboarding_idx").on(t.isPublic, t.onboardingCompleted),
+]);
 
 export const userPhotos = pgTable("user_photos", {
   id: serial("id").primaryKey(),
