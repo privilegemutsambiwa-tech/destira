@@ -633,7 +633,7 @@ export default function Profile() {
                   <div className="pt-3 mt-3" style={{ borderTop: "1px solid #2E2E42" }}>
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <p className="text-xs font-medium" style={{ color: "#9090A8" }}>Twin Training Progress</p>
-                      <span className="text-xs font-bold" style={{ color: "#A78BFA" }}>{pct}%</span>
+                      <span className="text-xs font-bold" style={{ color: "#A78BFA" }} data-testid="text-twin-progress-count">{totalAnswered} of {total} answered ({pct}%)</span>
                     </div>
                     <div className="w-full rounded-full h-2" style={{ background: "#242433" }}>
                       <div
