@@ -196,17 +196,18 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   };
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/lounge`;
-    const shareData = { title: group?.name || "Group", text: `Join "${group?.name}" on VibeFlow`, url };
     try {
+      const linkRes = await createInvite.mutateAsync();
+      const inviteUrl = `${window.location.origin}/join/${linkRes.token}`;
+      const shareData = { title: group?.name || "Group", text: `Join "${group?.name}" on VibeFlow`, url: inviteUrl };
       if (navigator.share) {
-        await navigator.share(shareData);
+        await navigator.share(shareData).catch(() => {});
       } else {
-        await navigator.clipboard.writeText(url);
-        toast({ title: "Link copied to clipboard" });
+        await navigator.clipboard.writeText(inviteUrl);
+        toast({ title: "Invite link copied to clipboard" });
       }
     } catch {
-      toast({ title: "Share cancelled" });
+      toast({ title: "Error", description: "Failed to generate invite link.", variant: "destructive" });
     }
   };
 
@@ -716,9 +717,19 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
               style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px", padding: "16px" }}
               data-testid="card-group-settings"
             >
-              <div className="flex items-center gap-2 mb-4">
-                <Settings className="w-4 h-4" style={{ color: "#9090A8" }} />
-                <span className="text-sm font-medium text-white">Group Settings</span>
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <Settings className="w-4 h-4" style={{ color: "#9090A8" }} />
+                  <span className="text-sm font-medium text-white">Group Settings</span>
+                </div>
+                <button
+                  onClick={() => setLocation(`/lounge/group/${groupId}/settings`)}
+                  className="text-xs font-medium btn-press px-3 py-1 rounded-full"
+                  style={{ background: "#242433", color: "#A78BFA", border: "1px solid #2E2E42" }}
+                  data-testid="button-open-full-settings"
+                >
+                  Full Settings
+                </button>
               </div>
               <div className="space-y-4">
                 {[
@@ -879,10 +890,15 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
               <p className="text-sm text-center py-4" style={{ color: "#9090A8" }}>No messages found</p>
             )}
             {(messageSearchResults as any[] || []).map((msg: any) => (
-              <div
+              <button
                 key={msg.id}
-                className="rounded-lg p-3"
+                className="w-full text-left rounded-lg p-3 btn-press"
                 style={{ background: "#242433" }}
+                onClick={() => {
+                  setSearchOpen(false);
+                  setSearchQuery("");
+                  setLocation(`/lounge/group/${groupId}?msg=${msg.id}`);
+                }}
                 data-testid={`search-result-${msg.id}`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -892,7 +908,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                   </span>
                 </div>
                 <p className="text-sm" style={{ color: "#9090A8" }}>{msg.content}</p>
-              </div>
+              </button>
             ))}
           </div>
         </DialogContent>

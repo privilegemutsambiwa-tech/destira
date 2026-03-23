@@ -180,6 +180,7 @@ export interface IStorage {
 
   updateGroupMemberMute(groupId: number, userId: string, isMuted: boolean): Promise<GroupMember>;
   isGroupNicknameTaken(nickname: string): Promise<boolean>;
+  isGroupNicknameTakenByOther(nickname: string, currentUserId: string): Promise<boolean>;
 
   createChatRequest(requesterId: string, targetId: string, groupId: number, expiresAt: Date): Promise<ChatRequest>;
   getChatRequest(id: number): Promise<ChatRequest | undefined>;
@@ -1369,6 +1370,16 @@ export class DatabaseStorage implements IStorage {
   async isGroupNicknameTaken(nickname: string): Promise<boolean> {
     const [row] = await db.select().from(profiles).where(
       sql`lower(${profiles.groupNickname}) = lower(${nickname})`
+    );
+    return !!row;
+  }
+
+  async isGroupNicknameTakenByOther(nickname: string, currentUserId: string): Promise<boolean> {
+    const [row] = await db.select().from(profiles).where(
+      and(
+        sql`lower(${profiles.groupNickname}) = lower(${nickname})`,
+        ne(profiles.userId, currentUserId)
+      )
     );
     return !!row;
   }

@@ -144,7 +144,7 @@ export default function Onboarding() {
         onboardingCompleted: true,
         isPublic: !privacyMode,
         groupNickname: nickname || undefined,
-      } as any);
+      });
 
       setLocation("/discover");
     } catch (error) {

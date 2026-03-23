@@ -22,6 +22,7 @@ import Billing from "@/pages/Billing";
 import Upgrade from "@/pages/Upgrade";
 import GroupChatPage from "@/pages/GroupChat";
 import GroupInfoPage from "@/pages/GroupInfo";
+import GroupSettings from "@/pages/GroupSettings";
 import Settings from "@/pages/Settings";
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
@@ -106,6 +107,9 @@ function Router() {
       </Route>
       <Route path="/lounge/group/:groupId/info">
         {(params) => <ProtectedRoute component={GroupInfoPage} params={params} />}
+      </Route>
+      <Route path="/lounge/group/:groupId/settings">
+        {(params) => <ProtectedRoute component={GroupSettings} params={params} />}
       </Route>
       <Route path="/lounge/group/:groupId">
         {(params) => <ProtectedRoute component={GroupChatPage} params={params} />}

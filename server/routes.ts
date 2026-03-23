@@ -254,14 +254,31 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         ? { ...req.body, twinQuestionsAnswered: onboardingCount }
         : req.body;
 
+      const { subscriptionTier: _stripped, ...safeBody } = bodyWithCount;
+      const safeCounted = onboardingCount !== undefined
+        ? { ...safeBody, twinQuestionsAnswered: onboardingCount }
+        : safeBody;
+
+      if (safeCounted.groupNickname) {
+        const nick = safeCounted.groupNickname.trim();
+        if (!/^[a-zA-Z0-9_]{3,20}$/.test(nick)) {
+          return res.status(400).json({ message: "Nickname must be 3-20 characters: letters, numbers, and underscores only" });
+        }
+        const takenByOther = await storage.isGroupNicknameTakenByOther(nick, userId);
+        if (takenByOther) {
+          return res.status(409).json({ message: "This nickname is already taken" });
+        }
+        safeCounted.groupNickname = nick;
+      }
+
       if (existing) {
-        const updated = await storage.updateProfile(userId, bodyWithCount);
+        const updated = await storage.updateProfile(userId, safeCounted);
         if (isCompletingOnboarding && !existing.onboardingCompleted) {
           seedOnboardingIntoTwinMemory(userId, req.body.personalityProfile).catch(() => {});
         }
         return res.json(updated);
       }
-      const profile = await storage.createProfile({ ...bodyWithCount, userId });
+      const profile = await storage.createProfile({ ...safeCounted, userId });
       if (isCompletingOnboarding) {
         seedOnboardingIntoTwinMemory(userId, req.body.personalityProfile).catch(() => {});
       }
@@ -280,7 +297,19 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     if (req.params.userId !== userId) return res.sendStatus(403);
     try {
-      const updated = await storage.updateProfile(userId, req.body);
+      const { subscriptionTier: _s, ...safeUpdate } = req.body;
+      if (safeUpdate.groupNickname) {
+        const nick = safeUpdate.groupNickname.trim();
+        if (!/^[a-zA-Z0-9_]{3,20}$/.test(nick)) {
+          return res.status(400).json({ message: "Nickname must be 3-20 characters: letters, numbers, and underscores only" });
+        }
+        const takenByOther = await storage.isGroupNicknameTakenByOther(nick, userId);
+        if (takenByOther) {
+          return res.status(409).json({ message: "This nickname is already taken" });
+        }
+        safeUpdate.groupNickname = nick;
+      }
+      const updated = await storage.updateProfile(userId, safeUpdate);
       res.json(updated);
     } catch (err) {
       res.status(500).json({ message: "Error updating profile" });
@@ -1349,9 +1378,11 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         return res.status(403).json({ message: "This group is invite-only" });
       }
 
+      const userProfile = await storage.getProfile(userId);
       const adjectives = ["Curious", "Dreamy", "Bold", "Gentle", "Witty", "Bright", "Calm", "Warm"];
       const nouns = ["Phoenix", "River", "Cloud", "Star", "Wave", "Spark", "Moon", "Breeze"];
-      const nickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
+      const fallbackNickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
+      const nickname = userProfile?.groupNickname || fallbackNickname;
       const member = await storage.joinGroup(groupId, userId, nickname);
       res.json(member);
     } catch (e) {
@@ -1388,10 +1419,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       }
       const processed = await storage.processJoinRequest(requestId, userId, status);
       if (status === "approved") {
+        const joinerProfile = await storage.getProfile(processed.userId);
         const adjectives = ["Curious", "Dreamy", "Bold", "Gentle", "Witty", "Bright", "Calm", "Warm"];
         const nouns = ["Phoenix", "River", "Cloud", "Star", "Wave", "Spark", "Moon", "Breeze"];
-        const nickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
-        await storage.joinGroup(groupId, processed.userId, nickname);
+        const fallbackNickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
+        const approvedNickname = joinerProfile?.groupNickname || fallbackNickname;
+        await storage.joinGroup(groupId, processed.userId, approvedNickname);
       }
       res.json(processed);
     } catch (e) {
@@ -1442,10 +1475,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const isMember = await storage.isGroupMember(link.groupId, userId);
       if (isMember) return res.status(409).json({ message: "Already a member" });
 
+      const inviteJoinerProfile = await storage.getProfile(userId);
       const adjectives = ["Curious", "Dreamy", "Bold", "Gentle", "Witty", "Bright", "Calm", "Warm"];
       const nouns = ["Phoenix", "River", "Cloud", "Star", "Wave", "Spark", "Moon", "Breeze"];
-      const nickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
-      const member = await storage.joinGroup(link.groupId, userId, nickname);
+      const fallbackNickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
+      const inviteNickname = inviteJoinerProfile?.groupNickname || fallbackNickname;
+      const member = await storage.joinGroup(link.groupId, userId, inviteNickname);
       res.json(member);
     } catch (e) {
       res.status(500).json({ message: "Failed to join via invite" });
@@ -1857,14 +1892,28 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const requesterProfile = await storage.getProfile(userId);
       const targetProfile = await storage.getProfile(targetId);
       if (!targetProfile) return res.status(404).json({ message: "Target user not found" });
-      const targetTier = targetProfile.subscriptionTier || "free";
-      if (targetTier === "vip") {
-        const existing = await storage.getMatchBetweenUsers(userId, targetId);
-        if (existing) return res.json({ status: "already_matched", match: existing });
+      if (userId === targetId) return res.status(400).json({ message: "Cannot send request to yourself" });
+
+      const requesterMember = await storage.getGroupMember(groupId, userId);
+      if (!requesterMember) return res.status(403).json({ message: "Must be a group member to send chat requests" });
+
+      const existingMatch = await storage.getMatchBetweenUsers(userId, targetId);
+      if (existingMatch) return res.json({ status: "already_matched", match: existingMatch });
+
+      const requesterTier = requesterProfile?.subscriptionTier || "free";
+      if (requesterTier === "vip") {
         const match = await storage.createMatch(userId, targetId);
         await storage.updateMatchStatus(match.id, "matched");
         return res.json({ status: "matched", match });
       }
+
+      const existingRequests = await storage.getChatRequests(userId);
+      const pendingToTarget = existingRequests.find(
+        r => r.requesterId === userId && r.targetId === targetId && r.status === "pending" &&
+          r.expiresAt && new Date(r.expiresAt) > new Date()
+      );
+      if (pendingToTarget) return res.status(409).json({ message: "You already have a pending request to this user" });
+
       const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
       const chatReq = await storage.createChatRequest(userId, targetId, groupId, expiresAt);
       const senderNickname = requesterProfile?.groupNickname || requesterProfile?.displayName || "Someone";

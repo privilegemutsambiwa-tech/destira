@@ -235,6 +235,11 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
+  const highlightMsgId = (() => {
+    const search = typeof window !== "undefined" ? window.location.search : "";
+    const match = search.match(/[?&]msg=(\d+)/);
+    return match ? parseInt(match[1]) : null;
+  })();
 
   const { data: group, isLoading: groupLoading } = useGroup(groupId);
   const { data: messages, isLoading: msgsLoading } = useEnrichedGroupMessages(groupId);
@@ -253,6 +258,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   const [activeMessageId, setActiveMessageId] = useState<number | null>(null);
   const [showPollDialog, setShowPollDialog] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
+  const [highlightedMsgId, setHighlightedMsgId] = useState<number | null>(highlightMsgId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -260,8 +266,16 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   const isAdmin = group?.myRole === "owner" || group?.myRole === "admin";
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (highlightMsgId && messages) {
+      const el = document.getElementById(`msg-${highlightMsgId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setTimeout(() => setHighlightedMsgId(null), 3000);
+      }
+    } else if (!highlightMsgId) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, highlightMsgId]);
 
   const messagesMap = useMemo(() => {
     const map: Record<number, any> = {};
@@ -431,7 +445,12 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                   </div>
                 )}
 
-                <div className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2`} data-testid={`message-${msg.id}`}>
+                <div
+                  id={`msg-${msg.id}`}
+                  className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2 transition-all duration-500`}
+                  style={highlightedMsgId === msg.id ? { background: "rgba(124,58,237,0.12)", borderRadius: "12px", marginLeft: "-8px", marginRight: "-8px", paddingLeft: "8px", paddingRight: "8px" } : undefined}
+                  data-testid={`message-${msg.id}`}
+                >
                   {!isMe && (
                     <div
                       className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-2 self-end"
