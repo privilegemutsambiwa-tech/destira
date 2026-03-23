@@ -56,16 +56,11 @@ const upload = multer({
   },
 });
 
-const vertexSaJson = process.env.GOOGLE_VERTEX_SA_JSON
-  ? (() => { try { return JSON.parse(process.env.GOOGLE_VERTEX_SA_JSON!); } catch { return undefined; } })()
-  : undefined;
-
 const ai = new GoogleGenAI({
   vertexai: true,
   project: "gen-lang-client-0303273462",
   location: "us-central1",
-  ...(vertexSaJson ? { googleAuthOptions: { credentials: vertexSaJson } } : {}),
-} as any);
+});
 
 export async function registerRoutes(
   httpServer: Server,

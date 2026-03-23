@@ -5,6 +5,25 @@ import { createServer } from "http";
 import { runMigrations } from 'stripe-replit-sync';
 import { getStripeSync } from './stripeClient';
 import { WebhookHandlers } from './webhookHandlers';
+import { writeFileSync } from "fs";
+
+function initVertexCredentials() {
+  const saJson = process.env.GOOGLE_VERTEX_SA_JSON;
+  if (!saJson) {
+    console.warn("GOOGLE_VERTEX_SA_JSON not set — Vertex AI calls will fail");
+    return;
+  }
+  try {
+    const credPath = "/tmp/vertex-sa.json";
+    writeFileSync(credPath, saJson, "utf8");
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = credPath;
+    console.log("Vertex AI credentials initialized");
+  } catch (e) {
+    console.error("Failed to initialize Vertex AI credentials:", e);
+  }
+}
+
+initVertexCredentials();
 
 const app = express();
 const httpServer = createServer(app);
