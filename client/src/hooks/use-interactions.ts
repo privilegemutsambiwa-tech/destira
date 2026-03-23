@@ -162,11 +162,14 @@ export function useInterviewChat(interviewId: number) {
   });
 }
 
-export function useDiscoverProfiles() {
+export function useDiscoverProfiles(filter?: string) {
+  const url = filter && filter !== "all"
+    ? `/api/profiles/discover?filter=${encodeURIComponent(filter)}`
+    : "/api/profiles/discover";
   return useQuery({
-    queryKey: ["/api/profiles/discover"],
+    queryKey: ["/api/profiles/discover", filter ?? "all"],
     queryFn: async () => {
-      const res = await fetch("/api/profiles/discover", { credentials: "include" });
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch profiles");
       return res.json();
     },

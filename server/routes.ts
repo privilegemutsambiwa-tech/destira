@@ -87,7 +87,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     try {
-      const discoverable = await storage.getDiscoverableProfiles(userId);
+      const filter = typeof req.query.filter === "string" ? req.query.filter : undefined;
+      const discoverable = await storage.getDiscoverableProfiles(userId, filter);
       res.json(discoverable);
     } catch (e) {
       console.error("Discover error:", e);

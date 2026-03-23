@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, User, Brain, Compass, Shield, Bell, Wrench, Crown, HelpCircle,
@@ -104,7 +104,13 @@ export default function Settings() {
   const [notifStories, setNotifStories] = useState(() => localStorage.getItem("notif_stories") !== "false");
   const [notifInterviews, setNotifInterviews] = useState(() => localStorage.getItem("notif_interviews") !== "false");
   const [discoverable, setDiscoverable] = useState(() => localStorage.getItem("discoverable") !== "false");
-  const [showDistance, setShowDistance] = useState(() => profile?.showDistance ?? localStorage.getItem("show_distance") !== "false");
+  const [showDistance, setShowDistance] = useState(() => localStorage.getItem("show_distance") !== "false");
+
+  useEffect(() => {
+    if (profile && typeof profile.showDistance === "boolean") {
+      setShowDistance(profile.showDistance);
+    }
+  }, [profile?.showDistance]);
 
   const handleTogglePublic = async () => {
     if (!profile) return;

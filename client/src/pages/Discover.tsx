@@ -128,7 +128,7 @@ export default function Discover() {
   const [filter, setFilter] = useState<FilterChip>(getInitialFilter);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
-  const { data: rawProfiles, isLoading } = useDiscoverProfiles();
+  const { data: rawProfiles, isLoading } = useDiscoverProfiles(filter);
   const startInterview = useStartInterview();
   const createMatch = useCreateMatch();
   const [, setLocation] = useLocation();

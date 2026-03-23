@@ -32,7 +32,7 @@ export interface IStorage {
   getProfile(userId: string): Promise<Profile | undefined>;
   createProfile(profile: InsertProfile & { userId: string }): Promise<Profile>;
   updateProfile(userId: string, updates: Partial<InsertProfile>): Promise<Profile>;
-  getDiscoverableProfiles(excludeUserId: string): Promise<any[]>;
+  getDiscoverableProfiles(excludeUserId: string, filter?: string): Promise<any[]>;
   getProfileWithUser(userId: string): Promise<any>;
 
   createMatch(user1Id: string, user2Id: string): Promise<Match>;
@@ -199,7 +199,23 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async getDiscoverableProfiles(excludeUserId: string): Promise<any[]> {
+  async getDiscoverableProfiles(excludeUserId: string, filter?: string): Promise<any[]> {
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+    const baseCondition = and(
+      ne(profiles.userId, excludeUserId),
+      eq(profiles.onboardingCompleted, true),
+      eq(profiles.isPublic, true)
+    );
+
+    const filterCondition = filter === "nearby" || filter === "online"
+      ? and(baseCondition, gt(profiles.locationUpdatedAt, thirtyMinutesAgo))
+      : baseCondition;
+
+    const orderBy = filter === "new"
+      ? desc(profiles.createdAt)
+      : asc(profiles.createdAt);
+
     const result = await db
       .select({
         id: profiles.id,
@@ -228,13 +244,8 @@ export class DatabaseStorage implements IStorage {
       })
       .from(profiles)
       .innerJoin(users, eq(profiles.userId, users.id))
-      .where(
-        and(
-          ne(profiles.userId, excludeUserId),
-          eq(profiles.onboardingCompleted, true),
-          eq(profiles.isPublic, true)
-        )
-      );
+      .where(filterCondition)
+      .orderBy(orderBy);
     return result;
   }
 
@@ -247,10 +258,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async checkNearby(userId: string, lat: number, lng: number, radiusKm: number = 1): Promise<any[]> {
+    const requester = await db
+      .select({ gender: profiles.gender })
+      .from(profiles)
+      .where(eq(profiles.userId, userId))
+      .then(rows => rows[0]);
+
     const all = await db
       .select({
         userId: profiles.userId,
         displayName: profiles.displayName,
+        gender: profiles.gender,
         locationLat: profiles.locationLat,
         locationLng: profiles.locationLng,
         locationName: profiles.locationName,
@@ -267,10 +285,20 @@ export class DatabaseStorage implements IStorage {
       );
 
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const requesterGender = requester?.gender?.toLowerCase();
+
+    function isCompatible(otherGender: string | null | undefined): boolean {
+      if (!requesterGender || !otherGender) return true;
+      const other = otherGender.toLowerCase();
+      if (requesterGender === other) return false;
+      return true;
+    }
+
     const nearby: any[] = [];
     for (const p of all) {
       if (!p.locationLat || !p.locationLng) continue;
       if (!p.locationUpdatedAt || p.locationUpdatedAt < thirtyMinutesAgo) continue;
+      if (!isCompatible(p.gender)) continue;
       const pLat = parseFloat(String(p.locationLat));
       const pLng = parseFloat(String(p.locationLng));
       const dist = haversineKm(lat, lng, pLat, pLng);
