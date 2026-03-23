@@ -2665,6 +2665,164 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Block / unblock
+  app.post("/api/users/block/:targetUserId", async (req, res) => {
+    const blockerId = getUserId(req);
+    if (!blockerId) return res.sendStatus(401);
+    try {
+      const { targetUserId } = req.params;
+      const entry = await storage.blockUser(blockerId, targetUserId);
+      res.json(entry);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to block user" });
+    }
+  });
+
+  app.delete("/api/users/block/:targetUserId", async (req, res) => {
+    const blockerId = getUserId(req);
+    if (!blockerId) return res.sendStatus(401);
+    try {
+      const { targetUserId } = req.params;
+      await storage.unblockUser(blockerId, targetUserId);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to unblock user" });
+    }
+  });
+
+  app.get("/api/users/blocked", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const blocked = await storage.getBlockedUsers(userId);
+      res.json(blocked);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to get blocked users" });
+    }
+  });
+
+  // Support tickets
+  app.post("/api/support/tickets", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const { subject, message } = req.body;
+      if (!subject || !message) return res.status(400).json({ message: "Subject and message required" });
+      const ticket = await storage.createSupportTicket(userId, subject, message);
+      res.json(ticket);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to submit ticket" });
+    }
+  });
+
+  // Data export
+  app.get("/api/account/export-data", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const profile = await storage.getProfile(userId);
+      const matches = await storage.getMatches(userId);
+      const twinMemory = await storage.getTwinMemoryEntries(userId);
+      res.setHeader("Content-Disposition", "attachment; filename=vibeflow-data.json");
+      res.setHeader("Content-Type", "application/json");
+      res.json({ profile, matches, twinMemory, exportedAt: new Date().toISOString() });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to export data" });
+    }
+  });
+
+  // Delete account
+  app.delete("/api/account", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const { confirmation } = req.body;
+      if (confirmation !== "DELETE") return res.status(400).json({ message: "Type DELETE to confirm" });
+      await storage.deleteAllUserData(userId);
+      req.logout?.(() => {});
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to delete account" });
+    }
+  });
+
+  // Clear Twin memory
+  app.delete("/api/twin/memory", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const entries = await storage.getTwinMemoryEntries(userId);
+      for (const e of entries) {
+        await storage.deleteTwinMemoryEntry(e.id);
+      }
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to clear Twin memory" });
+    }
+  });
+
+  // Tier limits check (likes)
+  app.post("/api/likes", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const profile = await storage.getProfile(userId);
+      const tier = profile?.subscriptionTier ?? "free";
+      const limit = tier === "free" ? 5 : tier === "plus" ? 50 : Infinity;
+      const currentCount = await storage.getDailyLikeCount(userId);
+      if (currentCount >= limit) {
+        return res.status(403).json({ error: "upgradeRequired", message: `Daily like limit reached (${limit}/day on ${tier} tier)` });
+      }
+      await storage.incrementDailyLikes(userId);
+      res.json({ success: true, count: currentCount + 1, limit });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to register like" });
+    }
+  });
+
+  // Verification status update
+  app.post("/api/profile/verify", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      await storage.updateProfile(userId, { verificationStatus: "pending" });
+      res.json({ success: true, verificationStatus: "pending" });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to submit verification" });
+    }
+  });
+
+  // Twin Tone settings — persisted in profile.twinPersona
+  app.post("/api/settings/twin-tone", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const { twinPersona } = req.body;
+      if (!twinPersona) return res.status(400).json({ message: "twinPersona required" });
+      await storage.updateProfile(userId, { twinPersona });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to save Twin tone" });
+    }
+  });
+
+  // Discovery preferences
+  app.post("/api/settings/discovery", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const { maxDistanceKm, ageMinPreference, ageMaxPreference } = req.body;
+      await storage.updateProfile(userId, {
+        ...(maxDistanceKm != null && { maxDistanceKm }),
+        ...(ageMinPreference != null && { ageMinPreference }),
+        ...(ageMaxPreference != null && { ageMaxPreference }),
+      });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to save discovery preferences" });
+    }
+  });
+
   app.post("/api/demo/seed", async (req, res) => {
     try {
       await storage.seedDemoData();

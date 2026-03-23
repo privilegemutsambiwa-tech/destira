@@ -30,6 +30,7 @@ export const profiles = pgTable("profiles", {
   aboutSummary: text("about_summary"),
   personalitySummary: text("personality_summary"),
   isVerified: boolean("is_verified").default(false),
+  verificationStatus: text("verification_status").default("unverified"),
   subscriptionTier: text("subscription_tier").default("free"),
   profileCompletionScore: integer("profile_completion_score").default(0),
   superMatchesRemaining: integer("super_matches_remaining").default(0),
@@ -40,6 +41,9 @@ export const profiles = pgTable("profiles", {
   locationName: text("location_name"),
   locationUpdatedAt: timestamp("location_updated_at"),
   showDistance: boolean("show_distance").default(true),
+  maxDistanceKm: integer("max_distance_km").default(100),
+  ageMinPreference: integer("age_min_preference").default(18),
+  ageMaxPreference: integer("age_max_preference").default(65),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [
   index("profiles_location_updated_at_idx").on(t.locationUpdatedAt),
@@ -394,6 +398,29 @@ export const chatRequests = pgTable("chat_requests", {
   expiresAt: timestamp("expires_at"),
 });
 
+export const blockedUsers = pgTable("blocked_users", {
+  id: serial("id").primaryKey(),
+  blockerId: varchar("blocker_id").notNull().references(() => users.id),
+  blockedId: varchar("blocked_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const supportTickets = pgTable("support_tickets", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("open"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const dailyLikeCounts = pgTable("daily_like_counts", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  date: text("date").notNull(),
+  count: integer("count").notNull().default(0),
+});
+
 export const insertTwinProfilesStructuredSchema = createInsertSchema(twinProfilesStructured).omit({
   id: true,
   updatedAt: true,
@@ -548,6 +575,9 @@ export type QuestionScheduleEntry = typeof questionSchedule.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type ChatRequest = typeof chatRequests.$inferSelect;
 export type InsertChatRequest = z.infer<typeof insertChatRequestSchema>;
+export type BlockedUser = typeof blockedUsers.$inferSelect;
+export type SupportTicket = typeof supportTickets.$inferSelect;
+export type DailyLikeCount = typeof dailyLikeCounts.$inferSelect;
 
 export type Story = typeof stories.$inferSelect;
 export type StoryMedia = typeof storyMedia.$inferSelect;

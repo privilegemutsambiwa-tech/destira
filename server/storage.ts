@@ -7,6 +7,7 @@ import {
   twinProfilesStructured, twinMemoryFacts, twinMemorySummary,
   questions, userAnswers, questionSchedule, auditLogs,
   stories, storyMedia, storyLikes, storyComments, storyViews, plans, chatRequests,
+  blockedUsers, supportTickets, dailyLikeCounts,
   type Profile, type InsertProfile, type UpdateProfileRequest,
   type Match, type Interview, type Group, type GroupMember, type DirectMessage, type GroupMessage,
   type GroupJoinRequest, type GroupInviteLink, type GroupModerationLog,
@@ -16,7 +17,7 @@ import {
   type TwinProfileStructured, type TwinMemoryFact, type TwinMemorySummaryEntry,
   type Question, type UserAnswer, type QuestionScheduleEntry, type AuditLog,
   type Story, type StoryMedia, type StoryLike, type StoryComment, type StoryView, type Plan,
-  type ChatRequest
+  type ChatRequest, type BlockedUser, type SupportTicket
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, lte } from "drizzle-orm";
@@ -188,6 +189,18 @@ export interface IStorage {
   updateChatRequestStatus(id: number, status: string): Promise<ChatRequest>;
 
   searchUsers(query: string, excludeUserId: string): Promise<any[]>;
+
+  blockUser(blockerId: string, blockedId: string): Promise<BlockedUser>;
+  unblockUser(blockerId: string, blockedId: string): Promise<void>;
+  getBlockedUsers(blockerId: string): Promise<BlockedUser[]>;
+  isBlocked(blockerId: string, blockedId: string): Promise<boolean>;
+
+  createSupportTicket(userId: string, subject: string, message: string): Promise<SupportTicket>;
+
+  incrementDailyLikes(userId: string): Promise<number>;
+  getDailyLikeCount(userId: string): Promise<number>;
+
+  deleteAllUserData(userId: string): Promise<void>;
 
   seedDemoData(): Promise<void>;
 }
@@ -1431,6 +1444,86 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(20);
     return rows;
+  }
+
+  async blockUser(blockerId: string, blockedId: string): Promise<BlockedUser> {
+    const existing = await db.select().from(blockedUsers).where(
+      and(eq(blockedUsers.blockerId, blockerId), eq(blockedUsers.blockedId, blockedId))
+    );
+    if (existing.length > 0) return existing[0];
+    const [row] = await db.insert(blockedUsers).values({ blockerId, blockedId }).returning();
+    return row;
+  }
+
+  async unblockUser(blockerId: string, blockedId: string): Promise<void> {
+    await db.delete(blockedUsers).where(
+      and(eq(blockedUsers.blockerId, blockerId), eq(blockedUsers.blockedId, blockedId))
+    );
+  }
+
+  async getBlockedUsers(blockerId: string): Promise<BlockedUser[]> {
+    return db.select().from(blockedUsers).where(eq(blockedUsers.blockerId, blockerId)).orderBy(desc(blockedUsers.createdAt));
+  }
+
+  async isBlocked(blockerId: string, blockedId: string): Promise<boolean> {
+    const [row] = await db.select().from(blockedUsers).where(
+      and(eq(blockedUsers.blockerId, blockerId), eq(blockedUsers.blockedId, blockedId))
+    );
+    return !!row;
+  }
+
+  async createSupportTicket(userId: string, subject: string, message: string): Promise<SupportTicket> {
+    const [ticket] = await db.insert(supportTickets).values({ userId, subject, message }).returning();
+    return ticket;
+  }
+
+  async incrementDailyLikes(userId: string): Promise<number> {
+    const today = new Date().toISOString().slice(0, 10);
+    const existing = await db.select().from(dailyLikeCounts).where(
+      and(eq(dailyLikeCounts.userId, userId), eq(dailyLikeCounts.date, today))
+    );
+    if (existing.length > 0) {
+      const newCount = existing[0].count + 1;
+      await db.update(dailyLikeCounts)
+        .set({ count: newCount })
+        .where(eq(dailyLikeCounts.id, existing[0].id));
+      return newCount;
+    } else {
+      await db.insert(dailyLikeCounts).values({ userId, date: today, count: 1 });
+      return 1;
+    }
+  }
+
+  async getDailyLikeCount(userId: string): Promise<number> {
+    const today = new Date().toISOString().slice(0, 10);
+    const [row] = await db.select().from(dailyLikeCounts).where(
+      and(eq(dailyLikeCounts.userId, userId), eq(dailyLikeCounts.date, today))
+    );
+    return row?.count ?? 0;
+  }
+
+  async deleteAllUserData(userId: string): Promise<void> {
+    await db.delete(twinMemory).where(eq(twinMemory.userId, userId));
+    await db.delete(twinMemoryFacts).where(eq(twinMemoryFacts.userId, userId));
+    await db.delete(twinMemorySummary).where(eq(twinMemorySummary.userId, userId));
+    await db.delete(twinProfilesStructured).where(eq(twinProfilesStructured.userId, userId));
+    await db.delete(starredMessages).where(eq(starredMessages.userId, userId));
+    await db.delete(blockedUsers).where(eq(blockedUsers.blockerId, userId));
+    await db.delete(supportTickets).where(eq(supportTickets.userId, userId));
+    const userMatches = await this.getMatches(userId);
+    for (const m of userMatches) {
+      await db.delete(directMessages).where(eq(directMessages.matchId, m.id));
+    }
+    await db.delete(matches).where(or(eq(matches.user1Id, userId), eq(matches.user2Id, userId)));
+    const userGroupMemberships = await db.select().from(groupMembers).where(eq(groupMembers.userId, userId));
+    for (const gm of userGroupMemberships) {
+      await db.delete(groupMessages).where(and(eq(groupMessages.groupId, gm.groupId), eq(groupMessages.userId, userId)));
+    }
+    await db.delete(groupMembers).where(eq(groupMembers.userId, userId));
+    await db.delete(userPhotos).where(eq(userPhotos.userId, userId));
+    await db.delete(stories).where(eq(stories.userId, userId));
+    await db.delete(chatRequests).where(or(eq(chatRequests.requesterId, userId), eq(chatRequests.targetId, userId)));
+    await db.delete(profiles).where(eq(profiles.userId, userId));
   }
 }
 

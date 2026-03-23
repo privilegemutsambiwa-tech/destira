@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { LayoutShell } from "@/components/layout-shell";
-import { Brain, X, Loader2, MapPin, Heart, Play, Plus } from "lucide-react";
+import { Brain, X, Loader2, MapPin, Heart, Play, Plus, Crown } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -201,6 +201,7 @@ export default function Discover() {
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
   const [viewingCardStory, setViewingCardStory] = useState<{ stories: any[]; displayName: string; photoUrl: string; userId: string } | null>(null);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const { data: rawProfiles, isLoading } = useDiscoverProfiles(filter, userLat, userLng);
   const { data: feedStories } = useFeedStories();
   const startInterview = useStartInterview();
@@ -372,14 +373,31 @@ export default function Discover() {
 
   const handleLike = async () => {
     try {
+      const limitRes = await fetch("/api/likes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+        credentials: "include",
+      });
+      if (limitRes.status === 403) {
+        const limitData = await limitRes.json();
+        if (limitData?.error === "upgradeRequired") {
+          setShowUpgradePrompt(true);
+          return;
+        }
+      }
+    } catch {
+      // non-critical, continue with like
+    }
+    try {
       await createMatch.mutateAsync(currentProfile.userId);
       toast({
         title: "Liked!",
         description: `${currentProfile.displayName} will be notified.`,
       });
       handleNext("right");
-    } catch (error: any) {
-      if (error.message?.includes("already exists")) {
+    } catch (err) {
+      if (err instanceof Error && err.message?.includes("already exists")) {
         toast({ title: "Already Connected", description: "You already have a match request with this person." });
         handleNext("right");
       } else {
@@ -715,6 +733,53 @@ export default function Discover() {
             }
           }}
         />
+      )}
+
+      {showUpgradePrompt && (
+        <div
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
+            display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 100,
+          }}
+          onClick={() => setShowUpgradePrompt(false)}
+        >
+          <div
+            style={{
+              background: "#1A1A24", borderRadius: "24px 24px 0 0",
+              padding: "32px 24px 48px", width: "100%", maxWidth: "480px",
+              border: "1px solid #2E2E42",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              width: "60px", height: "60px", borderRadius: "50%",
+              background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+              display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
+            }}>
+              <Crown className="w-7 h-7 text-white" />
+            </div>
+            <h2 className="text-xl font-bold text-white text-center mb-2">You've reached your daily limit</h2>
+            <p className="text-sm text-center mb-6" style={{ color: "#9090A8" }}>
+              Free accounts get 5 likes per day. Upgrade to VibeFlow Plus for 50 likes/day, or go VIP for unlimited.
+            </p>
+            <button
+              onClick={() => { setShowUpgradePrompt(false); setLocation("/billing"); }}
+              className="w-full py-3 text-sm font-semibold text-white mb-3"
+              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", borderRadius: "14px", border: "none", cursor: "pointer" }}
+              data-testid="button-upgrade-prompt"
+            >
+              Upgrade Now
+            </button>
+            <button
+              onClick={() => setShowUpgradePrompt(false)}
+              className="w-full py-3 text-sm font-medium"
+              style={{ background: "none", border: "none", color: "#9090A8", cursor: "pointer" }}
+              data-testid="button-dismiss-upgrade"
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
       )}
     </LayoutShell>
   );

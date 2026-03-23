@@ -1,14 +1,18 @@
-import { LayoutShell } from "@/components/layout-shell";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { useSubscription, useEntitlements } from "@/hooks/use-interactions";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Crown, Check, Sparkles, Zap, Star, Loader2, ExternalLink } from "lucide-react";
+import { Crown, Check, Sparkles, Zap, Star, Loader2, ExternalLink, ArrowLeft, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect } from "react";
-import { useSearch } from "wouter";
+import { useSearch, useLocation } from "wouter";
+import { useProfile } from "@/hooks/use-profiles";
+
+const BG = "#0F0F14";
+const CARD = "#1A1A24";
+const ELEVATED = "#242433";
+const BORDER = "#2E2E42";
+const MUTED = "#9090A8";
+const GRAD = "linear-gradient(135deg, #7C3AED, #EC4899)";
 
 interface StripeProduct {
   id: string;
@@ -23,44 +27,72 @@ interface StripeProduct {
   }[];
 }
 
-const TIER_CONFIG: Record<string, { features: string[]; popular?: boolean; icon: any }> = {
-  free: {
-    features: [
-      "5 AI Twin interviews/month",
-      "Basic discovery feed",
-      "Join up to 3 groups",
-      "Standard matching",
-    ],
+const TIERS = [
+  {
+    id: "free",
+    name: "Free",
+    price: "$0",
+    period: "forever",
+    tagline: "Get started on your journey",
+    color: MUTED,
     icon: Sparkles,
+    features: [
+      { label: "5 likes per day", included: true },
+      { label: "Basic discovery feed", included: true },
+      { label: "Join up to 2 groups", included: true },
+      { label: "AI Twin interviews (limited)", included: true },
+      { label: "Priority matching", included: false },
+      { label: "Twin Chat with matches", included: false },
+      { label: "See who viewed you", included: false },
+      { label: "Unlimited likes", included: false },
+    ],
   },
-  plus: {
+  {
+    id: "plus",
+    name: "Plus",
+    price: "$9.99",
+    period: "/month",
+    tagline: "For those serious about connecting",
+    color: "#7C3AED",
     popular: true,
-    features: [
-      "Unlimited AI Twin interviews",
-      "Priority discovery feed",
-      "Join unlimited groups",
-      "Advanced matching algorithm",
-      "Chat with your own Twin",
-      "AI profile summaries",
-    ],
     icon: Crown,
-  },
-  vip: {
     features: [
-      "Everything in Plus",
-      "See who viewed your profile",
-      "Read receipts in DMs",
-      "Priority customer support",
-      "Exclusive VIP badge",
-      "Monthly boost tokens",
+      { label: "50 likes per day", included: true },
+      { label: "Priority discovery feed", included: true },
+      { label: "Up to 10 groups", included: true },
+      { label: "Unlimited AI Twin interviews", included: true },
+      { label: "Priority matching algorithm", included: true },
+      { label: "Twin Chat with matches", included: true },
+      { label: "AI profile summaries", included: true },
+      { label: "See who viewed you", included: false },
     ],
-    icon: Star,
   },
-};
+  {
+    id: "vip",
+    name: "VIP",
+    price: "$19.99",
+    period: "/month",
+    tagline: "The full VibeFlow experience",
+    color: "#EC4899",
+    icon: Star,
+    features: [
+      { label: "Unlimited likes", included: true },
+      { label: "Priority discovery feed", included: true },
+      { label: "Unlimited groups", included: true },
+      { label: "Unlimited AI Twin interviews", included: true },
+      { label: "Priority matching algorithm", included: true },
+      { label: "Twin Chat with matches", included: true },
+      { label: "See who viewed your profile", included: true },
+      { label: "Exclusive VIP badge + boost tokens", included: true },
+    ],
+  },
+];
 
 export default function Billing() {
+  const [, setLocation] = useLocation();
   const { data: subscription, isLoading } = useSubscription();
   const { data: entitlements } = useEntitlements();
+  const { data: profile } = useProfile();
   const { toast } = useToast();
   const searchString = useSearch();
   const searchParams = new URLSearchParams(searchString);
@@ -71,17 +103,10 @@ export default function Billing() {
 
   useEffect(() => {
     if (searchParams.get("success") === "true") {
-      toast({
-        title: "Subscription Active",
-        description: "Welcome to your new plan! Your premium features are now available.",
-      });
+      toast({ title: "Subscription Active!", description: "Welcome to your new plan. Premium features are now unlocked." });
     }
     if (searchParams.get("canceled") === "true") {
-      toast({
-        title: "Checkout Canceled",
-        description: "No changes were made to your subscription.",
-        variant: "destructive",
-      });
+      toast({ title: "Checkout Canceled", description: "No changes were made.", variant: "destructive" });
     }
   }, []);
 
@@ -90,18 +115,8 @@ export default function Billing() {
       const res = await apiRequest("POST", "/api/stripe/checkout", { priceId });
       return await res.json();
     },
-    onSuccess: (data: { url: string }) => {
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Checkout Error",
-        description: error.message || "Failed to start checkout. Please try again.",
-        variant: "destructive",
-      });
-    },
+    onSuccess: (data: { url: string }) => { if (data.url) window.location.href = data.url; },
+    onError: (error: Error) => toast({ title: "Checkout Error", description: error.message, variant: "destructive" }),
   });
 
   const portalMutation = useMutation({
@@ -109,198 +124,231 @@ export default function Billing() {
       const res = await apiRequest("POST", "/api/stripe/portal");
       return await res.json();
     },
-    onSuccess: (data: { url: string }) => {
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: "Failed to open subscription management.",
-        variant: "destructive",
-      });
-    },
+    onSuccess: (data: { url: string }) => { if (data.url) window.location.href = data.url; },
+    onError: () => toast({ title: "Error", description: "Could not open billing portal.", variant: "destructive" }),
   });
 
-  const handleSubscribe = (tier: string) => {
-    if (tier === "free") return;
-
-    const product = stripeProducts?.find(
-      (p) => p.metadata?.tier === tier
-    );
-
+  const handleSubscribe = (tierId: string) => {
+    if (tierId === "free") return;
+    const product = stripeProducts?.find((p) => p.metadata?.tier === tierId);
     if (!product || product.prices.length === 0) {
-      toast({
-        title: "Not Available",
-        description: "This plan is not available yet. Please try again later.",
-      });
+      toast({ title: "Not Available", description: "This plan is not set up yet. Check back soon." });
       return;
     }
-
     checkoutMutation.mutate(product.prices[0].id);
   };
 
-  const currentTier = subscription?.tier || "free";
+  const currentTier = subscription?.tier || profile?.subscriptionTier || "free";
   const hasActiveSub = currentTier !== "free";
 
-  const tiers = [
-    { tier: "free", name: "Free", price: "$0", period: "forever" },
-    { tier: "plus", name: "Plus", price: "$9.99", period: "/month" },
-    { tier: "vip", name: "VIP", price: "$19.99", period: "/month" },
-  ];
-
-  if (stripeProducts && stripeProducts.length > 0) {
-    for (const product of stripeProducts) {
-      const tierKey = product.metadata?.tier;
-      if (tierKey && (tierKey === "plus" || tierKey === "vip")) {
-        const t = tiers.find((t) => t.tier === tierKey);
-        if (t && product.prices.length > 0) {
-          const priceAmount = product.prices[0].unit_amount / 100;
-          t.price = `$${priceAmount.toFixed(2)}`;
-          t.name = product.name.replace("VibeFlow ", "");
-        }
+  const tiers = TIERS.map((t) => {
+    if (stripeProducts) {
+      const product = stripeProducts.find((p) => p.metadata?.tier === t.id);
+      if (product && product.prices.length > 0) {
+        return { ...t, price: `$${(product.prices[0].unit_amount / 100).toFixed(2)}`, name: product.name.replace("VibeFlow ", "") };
       }
     }
-  }
+    return t;
+  });
 
   if (isLoading) {
     return (
-      <LayoutShell>
-        <div className="h-[60vh] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
-      </LayoutShell>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: BG }}>
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: "#7C3AED" }} />
+      </div>
     );
   }
 
   return (
-    <LayoutShell>
-      <div className="text-center mb-10">
-        <h1 className="font-display font-bold mb-2" data-testid="text-billing-title">Choose Your Plan</h1>
-        <p className="text-muted-foreground max-w-xl mx-auto">
-          Unlock the full VibeFlow experience with premium features.
+    <div className="min-h-screen" style={{ background: BG, color: "#FFFFFF", fontFamily: "'Inter', sans-serif" }} data-testid="page-billing">
+      <div className="sticky top-0 z-10 flex items-center gap-3 px-4" style={{ height: "56px", background: BG, borderBottom: `1px solid ${BORDER}` }}>
+        <button onClick={() => setLocation("/settings")} className="w-8 h-8 flex items-center justify-center" data-testid="button-billing-back">
+          <ArrowLeft className="w-5 h-5 text-white" />
+        </button>
+        <h1 className="font-bold text-white" style={{ fontSize: "17px" }}>Choose Your Plan</h1>
+      </div>
+
+      <div style={{ maxWidth: "480px", margin: "0 auto", padding: "24px 16px 48px" }}>
+
+        <div className="text-center mb-8">
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: "8px",
+            background: "rgba(124, 58, 237, 0.15)", borderRadius: "100px",
+            padding: "6px 16px", marginBottom: "16px",
+            border: "1px solid rgba(124, 58, 237, 0.3)",
+          }}>
+            <Crown className="w-4 h-4" style={{ color: "#7C3AED" }} />
+            <span className="text-sm font-medium" style={{ color: "#7C3AED" }}>Unlock full potential</span>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Find connections that actually matter</h2>
+          <p className="text-sm" style={{ color: MUTED }}>Your AI Twin gets smarter. Your matches get better.</p>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {tiers.map((tier) => {
+            const TierIcon = tier.icon;
+            const isActive = currentTier === tier.id;
+            const isPending = checkoutMutation.isPending;
+
+            return (
+              <div
+                key={tier.id}
+                style={{
+                  background: CARD,
+                  borderRadius: "20px",
+                  border: isActive ? `2px solid ${tier.color}` : tier.popular ? `2px solid rgba(124,58,237,0.5)` : `1px solid ${BORDER}`,
+                  overflow: "hidden",
+                  position: "relative",
+                }}
+                data-testid={`card-tier-${tier.id}`}
+              >
+                {tier.popular && !isActive && (
+                  <div style={{
+                    position: "absolute", top: "12px", right: "12px",
+                    background: GRAD, borderRadius: "100px",
+                    padding: "3px 10px", fontSize: "11px", fontWeight: 600, color: "#FFFFFF",
+                  }}>
+                    Most Popular
+                  </div>
+                )}
+                {isActive && (
+                  <div style={{
+                    position: "absolute", top: "12px", right: "12px",
+                    background: tier.color, borderRadius: "100px",
+                    padding: "3px 10px", fontSize: "11px", fontWeight: 600, color: "#FFFFFF",
+                  }}>
+                    Current
+                  </div>
+                )}
+
+                <div style={{ padding: "20px 20px 0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+                    <div style={{
+                      width: "40px", height: "40px", borderRadius: "12px",
+                      background: isActive || tier.popular ? GRAD : ELEVATED,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <TierIcon className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-white text-base">{tier.name}</p>
+                      <p className="text-xs" style={{ color: MUTED }}>{tier.tagline}</p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px", marginBottom: "16px" }}>
+                    <span className="text-3xl font-black text-white">{tier.price}</span>
+                    <span className="text-sm" style={{ color: MUTED }}>{tier.period}</span>
+                  </div>
+                </div>
+
+                <div style={{ padding: "0 20px 20px" }}>
+                  <div style={{ marginBottom: "16px" }}>
+                    {tier.features.map((feature, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0" }}>
+                        {feature.included ? (
+                          <div style={{
+                            width: "18px", height: "18px", borderRadius: "50%",
+                            background: GRAD, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                          }}>
+                            <Check className="w-3 h-3 text-white" />
+                          </div>
+                        ) : (
+                          <div style={{
+                            width: "18px", height: "18px", borderRadius: "50%",
+                            background: ELEVATED, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                          }}>
+                            <Lock className="w-3 h-3" style={{ color: MUTED }} />
+                          </div>
+                        )}
+                        <span className="text-sm" style={{ color: feature.included ? "#FFFFFF" : MUTED }}>{feature.label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {isActive ? (
+                    tier.id === "free" && !hasActiveSub ? (
+                      <button
+                        className="w-full py-3 text-sm font-semibold"
+                        style={{ background: ELEVATED, borderRadius: "12px", border: "none", color: MUTED, cursor: "default" }}
+                        disabled
+                        data-testid={`button-current-${tier.id}`}
+                      >
+                        Current Plan
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => portalMutation.mutate()}
+                        disabled={portalMutation.isPending}
+                        className="w-full py-3 text-sm font-semibold text-white flex items-center justify-center gap-2"
+                        style={{ background: ELEVATED, borderRadius: "12px", border: `1px solid ${BORDER}`, cursor: "pointer" }}
+                        data-testid={`button-manage-${tier.id}`}
+                      >
+                        {portalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                        Manage Subscription
+                      </button>
+                    )
+                  ) : tier.id === "free" ? (
+                    hasActiveSub ? (
+                      <button
+                        onClick={() => portalMutation.mutate()}
+                        disabled={portalMutation.isPending}
+                        className="w-full py-3 text-sm font-semibold flex items-center justify-center gap-2"
+                        style={{ background: ELEVATED, borderRadius: "12px", border: `1px solid ${BORDER}`, color: MUTED, cursor: "pointer" }}
+                        data-testid={`button-downgrade-${tier.id}`}
+                      >
+                        Downgrade via Portal
+                      </button>
+                    ) : (
+                      <button
+                        className="w-full py-3 text-sm font-semibold"
+                        style={{ background: ELEVATED, borderRadius: "12px", border: "none", color: MUTED, cursor: "default" }}
+                        disabled
+                        data-testid={`button-current-${tier.id}`}
+                      >
+                        Current Plan
+                      </button>
+                    )
+                  ) : (
+                    <button
+                      onClick={() => handleSubscribe(tier.id)}
+                      disabled={isPending}
+                      className="w-full py-3 text-sm font-semibold text-white flex items-center justify-center gap-2"
+                      style={{ background: GRAD, borderRadius: "12px", border: "none", cursor: "pointer" }}
+                      data-testid={`button-subscribe-${tier.id}`}
+                    >
+                      {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {tier.id === "vip" ? "Go VIP" : "Upgrade to Plus"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {entitlements && entitlements.length > 0 && (
+          <div style={{ marginTop: "32px" }}>
+            <p className="text-xs font-semibold mb-3" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1.2px" }}>Your Entitlements</p>
+            <div style={{ background: CARD, borderRadius: "16px", overflow: "hidden" }}>
+              {entitlements.map((ent: any, i: number) => (
+                <div key={ent.id} style={{
+                  display: "flex", alignItems: "center", padding: "12px 16px",
+                  borderBottom: i < entitlements.length - 1 ? `1px solid ${BORDER}` : "none",
+                }}>
+                  <Zap className="w-4 h-4 mr-3" style={{ color: "#7C3AED" }} />
+                  <span className="flex-1 text-sm text-white capitalize">{String(ent.type).replace(/_/g, " ")}</span>
+                  <span className="text-sm font-semibold" style={{ color: "#EC4899" }}>{ent.quantity} remaining</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p className="text-center text-xs mt-8" style={{ color: MUTED }}>
+          Cancel anytime. No hidden fees. Payments processed securely by Stripe.
         </p>
       </div>
-
-      <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-        {tiers.map((tier) => {
-          const config = TIER_CONFIG[tier.tier];
-          const isActive = currentTier === tier.tier;
-          const isPending = checkoutMutation.isPending;
-
-          return (
-            <Card
-              key={tier.tier}
-              className={`relative card-lift ${config?.popular ? 'border-primary border-2' : ''}`}
-              data-testid={`card-tier-${tier.tier}`}
-            >
-              {config?.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="gradient-bg text-white border-0">
-                    <Star className="w-3 h-3 mr-1" />
-                    Most Popular
-                  </Badge>
-                </div>
-              )}
-              <CardHeader className="text-center pb-2">
-                <CardTitle className="text-lg">{tier.name}</CardTitle>
-                <div className="mt-2">
-                  <span className="text-3xl font-bold">{tier.price}</span>
-                  <span className="text-sm text-muted-foreground">{tier.period}</span>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ul className="space-y-2">
-                  {config?.features.map((feature, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <Check className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                {isActive ? (
-                  <Button className="w-full" variant="outline" disabled data-testid={`button-current-${tier.tier}`}>
-                    Current Plan
-                  </Button>
-                ) : tier.tier === "free" ? (
-                  hasActiveSub ? (
-                    <Button
-                      className="w-full btn-press"
-                      variant="outline"
-                      onClick={() => portalMutation.mutate()}
-                      disabled={portalMutation.isPending}
-                      data-testid={`button-subscribe-${tier.tier}`}
-                    >
-                      {portalMutation.isPending ? (
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      ) : (
-                        <ExternalLink className="w-4 h-4 mr-2" />
-                      )}
-                      Manage Subscription
-                    </Button>
-                  ) : (
-                    <Button className="w-full" variant="outline" disabled data-testid={`button-current-${tier.tier}`}>
-                      Current Plan
-                    </Button>
-                  )
-                ) : (
-                  <Button
-                    className={`w-full btn-press ${config?.popular ? 'gradient-bg text-white' : ''}`}
-                    variant={config?.popular ? "default" : "outline"}
-                    onClick={() => handleSubscribe(tier.tier)}
-                    disabled={isPending}
-                    data-testid={`button-subscribe-${tier.tier}`}
-                  >
-                    {isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    ) : null}
-                    Upgrade
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {hasActiveSub && (
-        <div className="mt-8 text-center">
-          <Button
-            variant="outline"
-            className="btn-press"
-            onClick={() => portalMutation.mutate()}
-            disabled={portalMutation.isPending}
-            data-testid="button-manage-subscription"
-          >
-            {portalMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            ) : (
-              <ExternalLink className="w-4 h-4 mr-2" />
-            )}
-            Manage Subscription
-          </Button>
-        </div>
-      )}
-
-      {entitlements && entitlements.length > 0 && (
-        <div className="mt-10 max-w-xl mx-auto">
-          <h2 className="text-lg font-bold mb-4">Your Entitlements</h2>
-          <div className="grid gap-3">
-            {entitlements.map((ent: any) => (
-              <Card key={ent.id}>
-                <CardContent className="p-4 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-primary" />
-                    <span className="text-sm font-medium capitalize">{ent.type.replace(/_/g, " ")}</span>
-                  </div>
-                  <Badge variant="secondary">{ent.quantity} remaining</Badge>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-    </LayoutShell>
+    </div>
   );
 }

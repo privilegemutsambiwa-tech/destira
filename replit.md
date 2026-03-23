@@ -25,14 +25,15 @@ Always-dark UI. No light/dark toggle. Key tokens:
 ## Key Features
 1. **Soul-Mapping Onboarding** - 10-question personality interview with privacy toggle; answers are automatically seeded into Twin memory facts and `twinQuestionsAnswered` is set to 10
 2. **AI Twin Generation** - Gemini creates a persona from user's answers
-3. **Discovery Feed** - Browse profiles of other users (real DB data, not mock)
+3. **Discovery Feed** - Browse profiles of other users (real DB data, not mock); daily like limits enforced (Free: 5/day, Plus: 50/day, VIP: unlimited) with upgrade prompt modal
 4. **AI Twin Interview** - Chat with someone's AI Twin before connecting (with chat history persistence)
 5. **Match Request/Accept** - Send and respond to match requests with soft-delete and unmatch
 6. **Direct Chat** - Real-time messaging after matching
 7. **Serendipity Lounge** - Interest-based group chats with admin roles, privacy modes, invite links, join requests, moderation
 8. **Profile** - Photo management, public/private toggle, AI-generated summaries, subscription badge
 9. **Chat with Own Twin** - Self-reflection conversations with memory persistence
-10. **Billing** - Stripe-powered subscription tiers (Free/Plus/VIP) with real checkout
+10. **Billing** - Stripe-powered subscription tiers (Free/Plus/VIP) with dark redesigned 3-tier pricing page at /billing
+11. **Settings** - Full settings system with inline sub-panels: Twin Tone, Location Preferences (slider), Age Range (slider), Block List (backend), Data & Privacy (export + delete), Profile Verification selfie flow, Manage Billing, Help Center FAQ, Contact Us form, Terms of Service, Privacy Policy, Clear Twin Memory (2-step confirm), Delete Account (type DELETE)
 
 ## Project Structure
 ```
