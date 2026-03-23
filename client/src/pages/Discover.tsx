@@ -9,6 +9,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { StoryViewer, OwnStoryViewer, AddStoryButton } from "@/components/story-viewer";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import type { User } from "@shared/models/auth";
 
 function formatDistance(km: number): string {
   if (km < 1) return "Less than 1km away";
@@ -19,7 +20,8 @@ function formatDistance(km: number): string {
 function StoriesCarousel() {
   const { data: stories } = useFeedStories();
   const { user } = useAuth();
-  const [viewingStory, setViewingStory] = useState<any>(null);
+  const typedUser = user as User | null;
+  const [viewingStory, setViewingStory] = useState<{ stories: any[]; displayName: string; photoUrl: string } | null>(null);
   const [showOwnStoryViewer, setShowOwnStoryViewer] = useState(false);
   const [showStoryCreator, setShowStoryCreator] = useState(false);
 
@@ -33,8 +35,8 @@ function StoriesCarousel() {
   });
 
   const hasMyStories = myStories && myStories.length > 0;
-  const myPhotoUrl = (user as any)?.profileImageUrl || "";
-  const myName = (user as any)?.firstName || "You";
+  const myPhotoUrl = typedUser?.profileImageUrl || "";
+  const myName = typedUser?.firstName || "You";
   const myOwnStories: any[] = hasMyStories ? myStories : [];
 
   const grouped = useMemo(() => {
@@ -198,7 +200,7 @@ export default function Discover() {
   const [filter, setFilter] = useState<FilterChip>(getInitialFilter);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
-  const [viewingCardStory, setViewingCardStory] = useState<{ stories: any[]; displayName: string; photoUrl: string } | null>(null);
+  const [viewingCardStory, setViewingCardStory] = useState<{ stories: any[]; displayName: string; photoUrl: string; userId: string } | null>(null);
   const { data: rawProfiles, isLoading } = useDiscoverProfiles(filter, userLat, userLng);
   const { data: feedStories } = useFeedStories();
   const startInterview = useStartInterview();
@@ -225,9 +227,9 @@ export default function Discover() {
   }, []);
 
   const storiesByUserId = useMemo(() => {
-    if (!feedStories) return {} as Record<string, any[]>;
     const map: Record<string, any[]> = {};
-    (feedStories as any[]).forEach((s: any) => {
+    if (!feedStories) return map;
+    feedStories.forEach((s) => {
       if (!map[s.userId]) map[s.userId] = [];
       map[s.userId].push(s);
     });
@@ -246,13 +248,14 @@ export default function Discover() {
   }, [rawProfiles, filter]);
 
   const handleViewCardStory = useCallback((profile: any) => {
-    const userId = profile.userId;
+    const userId: string = profile.userId;
     const stories = storiesByUserId[userId];
     if (!stories || stories.length === 0) return;
     setViewingCardStory({
       stories,
       displayName: profile.displayName || "User",
       photoUrl: profile.user?.profileImageUrl || "",
+      userId,
     });
   }, [storiesByUserId]);
 
@@ -567,10 +570,9 @@ export default function Discover() {
                   {currentProfile.age ? `, ${currentProfile.age}` : ""}
                 </h2>
 
-                {currentProfile.showDistance === false ? (
-                  <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.6)", fontSize: "13px" }}>
-                    <MapPin className="w-3.5 h-3.5 shrink-0" />
-                    <span data-testid="text-profile-location">Prefers not to share location</span>
+                {currentProfile.locationName && currentProfile.showDistance === false ? (
+                  <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.7)", fontSize: "13px" }}>
+                    <span data-testid="text-profile-location">📍 {currentProfile.locationName}</span>
                   </div>
                 ) : currentProfile.locationName && distanceKm !== null ? (
                   <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.7)", fontSize: "13px" }}>
@@ -703,6 +705,15 @@ export default function Discover() {
           onClose={() => setViewingCardStory(null)}
           userName={viewingCardStory.displayName}
           profileImageUrl={viewingCardStory.photoUrl}
+          onInterviewTwin={async () => {
+            try {
+              const interview = await startInterview.mutateAsync(viewingCardStory.userId);
+              setViewingCardStory(null);
+              setLocation(`/interviews/${interview.id}/chat`);
+            } catch {
+              toast({ title: "Could not start interview", variant: "destructive" });
+            }
+          }}
         />
       )}
     </LayoutShell>

@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Heart, MessageCircle, X, Plus, Eye, Send, ChevronLeft, ChevronRight, Trash2, Camera, Pencil } from "lucide-react";
+import { Heart, MessageCircle, X, Plus, Eye, Send, ChevronLeft, ChevronRight, Trash2, Camera, Pencil, Brain } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 
@@ -79,9 +79,10 @@ interface StoryViewerProps {
   onClose: () => void;
   userName?: string;
   profileImageUrl?: string;
+  onInterviewTwin?: () => void;
 }
 
-export function StoryViewer({ stories, initialIndex, onClose, userName, profileImageUrl }: StoryViewerProps) {
+export function StoryViewer({ stories, initialIndex, onClose, userName, profileImageUrl, onInterviewTwin }: StoryViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [progress, setProgress] = useState(0);
   const [commentText, setCommentText] = useState("");
@@ -288,6 +289,25 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
         )}
 
         <div className="absolute bottom-0 left-0 right-0 z-10 p-3" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.6), transparent)" }}>
+          {onInterviewTwin && (
+            <button
+              className="w-full flex items-center justify-center gap-2 font-semibold mb-3"
+              style={{
+                background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                color: "#FFFFFF",
+                height: "44px",
+                borderRadius: "12px",
+                border: "none",
+                fontSize: "14px",
+                boxShadow: "0 4px 16px rgba(124,58,237,0.45)",
+              }}
+              onClick={() => { onInterviewTwin(); onClose(); }}
+              data-testid="button-interview-twin-from-story"
+            >
+              <Brain className="w-4 h-4" />
+              Interview their Twin
+            </button>
+          )}
           <div className="flex items-center gap-2 mb-2">
             <button
               className="w-8 h-8 flex items-center justify-center text-white"
