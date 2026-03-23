@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,9 +32,8 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
   const [canMembersSendMessages, setCanMembersSendMessages] = useState(true);
   const [canMembersEditInfo, setCanMembersEditInfo] = useState(true);
   const [maxMembers, setMaxMembers] = useState<number | "">(500);
-  const [initialized, setInitialized] = useState(false);
-
-  if (group && !initialized) {
+  useEffect(() => {
+    if (!group) return;
     setName(group.name || "");
     setDescription(group.description || "");
     setRulesText(group.rulesText || "");
@@ -45,8 +44,7 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
     setCanMembersSendMessages(group.canMembersSendMessages ?? true);
     setCanMembersEditInfo(group.canMembersEditInfo ?? true);
     setMaxMembers(group.maxMembers || 500);
-    setInitialized(true);
-  }
+  }, [group?.id]);
 
   if (!groupId || isNaN(groupId)) {
     setLocation("/lounge");

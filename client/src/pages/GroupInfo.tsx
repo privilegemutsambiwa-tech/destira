@@ -64,6 +64,8 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isMuted, setIsMuted] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareLink, setShareLink] = useState("");
 
   const iconUploadRef = useRef<HTMLInputElement>(null);
   const bannerUploadRef = useRef<HTMLInputElement>(null);
@@ -204,13 +206,25 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
       const inviteUrl = makeInviteUrl(linkRes.token);
       const shareData = { title: group?.name || "Group", text: `Join "${group?.name}" on VibeFlow`, url: inviteUrl };
       if (navigator.share) {
-        await navigator.share(shareData).catch(() => {});
+        await navigator.share(shareData).catch(() => {
+          setShareLink(inviteUrl);
+          setShareDialogOpen(true);
+        });
       } else {
-        await navigator.clipboard.writeText(inviteUrl);
-        toast({ title: "Invite link copied to clipboard" });
+        setShareLink(inviteUrl);
+        setShareDialogOpen(true);
       }
     } catch {
       toast({ title: "Error", description: "Failed to generate invite link.", variant: "destructive" });
+    }
+  };
+
+  const handleCopyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      toast({ title: "Invite link copied!" });
+    } catch {
+      toast({ title: "Error", description: "Could not copy link.", variant: "destructive" });
     }
   };
 
@@ -386,27 +400,27 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
         </div>
 
         <div className="flex items-center justify-center gap-5 py-5 mt-2">
-          <button
-            className="flex flex-col items-center gap-1.5 btn-press"
-            onClick={canAddMembers ? () => setAddMemberOpen(true) : undefined}
-            disabled={!canAddMembers}
-            data-testid="button-action-add-members"
-            style={{ opacity: canAddMembers ? 1 : 0.4 }}
-          >
-            <div
-              className="flex items-center justify-center"
-              style={{
-                width: "52px",
-                height: "52px",
-                borderRadius: "50%",
-                background: "#1A1A24",
-                border: "1px solid #2E2E42",
-              }}
+          {canAddMembers && (
+            <button
+              className="flex flex-col items-center gap-1.5 btn-press"
+              onClick={() => setAddMemberOpen(true)}
+              data-testid="button-action-add-members"
             >
-              <UserPlus className="w-5 h-5 text-white" />
-            </div>
-            <span style={{ fontSize: "11px", color: "#9090A8", fontWeight: 500 }}>Add</span>
-          </button>
+              <div
+                className="flex items-center justify-center"
+                style={{
+                  width: "52px",
+                  height: "52px",
+                  borderRadius: "50%",
+                  background: "#1A1A24",
+                  border: "1px solid #2E2E42",
+                }}
+              >
+                <UserPlus className="w-5 h-5 text-white" />
+              </div>
+              <span style={{ fontSize: "11px", color: "#9090A8", fontWeight: 500 }}>Add</span>
+            </button>
+          )}
           <button
             className="flex flex-col items-center gap-1.5 btn-press"
             onClick={() => setSearchOpen(true)}
@@ -955,6 +969,31 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             >
               {(updateGroup.isPending || updateSettings.isPending) && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent style={{ background: "#1A1A24", border: "1px solid #2E2E42" }}>
+          <DialogHeader>
+            <DialogTitle className="text-white">Invite Link</DialogTitle>
+            <DialogDescription style={{ color: "#9090A8" }}>Share this link to invite people to the group.</DialogDescription>
+          </DialogHeader>
+          <div
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm break-all"
+            style={{ background: "#242433", border: "1px solid #2E2E42", color: "#9090A8" }}
+            data-testid="text-share-link"
+          >
+            {shareLink}
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleCopyShareLink}
+              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", border: "none", color: "#fff" }}
+              data-testid="button-copy-share-link"
+            >
+              Copy Link
             </Button>
           </DialogFooter>
         </DialogContent>
