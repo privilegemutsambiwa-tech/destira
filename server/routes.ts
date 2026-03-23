@@ -7,7 +7,7 @@ import { GoogleGenAI } from "@google/genai";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
 import { sql, eq, and } from "drizzle-orm";
-import { groupMembers, blockedUsers, profiles } from "@shared/schema";
+import { groupMembers, blockedUsers, profiles, twinMemory as twinMemoryTable, twinMemoryFacts, twinMemorySummary } from "@shared/schema";
 import crypto from "crypto";
 import multer from "multer";
 import path from "path";
@@ -2725,7 +2725,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     try {
       const blocked = await storage.getBlockedUsers(userId);
-      res.json(blocked);
+      const enriched = await Promise.all(blocked.map(async (b) => {
+        const p = await storage.getProfile(b.blockedId);
+        const photos = await storage.getUserPhotos(b.blockedId);
+        const mainPhoto = photos.find(ph => ph.isMainProfilePhoto)?.photoUrl || photos[0]?.photoUrl || null;
+        return { ...b, displayName: p?.displayName || b.blockedId, photoUrl: mainPhoto };
+      }));
+      res.json(enriched);
     } catch (err) {
       res.status(500).json({ message: "Failed to get blocked users" });
     }
@@ -2752,7 +2758,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     try {
       const profile = await storage.getProfile(userId);
       const matches = await storage.getMatches(userId);
-      const twinMemory = await storage.getTwinMemoryEntries(userId);
+      const twinMemory = await storage.getTwinMemory(userId, 200);
       res.setHeader("Content-Disposition", "attachment; filename=vibeflow-data.json");
       res.setHeader("Content-Type", "application/json");
       res.json({ profile, matches, twinMemory, exportedAt: new Date().toISOString() });
@@ -2761,7 +2767,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
-  // Change password — hashes and stores password credential in profile
+  // Change password — validates input, hashes and stores credential for local auth fallback
   app.post("/api/account/change-password", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -2770,19 +2776,21 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (!currentPassword || !newPassword) {
         return res.status(400).json({ message: "Current and new password are required" });
       }
+      if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
+        return res.status(400).json({ message: "Invalid input" });
+      }
       if (newPassword.length < 8) {
         return res.status(400).json({ message: "New password must be at least 8 characters" });
       }
       const profile = await storage.getProfile(userId);
-      if (profile?.passwordHash) {
-        const salt = profile.passwordSalt || "";
-        const currentHash = crypto.createHash("sha256").update(currentPassword + salt).digest("hex");
+      if (profile?.passwordHash && profile?.passwordSalt) {
+        const currentHash = crypto.createHmac("sha256", profile.passwordSalt).update(currentPassword).digest("hex");
         if (currentHash !== profile.passwordHash) {
           return res.status(401).json({ message: "Current password is incorrect" });
         }
       }
-      const salt = crypto.randomBytes(16).toString("hex");
-      const hash = crypto.createHash("sha256").update(newPassword + salt).digest("hex");
+      const salt = crypto.randomBytes(32).toString("hex");
+      const hash = crypto.createHmac("sha256", salt).update(newPassword).digest("hex");
       await db.update(profiles).set({ passwordHash: hash, passwordSalt: salt }).where(eq(profiles.userId, userId));
       res.json({ success: true, message: "Password updated successfully" });
     } catch (err) {
@@ -2810,12 +2818,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     try {
-      const entries = await storage.getTwinMemoryEntries(userId);
-      for (const e of entries) {
-        await storage.deleteTwinMemoryEntry(e.id);
-      }
-      await storage.deleteAllTwinMemoryFacts(userId);
-      await storage.clearTwinMemorySummary(userId);
+      await db.delete(twinMemoryTable).where(eq(twinMemoryTable.userId, userId));
+      await db.delete(twinMemoryFacts).where(eq(twinMemoryFacts.userId, userId));
+      await db.delete(twinMemorySummary).where(eq(twinMemorySummary.userId, userId));
       await storage.updateProfile(userId, { twinQuestionsAnswered: 10 });
       res.json({ success: true });
     } catch (err) {

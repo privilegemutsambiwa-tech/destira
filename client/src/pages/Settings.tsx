@@ -237,7 +237,7 @@ function LocationPanel({ onBack, profile }: { onBack: () => void; profile: any }
       async (pos) => {
         try {
           const { latitude, longitude } = pos.coords;
-          const res = await apiRequest("POST", "/api/location", { lat: latitude, lng: longitude, locationName: "Current Location" });
+          const res = await apiRequest("POST", "/api/location/update", { lat: latitude, lng: longitude, locationName: "Current Location" });
           const data = await res.json();
           setCurrentLocation(data.locationName || "Location updated");
           toast({ title: "Location updated" });
@@ -297,7 +297,7 @@ function AgeRangePanel({ onBack, profile }: { onBack: () => void; profile: any }
     <Panel title="Age Range" onBack={onBack}>
       <div style={{ margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden", background: CARD }}>
         <SliderInput label="Minimum Age" value={ageMin} min={18} max={ageMax - 1} onChange={(v) => setAgeMin(v)} />
-        <SliderInput label="Maximum Age" value={ageMax} min={ageMin + 1} max={100} onChange={(v) => setAgeMax(v)} />
+        <SliderInput label="Maximum Age" value={ageMax} min={ageMin + 1} max={65} onChange={(v) => setAgeMax(v)} />
       </div>
       <p className="text-xs px-4 pt-3" style={{ color: MUTED }}>
         Show profiles for people aged {ageMin}–{ageMax}.
@@ -340,10 +340,14 @@ function BlockListPanel({ onBack }: { onBack: () => void }) {
               <div style={{
                 width: "36px", height: "36px", borderRadius: "50%",
                 background: ELEVATED, display: "flex", alignItems: "center", justifyContent: "center", marginRight: "12px",
+                overflow: "hidden", flexShrink: 0,
               }}>
-                <UserX className="w-4 h-4" style={{ color: MUTED }} />
+                {entry.photoUrl
+                  ? <img src={entry.photoUrl} alt={entry.displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : <UserX className="w-4 h-4" style={{ color: MUTED }} />
+                }
               </div>
-              <span className="flex-1 text-sm text-white">{entry.blockedId}</span>
+              <span className="flex-1 text-sm text-white" data-testid={`text-blocked-name-${entry.blockedId}`}>{entry.displayName || entry.blockedId}</span>
               <button
                 onClick={() => unblockMutation.mutate(entry.blockedId)}
                 className="text-xs font-semibold px-3 py-1"
