@@ -32,6 +32,7 @@ export const profiles = pgTable("profiles", {
   profileCompletionScore: integer("profile_completion_score").default(0),
   superMatchesRemaining: integer("super_matches_remaining").default(0),
   boostsRemaining: integer("boosts_remaining").default(0),
+  twinQuestionsAnswered: integer("twin_questions_answered").default(0),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

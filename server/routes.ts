@@ -142,6 +142,37 @@ export async function registerRoutes(
     }
   });
 
+  async function seedOnboardingIntoTwinMemory(userId: string, personalityProfile: Record<string, string>): Promise<void> {
+    try {
+      const ONBOARDING_QUESTIONS = [
+        "What are the top 3 values you live by?",
+        "Describe your ideal Sunday.",
+        "How do you handle conflict in relationships?",
+        "What's a life goal you're actively working towards?",
+        "What does emotional intimacy mean to you?",
+        "What's a deal-breaker for you in a relationship?",
+        "How do you show love and appreciation?",
+        "What's something surprising about you?",
+        "Describe the kind of partner energy you're looking for.",
+        "What would you want your partner to say about you after a year?",
+      ];
+
+      for (let i = 0; i < 10; i++) {
+        const answer = personalityProfile[String(i)];
+        if (answer && typeof answer === "string" && answer.trim()) {
+          const question = ONBOARDING_QUESTIONS[i] || `Onboarding question ${i + 1}`;
+          await storage.addTwinMemoryFact(userId, `${question} → ${answer.trim()}`, "onboarding");
+        }
+      }
+
+      await storage.updateProfile(userId, { twinQuestionsAnswered: 10 } as any);
+
+      storage.upsertTwinProfileStructured(userId, {}).catch(() => {});
+    } catch (e) {
+      console.error("Onboarding twin seeding error (non-blocking):", e);
+    }
+  }
+
   app.post("/api/profiles", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -149,9 +180,15 @@ export async function registerRoutes(
       const existing = await storage.getProfile(userId);
       if (existing) {
         const updated = await storage.updateProfile(userId, req.body);
+        if (req.body.onboardingCompleted && !existing.onboardingCompleted && req.body.personalityProfile) {
+          seedOnboardingIntoTwinMemory(userId, req.body.personalityProfile).catch(() => {});
+        }
         return res.json(updated);
       }
       const profile = await storage.createProfile({ ...req.body, userId });
+      if (req.body.onboardingCompleted && req.body.personalityProfile) {
+        seedOnboardingIntoTwinMemory(userId, req.body.personalityProfile).catch(() => {});
+      }
       res.status(201).json(profile);
     } catch (err) {
       console.error("Profile create error:", err);
@@ -391,6 +428,33 @@ IMPORTANT PRIVACY GUARDRAIL: Under NO circumstances reveal any of the following:
       memorySection += `\n\nRecent Facts about User:\n${memoryFacts.map(f => `- ${f.factText}`).join("\n")}`;
     }
 
+    let onboardingSection = "";
+    if (profile.personalityProfile && typeof profile.personalityProfile === "object") {
+      const ONBOARDING_QUESTIONS = [
+        "Top 3 values",
+        "Ideal Sunday",
+        "Handling conflict",
+        "Life goal",
+        "Emotional intimacy",
+        "Deal-breaker",
+        "Showing love",
+        "Surprising thing about them",
+        "Ideal partner energy",
+        "What partner should say after a year",
+      ];
+      const pp = profile.personalityProfile as Record<string, string>;
+      const lines: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        const answer = pp[String(i)];
+        if (answer && typeof answer === "string" && answer.trim()) {
+          lines.push(`- ${ONBOARDING_QUESTIONS[i] || `Q${i + 1}`}: ${answer.trim()}`);
+        }
+      }
+      if (lines.length > 0) {
+        onboardingSection = `\n\nWhat you already know about the user (from their onboarding):\n${lines.join("\n")}`;
+      }
+    }
+
     return `You are the user's personal AI Twin on VibeFlow, a dating app. You chat like a real friend on WhatsApp - warm, concise, and human.
 
 CONVERSATION RULES (CRITICAL):
@@ -400,12 +464,13 @@ CONVERSATION RULES (CRITICAL):
 - Ask follow-up questions to keep the conversation going.
 - Never monologue. Never list things with bullet points in chat.
 - Match their energy and vibe.
+- NEVER ask for information you already have from the onboarding section below.
 
 TONE: You are ${toneStyle}, with ${verbosity} verbosity, ${emojiUsage} emoji usage, and ${formality} formality.
 
 Your role: Help the user reflect on dating, relationships, and self-understanding. You learn from conversations and their profile data. Occasionally ask a personality question naturally ("Quick thought - ...").
 
-${profile.twinPersona || "You are friendly, open, and genuine."}${structuredSection}${memorySection}
+${profile.twinPersona || "You are friendly, open, and genuine."}${onboardingSection}${structuredSection}${memorySection}
 
 ${PRIVACY_GUARDRAIL}`;
   }

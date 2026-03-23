@@ -23,8 +23,8 @@ Always-dark UI. No light/dark toggle. Key tokens:
 - **Payments**: Stripe (via Replit Stripe Integration + stripe-replit-sync)
 
 ## Key Features
-1. **Soul-Mapping Onboarding** - 10-question personality interview with privacy toggle
-2. **AI Twin Generation** - OpenAI creates a persona from user's answers
+1. **Soul-Mapping Onboarding** - 10-question personality interview with privacy toggle; answers are automatically seeded into Twin memory facts and `twinQuestionsAnswered` is set to 10
+2. **AI Twin Generation** - Gemini creates a persona from user's answers
 3. **Discovery Feed** - Browse profiles of other users (real DB data, not mock)
 4. **AI Twin Interview** - Chat with someone's AI Twin before connecting (with chat history persistence)
 5. **Match Request/Accept** - Send and respond to match requests with soft-delete and unmatch

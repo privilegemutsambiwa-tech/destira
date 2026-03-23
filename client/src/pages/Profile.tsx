@@ -616,18 +616,22 @@ export default function Profile() {
                 )}
               </div>
 
-              {questionsProgress && (() => {
-                const answered = questionsProgress.totalAnswered || 0;
+              {(() => {
+                const chatAnswered = questionsProgress?.totalAnswered || 0;
+                const onboardingAnswered = profile.twinQuestionsAnswered || 0;
+                const totalAnswered = chatAnswered + onboardingAnswered;
                 const total = 100;
-                const pct = Math.min(Math.round((answered / total) * 100), 100);
-                let message = "Just getting started! Keep answering to help your Twin learn.";
-                if (pct > 75) message = "Amazing! Your Twin knows you deeply.";
-                else if (pct > 50) message = "Great work! Your Twin understands you well.";
-                else if (pct > 25) message = "Making progress! Your Twin is getting smarter.";
+                const pct = Math.min(Math.round((totalAnswered / total) * 100), 100);
+                let message = "Just getting started — your onboarding is saved!";
+                if (pct >= 100) message = "✦ Twin fully trained — you're getting the best matches!";
+                else if (pct >= 76) message = "Your Twin is nearly fully trained!";
+                else if (pct >= 51) message = "Your Twin knows you well. Almost there!";
+                else if (pct >= 26) message = "Your Twin is learning — keep the conversations going.";
+                else if (pct >= 11) message = "Good start! Chat with your Twin to teach it more.";
                 return (
                   <div className="pt-3 mt-3" style={{ borderTop: "1px solid #2E2E42" }}>
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <p className="text-xs font-medium" style={{ color: "#9090A8" }}>Questions Progress</p>
+                      <p className="text-xs font-medium" style={{ color: "#9090A8" }}>Twin Training Progress</p>
                       <span className="text-xs font-bold" style={{ color: "#A78BFA" }}>{pct}%</span>
                     </div>
                     <div className="w-full rounded-full h-2" style={{ background: "#242433" }}>
