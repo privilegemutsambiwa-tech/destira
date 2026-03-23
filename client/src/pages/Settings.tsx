@@ -172,7 +172,7 @@ export default function Settings() {
 
         <div style={SECTION_HEADER_STYLE}>Twin Settings</div>
         <div style={{ background: "#1A1A24", margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
-          <ChevronRow icon={Brain} label="Interview AI Twin" onClick={() => setLocation("/twin-chat")} testId="row-twin-chat" />
+          <ChevronRow icon={Brain} label="Interview AI Twin" onClick={() => setLocation("/twin-chat?from=/settings")} testId="row-twin-chat" />
           <ChevronRow icon={Volume2} label="Customize Twin Tone" sublabel="Style, verbosity, formality" onClick={() => { setLocation("/profile"); }} testId="row-twin-tone" />
           <ChevronRow icon={Brain} label="Clear Twin Memory" sublabel="Coming soon" onClick={() => handleComing("Clear Twin Memory")} testId="row-clear-memory" />
         </div>

@@ -64,7 +64,7 @@ export default function Interviews() {
             borderRadius: "20px",
             boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
           }}
-          onClick={() => setLocation("/twin-chat")}
+          onClick={() => setLocation("/twin-chat?from=/interviews")}
           data-testid="card-my-twin"
         >
           <div className="flex items-center gap-4">

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -109,7 +109,14 @@ export default function TwinChat() {
   const { data: memory } = useTwinMemory();
   const { user } = useAuth();
   const { data: profile } = useProfile();
-  const [, setLocation] = useLocation();
+  const [woLocation, setLocation] = useLocation();
+
+  const backRoute = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const from = params.get("from");
+    if (from && from.startsWith("/")) return from;
+    return "/matches";
+  }, [woLocation]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [initialized, setInitialized] = useState(false);
   const streamingMsgRef = useRef<string>("");
@@ -357,7 +364,7 @@ export default function TwinChat() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setLocation("/profile")}
+          onClick={() => setLocation(backRoute)}
           data-testid="button-back-twin"
         >
           <ArrowLeft className="w-5 h-5" />

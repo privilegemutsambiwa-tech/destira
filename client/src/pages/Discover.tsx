@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { Brain, X, Loader2, MapPin, Heart, Play, Plus } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
@@ -6,16 +6,36 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { StoryViewer } from "@/components/story-viewer";
+import { StoryViewer, OwnStoryViewer, AddStoryButton } from "@/components/story-viewer";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
 
 function formatDistance(km: number): string {
-  if (km < 1) return `${Math.round(km * 1000)}m away`;
+  if (km < 1) return "Less than 1km away";
+  if (km >= 100) return `${Math.round(km)}km away`;
   return `${km.toFixed(1)}km away`;
 }
 
 function StoriesCarousel() {
   const { data: stories } = useFeedStories();
+  const { user } = useAuth();
   const [viewingStory, setViewingStory] = useState<any>(null);
+  const [showOwnStoryViewer, setShowOwnStoryViewer] = useState(false);
+  const [showStoryCreator, setShowStoryCreator] = useState(false);
+
+  const { data: myStories } = useQuery<any[]>({
+    queryKey: ["/api/stories/mine"],
+    queryFn: async () => {
+      const res = await fetch("/api/stories/mine", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const hasMyStories = myStories && myStories.length > 0;
+  const myPhotoUrl = (user as any)?.profileImageUrl || "";
+  const myName = (user as any)?.firstName || "You";
+  const myOwnStories: any[] = hasMyStories ? myStories : [];
 
   const grouped = useMemo(() => {
     if (!stories || stories.length === 0) return [];
@@ -34,6 +54,67 @@ function StoriesCarousel() {
   return (
     <>
       <div className="flex gap-4 overflow-x-auto pb-3 mb-5 scrollbar-hide" data-testid="stories-carousel">
+        {hasMyStories ? (
+          <button
+            onClick={() => setShowOwnStoryViewer(true)}
+            className="flex flex-col items-center gap-1.5 shrink-0"
+            data-testid="story-own-ring"
+          >
+            <div
+              className="p-[2.5px] rounded-full story-ring-active"
+              style={{ width: `${STORY_SIZE}px`, height: `${STORY_SIZE}px` }}
+            >
+              <div className="w-full h-full rounded-full overflow-hidden" style={{ background: "#1A1A24" }}>
+                <Avatar className="w-full h-full">
+                  {myPhotoUrl ? (
+                    <AvatarImage src={myPhotoUrl} alt={myName} />
+                  ) : (
+                    <AvatarFallback style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", color: "#FFFFFF", fontSize: "14px" }}>
+                      {myName[0]}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+              </div>
+            </div>
+            <span
+              style={{
+                fontSize: "11px",
+                maxWidth: "56px",
+                textAlign: "center",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+                fontWeight: 600,
+              }}
+            >
+              Your Story
+            </span>
+          </button>
+        ) : (
+          <button
+            className="flex flex-col items-center gap-1.5 shrink-0"
+            onClick={() => setShowStoryCreator(true)}
+            data-testid="story-add-slot"
+          >
+            <div
+              className="rounded-full flex items-center justify-center"
+              style={{
+                width: `${STORY_SIZE}px`,
+                height: `${STORY_SIZE}px`,
+                border: "2px dashed #9090A8",
+                background: "transparent",
+              }}
+            >
+              <Plus className="w-5 h-5" style={{ color: "#9090A8" }} />
+            </div>
+            <span style={{ fontSize: "11px", color: "#9090A8" }}>Add</span>
+          </button>
+        )}
+
         {grouped.map((u) => (
           <button
             key={u.userId}
@@ -59,24 +140,6 @@ function StoriesCarousel() {
             </span>
           </button>
         ))}
-
-        <button
-          className="flex flex-col items-center gap-1.5 shrink-0"
-          data-testid="story-add-slot"
-        >
-          <div
-            className="rounded-full flex items-center justify-center"
-            style={{
-              width: `${STORY_SIZE}px`,
-              height: `${STORY_SIZE}px`,
-              border: "2px dashed #9090A8",
-              background: "transparent",
-            }}
-          >
-            <Plus className="w-5 h-5" style={{ color: "#9090A8" }} />
-          </div>
-          <span style={{ fontSize: "11px", color: "#9090A8" }}>Add</span>
-        </button>
       </div>
 
       {viewingStory && (
@@ -84,6 +147,26 @@ function StoriesCarousel() {
           stories={viewingStory.stories}
           initialIndex={0}
           onClose={() => setViewingStory(null)}
+          userName={viewingStory.displayName}
+          profileImageUrl={viewingStory.photoUrl}
+        />
+      )}
+
+      {showOwnStoryViewer && hasMyStories && (
+        <OwnStoryViewer
+          stories={myOwnStories}
+          onClose={() => setShowOwnStoryViewer(false)}
+          onAddStory={() => { setShowOwnStoryViewer(false); setShowStoryCreator(true); }}
+          userName={myName}
+          profileImageUrl={myPhotoUrl}
+        />
+      )}
+
+      {showStoryCreator && (
+        <AddStoryButton
+          open={showStoryCreator}
+          onOpenChange={setShowStoryCreator}
+          onStoryAdded={() => setShowStoryCreator(false)}
         />
       )}
     </>
@@ -115,7 +198,9 @@ export default function Discover() {
   const [filter, setFilter] = useState<FilterChip>(getInitialFilter);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
+  const [viewingCardStory, setViewingCardStory] = useState<{ stories: any[]; displayName: string; photoUrl: string } | null>(null);
   const { data: rawProfiles, isLoading } = useDiscoverProfiles(filter, userLat, userLng);
+  const { data: feedStories } = useFeedStories();
   const startInterview = useStartInterview();
   const createMatch = useCreateMatch();
   const [woLocation, setLocation] = useLocation();
@@ -139,6 +224,16 @@ export default function Discover() {
     }
   }, []);
 
+  const storiesByUserId = useMemo(() => {
+    if (!feedStories) return {} as Record<string, any[]>;
+    const map: Record<string, any[]> = {};
+    (feedStories as any[]).forEach((s: any) => {
+      if (!map[s.userId]) map[s.userId] = [];
+      map[s.userId].push(s);
+    });
+    return map;
+  }, [feedStories]);
+
   const profiles = useMemo(() => {
     if (!rawProfiles) return [];
     let list = [...rawProfiles];
@@ -149,6 +244,17 @@ export default function Discover() {
     }
     return list;
   }, [rawProfiles, filter]);
+
+  const handleViewCardStory = useCallback((profile: any) => {
+    const userId = profile.userId;
+    const stories = storiesByUserId[userId];
+    if (!stories || stories.length === 0) return;
+    setViewingCardStory({
+      stories,
+      displayName: profile.displayName || "User",
+      photoUrl: profile.user?.profileImageUrl || "",
+    });
+  }, [storiesByUserId]);
 
   if (isLoading) {
     return (
@@ -188,6 +294,7 @@ export default function Discover() {
               </button>
             ))}
           </div>
+          <StoriesCarousel />
           <div
             className="text-center py-20 px-6 rounded-2xl"
             style={{ background: "#1A1A24", boxShadow: "0 8px 32px rgba(0,0,0,0.4)", border: "1px solid #2E2E42" }}
@@ -228,6 +335,8 @@ export default function Discover() {
   const distanceKm: number | null = currentProfile.distanceKm ?? null;
   const nearby: boolean = currentProfile.isNearbyNow ?? false;
   const isVeryClose = distanceKm !== null && distanceKm < 1;
+  const cardStories = storiesByUserId[currentProfile.userId] || [];
+  const hasCardStories = cardStories.length > 0;
 
   const handleNext = (direction: "left" | "right") => {
     setSwipeDir(direction);
@@ -287,7 +396,6 @@ export default function Discover() {
           <h1 className="font-bold text-white" style={{ fontSize: "22px", letterSpacing: "-0.5px" }}>Discover</h1>
         </div>
 
-        {/* Filter chips */}
         <div className="flex gap-2 mb-5 overflow-x-auto scrollbar-hide" data-testid="filter-chips">
           {CHIP_LABELS.map(({ key, label }) => (
             <button
@@ -395,7 +503,6 @@ export default function Discover() {
                 </div>
               )}
 
-              {/* Nearby now green dot — active within 30 min */}
               {nearby && (
                 <div
                   className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full"
@@ -407,7 +514,6 @@ export default function Discover() {
                 </div>
               )}
 
-              {/* Sub-1km highlight badge */}
               {isVeryClose && !nearby && (
                 <div
                   className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full"
@@ -419,13 +525,30 @@ export default function Discover() {
                 </div>
               )}
 
-              <div
-                className="absolute top-3 left-3 w-11 h-11 rounded-full flex items-center justify-center"
-                style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)", border: "1.5px solid rgba(255,255,255,0.2)" }}
-                data-testid="story-ring-indicator"
-              >
-                <Play className="w-4 h-4 text-white fill-white" />
-              </div>
+              {hasCardStories ? (
+                <button
+                  onClick={() => handleViewCardStory(currentProfile)}
+                  className="absolute top-3 left-3 w-11 h-11 rounded-full flex items-center justify-center p-[2px]"
+                  style={{
+                    background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                    animation: "pulse 2s infinite",
+                  }}
+                  data-testid="story-ring-indicator"
+                  aria-label="View story"
+                >
+                  <div className="w-full h-full rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)" }}>
+                    <Play className="w-4 h-4 text-white fill-white" />
+                  </div>
+                </button>
+              ) : (
+                <div
+                  className="absolute top-3 left-3 w-11 h-11 rounded-full flex items-center justify-center"
+                  style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)", border: "1.5px solid rgba(255,255,255,0.2)" }}
+                  data-testid="story-ring-indicator"
+                >
+                  <Play className="w-4 h-4 text-white fill-white" />
+                </div>
+              )}
 
               <div
                 className="absolute inset-x-0 bottom-0 p-5"
@@ -451,14 +574,12 @@ export default function Discover() {
                   </div>
                 ) : currentProfile.locationName && distanceKm !== null ? (
                   <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.7)", fontSize: "13px" }}>
-                    <MapPin className="w-3.5 h-3.5 shrink-0" />
                     <span data-testid="text-profile-location">
                       📍 {currentProfile.locationName} · {formatDistance(distanceKm)}
                     </span>
                   </div>
                 ) : currentProfile.locationName ? (
                   <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.7)", fontSize: "13px" }}>
-                    <MapPin className="w-3.5 h-3.5 shrink-0" />
                     <span data-testid="text-profile-location">📍 {currentProfile.locationName}</span>
                   </div>
                 ) : currentProfile.location ? (
@@ -574,6 +695,16 @@ export default function Discover() {
           {(currentIdx % profiles.length) + 1} of {profiles.length} profiles
         </p>
       </div>
+
+      {viewingCardStory && (
+        <StoryViewer
+          stories={viewingCardStory.stories}
+          initialIndex={0}
+          onClose={() => setViewingCardStory(null)}
+          userName={viewingCardStory.displayName}
+          profileImageUrl={viewingCardStory.photoUrl}
+        />
+      )}
     </LayoutShell>
   );
 }

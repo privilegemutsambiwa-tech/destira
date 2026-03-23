@@ -546,7 +546,7 @@ export default function Profile() {
               </div>
 
               <button
-                onClick={() => setLocation("/twin-chat")}
+                onClick={() => setLocation("/twin-chat?from=/profile")}
                 className="w-full font-semibold text-white py-3 mb-4 btn-press"
                 style={{
                   background: "linear-gradient(135deg, #7C3AED, #EC4899)",
