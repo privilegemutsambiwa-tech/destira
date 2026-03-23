@@ -54,7 +54,7 @@ const TIERS = [
     period: "/month",
     tagline: "For those serious about connecting",
     color: "#7C3AED",
-    popular: true,
+    popular: false,
     icon: Crown,
     features: [
       { label: "50 likes per day", included: true },
@@ -74,6 +74,7 @@ const TIERS = [
     period: "/month",
     tagline: "The full VibeFlow experience",
     color: "#EC4899",
+    popular: true,
     icon: Star,
     features: [
       { label: "Unlimited likes", included: true },

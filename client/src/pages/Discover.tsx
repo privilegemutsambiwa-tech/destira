@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { LayoutShell } from "@/components/layout-shell";
-import { Brain, X, Loader2, MapPin, Heart, Play, Plus, Crown } from "lucide-react";
+import { Brain, X, Loader2, MapPin, Heart, Play, Plus, Crown, Check } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -381,7 +381,7 @@ export default function Discover() {
       });
       if (limitRes.status === 403) {
         const limitData = await limitRes.json();
-        if (limitData?.error === "upgradeRequired") {
+        if (limitData?.upgradeRequired === true) {
           setShowUpgradePrompt(true);
           return;
         }
@@ -582,12 +582,24 @@ export default function Discover() {
                 }}
               >
                 <h2
-                  className="font-bold text-white leading-tight mb-0.5"
+                  className="font-bold text-white leading-tight mb-0.5 flex items-center gap-2"
                   style={{ fontSize: "26px", letterSpacing: "-0.5px" }}
                   data-testid="text-profile-name"
                 >
-                  {currentProfile.displayName}
-                  {currentProfile.age ? `, ${currentProfile.age}` : ""}
+                  <span>{currentProfile.displayName}{currentProfile.age ? `, ${currentProfile.age}` : ""}</span>
+                  {currentProfile.isVerified && (
+                    <span
+                      title="Verified"
+                      data-testid="badge-verified"
+                      style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        width: "22px", height: "22px", borderRadius: "50%",
+                        background: "#3B82F6", flexShrink: 0,
+                      }}
+                    >
+                      <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                    </span>
+                  )}
                 </h2>
 
                 {currentProfile.locationName && currentProfile.showDistance === false ? (

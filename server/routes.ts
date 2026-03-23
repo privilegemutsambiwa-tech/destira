@@ -2808,21 +2808,30 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     try {
-      await storage.updateProfile(userId, { verificationStatus: "pending" });
+      await storage.updateProfile(userId, { verificationStatus: "pending", isVerified: false });
       res.json({ success: true, verificationStatus: "pending" });
+      setTimeout(async () => {
+        try {
+          await storage.updateProfile(userId, { verificationStatus: "verified", isVerified: true });
+        } catch {
+          // Auto-approve failed silently
+        }
+      }, 60 * 1000);
     } catch (err) {
       res.status(500).json({ message: "Failed to submit verification" });
     }
   });
 
-  // Twin Tone settings — persisted in profile.twinPersona
+  // Twin Tone settings — persisted in twinProfileStructured.twinToneProfile
   app.post("/api/settings/twin-tone", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     try {
-      const { twinPersona } = req.body;
-      if (!twinPersona) return res.status(400).json({ message: "twinPersona required" });
-      await storage.updateProfile(userId, { twinPersona });
+      const { twinToneProfile } = req.body;
+      if (!twinToneProfile || typeof twinToneProfile !== "object") {
+        return res.status(400).json({ message: "twinToneProfile object required" });
+      }
+      await storage.upsertTwinProfileStructured(userId, { twinToneProfile });
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ message: "Failed to save Twin tone" });

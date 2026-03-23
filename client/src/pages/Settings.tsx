@@ -155,56 +155,61 @@ function GradientButton({ label, onClick, testId, danger }: {
 
 function TwinTonePanel({ onBack, profile }: { onBack: () => void; profile: any }) {
   const { toast } = useToast();
-  const [tone, setTone] = useState(profile?.twinPersona ?? "balanced");
-
-  const tones = [
-    { id: "flirty", label: "Flirty", desc: "Playful, witty, a little cheeky" },
-    { id: "balanced", label: "Balanced", desc: "Natural, thoughtful, grounded" },
-    { id: "intellectual", label: "Intellectual", desc: "Thoughtful, precise, curious" },
-    { id: "playful", label: "Playful", desc: "Fun, energetic, spontaneous" },
-    { id: "mysterious", label: "Mysterious", desc: "Deep, introspective, alluring" },
-  ];
+  const existing = typeof profile?.twinToneProfile === "object" && profile.twinToneProfile !== null
+    ? profile.twinToneProfile as Record<string, number>
+    : {};
+  const [style, setStyle] = useState<number>(existing.style ?? 50);
+  const [verbosity, setVerbosity] = useState<number>(existing.verbosity ?? 50);
+  const [formality, setFormality] = useState<number>(existing.formality ?? 50);
+  const [expression, setExpression] = useState<number>(existing.expression ?? 50);
 
   const saveMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/settings/twin-tone", { twinPersona: tone }),
+    mutationFn: () => apiRequest("POST", "/api/settings/twin-tone", {
+      twinToneProfile: { style, verbosity, formality, expression },
+    }),
     onSuccess: () => toast({ title: "Twin tone saved" }),
     onError: () => toast({ title: "Failed to save", variant: "destructive" }),
   });
 
+  const controls = [
+    { key: "style", label: "Style", low: "Casual", high: "Witty", value: style, set: setStyle },
+    { key: "verbosity", label: "Verbosity", low: "Concise", high: "Elaborate", value: verbosity, set: setVerbosity },
+    { key: "formality", label: "Formality", low: "Relaxed", high: "Formal", value: formality, set: setFormality },
+    { key: "expression", label: "Expression", low: "Reserved", high: "Expressive", value: expression, set: setExpression },
+  ];
+
   return (
     <Panel title="Customize Twin Tone" onBack={onBack}>
       <p className="text-sm px-4 pt-4 pb-2" style={{ color: MUTED }}>
-        Choose how your AI Twin communicates on your behalf when chatting with matches.
+        Fine-tune how your AI Twin communicates when chatting with matches.
       </p>
-      <div style={{ margin: "12px 16px", borderRadius: "16px", overflow: "hidden", background: CARD }}>
-        {tones.map((t, i) => (
-          <div
-            key={t.id}
-            onClick={() => setTone(t.id)}
-            data-testid={`tone-option-${t.id}`}
-            style={{
-              display: "flex", alignItems: "center", padding: "14px 16px",
-              borderBottom: i < tones.length - 1 ? `1px solid ${BORDER}` : "none",
-              cursor: "pointer",
-            }}
-          >
-            <div style={{ flex: 1 }}>
-              <p className="text-sm font-semibold text-white">{t.label}</p>
-              <p className="text-xs" style={{ color: MUTED }}>{t.desc}</p>
+      <div style={{ margin: "12px 16px", borderRadius: "16px", background: CARD, padding: "4px 0" }}>
+        {controls.map((c, i) => (
+          <div key={c.key} style={{ padding: "14px 16px", borderBottom: i < controls.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+            <div className="flex justify-between mb-2">
+              <p className="text-sm font-semibold text-white">{c.label}</p>
+              <p className="text-xs font-medium" style={{ color: MUTED }}>{c.low} → {c.high}</p>
             </div>
-            {tone === t.id && (
-              <div style={{
-                width: "20px", height: "20px", borderRadius: "50%",
-                background: GRAD, display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <Check className="w-3 h-3 text-white" />
-              </div>
-            )}
+            <input
+              type="range" min={0} max={100} step={5} value={c.value}
+              onChange={(e) => c.set(Number(e.target.value))}
+              className="w-full accent-purple-500"
+              data-testid={`slider-twin-${c.key}`}
+            />
+            <div className="flex justify-between mt-1">
+              <span className="text-xs" style={{ color: MUTED }}>{c.low}</span>
+              <span className="text-xs font-medium text-white">{c.value}</span>
+              <span className="text-xs" style={{ color: MUTED }}>{c.high}</span>
+            </div>
           </div>
         ))}
       </div>
       <div style={{ padding: "0 16px" }}>
-        <GradientButton label="Save Tone" onClick={() => saveMutation.mutate()} testId="button-save-tone" />
+        <GradientButton
+          label={saveMutation.isPending ? "Saving..." : "Save Tone Settings"}
+          onClick={() => saveMutation.mutate()}
+          testId="button-save-tone"
+        />
       </div>
     </Panel>
   );
@@ -213,14 +218,60 @@ function TwinTonePanel({ onBack, profile }: { onBack: () => void; profile: any }
 function LocationPanel({ onBack, profile }: { onBack: () => void; profile: any }) {
   const { toast } = useToast();
   const [maxDist, setMaxDist] = useState(profile?.maxDistanceKm ?? 100);
+  const [currentLocation, setCurrentLocation] = useState<string>(profile?.locationName ?? "");
+  const [refreshing, setRefreshing] = useState(false);
+
   const saveMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/settings/discovery", { maxDistanceKm: maxDist }),
     onSuccess: () => toast({ title: "Location preferences saved" }),
     onError: () => toast({ title: "Failed to save", variant: "destructive" }),
   });
+
+  const refreshLocation = () => {
+    if (!navigator.geolocation) {
+      toast({ title: "Geolocation not supported by your browser", variant: "destructive" });
+      return;
+    }
+    setRefreshing(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const res = await apiRequest("POST", "/api/location", { lat: latitude, lng: longitude, locationName: "Current Location" });
+          const data = await res.json();
+          setCurrentLocation(data.locationName || "Location updated");
+          toast({ title: "Location updated" });
+        } catch {
+          toast({ title: "Failed to update location", variant: "destructive" });
+        } finally {
+          setRefreshing(false);
+        }
+      },
+      () => {
+        toast({ title: "Could not get your location", variant: "destructive" });
+        setRefreshing(false);
+      }
+    );
+  };
+
   return (
     <Panel title="Location Preferences" onBack={onBack}>
       <div style={{ margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden", background: CARD }}>
+        <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}` }}>
+          <p className="text-xs font-semibold mb-1" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Current Location</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-white" data-testid="text-current-location">{currentLocation || "Not set"}</p>
+            <button
+              onClick={refreshLocation}
+              disabled={refreshing}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+              style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: refreshing ? MUTED : "#FFFFFF" }}
+              data-testid="button-refresh-location"
+            >
+              {refreshing ? "Updating..." : "Refresh"}
+            </button>
+          </div>
+        </div>
         <SliderInput label="Max Distance" value={maxDist} min={5} max={500} onChange={setMaxDist} unit=" km" />
       </div>
       <p className="text-xs px-4 pt-3" style={{ color: MUTED }}>
@@ -309,9 +360,31 @@ function BlockListPanel({ onBack }: { onBack: () => void }) {
   );
 }
 
+const COLLECTED_DATA_ITEMS = [
+  "Profile information (name, age, bio, location)",
+  "Personality assessment answers and derived profile",
+  "AI Twin memory — facts, summaries, and conversation history",
+  "Match history and interaction data",
+  "Group membership and activity",
+  "Device location (when shared) for proximity features",
+  "Usage data for app improvement (no personal identifiers)",
+  "Support ticket content",
+];
+
 function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [showCollect, setShowCollect] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", "/api/account"),
+    onSuccess: () => {
+      toast({ title: "Account deleted", description: "All your data has been erased." });
+      window.location.href = "/";
+    },
+    onError: () => toast({ title: "Deletion failed", variant: "destructive" }),
+  });
 
   const handleExport = async () => {
     try {
@@ -329,12 +402,77 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
     }
   };
 
+  if (deleteStep === 1) {
+    return (
+      <Panel title="Delete All Data" onBack={() => setDeleteStep(0)}>
+        <div style={{ padding: "16px" }}>
+          <div className="text-center mb-6">
+            <div style={{
+              width: "60px", height: "60px", borderRadius: "50%", background: "rgba(239,68,68,0.15)",
+              display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px",
+            }}>
+              <Trash2 className="w-7 h-7" style={{ color: "#EF4444" }} />
+            </div>
+            <p className="font-semibold text-white mb-1">This is permanent</p>
+            <p className="text-sm" style={{ color: MUTED }}>All your profile data, matches, Twin memory, and account will be permanently deleted. This cannot be undone.</p>
+          </div>
+          <div style={{ marginBottom: "16px" }}>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Type DELETE to confirm</label>
+            <input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+              className="w-full px-3 py-2 text-sm text-white"
+              style={{ background: CARD, border: `1px solid #EF4444`, borderRadius: "10px", outline: "none" }}
+              data-testid="input-delete-confirm"
+            />
+          </div>
+          <button
+            disabled={deleteConfirmText !== "DELETE" || deleteMutation.isPending}
+            onClick={() => deleteMutation.mutate()}
+            className="w-full py-3 text-sm font-semibold text-white rounded-xl"
+            style={{
+              background: deleteConfirmText === "DELETE" ? "#EF4444" : ELEVATED,
+              opacity: deleteConfirmText !== "DELETE" || deleteMutation.isPending ? 0.5 : 1,
+              cursor: deleteConfirmText === "DELETE" ? "pointer" : "default",
+            }}
+            data-testid="button-confirm-delete-all"
+          >
+            {deleteMutation.isPending ? "Deleting..." : "Permanently Delete Everything"}
+          </button>
+        </div>
+      </Panel>
+    );
+  }
+
   return (
     <Panel title="Data & Privacy" onBack={onBack}>
       <p className="text-sm px-4 pt-4 pb-2" style={{ color: MUTED }}>
         You own your data. Download or delete everything at any time.
       </p>
       <div style={{ margin: "12px 16px", borderRadius: "16px", overflow: "hidden", background: CARD }}>
+        <div
+          style={{ ...ROW_STYLE, cursor: "pointer" }}
+          onClick={() => setShowCollect(v => !v)}
+          data-testid="row-what-we-collect"
+        >
+          <Shield className="w-5 h-5 mr-3" style={{ color: MUTED }} />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-white">What We Collect</p>
+            <p className="text-xs" style={{ color: MUTED }}>See all data categories we store</p>
+          </div>
+          {showCollect ? <ChevronUp className="w-4 h-4" style={{ color: MUTED }} /> : <ChevronDown className="w-4 h-4" style={{ color: MUTED }} />}
+        </div>
+        {showCollect && (
+          <div style={{ padding: "0 16px 14px", borderBottom: `1px solid ${BORDER}` }}>
+            {COLLECTED_DATA_ITEMS.map((item, i) => (
+              <div key={i} className="flex items-start gap-2 py-1.5">
+                <span style={{ color: "#7C3AED", marginTop: "2px" }}>•</span>
+                <p className="text-xs" style={{ color: MUTED }}>{item}</p>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={ROW_STYLE} onClick={handleExport} data-testid="row-export-data">
           <Download className="w-5 h-5 mr-3" style={{ color: MUTED }} />
           <div className="flex-1">
@@ -343,7 +481,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
           </div>
           <ChevronRight className="w-4 h-4" style={{ color: MUTED }} />
         </div>
-        <div style={{ ...ROW_STYLE, borderBottom: "none" }} onClick={() => setLocation("?panel=delete-account")} data-testid="row-delete-data">
+        <div style={{ ...ROW_STYLE, borderBottom: "none" }} onClick={() => setDeleteStep(1)} data-testid="row-delete-data">
           <Trash2 className="w-5 h-5 mr-3" style={{ color: "#EF4444" }} />
           <div className="flex-1">
             <p className="text-sm font-medium" style={{ color: "#EF4444" }}>Delete All Data</p>
@@ -510,16 +648,26 @@ function HelpPanel({ onBack }: { onBack: () => void }) {
   );
 }
 
+const CONTACT_SUBJECTS = [
+  "Report a bug",
+  "Billing issue",
+  "Account access",
+  "Safety concern",
+  "Feature request",
+  "Privacy inquiry",
+  "Other",
+];
+
 function ContactPanel({ onBack }: { onBack: () => void }) {
   const { toast } = useToast();
-  const [subject, setSubject] = useState("");
+  const [subject, setSubject] = useState(CONTACT_SUBJECTS[0]);
   const [message, setMessage] = useState("");
 
   const submitMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/support/tickets", { subject, message }),
     onSuccess: () => {
       toast({ title: "Message sent", description: "We'll respond within 24–48 hours." });
-      setSubject("");
+      setSubject(CONTACT_SUBJECTS[0]);
       setMessage("");
     },
     onError: () => toast({ title: "Failed to send", variant: "destructive" }),
@@ -531,14 +679,17 @@ function ContactPanel({ onBack }: { onBack: () => void }) {
         <p className="text-sm mb-4" style={{ color: MUTED }}>Send us a message and we'll get back to you within 24–48 hours.</p>
         <div style={{ marginBottom: "12px" }}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Subject</label>
-          <input
+          <select
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            placeholder="What's on your mind?"
             className="w-full px-3 py-2 text-sm text-white"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
-            data-testid="input-contact-subject"
-          />
+            data-testid="select-contact-subject"
+          >
+            {CONTACT_SUBJECTS.map(s => (
+              <option key={s} value={s} style={{ background: CARD }}>{s}</option>
+            ))}
+          </select>
         </div>
         <div style={{ marginBottom: "16px" }}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Message</label>
@@ -554,7 +705,13 @@ function ContactPanel({ onBack }: { onBack: () => void }) {
         </div>
         <GradientButton
           label={submitMutation.isPending ? "Sending..." : "Send Message"}
-          onClick={() => { if (subject && message) submitMutation.mutate(); }}
+          onClick={() => {
+            if (!message.trim()) {
+              toast({ title: "Please enter a message", variant: "destructive" });
+              return;
+            }
+            submitMutation.mutate();
+          }}
           testId="button-send-contact"
         />
       </div>
@@ -701,10 +858,12 @@ function TermsPanel({ onBack }: { onBack: () => void }) {
         <p className="mb-4">You retain ownership of content you post but grant VibeFlow a license to display it within the platform.</p>
         <p className="text-white font-semibold mb-1">4. Subscriptions</p>
         <p className="mb-4">Paid subscriptions auto-renew. Cancel anytime through your billing settings. Refunds are handled per our refund policy.</p>
-        <p className="text-white font-semibold mb-1">5. Limitation of Liability</p>
+        <p className="text-white font-semibold mb-1">5. Termination</p>
+        <p className="mb-4">VibeFlow may suspend or terminate accounts that violate these Terms, engage in fraudulent activity, or otherwise abuse the platform at our sole discretion.</p>
+        <p className="text-white font-semibold mb-1">6. Limitation of Liability</p>
         <p className="mb-4">VibeFlow is provided as-is. We are not responsible for outcomes of matches or interactions between users.</p>
-        <p className="text-white font-semibold mb-1">6. Contact</p>
-        <p>For questions, use the Contact Us page within the app.</p>
+        <p className="text-white font-semibold mb-1">7. Contact</p>
+        <p>For questions, use the Contact Us page within the app or email support@vibeflow.app.</p>
       </div>
     </Panel>
   );
