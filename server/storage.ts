@@ -20,6 +20,14 @@ import {
 import { users } from "@shared/models/auth";
 import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, lte } from "drizzle-orm";
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export interface IStorage {
   getProfile(userId: string): Promise<Profile | undefined>;
   createProfile(profile: InsertProfile & { userId: string }): Promise<Profile>;
@@ -166,6 +174,9 @@ export interface IStorage {
   createPlan(data: { name: string; durationDays: number; priceUsd: string; weeklyEquivalent?: string; isBestValue?: boolean; features?: string[]; stripePriceId?: string }): Promise<Plan>;
   updatePlan(id: number, updates: Partial<Plan>): Promise<Plan>;
 
+  updateLocation(userId: string, lat: number, lng: number, locationName: string): Promise<Profile>;
+  checkNearby(userId: string, lat: number, lng: number, radiusKm?: number): Promise<any[]>;
+
   seedDemoData(): Promise<void>;
 }
 
@@ -203,6 +214,11 @@ export class DatabaseStorage implements IStorage {
         onboardingCompleted: profiles.onboardingCompleted,
         isPublic: profiles.isPublic,
         createdAt: profiles.createdAt,
+        locationLat: profiles.locationLat,
+        locationLng: profiles.locationLng,
+        locationName: profiles.locationName,
+        locationUpdatedAt: profiles.locationUpdatedAt,
+        showDistance: profiles.showDistance,
         user: {
           id: users.id,
           firstName: users.firstName,
@@ -220,6 +236,49 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return result;
+  }
+
+  async updateLocation(userId: string, lat: number, lng: number, locationName: string): Promise<Profile> {
+    const [updated] = await db.update(profiles)
+      .set({ locationLat: String(lat), locationLng: String(lng), locationName, locationUpdatedAt: new Date() })
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return updated;
+  }
+
+  async checkNearby(userId: string, lat: number, lng: number, radiusKm: number = 1): Promise<any[]> {
+    const all = await db
+      .select({
+        userId: profiles.userId,
+        displayName: profiles.displayName,
+        locationLat: profiles.locationLat,
+        locationLng: profiles.locationLng,
+        locationName: profiles.locationName,
+        locationUpdatedAt: profiles.locationUpdatedAt,
+        showDistance: profiles.showDistance,
+      })
+      .from(profiles)
+      .where(
+        and(
+          ne(profiles.userId, userId),
+          eq(profiles.isPublic, true),
+          eq(profiles.onboardingCompleted, true)
+        )
+      );
+
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const nearby: any[] = [];
+    for (const p of all) {
+      if (!p.locationLat || !p.locationLng) continue;
+      if (!p.locationUpdatedAt || p.locationUpdatedAt < thirtyMinutesAgo) continue;
+      const pLat = parseFloat(String(p.locationLat));
+      const pLng = parseFloat(String(p.locationLng));
+      const dist = haversineKm(lat, lng, pLat, pLng);
+      if (dist <= radiusKm) {
+        nearby.push({ ...p, distanceKm: dist });
+      }
+    }
+    return nearby;
   }
 
   async getProfileWithUser(userId: string): Promise<any> {

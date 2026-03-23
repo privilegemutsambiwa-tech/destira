@@ -104,7 +104,7 @@ export default function Settings() {
   const [notifStories, setNotifStories] = useState(() => localStorage.getItem("notif_stories") !== "false");
   const [notifInterviews, setNotifInterviews] = useState(() => localStorage.getItem("notif_interviews") !== "false");
   const [discoverable, setDiscoverable] = useState(() => localStorage.getItem("discoverable") !== "false");
-  const [showDistance, setShowDistance] = useState(() => localStorage.getItem("show_distance") !== "false");
+  const [showDistance, setShowDistance] = useState(() => profile?.showDistance ?? localStorage.getItem("show_distance") !== "false");
 
   const handleTogglePublic = async () => {
     if (!profile) return;
@@ -119,6 +119,17 @@ export default function Settings() {
   function saveNotif(key: string, value: boolean) {
     localStorage.setItem(key, String(value));
   }
+
+  const handleToggleShowDistance = async (v: boolean) => {
+    setShowDistance(v);
+    localStorage.setItem("show_distance", String(v));
+    if (!profile) return;
+    try {
+      await updateProfile.mutateAsync({ userId: profile.userId, data: { showDistance: v } });
+    } catch {
+      toast({ title: "Error saving preference", variant: "destructive" });
+    }
+  };
 
   const handleComing = (label: string) => {
     toast({ title: `${label}`, description: "Coming soon" });
@@ -163,7 +174,7 @@ export default function Settings() {
         <div style={SECTION_HEADER_STYLE}>Discovery</div>
         <div style={{ background: "#1A1A24", margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ToggleRow icon={Compass} label="Discoverable" value={discoverable} onChange={(v) => { setDiscoverable(v); saveNotif("discoverable", v); }} testId="toggle-discoverable" />
-          <ToggleRow icon={MapPin} label="Show Distance" value={showDistance} onChange={(v) => { setShowDistance(v); saveNotif("show_distance", v); }} testId="toggle-show-distance" />
+          <ToggleRow icon={MapPin} label="Show Distance" value={showDistance} onChange={handleToggleShowDistance} testId="toggle-show-distance" />
           <ChevronRow icon={MapPin} label="Location Preferences" sublabel="Coming soon" onClick={() => handleComing("Location")} testId="row-location" />
           <ChevronRow icon={Compass} label="Age Range" sublabel="Coming soon" onClick={() => handleComing("Age Range")} testId="row-age-range" />
         </div>

@@ -254,6 +254,34 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     res.json(profile);
   });
 
+  app.post("/api/location/update", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const schema = z.object({ lat: z.number(), lng: z.number(), locationName: z.string() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid body" });
+    try {
+      const updated = await storage.updateLocation(userId, parsed.data.lat, parsed.data.lng, parsed.data.locationName);
+      res.json(updated);
+    } catch {
+      res.status(500).json({ message: "Failed to update location" });
+    }
+  });
+
+  app.post("/api/location/check-nearby", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const schema = z.object({ lat: z.number(), lng: z.number(), radiusKm: z.number().optional() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid body" });
+    try {
+      const nearby = await storage.checkNearby(userId, parsed.data.lat, parsed.data.lng, parsed.data.radiusKm);
+      res.json(nearby);
+    } catch {
+      res.status(500).json({ message: "Failed to check nearby" });
+    }
+  });
+
   app.use("/uploads", (await import("express")).default.static(UPLOAD_DIR));
 
   app.post("/api/uploads/image", upload.single("image"), (req: any, res) => {

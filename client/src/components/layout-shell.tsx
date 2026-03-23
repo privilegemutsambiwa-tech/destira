@@ -8,6 +8,8 @@ import {
   LogOut,
   Search,
 } from "lucide-react";
+import { LocationPermissionModal } from "./location-permission-modal";
+import { ProximityNotificationBanner } from "./proximity-notification-banner";
 
 interface LayoutShellProps {
   children: React.ReactNode;
@@ -31,6 +33,8 @@ export function LayoutShell({ children }: LayoutShellProps) {
 
   return (
     <div className="min-h-screen" style={{ background: "#0F0F14" }}>
+      <LocationPermissionModal />
+      <ProximityNotificationBanner />
       {/* Mobile header — logo centered */}
       <header
         className="sticky top-0 z-50 md:hidden flex items-center justify-center h-14 px-4"

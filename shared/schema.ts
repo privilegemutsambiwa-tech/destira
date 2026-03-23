@@ -33,6 +33,11 @@ export const profiles = pgTable("profiles", {
   superMatchesRemaining: integer("super_matches_remaining").default(0),
   boostsRemaining: integer("boosts_remaining").default(0),
   twinQuestionsAnswered: integer("twin_questions_answered").default(0),
+  locationLat: decimal("location_lat", { precision: 9, scale: 6 }),
+  locationLng: decimal("location_lng", { precision: 9, scale: 6 }),
+  locationName: text("location_name"),
+  locationUpdatedAt: timestamp("location_updated_at"),
+  showDistance: boolean("show_distance").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

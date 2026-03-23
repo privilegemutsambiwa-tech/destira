@@ -8,6 +8,24 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { StoryViewer } from "@/components/story-viewer";
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDistance(km: number): string {
+  if (km < 1) return `${Math.round(km * 1000)}m away`;
+  return `${km.toFixed(1)}km away`;
+}
+
+function isNearbyNow(locationUpdatedAt: string | Date | null | undefined): boolean {
+  if (!locationUpdatedAt) return false;
+  return Date.now() - new Date(locationUpdatedAt).getTime() < 30 * 60 * 1000;
+}
+
 function StoriesCarousel() {
   const { data: stories } = useFeedStories();
   const [viewingStory, setViewingStory] = useState<any>(null);
@@ -36,7 +54,6 @@ function StoriesCarousel() {
             className="flex flex-col items-center gap-1.5 shrink-0"
             data-testid={`story-avatar-${u.userId}`}
           >
-            {/* Animated gradient ring for active story */}
             <div className="story-ring-active p-[2.5px] rounded-full" style={{ width: `${STORY_SIZE}px`, height: `${STORY_SIZE}px` }}>
               <div className="w-full h-full rounded-full overflow-hidden" style={{ background: "#1A1A24" }}>
                 <Avatar className="w-full h-full">
@@ -56,7 +73,6 @@ function StoriesCarousel() {
           </button>
         ))}
 
-        {/* Empty add-story slot — dashed ring + plus icon */}
         <button
           className="flex flex-col items-center gap-1.5 shrink-0"
           data-testid="story-add-slot"
@@ -87,15 +103,55 @@ function StoriesCarousel() {
   );
 }
 
+type FilterChip = "all" | "nearby" | "new";
+
+const CHIP_LABELS: { key: FilterChip; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "nearby", label: "Nearby 📍" },
+  { key: "new", label: "New" },
+];
+
 export default function Discover() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [swipeDir, setSwipeDir] = useState<"left" | "right" | null>(null);
   const [isExiting, setIsExiting] = useState(false);
-  const { data: profiles, isLoading } = useDiscoverProfiles();
+  const [filter, setFilter] = useState<FilterChip>("all");
+  const [userLat, setUserLat] = useState<number | null>(null);
+  const [userLng, setUserLng] = useState<number | null>(null);
+  const { data: rawProfiles, isLoading } = useDiscoverProfiles();
   const startInterview = useStartInterview();
   const createMatch = useCreateMatch();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  useMemo(() => {
+    if (navigator.geolocation && localStorage.getItem("location_permission_asked") === "asked") {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); },
+        () => {},
+        { timeout: 5000, maximumAge: 5 * 60 * 1000 }
+      );
+    }
+  }, []);
+
+  const profiles = useMemo(() => {
+    if (!rawProfiles) return [];
+    let list = [...rawProfiles];
+
+    if (filter === "nearby" && userLat !== null && userLng !== null) {
+      list = list
+        .filter((p) => p.locationLat && p.locationLng && isNearbyNow(p.locationUpdatedAt))
+        .sort((a, b) => {
+          const dA = haversineKm(userLat!, userLng!, parseFloat(a.locationLat), parseFloat(a.locationLng));
+          const dB = haversineKm(userLat!, userLng!, parseFloat(b.locationLat), parseFloat(b.locationLng));
+          return dA - dB;
+        });
+    } else if (filter === "new") {
+      list = list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
+    return list;
+  }, [rawProfiles, filter, userLat, userLng]);
 
   if (isLoading) {
     return (
@@ -121,10 +177,23 @@ export default function Discover() {
             >
               <Brain className="w-10 h-10" style={{ color: "#7C3AED" }} />
             </div>
-            <h3 className="text-xl font-bold mb-2 text-white">No one to discover yet</h3>
+            <h3 className="text-xl font-bold mb-2 text-white">
+              {filter === "nearby" ? "Nobody nearby right now" : "No one to discover yet"}
+            </h3>
             <p className="text-sm" style={{ color: "#9090A8" }}>
-              Complete your onboarding first, then check back as more people join VibeFlow.
+              {filter === "nearby"
+                ? "Try All to see everyone, or check back when people are near you."
+                : "Complete your onboarding first, then check back as more people join VibeFlow."}
             </p>
+            {filter !== "all" && (
+              <button
+                onClick={() => setFilter("all")}
+                className="mt-4 text-sm font-medium"
+                style={{ color: "#7C3AED", background: "none", border: "none" }}
+              >
+                Show all profiles
+              </button>
+            )}
           </div>
         </div>
       </LayoutShell>
@@ -132,6 +201,12 @@ export default function Discover() {
   }
 
   const currentProfile = profiles[currentIdx % profiles.length];
+
+  const pLat = currentProfile.locationLat ? parseFloat(currentProfile.locationLat) : null;
+  const pLng = currentProfile.locationLng ? parseFloat(currentProfile.locationLng) : null;
+  const distanceKm = (userLat !== null && userLng !== null && pLat !== null && pLng !== null)
+    ? haversineKm(userLat, userLng, pLat, pLng)
+    : null;
 
   const handleNext = (direction: "left" | "right") => {
     setSwipeDir(direction);
@@ -184,11 +259,36 @@ export default function Discover() {
     ? Object.entries(currentProfile.personalityProfile as Record<string, number>).slice(0, 4)
     : [];
 
+  const nearby = isNearbyNow(currentProfile.locationUpdatedAt);
+
   return (
     <LayoutShell>
       <div className="max-w-sm mx-auto">
-        <div className="text-center mb-5">
+        <div className="text-center mb-4">
           <h1 className="font-bold text-white" style={{ fontSize: "22px", letterSpacing: "-0.5px" }}>Discover</h1>
+        </div>
+
+        {/* Filter chips */}
+        <div className="flex gap-2 mb-5 overflow-x-auto scrollbar-hide" data-testid="filter-chips">
+          {CHIP_LABELS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => { setFilter(key); setCurrentIdx(0); }}
+              className="shrink-0 text-sm font-medium"
+              style={{
+                padding: "6px 16px",
+                borderRadius: "100px",
+                border: "1px solid",
+                borderColor: filter === key ? "transparent" : "#2E2E42",
+                background: filter === key ? "linear-gradient(135deg, #7C3AED, #EC4899)" : "transparent",
+                color: filter === key ? "#FFFFFF" : "#9090A8",
+                transition: "all 0.15s",
+              }}
+              data-testid={`chip-${key}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         <StoriesCarousel />
@@ -213,7 +313,6 @@ export default function Discover() {
             }}
             data-testid="card-profile"
           >
-            {/* Directional swipe stamp overlays */}
             {isExiting && swipeDir === "left" && (
               <div
                 className="absolute inset-0 z-30 flex items-center justify-center"
@@ -259,7 +358,6 @@ export default function Discover() {
               </div>
             )}
 
-            {/* Image — portrait 1:1.2 */}
             <div className="relative" style={{ paddingBottom: "120%" }}>
               {currentProfile.coverPhotoUrl ? (
                 <img
@@ -278,7 +376,18 @@ export default function Discover() {
                 </div>
               )}
 
-              {/* Story play indicator */}
+              {/* Nearby now green dot */}
+              {nearby && (
+                <div
+                  className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+                  style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", border: "1px solid rgba(34,197,94,0.4)" }}
+                  data-testid="badge-nearby-now"
+                >
+                  <div className="w-2 h-2 rounded-full" style={{ background: "#22C55E", boxShadow: "0 0 6px #22C55E" }} />
+                  <span style={{ color: "#22C55E", fontSize: "11px", fontWeight: 600 }}>Nearby now</span>
+                </div>
+              )}
+
               <div
                 className="absolute top-3 left-3 w-11 h-11 rounded-full flex items-center justify-center"
                 style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)", border: "1.5px solid rgba(255,255,255,0.2)" }}
@@ -287,7 +396,6 @@ export default function Discover() {
                 <Play className="w-4 h-4 text-white fill-white" />
               </div>
 
-              {/* Frosted glass info overlay — spec: backdrop-blur 20px */}
               <div
                 className="absolute inset-x-0 bottom-0 p-5"
                 style={{
@@ -304,12 +412,32 @@ export default function Discover() {
                   {currentProfile.displayName}
                   {currentProfile.age ? `, ${currentProfile.age}` : ""}
                 </h2>
-                {currentProfile.location && (
+
+                {/* Location line — distance if available, or city */}
+                {currentProfile.showDistance === false ? (
+                  <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.6)", fontSize: "13px" }}>
+                    <MapPin className="w-3.5 h-3.5 shrink-0" />
+                    <span data-testid="text-profile-location">Prefers not to share location</span>
+                  </div>
+                ) : currentProfile.locationName && distanceKm !== null ? (
+                  <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.7)", fontSize: "13px" }}>
+                    <MapPin className="w-3.5 h-3.5 shrink-0" />
+                    <span data-testid="text-profile-location">
+                      📍 {currentProfile.locationName} · {formatDistance(distanceKm)}
+                    </span>
+                  </div>
+                ) : currentProfile.locationName ? (
+                  <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.7)", fontSize: "13px" }}>
+                    <MapPin className="w-3.5 h-3.5 shrink-0" />
+                    <span data-testid="text-profile-location">📍 {currentProfile.locationName}</span>
+                  </div>
+                ) : currentProfile.location ? (
                   <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.7)", fontSize: "14px" }}>
                     <MapPin className="w-3.5 h-3.5 shrink-0" />
                     <span data-testid="text-profile-location">{currentProfile.location}</span>
                   </div>
-                )}
+                ) : null}
+
                 {currentProfile.bio && (
                   <p
                     className="text-sm leading-snug"
@@ -322,7 +450,6 @@ export default function Discover() {
               </div>
             </div>
 
-            {/* Personality trait pills */}
             {personalityTraits.length > 0 && (
               <div className="px-4 py-3 flex flex-wrap gap-2" style={{ background: "#1A1A24" }}>
                 {personalityTraits.map(([trait, score]) => (
@@ -345,9 +472,7 @@ export default function Discover() {
               </div>
             )}
 
-            {/* 3-button action row */}
             <div className="px-5 pb-5 pt-2 flex items-center justify-center gap-4" style={{ background: "#1A1A24" }}>
-              {/* Pass — circle with red border */}
               <button
                 onClick={handlePass}
                 className="flex items-center justify-center btn-press transition-all"
@@ -365,7 +490,6 @@ export default function Discover() {
                 <X className="w-6 h-6" />
               </button>
 
-              {/* Interview AI Twin — gradient rect CTA */}
               <button
                 onClick={handleInterview}
                 disabled={startInterview.isPending}
@@ -391,7 +515,6 @@ export default function Discover() {
                 )}
               </button>
 
-              {/* Like — circle with pink border */}
               <button
                 onClick={handleLike}
                 disabled={createMatch.isPending}
@@ -417,7 +540,6 @@ export default function Discover() {
           </motion.div>
         </AnimatePresence>
 
-        {/* Counter */}
         <p className="text-center text-xs mb-8" style={{ color: "#9090A8" }}>
           {(currentIdx % profiles.length) + 1} of {profiles.length} profiles
         </p>
