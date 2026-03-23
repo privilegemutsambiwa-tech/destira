@@ -118,8 +118,16 @@ export default function Discover() {
   const { data: rawProfiles, isLoading } = useDiscoverProfiles(filter, userLat, userLng);
   const startInterview = useStartInterview();
   const createMatch = useCreateMatch();
-  const [, setLocation] = useLocation();
+  const [woLocation, setLocation] = useLocation();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const f = params.get("filter");
+    const next = (f === "nearby" || f === "new" || f === "online") ? f : "all";
+    setFilter(next as FilterChip);
+    setCurrentIdx(0);
+  }, [woLocation]);
 
   useEffect(() => {
     if (navigator.geolocation && localStorage.getItem("location_permission_asked") === "asked") {
