@@ -398,9 +398,12 @@ export class DatabaseStorage implements IStorage {
 
   async getMatchBetweenUsers(user1Id: string, user2Id: string): Promise<Match | undefined> {
     const [match] = await db.select().from(matches).where(
-      or(
-        and(eq(matches.user1Id, user1Id), eq(matches.user2Id, user2Id)),
-        and(eq(matches.user1Id, user2Id), eq(matches.user2Id, user1Id))
+      and(
+        eq(matches.status, "matched"),
+        or(
+          and(eq(matches.user1Id, user1Id), eq(matches.user2Id, user2Id)),
+          and(eq(matches.user1Id, user2Id), eq(matches.user2Id, user1Id))
+        )
       )
     );
     return match;

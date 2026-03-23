@@ -131,7 +131,7 @@ function Router() {
         <ProtectedRoute component={Settings} />
       </Route>
       <Route path="/join/:token">
-        {(params) => <ProtectedRoute component={JoinGroup} params={params} />}
+        {(params) => <JoinGroup params={params} />}
       </Route>
 
       <Route component={NotFound} />

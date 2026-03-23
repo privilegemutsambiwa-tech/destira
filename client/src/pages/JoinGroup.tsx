@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { Loader2, Users, CheckCircle, XCircle } from "lucide-react";
+import { Loader2, Users, CheckCircle, XCircle, LogIn } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -20,7 +20,8 @@ export default function JoinGroup({ params }: { params?: { token?: string } }) {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      setLocation(`/?next=/join/${rawParam}`);
+      setStatus("error");
+      setErrorMsg("login_required");
       return;
     }
     if (!parsedToken) {
@@ -122,7 +123,22 @@ export default function JoinGroup({ params }: { params?: { token?: string } }) {
             </button>
           </>
         )}
-        {status === "error" && (
+        {status === "error" && errorMsg === "login_required" && (
+          <>
+            <LogIn className="w-12 h-12 mx-auto mb-4" style={{ color: "#7C3AED" }} />
+            <p className="text-white font-bold text-xl mb-1">Join with VibeFlow</p>
+            <p className="text-sm mb-4" style={{ color: "#9090A8" }}>Log in or sign up to join this group.</p>
+            <a
+              href={`/api/login?returnTo=${encodeURIComponent(`/join/${rawParam}`)}`}
+              className="block w-full py-3 rounded-xl font-semibold text-white text-center btn-press"
+              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
+              data-testid="button-login-to-join"
+            >
+              Log In / Sign Up
+            </a>
+          </>
+        )}
+        {status === "error" && errorMsg !== "login_required" && (
           <>
             <XCircle className="w-12 h-12 mx-auto mb-4" style={{ color: "#EF4444" }} />
             <p className="text-white font-bold text-xl mb-1">Link Invalid</p>
