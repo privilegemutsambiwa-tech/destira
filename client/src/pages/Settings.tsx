@@ -605,7 +605,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
 
       {tier === "free" && (
         <div style={{ padding: "0 16px 16px" }}>
-          <GradientButton label="Upgrade to VibeFlow Plus" onClick={() => setLocation("/upgrade")} testId="button-upgrade-billing" />
+          <GradientButton label="Upgrade to VibeFlow Plus" onClick={() => setLocation("/billing")} testId="button-upgrade-billing" />
         </div>
       )}
 
@@ -1137,7 +1137,7 @@ export default function Settings() {
 
         <div style={SECTION_HEADER_STYLE}>Subscription</div>
         <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
-          <ChevronRow icon={Crown} label="Upgrade Plan" sublabel="Get VIP access" onClick={() => setLocation("/upgrade")} testId="row-upgrade" />
+          <ChevronRow icon={Crown} label="Upgrade Plan" sublabel="Get VIP access" onClick={() => setLocation("/billing")} testId="row-upgrade" />
           <ChevronRow icon={CreditCard} label="Manage Billing" sublabel="View plan, cancel subscription" onClick={() => setActivePanel("billing")} testId="row-billing" />
         </div>
 

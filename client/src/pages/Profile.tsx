@@ -769,7 +769,7 @@ export default function Profile() {
                       fontSize: "15px",
                       boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
                     }}
-                    onClick={() => setLocation("/upgrade")}
+                    onClick={() => setLocation("/billing")}
                     data-testid="button-upgrade"
                   >
                     Upgrade Now

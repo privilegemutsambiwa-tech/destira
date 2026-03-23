@@ -1540,24 +1540,57 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteAllUserData(userId: string): Promise<void> {
+    // Twin data
     await db.delete(twinMemory).where(eq(twinMemory.userId, userId));
     await db.delete(twinMemoryFacts).where(eq(twinMemoryFacts.userId, userId));
     await db.delete(twinMemorySummary).where(eq(twinMemorySummary.userId, userId));
     await db.delete(twinProfilesStructured).where(eq(twinProfilesStructured.userId, userId));
+    await db.delete(twinNotifications).where(eq(twinNotifications.userId, userId));
+    // Messaging
     await db.delete(starredMessages).where(eq(starredMessages.userId, userId));
-    await db.delete(blockedUsers).where(eq(blockedUsers.blockerId, userId));
-    await db.delete(supportTickets).where(eq(supportTickets.userId, userId));
-    const userMatches = await this.getMatches(userId);
-    for (const m of userMatches) {
-      await db.delete(directMessages).where(eq(directMessages.matchId, m.id));
+    await db.delete(messageReactions).where(eq(messageReactions.userId, userId));
+    // Polls
+    await db.delete(pollVotes).where(eq(pollVotes.userId, userId));
+    // Q&A
+    await db.delete(userAnswers).where(eq(userAnswers.userId, userId));
+    await db.delete(questionSchedule).where(eq(questionSchedule.userId, userId));
+    // Payments & entitlements
+    await db.delete(entitlements).where(eq(entitlements.userId, userId));
+    const userSubs = await db.select({ id: subscriptions.id }).from(subscriptions).where(eq(subscriptions.userId, userId));
+    for (const sub of userSubs) {
+      await db.delete(payments).where(eq(payments.subscriptionId, sub.id));
     }
-    await db.delete(matches).where(or(eq(matches.user1Id, userId), eq(matches.user2Id, userId)));
+    await db.delete(subscriptions).where(eq(subscriptions.userId, userId));
+    // Audit logs
+    await db.delete(auditLogs).where(eq(auditLogs.userId, userId));
+    // Support
+    await db.delete(supportTickets).where(eq(supportTickets.userId, userId));
+    // Block lists
+    await db.delete(blockedUsers).where(eq(blockedUsers.blockerId, userId));
+    await db.delete(blockedUsers).where(eq(blockedUsers.blockedId, userId));
+    // Daily counts
+    await db.delete(dailyLikeCounts).where(eq(dailyLikeCounts.userId, userId));
+    // Chat requests
+    await db.delete(chatRequests).where(or(eq(chatRequests.requesterId, userId), eq(chatRequests.targetId, userId)));
+    // Groups
+    await db.delete(groupJoinRequests).where(eq(groupJoinRequests.userId, userId));
+    await db.delete(groupModerationLogs).where(eq(groupModerationLogs.userId, userId));
     const userGroupMemberships = await db.select().from(groupMembers).where(eq(groupMembers.userId, userId));
     for (const gm of userGroupMemberships) {
       await db.delete(groupMessages).where(and(eq(groupMessages.groupId, gm.groupId), eq(groupMessages.userId, userId)));
     }
     await db.delete(groupMembers).where(eq(groupMembers.userId, userId));
+    // Direct messages
+    const userMatches = await this.getMatches(userId);
+    for (const m of userMatches) {
+      await db.delete(directMessages).where(eq(directMessages.matchId, m.id));
+    }
+    await db.delete(matches).where(or(eq(matches.user1Id, userId), eq(matches.user2Id, userId)));
+    // Interviews
+    await db.delete(interviews).where(or(eq(interviews.requesterId, userId), eq(interviews.targetId, userId)));
+    // Photos
     await db.delete(userPhotos).where(eq(userPhotos.userId, userId));
+    // Stories
     const userStories = await db.select({ id: stories.id }).from(stories).where(eq(stories.userId, userId));
     for (const s of userStories) {
       await db.delete(storyMedia).where(eq(storyMedia.storyId, s.id));
@@ -1569,9 +1602,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(storyComments).where(eq(storyComments.userId, userId));
     await db.delete(storyViews).where(eq(storyViews.userId, userId));
     await db.delete(stories).where(eq(stories.userId, userId));
-    await db.delete(chatRequests).where(or(eq(chatRequests.requesterId, userId), eq(chatRequests.targetId, userId)));
-    await db.delete(dailyLikeCounts).where(eq(dailyLikeCounts.userId, userId));
-    await db.delete(blockedUsers).where(eq(blockedUsers.blockedId, userId));
+    // Profile (last, FK anchor)
     await db.delete(profiles).where(eq(profiles.userId, userId));
   }
 }

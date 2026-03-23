@@ -165,7 +165,7 @@ function UpgradeBanner() {
             Upgrade to Plus or VIP to see clear photos and names of people who liked you
           </p>
           <button
-            onClick={() => setLocation("/upgrade")}
+            onClick={() => setLocation("/billing")}
             className="btn-press font-semibold px-4 py-2"
             style={{
               background: "rgba(255,255,255,0.95)",
@@ -218,7 +218,7 @@ function LikeCard({ like, isBlurred }: { like: any; isBlurred: boolean }) {
     return (
       <div
         className="relative cursor-pointer overflow-hidden"
-        onClick={() => setLocation("/upgrade")}
+        onClick={() => setLocation("/billing")}
         style={{ borderRadius: "16px", aspectRatio: "1/1", boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}
         data-testid={`card-like-blurred-${like.id}`}
       >
