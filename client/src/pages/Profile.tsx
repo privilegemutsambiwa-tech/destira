@@ -156,7 +156,7 @@ export default function Profile() {
 
   const handleSaveBioAsIs = async () => {
     try {
-      await updateProfile.mutateAsync({ userId: user!.id, data: { bio: bioEditorValue } });
+      await updateProfile.mutateAsync({ userId: user!.id, data: { aboutMe: bioEditorValue, bio: bioEditorValue } });
       setBioEditorOpen(false);
       toast({ title: "Bio saved!" });
       queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });

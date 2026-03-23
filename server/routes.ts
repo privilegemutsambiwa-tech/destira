@@ -151,11 +151,21 @@ export async function registerRoutes(
     try {
       const profile = await storage.getProfile(userId);
       if (!profile) return res.status(404).json({ message: "Profile not found" });
+      const memoryFacts = await storage.getTwinMemoryFacts(userId, 15);
+      const memorySummary = await storage.getTwinMemorySummary(userId);
+      const contextData = {
+        displayName: profile.displayName,
+        bio: profile.aboutMe || profile.bio,
+        personality: profile.personalityProfile,
+        twinPersona: profile.twinPersona,
+        memoryFacts: memoryFacts.map(f => f.factText),
+        memorySummary: memorySummary?.summaryText,
+      };
       const response = await ai.models.generateContent({
         model: "gemini-2.0-flash-001",
-        contents: [{ role: "user", parts: [{ text: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName }) }] }],
+        contents: [{ role: "user", parts: [{ text: JSON.stringify(contextData) }] }],
         config: {
-          systemInstruction: `Generate two short summaries for a dating profile. Return JSON with: {"aboutSummary": "A 1-2 sentence witty 'About Me' summary", "personalitySummary": "A 1-2 sentence personality passage based on their traits"}. Make them warm, genuine, and engaging.`,
+          systemInstruction: `Generate two warm, genuine summaries for a dating profile using all available context (bio, personality answers, Twin memory facts, and conversation themes). Return JSON with: {"aboutSummary": "A 3-4 sentence warm, witty 'About Me' summary that captures their authentic personality and what makes them interesting as a partner", "personalitySummary": "A 3-4 sentence personality passage based on their traits, values, and how they show up in relationships"}. Draw from the memory facts and conversation themes to make it specific and real — avoid generic platitudes.`,
           responseMimeType: "application/json",
           maxOutputTokens: 8192,
         },
@@ -811,13 +821,6 @@ Only include structured_updates fields if the conversation clearly reveals them.
 
       const systemPrompt = await buildTwinSystemPrompt(userId, profile);
 
-      const nextQuestion = await storage.getNextQuestion(userId);
-      let questionInjection = "";
-      if (nextQuestion && Math.random() < 0.3) {
-        questionInjection = `\n\nIMPORTANT: After responding to the user, naturally work in this question to help you understand them better: "${nextQuestion.text}" (Category: ${nextQuestion.category}). Frame it conversationally, e.g., "Before we continue—quick question to help me understand you better..." If the question doesn't fit the conversation flow, skip it.`;
-        await storage.recordQuestionAsked(userId, nextQuestion.id);
-      }
-
       await storage.createAuditLog(userId, "twin_chat", { messageLength: message.length });
 
       if (useStream) {
@@ -839,7 +842,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
           model: "gemini-2.0-flash-001",
           contents: geminiMsgs,
           config: {
-            systemInstruction: systemPrompt + questionInjection,
+            systemInstruction: systemPrompt,
             maxOutputTokens: 8192,
           },
         });
@@ -862,11 +865,6 @@ Only include structured_updates fields if the conversation clearly reveals them.
         }
 
         res.write(`data: ${JSON.stringify({ type: "done", content: fullResponse })}\n\n`);
-
-        if (nextQuestion) {
-          res.write(`data: ${JSON.stringify({ type: "quick_replies", replies: ["Tell me more", "Give advice", "Ask me a question"] })}\n\n`);
-        }
-
         res.end();
       } else {
         const geminiMsgs = [
@@ -881,7 +879,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
           model: "gemini-2.0-flash-001",
           contents: geminiMsgs,
           config: {
-            systemInstruction: systemPrompt + questionInjection,
+            systemInstruction: systemPrompt,
             maxOutputTokens: 8192,
           },
         });
@@ -895,7 +893,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
           extractMemoryAfterChat(userId, allMsgs).catch(() => {});
         }
 
-        res.json({ response: aiResponse, quickReplies: nextQuestion ? ["Tell me more", "Give advice", "Ask me a question"] : undefined });
+        res.json({ response: aiResponse });
       }
     } catch (e) {
       console.error("Twin self-chat error:", e);
