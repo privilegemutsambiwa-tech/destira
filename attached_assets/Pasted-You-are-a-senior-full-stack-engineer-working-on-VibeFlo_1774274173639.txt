@@ -1,0 +1,611 @@
+You are a senior full-stack engineer working on VibeFlow.
+Apply ALL changes below carefully. Do not break anything 
+currently working. This is a comprehensive update covering
+Discover, Chat, Lounge, Profile, Settings, and AI Twin.
+
+=======================================================
+SECTION 1 — DISCOVER PAGE FIXES
+=======================================================
+
+FIX A: Story "Add" button on Discover must actually work
+
+The dashed "+" circle at the top of Discover is not 
+functional. Fix it:
+
+- Tapping it opens the same story creator modal that 
+  exists on the Profile page
+- After posting a story, the dashed circle transforms 
+  into the user's avatar with a gradient ring
+- The story is saved to Supabase stories table
+- Label changes from "Add" to "Your Story"
+- Tapping own story ring opens the Story Viewer
+
+FIX B: Show distance on every profile card
+
+Under the user's name and location on each Discover card,
+add a distance indicator:
+
+Format: "📍 San Francisco, CA · 3.2km away"
+
+If location is not available for that user: 
+  Show only "📍 San Francisco, CA" (no distance)
+
+If current user has location off:
+  Show "📍 San Francisco, CA" (no distance shown)
+
+Calculate distance using Haversine formula between 
+current user's coordinates and the profile's coordinates.
+
+Round to 1 decimal place.
+If < 1km: show "Less than 1km away"
+If >= 100km: show "Xkm away" (no decimal)
+
+FIX C: Story rings on other users' cards must be tappable
+
+If a user being shown on Discover has an active story:
+- Show animated gradient ring around their story/play 
+  indicator at top-left of their card
+- Tapping that ring/button opens a full-screen Story 
+  Viewer showing that user's story
+- Story Viewer shows:
+  → Progress bar at top (5 seconds per story)
+  → User avatar + name + "X hours ago" top-left
+  → Close (X) button top-right
+  → Bottom bar: "🧠 Interview their Twin" gradient button
+- Stories expire after 24 hours
+
+=======================================================
+SECTION 2 — CHAT TAB: Navigation Fix
+=======================================================
+
+CURRENT BUG: 
+Opening "Chat with My Twin" from the Chat tab, then 
+pressing back, takes the user to the Profile tab.
+
+FIX:
+When navigating to Twin Chat, pass the origin route:
+  /twin-chat?from=chat  (when opened from Chat tab)
+  /twin-chat?from=profile (when opened from Profile)
+  /twin-chat?from=discover (when opened from Discover)
+
+On back navigation inside Twin Chat:
+  Read the ?from= parameter
+  Navigate back to that exact tab/route
+  DEFAULT must be Chat tab if opened from Chat tab
+  NEVER default to Profile tab unless from=profile
+
+=======================================================
+SECTION 3 — LOUNGE / GROUPS: Full Feature Build
+=======================================================
+
+--- 3A: Group Action Buttons (Add, Search, Mute, Share) ---
+
+Make all 4 buttons in Group Info actually functional:
+
+ADD BUTTON:
+- Opens a search modal to find VibeFlow users by nickname
+- Search results show: avatar, nickname, "Add to Group" button
+- If group settings allow "Anyone can add": any member sees this
+- If group settings "Admin only": only admin sees the Add button
+  (other members see it greyed out or hidden)
+- When added, user gets a notification: 
+  "You've been added to [Group Name]"
+
+SEARCH BUTTON:
+- Opens a search bar within the group
+- Searches through message history in that group
+- Highlights matching messages in results list
+- Tapping a result scrolls to that message in chat
+
+MUTE BUTTON:
+- Toggles mute state for that group for current user
+- When muted: no push notifications from that group
+- Button icon changes: bell-off when muted, bell when unmuted
+- Show "Muted" label below icon when active
+- Store mute preference in Supabase: 
+  group_members table, column: is_muted (boolean)
+
+SHARE BUTTON:
+- Generates a unique invite link:
+  Format: https://vibeflow.app/join/[group-id]-[random-token]
+- Opens native share sheet (Web Share API):
+  navigator.share({ title: 'Join [Group Name] on VibeFlow', url: inviteLink })
+- If Web Share API not available: show a modal with the 
+  link in a copyable text field + "Copy Link" button
+- Store invite tokens in Supabase table: group_invites
+  Columns: id, group_id, token, created_by, created_at, 
+  expires_at (7 days), max_uses (null = unlimited)
+- When someone visits the invite link:
+  → If auto-join enabled by admin: join immediately
+  → If requires approval: show "Request to Join" button
+
+--- 3B: Group Admin Settings ---
+
+Add a "Settings" option in Group Info (visible to admin only)
+Opens a Group Settings page with:
+
+GENERAL:
+- Group Name (editable text field)
+- Group Description (editable textarea)
+- Group Rules (editable textarea)
+
+MEMBERSHIP:
+- Join Mode toggle:
+  "Open (anyone can join)" / "Approval required"
+- Who can add members:
+  "Admin only" / "Any member"
+- Max members slider (10 to 500, default unlimited)
+
+PERMISSIONS:
+- Who can post messages:
+  "Everyone" / "Admin only"
+- Who can share the invite link:
+  "Everyone" / "Admin only"
+
+Save button: gradient, full width, "Save Settings"
+Only admin can see and access Group Settings.
+
+--- 3C: Group Profile Photos (Admin Only) ---
+
+In Group Info, for admin users:
+- The group avatar circle is tappable (shows camera icon on hover)
+- The gradient banner at top is tappable (shows camera icon)
+- Tapping either opens a photo picker
+- Admin selects:
+  → Background photo (banner): any image, stored in 
+    Supabase Storage bucket: group-images
+  → Group icon photo (circle): any image, circular crop
+- After upload, update groups table:
+  banner_url, icon_url columns
+- Non-admin members see the photos but cannot change them
+
+--- 3D: Nickname System for Groups ---
+
+ONBOARDING ADDITION:
+Add a new step to the onboarding questionnaire 
+(insert after Step 2 — Basic Info):
+
+STEP 2B — Choose Your Group Nickname
+  Title: "Choose a Group Nickname"
+  Subtitle: "This is how you'll appear in all group 
+  chats. Your real name stays private."
+  Single text input: "Nickname"
+  Rules shown below:
+  → 3-20 characters
+  → Letters, numbers, underscores only
+  → Must be unique across all users
+  Validate uniqueness against profiles table in real-time
+  Show green checkmark if available, red X if taken
+  
+  Save as: group_nickname column in profiles table
+
+DISPLAY RULE (CRITICAL):
+- In ALL group chats and lounge areas:
+  → Show group_nickname instead of display_name
+  → Show the user's avatar (if they have one)
+  → NEVER show real name in groups
+- In direct matches/chat (1-on-1): show display_name
+- In Twin chat: show display_name
+- Only in group contexts: show group_nickname
+
+--- 3E: Direct Message Request System ---
+
+RULE: Users cannot directly message someone they met 
+only in a group chat, unless they have Premium Max.
+
+IMPLEMENTATION:
+
+Long-press or right-click on any message in a group:
+  Shows a context menu:
+  → "Reply" 
+  → "React with emoji"
+  → "Request Private Chat" (if not already connected)
+  → "Report Message"
+
+"Request Private Chat" flow:
+  → Sends a notification to the target user:
+    "[Nickname] wants to chat with you privately"
+    Two buttons: "Accept" / "Decline"
+  → If accepted: a new 1-on-1 chat thread opens
+  → If declined: sender gets notified "Request declined"
+  → Request expires after 48 hours if not responded to
+
+PREMIUM MAX EXCEPTION:
+  Users with the highest premium tier (VIP/Max plan):
+  → Can tap any group member's avatar/nickname
+  → Opens their profile with a "Message Directly" button
+  → This bypasses the request system entirely
+  → Show a gold crown badge next to their nickname in groups
+    to indicate premium status
+
+Store chat requests in Supabase table: chat_requests
+  Columns: id, requester_id, target_id, group_id, 
+  status (pending/accepted/declined), created_at, 
+  expires_at
+
+=======================================================
+SECTION 4 — PROFILE: About Me Redesign
+=======================================================
+
+REMOVE: The "Generate" button from About Me section
+KEEP: Only the "Quick Summary" button (rename to 
+      "✦ Refresh Summary")
+
+QUICK SUMMARY behavior:
+- When clicked, calls OpenAI to generate a summary using:
+  → All 10 onboarding answers stored in twin_memory
+  → Any additional traits learned from Twin conversations
+  → The user's bio if they wrote one
+- Generates a warm, natural 3-4 sentence summary
+- Shows the result in the About Me section
+- Each click generates a fresh version
+- User can keep clicking until they like one
+
+REMOVE from About Me: 
+- The long-sentence pill tags (e.g. "Going To Church Or 
+  Out With The Boys Or Watching Soccer")
+- These were answers to onboarding questions and should 
+  NOT display as pills — they feed the AI summary instead
+
+KEEP in About Me:
+- Short interest tags only (< 20 characters each)
+  e.g. "Fitness", "Soccer", "Coding", "Church"
+- These come from the interests multi-select in onboarding
+
+ADD: Edit Bio section
+Below the summary, add an "Edit" pencil icon button.
+Tapping it opens an inline editor:
+  - Multi-line text area (max 300 chars)
+  - Character counter
+  - Two buttons below:
+    → "Save as is" (grey outlined button)
+    → "✦ Polish with AI" (gradient button)
+  
+  "Polish with AI" sends the user's typed text to OpenAI:
+  Prompt: "The user wrote this about themselves for a 
+  dating app: '[their text]'. Rewrite it to be more 
+  engaging, warm, and authentic while keeping their 
+  voice and all the key details. Max 3 sentences."
+  Shows the polished result for approval before saving.
+
+=======================================================
+SECTION 5 — TWIN INTERVIEW: Conversational Question Mode
+=======================================================
+
+When user opens Twin Chat (Interview AI Twin button):
+
+If twin_questions_answered < 100:
+
+The Twin should weave the remaining questions naturally 
+into conversation — NOT present them as a list.
+
+System prompt addition for Twin Chat:
+
+`IMPORTANT CONTEXT:
+${user.display_name} has answered ${questionsAnswered} 
+out of 100 questions. ${100 - questionsAnswered} remain.
+
+YOUR MISSION (do this naturally, not robotically):
+1. Start with warm conversation about their day or dating life
+2. Every 2-3 exchanges, naturally ask ONE question from 
+   the unanswered questions list
+3. When they answer, extract the trait and save it to 
+   twin_memory, then subtract from remaining count
+4. Occasionally mention their progress in a fun way:
+   "By the way, we've covered 23 questions together — 
+   only 77 left to go! You're building quite the Twin."
+5. Never ask multiple questions at once
+6. Never say "Question 47 of 100:" — weave it naturally
+7. The conversation should feel like chatting with a 
+   curious, warm friend who genuinely wants to know you
+
+QUESTIONS TO WEAVE IN (pick one at a time, randomly):
+- What does your ideal Saturday look like?
+- How do you handle conflict in relationships?
+- What's your love language?
+- Describe your relationship with your family
+- What are your deal-breakers in a partner?
+- How important is physical fitness to you?
+- What are your career/life ambitions?
+- How do you feel about children?
+- What's your spiritual/religious background?
+- What kind of humor do you have?
+- How do you show affection?
+- What was your last relationship like?
+- What does commitment mean to you?
+- How do you handle stress?
+- What's your ideal date?
+[continue with remaining questions]`
+
+When a question is answered in chat:
+→ Detect the answer using AI (POST /api/twin/extract-trait)
+→ Save to twin_memory
+→ Increment twin_questions_answered in profiles
+→ Progress bar on Profile page updates in real time
+
+=======================================================
+SECTION 6 — SETTINGS: Make Everything Actually Work
+=======================================================
+
+Every "Coming soon" item must now be functional.
+Group related items together logically.
+
+--- ACCOUNT SECTION ---
+
+EDIT PROFILE → Already works (keep)
+
+CHANGE EMAIL:
+- Opens modal with:
+  → "Current email: user@example.com"
+  → New email input field
+  → Password confirmation field (for security)
+  → "Send Verification" button
+- Sends verification email via Supabase Auth
+- Shows: "Check your email to confirm the change"
+
+CHANGE PASSWORD:
+- Opens modal with:
+  → Current password field
+  → New password field  
+  → Confirm new password field
+  → "Update Password" gradient button
+- Uses Supabase Auth updateUser({ password: newPassword })
+- Shows success toast: "Password updated successfully"
+
+PHONE NUMBER:
+- Opens modal to add/change phone number
+- Input with country code selector
+- "Send OTP" button → user enters 6-digit code
+- Uses Supabase Auth phone verification
+
+--- TWIN SETTINGS ---
+
+INTERVIEW AI TWIN → navigates to Twin Chat (already works)
+
+CUSTOMIZE TWIN TONE:
+- Opens a settings page (was previously a card on Profile)
+- 4 dropdowns/selectors:
+  Style: Supportive / Playful / Direct / Empathetic
+  Verbosity: Brief / Balanced / Detailed
+  Formality: Casual / Neutral / Formal
+  Expression: Minimal / Moderate / Expressive
+- Save button saves to profiles.twin_tone JSON column
+- These values inject into the Twin's system prompt
+
+CLEAR TWIN MEMORY:
+- Opens a confirmation modal:
+  "Are you sure? This will reset everything your Twin 
+  has learned about you. You'll start fresh."
+  "Yes, Clear Memory" (red button) / "Cancel"
+- On confirm: DELETE all rows from twin_memory for user
+  SET profiles.twin_questions_answered = 10 (keep onboarding)
+
+--- DISCOVERY SECTION ---
+
+DISCOVERABLE toggle → already works (keep)
+SHOW DISTANCE toggle → already works (keep)
+
+LOCATION PREFERENCES (was "Coming soon"):
+- Opens a page with:
+  → "Current location: [location_name]" 
+  → "Refresh Location" button (re-runs geolocation)
+  → "Maximum distance" slider: 5km to 500km
+  → Display current value: "Show people within 50km"
+  Save to profiles.max_distance_km
+
+AGE RANGE (was "Coming soon"):
+- Opens a page with two sliders: Min Age / Max Age
+- Range: 18 to 65
+- Shows: "Looking for ages 22 – 35"
+- Save to profiles: age_min_preference, age_max_preference
+
+--- PRIVACY SECTION ---
+
+PUBLIC PROFILE toggle → already works (keep)
+
+BLOCK LIST (was "Coming soon"):
+- Opens a page showing all blocked users
+- Each row: avatar, nickname, "Unblock" button
+- "Block" adds to Supabase blocked_users table
+- Blocked users cannot see your profile or message you
+- Empty state: "No blocked users" with shield icon
+
+DATA & PRIVACY (was "Coming soon"):
+- Opens a page with:
+  → "Download My Data" button
+    → Generates a JSON export of their profile, 
+       conversations summary, and twin memory traits
+    → Triggers download in browser
+  → "What data we collect" expandable section
+    Shows a clear list of what VibeFlow stores
+  → "Delete All Data" red button
+    → Confirmation modal → deletes account + all data
+
+--- PROFILE TOOLS ---
+
+GENERATE AI SUMMARY → calls same endpoint as Quick Summary button
+VERIFY PROFILE (was "Coming soon"):
+- Opens a verification flow:
+  Step 1: "Take a selfie holding up two fingers"
+  → Camera capture button (uses device camera)
+  → Uploads to Supabase Storage
+  Step 2: "Selfie submitted for review"
+  → Sets profiles.verification_status = 'pending'
+  → Show "Verification pending" badge on profile
+  → Admin can approve (for now, auto-approve after 1 minute
+    for testing purposes, set status = 'verified')
+  → Verified users get a blue checkmark on their profile card
+
+MANAGE PHOTOS → opens the Photos section already built
+
+--- SUBSCRIPTION ---
+
+UPGRADE PLAN → navigates to Pricing page (already built)
+
+MANAGE BILLING (was "Coming soon"):
+- Opens a page showing:
+  → Current plan: Free / Plus / VIP
+  → Billing cycle (if premium)
+  → "Cancel Subscription" option (if premium)
+  → Payment history table (empty state for now)
+  → Note: "Payment management coming soon — 
+    contact support@vibeflow.app for billing help"
+
+--- SUPPORT ---
+
+HELP CENTER (was "Coming soon"):
+- Opens an FAQ page with expandable sections:
+
+  Getting Started:
+  Q: How does the AI Twin work?
+  A: Your Twin learns your personality from conversations 
+  and represents you to potential matches before you connect.
+  
+  Q: Is my personal information safe?
+  A: Yes. Your private data is never shared. Only a 
+  public-safe summary is visible to other users.
+
+  Matching:
+  Q: How are matches selected?
+  A: We use personality traits, interests, relationship 
+  goals, and communication style to find compatibility.
+  
+  Q: Why am I not seeing many profiles?
+  A: Make sure your discovery preferences are set and 
+  your profile is complete.
+
+  Privacy & Safety:
+  Q: Can other users see my real name?
+  A: In groups, only your nickname shows. In matches, 
+  your display name is shown after you connect.
+  
+  Q: How do I block someone?
+  A: Go to Settings → Privacy → Block List.
+
+CONTACT US (was "Coming soon"):
+- Opens a contact form:
+  → Subject dropdown: Bug Report / Account Help / 
+    Billing / Safety Concern / Other
+  → Message text area (min 20 chars)
+  → "Send Message" gradient button
+  → On submit: save to Supabase support_tickets table
+    Columns: id, user_id, subject, message, 
+    status (open), created_at
+  → Show confirmation: "Message sent! We'll respond 
+    within 24 hours."
+
+TERMS OF SERVICE:
+- Opens a full-screen page with the Terms text
+- Include standard sections:
+  1. Acceptance of Terms
+  2. User Conduct
+  3. Privacy
+  4. AI Features Disclaimer
+  5. Intellectual Property
+  6. Termination
+  7. Governing Law
+- Back button at top
+
+PRIVACY POLICY:
+- Opens a full-screen page with Privacy Policy text
+- Sections:
+  1. What We Collect
+  2. How We Use Your Data
+  3. AI and Your Data
+  4. Data Storage and Security
+  5. Your Rights
+  6. Contact Information
+
+--- DANGER ZONE ---
+
+SIGN OUT → already works (keep)
+
+PAUSE ACCOUNT (was greyed out):
+- Opens confirmation modal:
+  "Pausing hides your profile from discovery. 
+  You can resume anytime."
+  "Pause Account" (orange button) / "Cancel"
+- Sets profiles.is_paused = true
+- User can still log in and use chat/groups
+- Profile card hidden from Discover for other users
+- Show banner on their Profile page: 
+  "Account paused — you're hidden from discovery"
+  with "Resume Account" button
+
+DELETE ACCOUNT:
+- Opens a 2-step confirmation:
+  Step 1: "This will permanently delete your account, 
+  profile, messages, and AI Twin. This cannot be undone."
+  Type "DELETE" to confirm (text input)
+  "Delete My Account" red button (disabled until "DELETE" typed)
+  
+  Step 2: If confirmed:
+  → Delete all user data from all Supabase tables
+  → Sign out
+  → Redirect to landing page
+  → Show: "Your account has been deleted."
+
+=======================================================
+SECTION 7 — PRICING / PREMIUM TIER ADJUSTMENTS
+=======================================================
+
+Review competitor apps (Tinder, Hinge, Bumble) for 
+pricing benchmarks. Restructure VibeFlow's tiers:
+
+FREE TIER:
+- 10 profile views per day
+- 5 likes per day
+- 3 AI Twin interviews per month
+- Join up to 2 groups
+- Standard matching
+- Request-only group DMs
+
+PLUS TIER ($9.99/month):
+- Unlimited profile views
+- 50 likes per day  
+- 20 AI Twin interviews per month
+- Join up to 10 groups
+- Priority matching
+- See who liked you (blurred — unlock one per day)
+- Request-only group DMs
+- Profile boost once per week
+
+VIP TIER ($19.99/month) — "Premium Max":
+- Everything in Plus
+- Unlimited likes
+- Unlimited AI Twin interviews
+- Unlimited groups
+- See exactly who liked you
+- Advanced matching algorithm
+- Direct message anyone (bypasses request system)
+- Gold crown badge in groups
+- Priority in discovery feed
+- Read receipts in chat
+- Dedicated Twin coaching mode
+
+Update the pricing page to show these 3 tiers clearly.
+Stack vertically on mobile (full width cards).
+VIP card gets gradient border + "Most Popular" badge.
+
+Enforce tier limits in the backend:
+  Check user's subscription_tier in profiles table
+  ('free', 'plus', 'vip')
+  When free user exceeds daily likes: show upgrade prompt
+  When free user tries to direct message from group: 
+    show upgrade prompt explaining VIP benefit
+
+=======================================================
+TECHNICAL RULES
+=======================================================
+
+1. All Supabase operations use Row Level Security
+2. Group nicknames must be unique — validate on signup
+3. Invite links expire after 7 days
+4. Chat requests expire after 48 hours
+5. All "Coming soon" items must now be replaced with 
+   working implementations or clean placeholder UIs
+6. No raw error messages shown to users ever
+7. All modals have a proper close button
+8. All forms validate before submission
+9. Loading states shown on all async operations
+10. Keep all existing working features intact
