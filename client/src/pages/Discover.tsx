@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { Brain, X, Loader2, MapPin, Heart, Play, Plus, Crown, Check } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
+import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -725,9 +726,28 @@ export default function Discover() {
           </motion.div>
         </AnimatePresence>
 
-        <p className="text-center text-xs mb-8" style={{ color: "#9090A8" }}>
-          {(currentIdx % profiles.length) + 1} of {profiles.length} profiles
-        </p>
+        <div className="flex items-center justify-between px-4 mb-8">
+          <p className="text-xs" style={{ color: "#9090A8" }}>
+            {(currentIdx % profiles.length) + 1} of {profiles.length} profiles
+          </p>
+          <button
+            onClick={async () => {
+              if (!currentProfile?.userId) return;
+              try {
+                await apiRequest("POST", `/api/users/block/${currentProfile.userId}`, {});
+                handleNext("left");
+                toast({ title: "User blocked", description: "They won't appear in your feed anymore." });
+              } catch {
+                toast({ title: "Could not block user", variant: "destructive" });
+              }
+            }}
+            className="text-xs"
+            style={{ color: "#9090A8", textDecoration: "underline" }}
+            data-testid="button-block-user"
+          >
+            Block / Report
+          </button>
+        </div>
       </div>
 
       {viewingCardStory && (

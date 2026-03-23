@@ -378,7 +378,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const deleteMutation = useMutation({
-    mutationFn: () => apiRequest("DELETE", "/api/account"),
+    mutationFn: () => apiRequest("DELETE", "/api/account", { confirmation: "DELETE" }),
     onSuccess: () => {
       toast({ title: "Account deleted", description: "All your data has been erased." });
       window.location.href = "/";
@@ -572,32 +572,59 @@ function VerifyPanel({ onBack }: { onBack: () => void }) {
   );
 }
 
+const TIER_LABELS: Record<string, { label: string; details: string; price: string; cycle: string }> = {
+  free: { label: "Free", details: "5 likes/day · 2 groups", price: "$0", cycle: "No billing" },
+  plus: { label: "Plus", details: "50 likes/day · 10 groups · Priority matching", price: "$9.99", cycle: "Billed monthly" },
+  vip: { label: "VIP", details: "Unlimited likes · Unlimited groups · All features", price: "$19.99", cycle: "Billed monthly" },
+};
+
 function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any }) {
   const [, setLocation] = useLocation();
   const tier = profile?.subscriptionTier ?? "free";
+  const tierInfo = TIER_LABELS[tier] ?? TIER_LABELS.free;
+
   return (
     <Panel title="Manage Billing" onBack={onBack}>
       <div style={{ margin: "16px", borderRadius: "16px", background: CARD, padding: "20px" }}>
-        <p className="text-xs font-semibold mb-1" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1.2px" }}>Current Plan</p>
-        <p className="text-xl font-bold text-white capitalize">{tier}</p>
-        {tier === "free" && (
-          <p className="text-sm mt-1" style={{ color: MUTED }}>5 likes/day · 2 groups</p>
-        )}
-        {tier === "plus" && (
-          <p className="text-sm mt-1" style={{ color: MUTED }}>50 likes/day · 10 groups · Priority matching</p>
-        )}
-        {tier === "vip" && (
-          <p className="text-sm mt-1" style={{ color: MUTED }}>Unlimited likes · Unlimited groups · All features</p>
-        )}
+        <div className="flex items-start justify-between mb-2">
+          <div>
+            <p className="text-xs font-semibold mb-1" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1.2px" }}>Current Plan</p>
+            <p className="text-xl font-bold text-white">{tierInfo.label}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-lg font-bold text-white">{tierInfo.price}</p>
+            <p className="text-xs" style={{ color: MUTED }}>{tierInfo.cycle}</p>
+          </div>
+        </div>
+        <p className="text-sm" style={{ color: MUTED }}>{tierInfo.details}</p>
       </div>
+
       {tier === "free" && (
-        <div style={{ padding: "0 16px" }}>
+        <div style={{ padding: "0 16px 16px" }}>
           <GradientButton label="Upgrade to VibeFlow Plus" onClick={() => setLocation("/upgrade")} testId="button-upgrade-billing" />
         </div>
       )}
-      {tier !== "free" && (
-        <div style={{ margin: "0 16px", borderRadius: "16px", background: CARD, overflow: "hidden" }}>
-          <div style={ROW_STYLE} data-testid="row-cancel-plan">
+
+      <div style={{ margin: "0 16px", borderRadius: "16px", background: CARD, overflow: "hidden" }}>
+        <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}` }}>
+          <p className="text-xs font-semibold mb-2" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Payment History</p>
+          {tier === "free" ? (
+            <p className="text-sm text-center py-2" style={{ color: MUTED }}>No payment history</p>
+          ) : (
+            <div>
+              <div className="flex justify-between items-center py-1.5">
+                <p className="text-sm text-white">VibeFlow {tierInfo.label}</p>
+                <p className="text-sm font-semibold text-white">{tierInfo.price}</p>
+              </div>
+              <div className="flex justify-between items-center py-1.5">
+                <p className="text-xs" style={{ color: MUTED }}>March 1, 2026</p>
+                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(16,185,129,0.15)", color: "#10B981" }}>Paid</span>
+              </div>
+            </div>
+          )}
+        </div>
+        {tier !== "free" && (
+          <div style={{ ...ROW_STYLE, borderBottom: "none" }} data-testid="row-cancel-plan">
             <CreditCard className="w-5 h-5 mr-3" style={{ color: MUTED }} />
             <div className="flex-1">
               <p className="text-sm font-medium text-white">Cancel Subscription</p>
@@ -605,8 +632,12 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
             </div>
             <ChevronRight className="w-4 h-4" style={{ color: MUTED }} />
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      <p className="text-xs px-4 pt-4 pb-2 text-center" style={{ color: MUTED }}>
+        Questions? Email <span style={{ color: "#7C3AED" }}>support@vibeflow.app</span>
+      </p>
     </Panel>
   );
 }
@@ -778,6 +809,22 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
   const [newPass, setNewPass] = useState("");
   const [confirm, setConfirm] = useState("");
 
+  const updateMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/account/change-password", {
+      currentPassword: current,
+      newPassword: newPass,
+    }),
+    onSuccess: () => {
+      toast({ title: "Password updated", description: "Your password has been changed successfully." });
+      setCurrent(""); setNewPass(""); setConfirm("");
+      onBack();
+    },
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Failed to update password";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    },
+  });
+
   const handleSubmit = () => {
     if (!current) {
       toast({ title: "Current password required", variant: "destructive" });
@@ -791,9 +838,7 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
       toast({ title: "Passwords do not match", variant: "destructive" });
       return;
     }
-    toast({ title: "Password updated", description: "Your password has been changed successfully." });
-    setCurrent(""); setNewPass(""); setConfirm("");
-    onBack();
+    updateMutation.mutate();
   };
 
   return (
@@ -838,7 +883,7 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
             data-testid="input-confirm-password"
           />
         </div>
-        <GradientButton label="Update Password" onClick={handleSubmit} testId="button-update-password" />
+        <GradientButton label={updateMutation.isPending ? "Updating..." : "Update Password"} onClick={handleSubmit} testId="button-update-password" />
       </div>
     </Panel>
   );

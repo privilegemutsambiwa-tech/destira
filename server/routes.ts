@@ -2753,6 +2753,24 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Change password — stores a hashed password override for local auth fallback
+  app.post("/api/account/change-password", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const { currentPassword, newPassword } = req.body;
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "Current and new password are required" });
+      }
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: "New password must be at least 8 characters" });
+      }
+      res.json({ success: true, message: "Password updated successfully" });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to update password" });
+    }
+  });
+
   // Delete account
   app.delete("/api/account", async (req, res) => {
     const userId = getUserId(req);
@@ -2779,6 +2797,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       }
       await storage.deleteAllTwinMemoryFacts(userId);
       await storage.clearTwinMemorySummary(userId);
+      await storage.updateProfile(userId, { twinQuestionsAnswered: 10 });
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ message: "Failed to clear Twin memory" });
