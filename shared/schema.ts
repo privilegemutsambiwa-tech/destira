@@ -44,6 +44,8 @@ export const profiles = pgTable("profiles", {
   maxDistanceKm: integer("max_distance_km").default(100),
   ageMinPreference: integer("age_min_preference").default(18),
   ageMaxPreference: integer("age_max_preference").default(65),
+  passwordHash: text("password_hash"),
+  passwordSalt: text("password_salt"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [
   index("profiles_location_updated_at_idx").on(t.locationUpdatedAt),

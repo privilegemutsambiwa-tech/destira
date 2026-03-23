@@ -6,8 +6,8 @@ import { z } from "zod";
 import { GoogleGenAI } from "@google/genai";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
-import { sql, eq } from "drizzle-orm";
-import { groupMembers } from "@shared/schema";
+import { sql, eq, and } from "drizzle-orm";
+import { groupMembers, blockedUsers, profiles } from "@shared/schema";
 import crypto from "crypto";
 import multer from "multer";
 import path from "path";
@@ -1933,6 +1933,14 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const existingMatch = await storage.getMatchBetweenUsers(userId, targetId);
       if (existingMatch) return res.json({ status: "already_matched", match: existingMatch });
 
+      const isBlockedByTarget = await db.select().from(blockedUsers)
+        .where(and(eq(blockedUsers.blockerId, targetId), eq(blockedUsers.blockedId, userId)));
+      const isBlockedByRequester = await db.select().from(blockedUsers)
+        .where(and(eq(blockedUsers.blockerId, userId), eq(blockedUsers.blockedId, targetId)));
+      if (isBlockedByTarget.length > 0 || isBlockedByRequester.length > 0) {
+        return res.status(403).json({ message: "Cannot send chat request to this user" });
+      }
+
       const requesterTier = requesterProfile?.subscriptionTier || "free";
       if (requesterTier === "vip") {
         const match = await storage.createMatch(userId, targetId);
@@ -2753,7 +2761,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
-  // Change password — stores a hashed password override for local auth fallback
+  // Change password — hashes and stores password credential in profile
   app.post("/api/account/change-password", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -2765,6 +2773,17 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (newPassword.length < 8) {
         return res.status(400).json({ message: "New password must be at least 8 characters" });
       }
+      const profile = await storage.getProfile(userId);
+      if (profile?.passwordHash) {
+        const salt = profile.passwordSalt || "";
+        const currentHash = crypto.createHash("sha256").update(currentPassword + salt).digest("hex");
+        if (currentHash !== profile.passwordHash) {
+          return res.status(401).json({ message: "Current password is incorrect" });
+        }
+      }
+      const salt = crypto.randomBytes(16).toString("hex");
+      const hash = crypto.createHash("sha256").update(newPassword + salt).digest("hex");
+      await db.update(profiles).set({ passwordHash: hash, passwordSalt: salt }).where(eq(profiles.userId, userId));
       res.json({ success: true, message: "Password updated successfully" });
     } catch (err) {
       res.status(500).json({ message: "Failed to update password" });
