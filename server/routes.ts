@@ -158,17 +158,13 @@ export async function registerRoutes(
         "What would you want your partner to say about you after a year?",
       ];
 
-      let seededCount = 0;
       for (let i = 0; i < 10; i++) {
         const answer = personalityProfile[String(i)];
         if (answer && typeof answer === "string" && answer.trim()) {
           const question = ONBOARDING_QUESTIONS[i] || `Onboarding question ${i + 1}`;
           await storage.addTwinMemoryFact(userId, `${question} → ${answer.trim()}`, "onboarding");
-          seededCount++;
         }
       }
-
-      await storage.updateProfile(userId, { twinQuestionsAnswered: seededCount });
 
       const profile = await storage.getProfile(userId);
       if (profile) {
@@ -209,15 +205,25 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     try {
       const existing = await storage.getProfile(userId);
+      const isCompletingOnboarding = req.body.onboardingCompleted && req.body.personalityProfile;
+      const onboardingCount = isCompletingOnboarding
+        ? Object.values(req.body.personalityProfile as Record<string, string>).filter(
+            (v): v is string => typeof v === "string" && v.trim().length > 0
+          ).length
+        : undefined;
+      const bodyWithCount = onboardingCount !== undefined
+        ? { ...req.body, twinQuestionsAnswered: onboardingCount }
+        : req.body;
+
       if (existing) {
-        const updated = await storage.updateProfile(userId, req.body);
-        if (req.body.onboardingCompleted && !existing.onboardingCompleted && req.body.personalityProfile) {
+        const updated = await storage.updateProfile(userId, bodyWithCount);
+        if (isCompletingOnboarding && !existing.onboardingCompleted) {
           seedOnboardingIntoTwinMemory(userId, req.body.personalityProfile).catch(() => {});
         }
         return res.json(updated);
       }
-      const profile = await storage.createProfile({ ...req.body, userId });
-      if (req.body.onboardingCompleted && req.body.personalityProfile) {
+      const profile = await storage.createProfile({ ...bodyWithCount, userId });
+      if (isCompletingOnboarding) {
         seedOnboardingIntoTwinMemory(userId, req.body.personalityProfile).catch(() => {});
       }
       res.status(201).json(profile);
