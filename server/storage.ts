@@ -208,7 +208,7 @@ export class DatabaseStorage implements IStorage {
       eq(profiles.isPublic, true)
     );
 
-    const filterCondition = filter === "nearby" || filter === "online"
+    const filterCondition = filter === "online"
       ? and(baseCondition, gt(profiles.locationUpdatedAt, thirtyMinutesAgo))
       : baseCondition;
 

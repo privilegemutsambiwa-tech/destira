@@ -136,7 +136,7 @@ export default function Discover() {
     let list = [...rawProfiles];
     if (filter === "nearby") {
       list = list
-        .filter((p) => p.isNearbyNow)
+        .filter((p) => p.distanceKm !== null && p.distanceKm !== undefined)
         .sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
     }
     return list;
