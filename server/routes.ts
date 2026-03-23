@@ -11,6 +11,7 @@ import crypto from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import type { TwinProfileStructured } from "@shared/schema";
 
 const aiRateLimits = new Map<string, number[]>();
 function checkAIRateLimit(userId: string, maxPerMinute: number = 10): boolean {
@@ -157,17 +158,47 @@ export async function registerRoutes(
         "What would you want your partner to say about you after a year?",
       ];
 
+      let seededCount = 0;
       for (let i = 0; i < 10; i++) {
         const answer = personalityProfile[String(i)];
         if (answer && typeof answer === "string" && answer.trim()) {
           const question = ONBOARDING_QUESTIONS[i] || `Onboarding question ${i + 1}`;
           await storage.addTwinMemoryFact(userId, `${question} → ${answer.trim()}`, "onboarding");
+          seededCount++;
         }
       }
 
-      await storage.updateProfile(userId, { twinQuestionsAnswered: 10 } as any);
+      await storage.updateProfile(userId, { twinQuestionsAnswered: seededCount });
 
-      storage.upsertTwinProfileStructured(userId, {}).catch(() => {});
+      const profile = await storage.getProfile(userId);
+      if (profile) {
+        const extraction = await ai.models.generateContent({
+          model: "gemini-1.5-pro-001",
+          contents: [{ role: "user", parts: [{ text: JSON.stringify({ personality: personalityProfile, twinPersona: profile.twinPersona }) }] }],
+          config: {
+            systemInstruction: `Analyze the user's onboarding answers to extract structured personality traits. Return JSON with:
+{"top_values": ["value1", "value2", ...], "relationship_goals": "...", "boundaries": "...", "humor_style": "...", "communication_style": "...", "attachment_style": "...", "interests": ["interest1", ...], "lifestyle_patterns": ["pattern1", ...], "desired_partner_traits": ["trait1", ...]}
+Fill in what you can determine from the data. Use short, clear phrases. Limit arrays to 5 items max.`,
+            responseMimeType: "application/json",
+            maxOutputTokens: 8192,
+          },
+        });
+        const extracted = JSON.parse(extraction.text || "{}");
+        const structuredUpdates: Partial<TwinProfileStructured> = {
+          ...(extracted.top_values?.length ? { topValues: extracted.top_values } : {}),
+          ...(extracted.relationship_goals ? { relationshipGoals: extracted.relationship_goals } : {}),
+          ...(extracted.boundaries ? { boundaries: extracted.boundaries } : {}),
+          ...(extracted.humor_style ? { humorStyle: extracted.humor_style } : {}),
+          ...(extracted.communication_style ? { communicationStyle: extracted.communication_style } : {}),
+          ...(extracted.attachment_style ? { attachmentStyle: extracted.attachment_style } : {}),
+          ...(extracted.interests?.length ? { interests: extracted.interests } : {}),
+          ...(extracted.lifestyle_patterns?.length ? { lifestylePatterns: extracted.lifestyle_patterns } : {}),
+          ...(extracted.desired_partner_traits?.length ? { desiredPartnerTraits: extracted.desired_partner_traits } : {}),
+        };
+        if (Object.keys(structuredUpdates).length > 0) {
+          await storage.upsertTwinProfileStructured(userId, structuredUpdates);
+        }
+      }
     } catch (e) {
       console.error("Onboarding twin seeding error (non-blocking):", e);
     }
@@ -470,7 +501,7 @@ TONE: You are ${toneStyle}, with ${verbosity} verbosity, ${emojiUsage} emoji usa
 
 Your role: Help the user reflect on dating, relationships, and self-understanding. You learn from conversations and their profile data. Occasionally ask a personality question naturally ("Quick thought - ...").
 
-${profile.twinPersona || "You are friendly, open, and genuine."}${onboardingSection}${structuredSection}${memorySection}
+${profile.twinPersona || "You are friendly, open, and genuine."}${structuredSection}${onboardingSection}${memorySection}
 
 ${PRIVACY_GUARDRAIL}`;
   }

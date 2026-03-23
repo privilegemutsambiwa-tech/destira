@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
-import { useSubscription, useGenerateSummary, useProfileCompletion, useGenerateAboutMe, useGenerateAISummary, useTwinToneProfile, useUpdateTwinToneProfile, useTwinStructuredProfile, useExtractTwinProfile, useQuestionsProgress } from "@/hooks/use-interactions";
+import { useSubscription, useGenerateSummary, useProfileCompletion, useGenerateAboutMe, useGenerateAISummary, useTwinToneProfile, useUpdateTwinToneProfile, useTwinStructuredProfile, useExtractTwinProfile, useTwinMemory } from "@/hooks/use-interactions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -48,7 +48,7 @@ export default function Profile() {
   const updateTone = useUpdateTwinToneProfile();
   const { data: structuredProfile } = useTwinStructuredProfile();
   const extractProfile = useExtractTwinProfile();
-  const { data: questionsProgress } = useQuestionsProgress();
+  const { data: twinMemory } = useTwinMemory();
   const [showPhotoDialog, setShowPhotoDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showToneDialog, setShowToneDialog] = useState(false);
@@ -617,9 +617,10 @@ export default function Profile() {
               </div>
 
               {(() => {
-                const chatAnswered = questionsProgress?.totalAnswered || 0;
+                const memoryFacts: any[] = twinMemory?.facts || [];
+                const chatFacts = memoryFacts.filter((f: any) => f.source !== "onboarding").length;
                 const onboardingAnswered = profile.twinQuestionsAnswered || 0;
-                const totalAnswered = chatAnswered + onboardingAnswered;
+                const totalAnswered = onboardingAnswered + chatFacts;
                 const total = 100;
                 const pct = Math.min(Math.round((totalAnswered / total) * 100), 100);
                 let message = "Just getting started — your onboarding is saved!";
