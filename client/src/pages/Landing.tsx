@@ -3,6 +3,7 @@ import { useRef, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { AlertTriangle } from "lucide-react";
 import { VibeFlowLockup } from "@/components/brand/logo";
+import { PhotoFrame } from "@/components/brand/photo-frame";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 
@@ -186,15 +187,6 @@ function BoundaryToggle({ label, on }: { label: string; on: boolean }) {
         <span className="block w-[18px] h-[18px] rounded-full bg-vf-ink" />
       </span>
       <span className="text-[13.5px] text-vf-soft">{label}</span>
-    </div>
-  );
-}
-
-/** Placeholder for a group cover image — real images dropped in later. */
-function PhotoSlot() {
-  return (
-    <div className="h-[150px] rounded-t-[22px] bg-vf-surface2 border-b border-vf-line flex items-center justify-center">
-      <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">Photo</span>
     </div>
   );
 }
@@ -434,13 +426,13 @@ export default function Landing() {
 
       {/* ============ 2 · HERO ============ */}
       <section
-        className="relative flex items-center px-6"
-        style={{ minHeight: "max(100vh, 640px)" }}
+        className="relative px-6 pb-[88px] lg:pb-0 lg:min-h-screen lg:flex lg:items-center"
         aria-labelledby="hero-heading"
         data-testid="section-hero"
       >
-        <div className="max-w-[1180px] mx-auto w-full">
-          <div className="max-w-[900px]">
+        <div className="max-w-[1180px] mx-auto w-full pt-20 lg:pt-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] items-center gap-12 lg:gap-[clamp(40px,5vw,88px)]">
+          {/* LEFT — type column (unchanged copy) */}
+          <div>
             <Reveal>
               <Eyebrow>Johannesburg · Free to join</Eyebrow>
             </Reveal>
@@ -477,10 +469,55 @@ export default function Landing() {
                 </p>
               </div>
             </Reveal>
+
+            {/* mobile: primary image only, below the type */}
+            <div className="lg:hidden mt-10">
+              <PhotoFrame
+                slot="hero-primary"
+                ratio="4/5"
+                treatment="warm"
+                priority
+                caption="MIRA & KABELO · RESONANCE 87 · MET IN LATE PRACTICE"
+              />
+            </div>
           </div>
+
+          {/* RIGHT — two-image stagger, desktop only */}
+          <Reveal delay={200} className="hidden lg:block">
+            <div className="relative group">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -inset-10 translate-x-8 -translate-y-8"
+                style={{
+                  background: "radial-gradient(45% 45% at 65% 30%, rgba(255,107,74,0.35), rgba(12,9,16,0) 70%)",
+                  filter: "blur(60px)",
+                  opacity: 0.1,
+                }}
+              />
+              <PhotoFrame
+                slot="hero-primary"
+                ratio="4/5"
+                treatment="warm"
+                priority
+                caption="MIRA & KABELO · RESONANCE 87 · MET IN LATE PRACTICE"
+                className="relative transition-transform duration-500 ease-out motion-safe:group-hover:scale-[1.015]"
+              />
+              <div
+                className="absolute w-[46%] rotate-[-3deg] transition-transform duration-500 ease-out motion-safe:group-hover:rotate-[-1.5deg]"
+                style={{ bottom: "-8%", left: "-14%", zIndex: 3, boxShadow: "0 0 0 4px #0C0910", borderRadius: "20px" }}
+              >
+                <PhotoFrame
+                  slot="hero-secondary"
+                  ratio="1/1"
+                  treatment="warm"
+                  caption="THURSDAY · THE LISTENING ROOM"
+                />
+              </div>
+            </div>
+          </Reveal>
         </div>
 
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-8 flex flex-col items-center gap-3">
+        <div className="hidden lg:flex absolute left-1/2 -translate-x-1/2 bottom-8 flex-col items-center gap-3">
           <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
             How it actually works
           </span>
@@ -527,6 +564,14 @@ export default function Landing() {
 
           <Reveal delay={120}>
             <TwinTranscript />
+            <div className="mt-4">
+              <PhotoFrame
+                slot="turn"
+                ratio="16/9"
+                treatment="plain"
+                caption="NINETY SECONDS OF TWIN CONVERSATION, THEN AN ACTUAL EVENING"
+              />
+            </div>
           </Reveal>
         </div>
       </section>
@@ -656,13 +701,13 @@ export default function Landing() {
 
           <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-5">
             {[
-              ["Late Practice", "412 members · musicians with day jobs"],
-              ["Sunday Trail", "1,208 members · 6am starts, no excuses"],
-              ["Table for Six", "330 members · long dinners, dating with intent"],
-            ].map(([name, meta], i) => (
+              ["Late Practice", "412 members · musicians with day jobs", "community-late-practice"],
+              ["Sunday Trail", "1,208 members · 6am starts, no excuses", "community-sunday-trail"],
+              ["Table for Six", "330 members · long dinners, dating with intent", "community-table-for-six"],
+            ].map(([name, meta, slot], i) => (
               <Reveal key={name} delay={i * 80}>
                 <div className="rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden">
-                  <PhotoSlot />
+                  <PhotoFrame slot={slot} ratio="3/2" treatment="warm" style={{ borderRadius: 0 }} />
                   <div className="p-5">
                     <div className="text-[16px] text-vf-text">{name}</div>
                     <div className="text-[13px] text-vf-muted mt-1">{meta}</div>
@@ -742,18 +787,23 @@ export default function Landing() {
       {/* ============ 7 · CLOSING CTA ============ */}
       <section
         className="relative px-6 flex items-center justify-center overflow-hidden"
-        style={{ minHeight: "70vh" }}
+        style={{ minHeight: "78vh" }}
         aria-labelledby="closing-heading"
         data-testid="section-closing"
       >
-        <div
-          className="absolute inset-0 pointer-events-none"
-          aria-hidden="true"
-          style={{
-            background:
-              "radial-gradient(60% 50% at 50% 55%, rgba(255,107,74,0.08), rgba(12,9,16,0) 70%)",
-          }}
-        />
+        {/* full-bleed backdrop: two people walking away, lit street at night */}
+        <div className="absolute inset-0" aria-hidden="true" data-photo-slot="closing-fullbleed">
+          <div className="absolute inset-0 flex items-center justify-center bg-vf-surface2">
+            <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">Photo</span>
+          </div>
+          {/* legibility scrim + top/bottom fade into the page */}
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(rgba(12,9,16,0.72), rgba(12,9,16,0.88))" }}
+          />
+          <div className="absolute inset-x-0 top-0 h-[120px] bg-gradient-to-b from-vf-ink to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-[120px] bg-gradient-to-t from-vf-ink to-transparent" />
+        </div>
         <div className="relative max-w-[820px] mx-auto text-center">
           <Reveal>
             <h2
