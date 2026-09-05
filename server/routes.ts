@@ -3140,16 +3140,29 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   // /login, so different browser sessions stay distinct accounts.
   if (process.env.NODE_ENV !== "production") {
     try {
-      const devEmail = (process.env.DEV_USER_EMAIL || "dev@local.test").trim().toLowerCase();
+      const devEmail = (process.env.DEV_USER_EMAIL || "demo@vibeflow.local").trim().toLowerCase();
       const existingDev = await authStorage.getUserByEmail(devEmail);
       if (!existingDev) {
-        const devPassword = process.env.DEV_USER_PASSWORD || "devpassword123";
-        await authStorage.createUser({
+        const devPassword = process.env.DEV_USER_PASSWORD || "VibeFlow123!";
+        const devUser = await authStorage.createUser({
           email: devEmail,
           passwordHash: await hashPassword(devPassword),
-          firstName: "Dev",
+          firstName: "Demo",
           lastName: "User",
         });
+        // Give it a completed profile so login lands in the app, not onboarding.
+        await storage.createProfile({
+          userId: devUser.id,
+          displayName: "Demo",
+          bio: "Local demo account for exploring VibeFlow.",
+          age: 29,
+          gender: "other",
+          location: "Johannesburg",
+          personalityProfile: { openness: 82, conscientiousness: 74, extraversion: 61, agreeableness: 79, neuroticism: 33 },
+          twinPersona: "I'm Demo's AI Twin. Demo is curious, direct, and here to see how the app feels from the inside.",
+          onboardingCompleted: true,
+          isPublic: true,
+        } as any);
         console.log(`[dev] Seeded a local login: ${devEmail} / ${devPassword} (set DEV_USER_EMAIL / DEV_USER_PASSWORD to change).`);
       }
     } catch (e) {

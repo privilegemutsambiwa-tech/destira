@@ -1,18 +1,21 @@
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
+import { Eye, EyeOff } from "lucide-react";
+import { VibeFlowLockup } from "@/components/brand/logo";
 import { useAuth } from "@/hooks/use-auth";
 
-const BG = "#0F0F14";
-const CARD = "#1A1A24";
-const BORDER = "#2E2E42";
-const MUTED = "#9090A8";
-const GRAD = "linear-gradient(135deg, #7C3AED, #EC4899)";
+const BG = "#0C0910";
+const CARD = "#161220";
+const BORDER = "rgba(255,255,255,0.09)";
+const MUTED = "#A79FB4";
+const EMBER = "#FF6B4A";
 
 export default function Login() {
   const { user, isLoading, login, isLoggingIn } = useAuth();
   const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [demoLoading, setDemoLoading] = useState(false);
 
@@ -51,13 +54,12 @@ export default function Login() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: BG }}>
       <div className="w-full" style={{ maxWidth: "380px" }}>
-        <div className="flex items-center gap-2 justify-center mb-8">
-          <img src="/brand/logo.png" alt="VibeFlow" className="w-9 h-9 rounded-xl object-cover" />
-          <span className="font-bold text-xl text-white">VibeFlow</span>
+        <div className="flex items-center justify-center mb-8 text-white">
+          <VibeFlowLockup orientation="horizontal" size={30} />
         </div>
 
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "20px", padding: "28px" }}>
-          <h1 className="font-bold text-white text-center mb-1" style={{ fontSize: "22px" }} data-testid="text-login-title">
+          <h1 className="text-center mb-1" style={{ fontFamily: '"Instrument Serif", serif', fontWeight: 400, color: "#F5F0EA", fontSize: "24px" }} data-testid="text-login-title">
             Welcome back
           </h1>
           <p className="text-center text-sm mb-6" style={{ color: MUTED }}>
@@ -84,16 +86,28 @@ export default function Login() {
               <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>
                 Password
               </label>
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-3 py-2 text-sm text-white"
-                style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
-                data-testid="input-login-password"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-3 pr-10 py-2 text-sm text-white"
+                  style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+                  data-testid="input-login-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1"
+                  style={{ color: MUTED }}
+                  data-testid="button-toggle-password"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             {error && (
@@ -105,9 +119,10 @@ export default function Login() {
             <button
               type="submit"
               disabled={isLoggingIn}
-              className="w-full font-semibold text-white btn-press"
+              className="w-full font-bold btn-press"
               style={{
-                background: GRAD,
+                background: EMBER,
+                color: "#0C0910",
                 height: "48px",
                 borderRadius: "12px",
                 fontSize: "15px",
