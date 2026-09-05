@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+﻿import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
@@ -53,20 +53,20 @@ export function StoryCircle({ userId, userName, profileImageUrl, hasUnviewed = t
           padding: "2px",
           borderRadius: "50%",
           background: hasUnviewed
-            ? "linear-gradient(135deg, #7C3AED, #EC4899)"
-            : "#2E2E42",
+            ? "#FF6B4A"
+            : "rgba(255,255,255,0.09)",
         }}
       >
-        <div style={{ padding: "2px", borderRadius: "50%", background: "#0F0F14" }}>
+        <div style={{ padding: "2px", borderRadius: "50%", background: "#0C0910" }}>
           <Avatar className="w-14 h-14">
             <AvatarImage src={profileImageUrl} alt={userName} />
-            <AvatarFallback className="text-sm font-semibold" style={{ background: "#242433", color: "#FFFFFF" }}>
+            <AvatarFallback className="text-sm font-semibold" style={{ background: "rgba(255,255,255,0.05)", color: "#FFFFFF" }}>
               {userName?.[0]?.toUpperCase() || "U"}
             </AvatarFallback>
           </Avatar>
         </div>
       </div>
-      <span className="text-xs truncate max-w-[64px]" style={{ color: "#9090A8" }} data-testid={`text-story-name-${userId}`}>
+      <span className="text-xs truncate max-w-[64px]" style={{ color: "#A79FB4" }} data-testid={`text-story-name-${userId}`}>
         {userName}
       </span>
     </button>
@@ -250,7 +250,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
           {isTextStory ? (
             <div
               className="w-full h-full flex items-center justify-center px-8"
-              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
+              style={{ background: "#FF6B4A" }}
             >
               <p className="text-white font-bold text-center" style={{ fontSize: "22px", lineHeight: 1.4 }} data-testid={`text-story-content-${currentStory.id}`}>
                 {currentMedia?.textContent}
@@ -288,12 +288,12 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
           </button>
         )}
 
-        <div className="absolute bottom-0 left-0 right-0 z-10 p-3" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.6), transparent)" }}>
+        <div className="absolute bottom-0 left-0 right-0 z-10 p-3" style={{ background: "linear-gradient(to top, rgba(12,9,16,0.75), transparent)" }}>
           {onInterviewTwin && (
             <button
               className="w-full flex items-center justify-center gap-2 font-semibold mb-3"
               style={{
-                background: "linear-gradient(135deg, #7C3AED, #EC4899)",
+                background: "#FF6B4A",
                 color: "#FFFFFF",
                 height: "44px",
                 borderRadius: "12px",
@@ -506,7 +506,7 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
           {isTextStory ? (
             <div
               className="w-full h-full flex items-center justify-center px-8"
-              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
+              style={{ background: "#FF6B4A" }}
             >
               <p className="text-white font-bold text-center" style={{ fontSize: "22px", lineHeight: 1.4 }} data-testid={`text-own-story-content-${currentStory.id}`}>
                 {currentMedia?.textContent}
@@ -540,7 +540,7 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
 
         <div
           className="absolute bottom-0 left-0 right-0 z-10 p-4 flex items-center justify-between"
-          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.6), transparent)" }}
+          style={{ background: "linear-gradient(to top, rgba(12,9,16,0.75), transparent)" }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-2 text-white text-sm" data-testid="text-own-story-views">
@@ -651,12 +651,12 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
   };
 
   const ringStyle: React.CSSProperties = mode === "solid"
-    ? { padding: "2px", borderRadius: "50%", background: "linear-gradient(135deg, #7C3AED, #EC4899)" }
-    : { padding: "2px", borderRadius: "50%", border: "2px dashed #7C3AED" };
+    ? { padding: "2px", borderRadius: "50%", background: "#FF6B4A" }
+    : { padding: "2px", borderRadius: "50%", border: "2px dashed rgba(255,107,74,0.5)" };
 
   const innerStyle: React.CSSProperties = mode === "solid"
-    ? { width: "56px", height: "56px", borderRadius: "50%", background: "#1A1A24", display: "flex", alignItems: "center", justifyContent: "center" }
-    : { width: "56px", height: "56px", borderRadius: "50%", background: "#1A1A24", display: "flex", alignItems: "center", justifyContent: "center" };
+    ? { width: "56px", height: "56px", borderRadius: "50%", background: "#161220", display: "flex", alignItems: "center", justifyContent: "center" }
+    : { width: "56px", height: "56px", borderRadius: "50%", background: "#161220", display: "flex", alignItems: "center", justifyContent: "center" };
 
   return (
     <>
@@ -677,64 +677,60 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
           data-testid="button-add-story"
         >
           <div style={innerStyle}>
-            <Plus className="w-5 h-5" style={{ color: "#9090A8" }} />
+            <Plus className="w-5 h-5" style={{ color: "#A79FB4" }} />
           </div>
         </button>
-        <span className="text-xs" style={{ color: "#9090A8" }}>Add Story</span>
+        <span className="text-xs" style={{ color: "#A79FB4" }}>Add a moment</span>
       </div>
 
       {creatorMode === "choose" && (
         <div
           className="fixed inset-0 z-[100] flex items-end justify-center"
-          style={{ background: "rgba(0,0,0,0.7)" }}
+          style={{ background: "rgba(12,9,16,0.72)" }}
           onClick={reset}
           data-testid="story-creator-overlay"
         >
           <div
             className="w-full max-w-md p-6 pb-8"
-            style={{ background: "#1A1A24", borderRadius: "24px 24px 0 0" }}
+            style={{ background: "#14101C", borderRadius: "26px 26px 0 0", border: "1px solid rgba(255,255,255,0.09)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="font-bold text-white text-center mb-6" style={{ fontSize: "17px" }}>Add to Story</h2>
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            <h2
+              className="text-center mb-1"
+              style={{ fontFamily: '"Instrument Serif", serif', fontWeight: 400, color: "#F5F0EA", fontSize: "22px" }}
+            >
+              Add a moment
+            </h2>
+            <p className="text-center text-xs mb-6" style={{ color: "#7E7690" }}>
+              Only people in your rooms see this.
+            </p>
+            <div className="grid grid-cols-2 gap-3 mb-5">
               <button
-                className="flex flex-col items-center gap-3 p-5"
-                style={{ background: "#242433", borderRadius: "16px", border: "1px solid #2E2E42" }}
+                className="flex flex-col items-start gap-2 p-4 transition-colors"
+                style={{ background: "#161220", borderRadius: "18px", border: "1px solid rgba(255,255,255,0.09)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(255,107,74,0.5)")}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.09)")}
                 onClick={() => { fileInputRef.current?.click(); setCreatorMode(null); }}
                 data-testid="button-story-choose-photo"
               >
-                <div
-                  className="w-12 h-12 flex items-center justify-center"
-                  style={{ borderRadius: "14px", background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
-                >
-                  <Camera className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <p className="font-semibold text-white text-sm">Add Photo</p>
-                  <p className="text-xs mt-0.5" style={{ color: "#9090A8" }}>Share an image</p>
-                </div>
+                <Camera className="w-5 h-5" style={{ color: "#A79FB4" }} />
+                <p className="font-medium text-sm" style={{ color: "#F5F0EA" }}>A photo</p>
               </button>
               <button
-                className="flex flex-col items-center gap-3 p-5"
-                style={{ background: "#242433", borderRadius: "16px", border: "1px solid #2E2E42" }}
+                className="flex flex-col items-start gap-2 p-4 transition-colors"
+                style={{ background: "#161220", borderRadius: "18px", border: "1px solid rgba(255,255,255,0.09)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(255,107,74,0.5)")}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.09)")}
                 onClick={() => setCreatorMode("text")}
                 data-testid="button-story-choose-text"
               >
-                <div
-                  className="w-12 h-12 flex items-center justify-center"
-                  style={{ borderRadius: "14px", background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
-                >
-                  <Pencil className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <p className="font-semibold text-white text-sm">Write a Story</p>
-                  <p className="text-xs mt-0.5" style={{ color: "#9090A8" }}>Share your thoughts</p>
-                </div>
+                <Pencil className="w-5 h-5" style={{ color: "#A79FB4" }} />
+                <p className="font-medium text-sm" style={{ color: "#F5F0EA" }}>A line</p>
               </button>
             </div>
             <button
               className="w-full text-sm font-medium"
-              style={{ color: "#9090A8" }}
+              style={{ color: "#A79FB4" }}
               onClick={reset}
               data-testid="button-story-creator-cancel"
             >
@@ -752,7 +748,7 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
         >
           <div
             className="w-full max-w-md p-6 pb-8"
-            style={{ background: "#1A1A24", borderRadius: "24px 24px 0 0" }}
+            style={{ background: "#161220", borderRadius: "24px 24px 0 0" }}
           >
             <h2 className="font-bold text-white text-center mb-4" style={{ fontSize: "17px" }}>Add Caption</h2>
             {selectedFile && (
@@ -769,19 +765,19 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
               className="w-full px-4 py-3 text-sm mb-4 text-white"
-              style={{ background: "#242433", border: "1px solid #2E2E42", borderRadius: "12px", outline: "none" }}
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: "12px", outline: "none" }}
               data-testid="input-story-caption"
             />
             <button
               className="w-full py-3 font-semibold text-white mb-3"
-              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", borderRadius: "14px", border: "none", fontSize: "15px" }}
+              style={{ background: "#FF6B4A", borderRadius: "14px", border: "none", fontSize: "15px" }}
               onClick={handlePostPhoto}
               disabled={isUploading}
               data-testid="button-post-photo-story"
             >
-              {isUploading ? "Posting…" : "Post Story"}
+              {isUploading ? "Postingâ€¦" : "Post Story"}
             </button>
-            <button className="w-full text-sm font-medium" style={{ color: "#9090A8" }} onClick={reset} data-testid="button-cancel-photo-story">
+            <button className="w-full text-sm font-medium" style={{ color: "#A79FB4" }} onClick={reset} data-testid="button-cancel-photo-story">
               Cancel
             </button>
           </div>
@@ -796,7 +792,7 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
         >
           <div
             className="w-full max-w-md p-6 pb-8"
-            style={{ background: "#1A1A24", borderRadius: "24px 24px 0 0" }}
+            style={{ background: "#161220", borderRadius: "24px 24px 0 0" }}
           >
             <h2 className="font-bold text-white text-center mb-4" style={{ fontSize: "17px" }}>Write a Story</h2>
             <textarea
@@ -805,7 +801,7 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
               onChange={(e) => setTextContent(e.target.value)}
               rows={5}
               className="w-full px-4 py-3 text-sm mb-3 text-white resize-none"
-              style={{ background: "#242433", border: "1px solid #2E2E42", borderRadius: "12px", outline: "none" }}
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: "12px", outline: "none" }}
               data-testid="textarea-story-text"
             />
             <input
@@ -813,19 +809,19 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
               className="w-full px-4 py-3 text-sm mb-4 text-white"
-              style={{ background: "#242433", border: "1px solid #2E2E42", borderRadius: "12px", outline: "none" }}
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: "12px", outline: "none" }}
               data-testid="input-story-text-caption"
             />
             <button
               className="w-full py-3 font-semibold text-white mb-3"
-              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", borderRadius: "14px", border: "none", fontSize: "15px", opacity: textContent.trim() ? 1 : 0.5 }}
+              style={{ background: "#FF6B4A", borderRadius: "14px", border: "none", fontSize: "15px", opacity: textContent.trim() ? 1 : 0.5 }}
               onClick={handlePostText}
               disabled={isUploading || !textContent.trim()}
               data-testid="button-post-text-story"
             >
-              {isUploading ? "Posting…" : "Post Story"}
+              {isUploading ? "Postingâ€¦" : "Post Story"}
             </button>
-            <button className="w-full text-sm font-medium" style={{ color: "#9090A8" }} onClick={reset} data-testid="button-cancel-text-story">
+            <button className="w-full text-sm font-medium" style={{ color: "#A79FB4" }} onClick={reset} data-testid="button-cancel-text-story">
               Cancel
             </button>
           </div>

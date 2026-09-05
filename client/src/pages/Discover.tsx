@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+﻿import { useState, useMemo, useEffect, useCallback } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
@@ -23,9 +23,9 @@ function formatDistance(km: number): string {
 // Demo-seeded profiles carry real Big-Five trait scores (openness,
 // conscientiousness, ...); profiles onboarded through the app carry free-text
 // soul-mapping answers instead (see Onboarding.tsx). There's no backend
-// compatibility scoring yet (docs/redesign-handoff.md §4.2 is deferred), so
+// compatibility scoring yet (docs/redesign-handoff.md Â§4.2 is deferred), so
 // the resonance dial only renders when a profile actually has numeric trait
-// data — no invented numbers for the common case.
+// data â€” no invented numbers for the common case.
 function getResonance(personalityProfile: unknown): { score: number; axes: { label: string; value: number }[] } | null {
   if (!personalityProfile || typeof personalityProfile !== "object") return null;
   const numeric = Object.entries(personalityProfile as Record<string, unknown>).filter(
@@ -88,12 +88,12 @@ function StoriesCarousel() {
               className="p-[2.5px] rounded-full story-ring-active"
               style={{ width: `${STORY_SIZE}px`, height: `${STORY_SIZE}px` }}
             >
-              <div className="w-full h-full rounded-full overflow-hidden" style={{ background: "#1A1A24" }}>
+              <div className="w-full h-full rounded-full overflow-hidden" style={{ background: "#161220" }}>
                 <Avatar className="w-full h-full">
                   {myPhotoUrl ? (
                     <AvatarImage src={myPhotoUrl} alt={myName} />
                   ) : (
-                    <AvatarFallback style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", color: "#FFFFFF", fontSize: "14px" }}>
+                    <AvatarFallback style={{ background: "#161220", color: "#F5F0EA", fontSize: "14px" }}>
                       {myName[0]}
                     </AvatarFallback>
                   )}
@@ -108,10 +108,7 @@ function StoriesCarousel() {
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
+                color: "#A79FB4",
                 fontWeight: 600,
               }}
             >
@@ -129,13 +126,13 @@ function StoriesCarousel() {
               style={{
                 width: `${STORY_SIZE}px`,
                 height: `${STORY_SIZE}px`,
-                border: "2px dashed #9090A8",
+                border: "2px dashed rgba(255,255,255,0.2)",
                 background: "transparent",
               }}
             >
-              <Plus className="w-5 h-5" style={{ color: "#9090A8" }} />
+              <Plus className="w-5 h-5" style={{ color: "#A79FB4" }} />
             </div>
-            <span style={{ fontSize: "11px", color: "#9090A8" }}>Add</span>
+            <span style={{ fontSize: "11px", color: "#A79FB4" }}>Add</span>
           </button>
         )}
 
@@ -147,19 +144,19 @@ function StoriesCarousel() {
             data-testid={`story-avatar-${u.userId}`}
           >
             <div className="story-ring-active p-[2.5px] rounded-full" style={{ width: `${STORY_SIZE}px`, height: `${STORY_SIZE}px` }}>
-              <div className="w-full h-full rounded-full overflow-hidden" style={{ background: "#1A1A24" }}>
+              <div className="w-full h-full rounded-full overflow-hidden" style={{ background: "#161220" }}>
                 <Avatar className="w-full h-full">
                   {u.photoUrl ? (
                     <AvatarImage src={u.photoUrl} alt={u.displayName} />
                   ) : (
-                    <AvatarFallback style={{ background: "#242433", color: "#FFFFFF", fontSize: "14px" }}>
+                    <AvatarFallback style={{ background: "rgba(255,255,255,0.05)", color: "#FFFFFF", fontSize: "14px" }}>
                       {u.displayName[0]}
                     </AvatarFallback>
                   )}
                 </Avatar>
               </div>
             </div>
-            <span style={{ fontSize: "11px", color: "#9090A8", maxWidth: "56px", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: "11px", color: "#A79FB4", maxWidth: "56px", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {u.displayName.split(" ")[0]}
             </span>
           </button>
@@ -197,22 +194,34 @@ function StoriesCarousel() {
   );
 }
 
-type FilterChip = "all" | "nearby" | "new" | "online";
-
-const CHIP_LABELS: { key: FilterChip; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "nearby", label: "Nearby" },
-  { key: "new", label: "New" },
-  { key: "online", label: "Online" },
-];
+// One read a day, so there is no feed to filter â€” the only scope that has
+// backend support today is distance. "Within 20km" toggles between the
+// distance-sorted view and everyone.
+type FilterChip = "all" | "nearby";
 
 function getInitialFilter(): FilterChip {
   if (typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
-    const f = params.get("filter");
-    if (f === "nearby" || f === "new" || f === "online") return f;
+    if (params.get("filter") === "nearby") return "nearby";
   }
   return "all";
+}
+
+function ScopePill({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-pressed={active}
+      className={`text-sm font-medium px-4 py-1.5 rounded-full border transition-colors ${
+        active
+          ? "bg-vf-ember border-transparent text-vf-ink"
+          : "border-vf-line text-vf-soft hover:border-white/25"
+      }`}
+      data-testid="chip-nearby"
+    >
+      Within 20km
+    </button>
+  );
 }
 
 export default function Discover() {
@@ -231,9 +240,7 @@ export default function Discover() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const f = params.get("filter");
-    const next = (f === "nearby" || f === "new" || f === "online") ? f : "all";
-    setFilter(next as FilterChip);
+    setFilter(params.get("filter") === "nearby" ? "nearby" : "all");
     setCurrentIdx(0);
   }, [woLocation]);
 
@@ -297,28 +304,15 @@ export default function Discover() {
       <LayoutShell>
         <div className="max-w-lg mx-auto">
           <div className="mb-6">
-            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint mb-2">
-              {weekday}
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2">
+              {weekday} Â· no read yet
             </div>
             <h1 className="font-serif font-normal text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-[-0.02em] text-vf-text">
               Discover
             </h1>
           </div>
-          <div className="flex gap-2 mb-5 overflow-x-auto scrollbar-hide" data-testid="filter-chips">
-            {CHIP_LABELS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => { setFilter(key); setCurrentIdx(0); }}
-                className={`shrink-0 text-sm font-medium px-4 py-1.5 rounded-full border transition-colors ${
-                  filter === key
-                    ? "bg-vf-ember border-transparent text-vf-ink"
-                    : "border-vf-line text-vf-soft hover:border-white/25"
-                }`}
-                data-testid={`chip-${key}`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex gap-2 mb-5" data-testid="filter-chips">
+            <ScopePill active={filter === "nearby"} onToggle={() => { setFilter(filter === "nearby" ? "all" : "nearby"); setCurrentIdx(0); }} />
           </div>
           <StoriesCarousel />
           <div className="text-center py-20 px-6 rounded-[22px] border border-vf-line bg-vf-surface">
@@ -326,21 +320,19 @@ export default function Discover() {
               <Brain className="w-10 h-10 text-vf-mint" />
             </div>
             <h3 className="font-serif text-xl mb-2 text-vf-text">
-              {filter === "nearby" ? "Nobody nearby right now" : filter === "online" ? "Nobody online right now" : "No one to discover yet"}
+              {filter === "nearby" ? "Nobody within 20km right now" : "No one to discover yet"}
             </h3>
             <p className="text-sm text-vf-muted">
               {filter === "nearby"
-                ? "Try All to see everyone, or check back when people are near you."
-                : filter === "online"
-                ? "Check back in a bit to see who's active."
+                ? "Widen the scope to see everyone, or check back when people are near you."
                 : "Complete your onboarding first, then check back as more people join VibeFlow."}
             </p>
             {filter !== "all" && (
               <button
                 onClick={() => setFilter("all")}
-                className="mt-4 text-sm font-medium text-vf-mint"
+                className="mt-4 text-sm font-medium text-vf-ember"
               >
-                Show all profiles
+                Show everyone
               </button>
             )}
           </div>
@@ -419,7 +411,7 @@ export default function Discover() {
   };
 
   // Free-text soul-mapping answers (real onboarded users) fall back to a
-  // couple of quoted excerpts instead of fake numeric axes — see getResonance().
+  // couple of quoted excerpts instead of fake numeric axes â€” see getResonance().
   const textAnswers = !resonance && currentProfile.personalityProfile && typeof currentProfile.personalityProfile === "object"
     ? Object.values(currentProfile.personalityProfile as Record<string, unknown>).filter((v): v is string => typeof v === "string" && v.trim().length > 0).slice(0, 2)
     : [];
@@ -433,28 +425,15 @@ export default function Discover() {
       <div className="max-w-3xl mx-auto">
         <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
           <div>
-            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint mb-2">
-              {weekday} · {profiles.length} {profiles.length === 1 ? "profile" : "profiles"} to explore
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2">
+              {weekday} Â· one read ready
             </div>
             <h1 className="font-serif font-normal text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-[-0.02em] text-vf-text">
               Discover
             </h1>
           </div>
           <div className="flex gap-2 flex-wrap" data-testid="filter-chips">
-            {CHIP_LABELS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => { setFilter(key); setCurrentIdx(0); }}
-                className={`shrink-0 text-sm font-medium px-4 py-1.5 rounded-full border transition-colors ${
-                  filter === key
-                    ? "bg-vf-ember border-transparent text-vf-ink"
-                    : "border-vf-line text-vf-soft hover:border-white/25"
-                }`}
-                data-testid={`chip-${key}`}
-              >
-                {label}
-              </button>
-            ))}
+            <ScopePill active={filter === "nearby"} onToggle={() => { setFilter(filter === "nearby" ? "all" : "nearby"); setCurrentIdx(0); }} />
           </div>
         </div>
 
@@ -479,7 +458,7 @@ export default function Discover() {
                   className="absolute inset-0 w-full h-full object-cover"
                 />
               ) : (
-                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#7C3AED] to-[#EC4899]">
+                <div className="absolute inset-0 flex items-center justify-center bg-vf-surface2">
                   <span className="font-serif text-white/25" style={{ fontSize: "96px" }}>
                     {currentProfile.displayName?.[0] || "?"}
                   </span>
@@ -487,8 +466,8 @@ export default function Discover() {
               )}
 
               <div
-                className="absolute inset-x-0 bottom-0 pointer-events-none"
-                style={{ height: "52%", background: "linear-gradient(to top, rgba(12,9,16,.92), rgba(12,9,16,0))" }}
+                className="absolute inset-x-0 bottom-0 pointer-events-none bg-gradient-to-t from-vf-ink to-transparent"
+                style={{ height: "52%" }}
               />
 
               {nearby && (
@@ -517,7 +496,7 @@ export default function Discover() {
                 <button
                   onClick={() => handleViewCardStory(currentProfile)}
                   className="absolute top-3 left-3 w-11 h-11 rounded-full flex items-center justify-center p-[2px]"
-                  style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", animation: "pulse 2s infinite" }}
+                  style={{ background: "#FF6B4A", animation: "pulse 2s infinite" }}
                   data-testid="story-ring-indicator"
                   aria-label="View story"
                 >
@@ -555,7 +534,7 @@ export default function Discover() {
                     <MapPin className="w-3.5 h-3.5 shrink-0" />
                     <span data-testid="text-profile-location">
                       {currentProfile.locationName || currentProfile.location}
-                      {currentProfile.showDistance !== false && distanceKm !== null ? ` · ${formatDistance(distanceKm)}` : ""}
+                      {currentProfile.showDistance !== false && distanceKm !== null ? ` Â· ${formatDistance(distanceKm)}` : ""}
                     </span>
                   </div>
                 )}
@@ -668,7 +647,7 @@ export default function Discover() {
                     className="text-left rounded-[20px] border border-vf-line bg-vf-surface2 p-4 flex gap-3.5 items-center hover:border-white/20 transition-colors"
                     data-testid={`card-upcoming-${p.userId}`}
                   >
-                    <div className="w-[58px] h-[72px] rounded-[14px] shrink-0 overflow-hidden bg-gradient-to-br from-[#7C3AED] to-[#EC4899] flex items-center justify-center">
+                    <div className="w-[58px] h-[72px] rounded-[14px] shrink-0 overflow-hidden bg-vf-surface2 flex items-center justify-center">
                       {p.coverPhotoUrl ? (
                         <img src={p.coverPhotoUrl} alt={p.displayName} className="w-full h-full object-cover" />
                       ) : (
