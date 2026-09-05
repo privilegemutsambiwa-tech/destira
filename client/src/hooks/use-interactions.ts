@@ -5,7 +5,18 @@ export function useIncomingLikes() {
     queryKey: ["/api/likes/incoming"],
     queryFn: async () => {
       const res = await fetch("/api/likes/incoming", { credentials: "include" });
-      if (!res.ok) return { likes: [], totalCount: 0, isBlurred: true, tier: "free" };
+      if (!res.ok) return { likes: [], totalCount: 0 };
+      return res.json();
+    },
+  });
+}
+
+export function useOutgoingLikes() {
+  return useQuery({
+    queryKey: ["/api/likes/outgoing"],
+    queryFn: async () => {
+      const res = await fetch("/api/likes/outgoing", { credentials: "include" });
+      if (!res.ok) return { asks: [], totalCount: 0 };
       return res.json();
     },
   });
@@ -24,6 +35,7 @@ export function useLikeBack() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/likes/incoming"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/likes/outgoing"] });
       queryClient.invalidateQueries({ queryKey: ["/api/matches"] });
     },
   });
@@ -73,7 +85,11 @@ export function useRespondToMatch() {
       if (!res.ok) throw new Error("Failed to respond to match");
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/matches"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/matches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/likes/incoming"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/likes/outgoing"] });
+    },
   });
 }
 
@@ -1018,6 +1034,7 @@ export function useRespondChatRequest() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/chat-requests"] });
       queryClient.invalidateQueries({ queryKey: ["/api/matches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/likes/incoming"] });
     },
   });
 }
