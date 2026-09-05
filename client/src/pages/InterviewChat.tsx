@@ -3,13 +3,17 @@ import { useCreateMatch } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Send, ArrowLeft, Bot, Sparkles, Loader2, Check, CheckCheck } from "lucide-react";
+import { Send, ArrowLeft, Loader2, Check, CheckCheck } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
+
+const SUGGESTED_QUESTIONS = [
+  "What are they looking for?",
+  "How do they handle conflict?",
+  "What would they never compromise on?",
+];
 
 type MessageStatus = "sending" | "sent" | "delivered";
 
@@ -34,12 +38,12 @@ interface InterviewData {
 
 function StatusIndicator({ status }: { status: MessageStatus }) {
   if (status === "sending") {
-    return <Loader2 className="w-3 h-3 text-primary-foreground/50 animate-spin" />;
+    return <Loader2 className="w-3 h-3 text-vf-faint animate-spin" />;
   }
   if (status === "sent") {
-    return <Check className="w-3 h-3 text-primary-foreground/60" />;
+    return <Check className="w-3 h-3 text-vf-faint" />;
   }
-  return <CheckCheck className="w-3 h-3 text-primary-foreground/80" />;
+  return <CheckCheck className="w-3 h-3 text-vf-ember" />;
 }
 
 export default function InterviewChat({ params }: { params: { id: string } }) {
@@ -69,6 +73,9 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
         setTargetUserId(interview.targetProfile?.userId || interview.targetId || null);
         setTargetAvatar(interview.targetProfile?.profileImageUrl || null);
 
+        const possessive = name.toLowerCase() === "their" ? "This twin" : `${name}'s twin`;
+        const opener = `${possessive} is here. Ask it what they want in three years, how they argue, or what they won't compromise on — it answers only what they're allowed.`;
+
         if (interview.transcript) {
           try {
             const history: { role: string; content: string }[] = JSON.parse(interview.transcript);
@@ -83,7 +90,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
           } catch {
             setMessages([{
               id: 1,
-              text: `Hi! I'm ${name}'s AI Twin. I'm here to help you see if we'd be a great match. Ask me anything!`,
+              text: opener,
               sender: "ai",
               timestamp: new Date(),
               status: "delivered",
@@ -92,7 +99,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
         } else {
           setMessages([{
             id: 1,
-            text: `Hi! I'm ${name}'s AI Twin. I'm here to help you see if we'd be a great match. Ask me anything about ${name.toLowerCase() === "their" ? "them" : name} - their values, hobbies, life goals, or what they're looking for!`,
+            text: opener,
             sender: "ai",
             timestamp: new Date(),
             status: "delivered",
@@ -108,19 +115,20 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
 
   useEffect(scrollToBottom, [messages, isTyping, scrollToBottom]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isStreaming) return;
+  const handleSend = async (textArg?: string) => {
+    const text = (textArg ?? input).trim();
+    if (!text || isStreaming) return;
 
     const userMsg: Message = {
       id: Date.now(),
-      text: input,
+      text,
       sender: "user",
       timestamp: new Date(),
       status: "sending",
     };
 
     setMessages(prev => [...prev, userMsg]);
-    const currentInput = input;
+    const currentInput = text;
     setInput("");
     setIsStreaming(true);
 
@@ -261,53 +269,56 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
   };
 
   const avatarInitial = targetName?.[0]?.toUpperCase() || "T";
+  const twinPossessive = targetName.toLowerCase() === "their" ? "their" : `${targetName}'s`;
+  const meetName = targetName.toLowerCase() === "their" ? "them" : targetName;
+  const showSuggestions = messages.length <= 1 && !isStreaming && !isTyping;
 
   return (
-    <div className="h-screen flex flex-col bg-background" data-testid="interview-chat-page">
-      <div className="bg-card border-b px-4 py-3 flex items-center justify-between gap-2 sticky top-0 z-50">
-        <div className="flex items-center gap-3">
+    <div className="h-screen flex flex-col bg-vf-ink text-vf-text" data-testid="interview-chat-page">
+      <div className="bg-vf-ink border-b border-vf-line px-4 py-3 flex items-center justify-between gap-2 sticky top-0 z-50">
+        <div className="flex items-center gap-3 min-w-0">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setLocation("/interviews")}
             data-testid="button-back"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5 text-vf-ember" />
           </Button>
-          <div className="flex items-center gap-3">
-            <Avatar>
+          <div className="flex items-center gap-3 min-w-0">
+            <Avatar className="ring-2 ring-vf-mint">
               {targetAvatar ? (
                 <AvatarImage src={targetAvatar} alt={targetName} />
               ) : null}
-              <AvatarFallback className="gradient-bg text-white font-bold">
+              <AvatarFallback className="bg-vf-ink text-vf-text font-serif">
                 {avatarInitial}
               </AvatarFallback>
             </Avatar>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-bold text-sm" data-testid="text-twin-name">{targetName}'s AI Twin</h2>
-                <Badge variant="secondary" className="text-[10px]">
-                  <Bot className="w-3 h-3 mr-1" />
-                  AI Twin
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                <span data-testid="text-twin-status">Online</span>
+            <div className="min-w-0">
+              <h2 className="font-serif text-[15px] text-vf-text truncate" data-testid="text-twin-name">
+                {targetName}
+              </h2>
+              <p className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-vf-mint" />
+                <span
+                  className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-mint"
+                  data-testid="text-twin-status"
+                >
+                  {twinPossessive} twin · learning
+                </span>
               </p>
             </div>
           </div>
         </div>
         {targetUserId && (
-          <Button
-            variant="outline"
+          <button
             onClick={handleRequestMatch}
             disabled={createMatch.isPending}
+            className="shrink-0 rounded-full bg-vf-ember text-vf-ink font-semibold text-sm px-4 h-10 hover:bg-[#FF8163] disabled:opacity-50 transition-colors"
             data-testid="button-request-match"
           >
-            <Sparkles className="w-4 h-4 mr-2" />
-            Request Match
-          </Button>
+            Ask to meet {meetName}
+          </button>
         )}
       </div>
 
@@ -324,30 +335,28 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
               data-testid={`message-${msg.sender}-${msg.id}`}
             >
               {msg.sender === "ai" && (
-                <Avatar className="h-8 w-8 mr-2 mt-1 shrink-0">
+                <Avatar className="h-8 w-8 mr-2 mt-1 shrink-0 ring-1 ring-vf-mint">
                   {targetAvatar ? (
                     <AvatarImage src={targetAvatar} alt={targetName} />
                   ) : null}
-                  <AvatarFallback className="gradient-bg text-white text-xs font-bold">
+                  <AvatarFallback className="bg-vf-ink text-vf-text text-xs font-serif">
                     {avatarInitial}
                   </AvatarFallback>
                 </Avatar>
               )}
               <div className="flex flex-col gap-1 max-w-[75%]">
                 <div
-                  className={`
-                    rounded-md px-4 py-3 text-sm leading-relaxed
-                    ${msg.sender === "user"
-                      ? "gradient-bg text-white rounded-tr-none"
-                      : "bg-card border text-card-foreground rounded-tl-none"
-                    }
-                  `}
+                  className={`px-4 py-3 text-sm leading-relaxed ${
+                    msg.sender === "user"
+                      ? "rounded-[18px] rounded-br-[6px] bg-vf-ember text-[#180B07] font-medium"
+                      : "rounded-[18px] rounded-bl-[6px] border border-vf-mint/[0.22] bg-vf-mint/[0.09] text-vf-text"
+                  }`}
                 >
                   {msg.text}
                 </div>
                 {msg.sender === "user" && (
                   <div className="flex items-center justify-end gap-1">
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-[10px] text-vf-faint">
                       {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
                     <StatusIndicator status={msg.status} />
@@ -357,6 +366,26 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
             </motion.div>
           ))}
         </AnimatePresence>
+
+        {showSuggestions && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-wrap gap-2 pl-10"
+            data-testid="suggested-questions"
+          >
+            {SUGGESTED_QUESTIONS.map((q) => (
+              <button
+                key={q}
+                onClick={() => handleSend(q)}
+                className="rounded-full border border-vf-ember/50 text-vf-ember text-xs px-3 py-1.5 hover:bg-vf-ember/10 transition-colors"
+                data-testid={`chip-suggested-${q.slice(0, 12)}`}
+              >
+                {q}
+              </button>
+            ))}
+          </motion.div>
+        )}
 
         <AnimatePresence>
           {isTyping && (
@@ -369,24 +398,22 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
               className="flex justify-start"
               data-testid="typing-indicator"
             >
-              <Avatar className="h-8 w-8 mr-2 mt-1 shrink-0">
+              <Avatar className="h-8 w-8 mr-2 mt-1 shrink-0 ring-1 ring-vf-mint">
                 {targetAvatar ? (
                   <AvatarImage src={targetAvatar} alt={targetName} />
                 ) : null}
-                <AvatarFallback className="gradient-bg text-white text-xs font-bold">
+                <AvatarFallback className="bg-vf-ink text-vf-text text-xs font-serif">
                   {avatarInitial}
                 </AvatarFallback>
               </Avatar>
-              <Card className="border">
-                <CardContent className="p-3 flex items-center gap-2">
-                  <div className="flex gap-1">
-                    <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" />
-                    <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:100ms]" />
-                    <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:200ms]" />
-                  </div>
-                  <span className="text-xs text-muted-foreground">Twin is thinking...</span>
-                </CardContent>
-              </Card>
+              <div className="rounded-[18px] rounded-bl-[6px] border border-vf-mint/[0.22] bg-vf-mint/[0.09] p-3 flex items-center gap-2">
+                <div className="flex gap-1">
+                  <span className="w-1.5 h-1.5 bg-vf-mint rounded-full animate-bounce" />
+                  <span className="w-1.5 h-1.5 bg-vf-mint rounded-full animate-bounce [animation-delay:100ms]" />
+                  <span className="w-1.5 h-1.5 bg-vf-mint rounded-full animate-bounce [animation-delay:200ms]" />
+                </div>
+                <span className="text-xs text-vf-muted">Reading {twinPossessive} answers…</span>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -394,7 +421,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 bg-background border-t">
+      <div className="p-4 bg-vf-ink border-t border-vf-line">
         <form
           className="flex gap-2 max-w-4xl mx-auto items-center"
           onSubmit={(e) => { e.preventDefault(); handleSend(); }}
@@ -403,14 +430,15 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={`Ask about ${targetName}'s values, interests...`}
-            className="flex-1"
+            placeholder={`Ask about ${meetName}…`}
+            className="flex-1 rounded-full bg-white/5 border-vf-line text-vf-text"
             disabled={isStreaming}
             data-testid="input-message"
           />
           <Button
             type="submit"
             size="icon"
+            className="rounded-full bg-vf-mint text-vf-ink hover:bg-[#A9EDD6] disabled:opacity-50"
             disabled={!input.trim() || isStreaming}
             data-testid="button-send"
           >
