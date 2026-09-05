@@ -963,7 +963,7 @@ export default function Landing() {
         <div className="max-w-[1180px] mx-auto py-14 flex flex-col md:flex-row gap-10 md:gap-16 md:items-start md:justify-between">
           <div>
             <div className="text-vf-text">
-              <VibeFlowLockup orientation="horizontal" size={26} />
+              <VibeFlowLockup orientation="horizontal" size={28} />
             </div>
             <p className="mt-4 text-[13px] text-vf-muted">Made in Johannesburg.</p>
             <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint">
