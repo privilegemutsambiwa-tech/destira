@@ -2307,46 +2307,50 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // People whose twin talked to yours and who asked to meet. Never gated —
+  // the landing page promises we don't sell back people who already liked you,
+  // so full profiles always, no blur, no tier check.
   app.get("/api/likes/incoming", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     try {
       const userMatches = await storage.getMatchesWithProfiles(userId);
-      const incoming = userMatches
+      const likes = userMatches
         .filter((m: any) => m.status === "pending" && !m.isRequester)
         .map((m: any) => ({
           matchId: m.id,
           fromUserId: m.isRequester ? m.user2Id : m.user1Id,
-          profile: m.otherProfile,
+          profile: m.otherProfile ? { ...m.otherProfile, blurred: false } : null,
           createdAt: m.createdAt,
         }));
 
-      const sub = await storage.getSubscription(userId);
-      const tier = sub?.tier || "free";
-      const isBlurred = tier === "free";
-
-      res.json({
-        likes: incoming.map((like: any) => ({
-          ...like,
-          profile: isBlurred ? {
-            displayName: null,
-            bio: null,
-            coverPhotoUrl: like.profile?.coverPhotoUrl || null,
-            age: like.profile?.age || null,
-            location: like.profile?.location || null,
-            blurred: true,
-          } : {
-            ...like.profile,
-            blurred: false,
-          },
-        })),
-        totalCount: incoming.length,
-        isBlurred,
-        tier,
-      });
+      res.json({ likes, totalCount: likes.length });
     } catch (e) {
       console.error("Likes incoming error:", e);
       res.status(500).json({ message: "Failed to fetch incoming likes" });
+    }
+  });
+
+  // Your outgoing asks — mirror of the incoming filter, requester side.
+  app.get("/api/likes/outgoing", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const userMatches = await storage.getMatchesWithProfiles(userId);
+      const asks = userMatches
+        .filter((m: any) => m.isRequester && m.status !== "unmatched")
+        .map((m: any) => ({
+          matchId: m.id,
+          toUserId: m.isRequester ? m.user2Id : m.user1Id,
+          profile: m.otherProfile ? { ...m.otherProfile, blurred: false } : null,
+          status: m.status,
+          createdAt: m.createdAt,
+        }));
+
+      res.json({ asks, totalCount: asks.length });
+    } catch (e) {
+      console.error("Likes outgoing error:", e);
+      res.status(500).json({ message: "Failed to fetch outgoing likes" });
     }
   });
 
