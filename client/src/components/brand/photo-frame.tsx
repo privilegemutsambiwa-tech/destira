@@ -25,6 +25,10 @@ export interface PhotoFrameProps {
   priority?: boolean;
   /** REQUIRED whenever src is set — throws in dev otherwise. */
   alt?: string;
+  /** Explicit responsive set, e.g. "/photos/x-640.webp 640w, …". When absent
+   *  and src is set, a `?w=` CDN pattern is assumed. */
+  srcSet?: string;
+  sizes?: string;
   /** Marks the slot for the person filling photos in. */
   slot?: string;
   className?: string;
@@ -38,6 +42,8 @@ export function PhotoFrame({
   treatment = "plain",
   priority = false,
   alt,
+  srcSet,
+  sizes,
   slot,
   className = "",
   style,
@@ -57,8 +63,8 @@ export function PhotoFrame({
       {src ? (
         <img
           src={src}
-          srcSet={WIDTHS.map((w) => `${src}?w=${w} ${w}w`).join(", ")}
-          sizes="(min-width: 1024px) 45vw, 100vw"
+          srcSet={srcSet ?? WIDTHS.map((w) => `${src}?w=${w} ${w}w`).join(", ")}
+          sizes={sizes ?? "(min-width: 1024px) 45vw, 100vw"}
           alt={alt}
           loading={priority ? "eager" : "lazy"}
           decoding="async"

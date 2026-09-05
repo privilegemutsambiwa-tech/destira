@@ -92,6 +92,17 @@ function Reveal({
   );
 }
 
+const PHOTO_WIDTHS = [640, 960, 1440, 1920] as const;
+
+/** Placeholder imagery lives in client/public/photos/ — swap freely; the slot
+ *  ids match docs/photo-manifest.md and the [data-photo-slot] attributes. */
+function photo(slot: string) {
+  return {
+    src: `/photos/${slot}.jpg`,
+    srcSet: PHOTO_WIDTHS.map((w) => `/photos/${slot}-${w}.webp ${w}w`).join(", "),
+  };
+}
+
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
@@ -474,6 +485,8 @@ export default function Landing() {
             <div className="lg:hidden mt-10">
               <PhotoFrame
                 slot="hero-primary"
+                {...photo("hero-primary")}
+                alt="Two people at a café table, one leaning in mid-sentence with a hand raised"
                 ratio="4/5"
                 treatment="warm"
                 priority
@@ -496,6 +509,8 @@ export default function Landing() {
               />
               <PhotoFrame
                 slot="hero-primary"
+                {...photo("hero-primary")}
+                alt="Two people at a café table, one leaning in mid-sentence with a hand raised"
                 ratio="4/5"
                 treatment="warm"
                 priority
@@ -508,6 +523,8 @@ export default function Landing() {
               >
                 <PhotoFrame
                   slot="hero-secondary"
+                  {...photo("hero-secondary")}
+                  alt="Two people side by side flipping through a crate of records in a dim room"
                   ratio="1/1"
                   treatment="warm"
                   caption="THURSDAY · THE LISTENING ROOM"
@@ -567,6 +584,8 @@ export default function Landing() {
             <div className="mt-4">
               <PhotoFrame
                 slot="turn"
+                {...photo("turn")}
+                alt="Friends laughing across a candlelit table, wine poured, plates between them"
                 ratio="16/9"
                 treatment="plain"
                 caption="NINETY SECONDS OF TWIN CONVERSATION, THEN AN ACTUAL EVENING"
@@ -701,13 +720,13 @@ export default function Landing() {
 
           <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-5">
             {[
-              ["Late Practice", "412 members · musicians with day jobs", "community-late-practice"],
-              ["Sunday Trail", "1,208 members · 6am starts, no excuses", "community-sunday-trail"],
-              ["Table for Six", "330 members · long dinners, dating with intent", "community-table-for-six"],
-            ].map(([name, meta, slot], i) => (
+              ["Late Practice", "412 members · musicians with day jobs", "group-late-practice", "Musicians mid-rehearsal in a small room, one watching another play"],
+              ["Sunday Trail", "1,208 members · 6am starts, no excuses", "group-sunday-trail", "A line of people climbing a mountain ridge at first light, seen from behind"],
+              ["Table for Six", "330 members · long dinners, dating with intent", "group-table-for-six", "A long table shot from above — six people, shared dishes, hands reaching in"],
+            ].map(([name, meta, slot, alt], i) => (
               <Reveal key={name} delay={i * 80}>
                 <div className="rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden">
-                  <PhotoFrame slot={slot} ratio="3/2" treatment="warm" style={{ borderRadius: 0 }} />
+                  <PhotoFrame slot={slot} {...photo(slot)} alt={alt} ratio="3/2" treatment="warm" style={{ borderRadius: 0 }} />
                   <div className="p-5">
                     <div className="text-[16px] text-vf-text">{name}</div>
                     <div className="text-[13px] text-vf-muted mt-1">{meta}</div>
@@ -793,9 +812,16 @@ export default function Landing() {
       >
         {/* full-bleed backdrop: two people walking away, lit street at night */}
         <div className="absolute inset-0" aria-hidden="true" data-photo-slot="closing-fullbleed">
-          <div className="absolute inset-0 flex items-center justify-center bg-vf-surface2">
-            <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">Photo</span>
-          </div>
+          <img
+            src="/photos/closing.jpg"
+            srcSet={PHOTO_WIDTHS.map((w) => `/photos/closing-${w}.webp ${w}w`).join(", ")}
+            sizes="100vw"
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover"
+            style={{ objectPosition: "center 40%" }}
+          />
           {/* legibility scrim + top/bottom fade into the page */}
           <div
             className="absolute inset-0"
