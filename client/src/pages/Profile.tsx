@@ -25,6 +25,55 @@ import { queryClient } from "@/lib/queryClient";
 
 const CARD = "rounded-[20px] border border-vf-line bg-vf-surface";
 
+const NUDGE_KEY = "vf_referral_nudge_dismissed";
+
+/** Shown once the user is clearly enjoying it (readiness > 60) and hasn't
+ *  referred anyone yet. Dismissal persists. */
+function ReferralNudge({ completionScore }: { completionScore: number }) {
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem(NUDGE_KEY) === "1"; } catch { return false; }
+  });
+  const { data } = useQuery<{ url: string; counts: { pending: number; qualified: number; rewarded: number } }>({
+    queryKey: ["/api/referrals/me"],
+  });
+
+  const joined = data ? data.counts.pending + data.counts.qualified + data.counts.rewarded : 0;
+  if (dismissed || completionScore <= 60 || joined > 0 || !data) return null;
+
+  const dismiss = () => {
+    setDismissed(true);
+    try { localStorage.setItem(NUDGE_KEY, "1"); } catch { /* noop */ }
+  };
+  const copy = () => { navigator.clipboard?.writeText(data.url).catch(() => {}); };
+
+  return (
+    <div
+      className="relative rounded-[18px] border border-vf-line bg-vf-surface2 p-4 pr-10"
+      data-testid="referral-nudge"
+    >
+      <button
+        onClick={dismiss}
+        aria-label="Dismiss"
+        className="absolute right-3 top-3 text-vf-faint hover:text-vf-text transition-colors"
+        data-testid="button-dismiss-nudge"
+      >
+        <X className="w-4 h-4" />
+      </button>
+      <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">Bring your people</div>
+      <p className="text-[14px] text-vf-text mt-1.5 leading-[1.5]">
+        Every friend who joins gets you five more profile views. Your daily read stays one a day.
+      </p>
+      <button
+        onClick={copy}
+        className="mt-3 inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[#FF8163] transition-colors"
+        data-testid="button-nudge-copy"
+      >
+        Copy invite link
+      </button>
+    </div>
+  );
+}
+
 export default function Profile() {
   const { data: profile, isLoading } = useProfile();
   const { data: subscription } = useSubscription();
@@ -238,6 +287,8 @@ export default function Profile() {
   return (
     <LayoutShell>
       <div className="space-y-6">
+
+        <ReferralNudge completionScore={completionScore} />
 
         {/* Hero */}
         <div className="relative">

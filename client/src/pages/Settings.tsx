@@ -99,6 +99,57 @@ function ChevronRow({ icon: Icon, label, sublabel, onClick, destructive, testId 
   );
 }
 
+function InviteRow() {
+  const { data } = useQuery<{ code: string; url: string; counts: { pending: number; qualified: number; rewarded: number }; viewsEarned: number }>({
+    queryKey: ["/api/referrals/me"],
+  });
+  const [copied, setCopied] = useState(false);
+
+  const joined = data ? data.counts.pending + data.counts.qualified + data.counts.rewarded : 0;
+  const views = data?.viewsEarned ?? 0;
+
+  const copy = async () => {
+    if (!data?.url) return;
+    try {
+      await navigator.clipboard.writeText(data.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch { /* clipboard blocked */ }
+  };
+
+  return (
+    <div style={{ padding: "14px 16px" }} data-testid="row-referral">
+      <div className="flex items-center gap-3">
+        <Plus className="w-5 h-5 shrink-0" style={{ color: MUTED }} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium" style={{ color: TEXT }}>Invite a friend</p>
+          <p style={{ ...MONO_EYEBROW, color: FAINT, marginTop: "3px" }}>
+            {joined} joined · {views} views earned
+          </p>
+        </div>
+        <button
+          onClick={copy}
+          disabled={!data}
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg btn-press disabled:opacity-40"
+          style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: copied ? MINT : TEXT }}
+          data-testid="button-copy-referral"
+        >
+          {copied ? "Copied" : "Copy link"}
+        </button>
+      </div>
+      {data?.code && (
+        <div
+          className="mt-2.5 text-xs px-3 py-2 rounded-lg select-all"
+          style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: MUTED, fontFamily: '"DM Mono", ui-monospace, monospace', letterSpacing: "0.12em" }}
+          data-testid="text-referral-code"
+        >
+          {data.code}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SliderInput({ label, value, min, max, onChange, unit = "" }: {
   label: string; value: number; min: number; max: number;
   onChange: (v: number) => void; unit?: string;
@@ -1184,6 +1235,11 @@ export default function Settings() {
           <ChevronRow icon={Wrench} label="Generate AI Summary" onClick={() => setLocation("/profile")} testId="row-ai-summary" />
           <ChevronRow icon={Check} label="Verify Profile" sublabel={profile?.verificationStatus === "pending" ? "Pending review" : profile?.isVerified ? "Verified" : "Get the blue checkmark"} onClick={() => setActivePanel("verify")} testId="row-verify" />
           <ChevronRow icon={Wrench} label="Manage Photos" onClick={() => setLocation("/profile")} testId="row-manage-photos" />
+        </div>
+
+        <div style={SECTION_HEADER_STYLE}>Invite</div>
+        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+          <InviteRow />
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Subscription</div>

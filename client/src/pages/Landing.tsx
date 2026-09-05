@@ -674,6 +674,25 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ============ 5.5 · BRING YOUR PEOPLE (strip, not a section) ============ */}
+      <div className="px-6" data-testid="strip-referral">
+        <div className="max-w-[1180px] mx-auto border-y border-vf-line py-8 md:py-10">
+          <Reveal>
+            <Eyebrow>Bring your people</Eyebrow>
+            <p
+              className="font-serif font-normal text-vf-text mt-3"
+              style={{ fontSize: "clamp(20px, 2.6vw, 30px)", lineHeight: 1.15, letterSpacing: "-0.015em" }}
+            >
+              Every friend who joins gets you five more profile views.
+            </p>
+            <p className="mt-3 text-[14.5px] leading-[1.6] text-vf-muted max-w-[62ch]">
+              Your daily read is always one a day — that never changes, and it is not for sale.
+              Profile views are for looking someone up properly.
+            </p>
+          </Reveal>
+        </div>
+      </div>
+
       {/* ============ 6 · THE OBJECTION ============ */}
       <section
         className="px-6"
