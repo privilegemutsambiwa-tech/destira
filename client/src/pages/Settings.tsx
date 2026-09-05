@@ -15,12 +15,25 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from "@/components/ui/dialog";
 
-const BG = "#0F0F14";
-const CARD = "#1A1A24";
-const ELEVATED = "#242433";
-const BORDER = "#2E2E42";
-const MUTED = "#9090A8";
-const GRAD = "linear-gradient(135deg, #7C3AED, #EC4899)";
+const BG = "#0C0910";        // vf-ink — page ground
+const CARD = "#161220";      // vf-surface2 — setting rows
+const ELEVATED = "rgba(255,255,255,0.05)"; // input fill
+const BORDER = "rgba(255,255,255,0.09)";   // vf-line — hairline
+const MUTED = "#A79FB4";     // vf-muted — body
+const FAINT = "#7E7690";     // vf-faint — 12-13px metadata only
+const TEXT = "#F5F0EA";      // vf-text
+const EMBER = "#FF6B4A";     // human / primary action
+const MINT = "#8FE3C7";      // AI-twin layer — and toggle tracks, per the global rule
+const INK = "#0C0910";       // knob on a mint track, text on an ember fill
+
+const SERIF: React.CSSProperties = { fontFamily: '"Instrument Serif", serif', fontWeight: 400 };
+const MONO_EYEBROW: React.CSSProperties = {
+  fontFamily: '"DM Mono", ui-monospace, monospace',
+  fontSize: "10.5px",
+  letterSpacing: "0.16em",
+  textTransform: "uppercase",
+  fontWeight: 400,
+};
 
 const ROW_STYLE: React.CSSProperties = {
   display: "flex",
@@ -32,12 +45,9 @@ const ROW_STYLE: React.CSSProperties = {
 };
 
 const SECTION_HEADER_STYLE: React.CSSProperties = {
-  fontSize: "11px",
-  letterSpacing: "1.5px",
+  ...MONO_EYEBROW,
   color: MUTED,
-  textTransform: "uppercase",
-  padding: "20px 16px 8px",
-  fontWeight: 600,
+  padding: "24px 16px 10px",
 };
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
@@ -45,15 +55,16 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
     <div
       onClick={(e) => { e.stopPropagation(); onChange(!value); }}
       style={{
-        width: "42px", height: "24px", borderRadius: "12px",
-        background: value ? GRAD : BORDER,
+        width: "42px", height: "24px", borderRadius: "100px",
+        background: value ? MINT : "rgba(255,255,255,0.14)",
         transition: "background 0.2s", position: "relative", cursor: "pointer", flexShrink: 0,
       }}
     >
       <div style={{
         position: "absolute", top: "3px", left: value ? "21px" : "3px",
-        width: "18px", height: "18px", borderRadius: "50%", background: "#FFFFFF",
-        transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+        width: "18px", height: "18px", borderRadius: "50%",
+        background: value ? INK : "#CFC7DA",
+        transition: "left 0.2s, background 0.2s",
       }} />
     </div>
   );
@@ -96,12 +107,12 @@ function SliderInput({ label, value, min, max, onChange, unit = "" }: {
     <div style={{ padding: "12px 16px", borderBottom: `1px solid ${BORDER}` }}>
       <div className="flex justify-between items-center mb-2">
         <span className="text-sm font-medium text-white">{label}</span>
-        <span className="text-sm font-semibold" style={{ color: "#EC4899" }}>{value}{unit}</span>
+        <span className="text-sm" style={{ ...SERIF, color: EMBER, fontSize: "15px" }}>{value}{unit}</span>
       </div>
       <input
         type="range" min={min} max={max} value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full" style={{ accentColor: "#7C3AED" }}
+        className="w-full" style={{ accentColor: EMBER }}
         data-testid={`slider-${label.toLowerCase().replace(/\s+/g, "-")}`}
       />
       <div className="flex justify-between mt-1">
@@ -120,13 +131,13 @@ type PanelKey =
 
 function Panel({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
   return (
-    <div className="min-h-screen" style={{ background: BG, color: "#FFFFFF", fontFamily: "'Inter', sans-serif" }}>
+    <div className="min-h-screen" style={{ background: BG, color: TEXT }}>
       <div className="sticky top-0 z-10 flex items-center gap-3 px-4"
         style={{ height: "56px", background: BG, borderBottom: `1px solid ${BORDER}` }}>
         <button onClick={onBack} className="w-8 h-8 flex items-center justify-center" data-testid="button-panel-back">
-          <ArrowLeft className="w-5 h-5 text-white" />
+          <ArrowLeft className="w-5 h-5" style={{ color: EMBER }} />
         </button>
-        <h1 className="font-bold text-white" style={{ fontSize: "17px" }}>{title}</h1>
+        <h1 style={{ ...SERIF, color: TEXT, fontSize: "20px" }}>{title}</h1>
       </div>
       <div style={{ maxWidth: "480px", margin: "0 auto", paddingBottom: "40px" }}>
         {children}
@@ -142,9 +153,11 @@ function GradientButton({ label, onClick, testId, danger }: {
     <button
       onClick={onClick}
       data-testid={testId}
-      className="w-full py-3 text-sm font-semibold text-white"
+      className="w-full py-3 text-sm"
       style={{
-        background: danger ? "#EF4444" : GRAD,
+        background: danger ? "#EF4444" : EMBER,
+        color: danger ? "#FFFFFF" : INK,
+        fontWeight: 600,
         borderRadius: "12px", border: "none", cursor: "pointer",
       }}
     >
@@ -193,7 +206,8 @@ function TwinTonePanel({ onBack, profile }: { onBack: () => void; profile: any }
             <input
               type="range" min={0} max={100} step={5} value={c.value}
               onChange={(e) => c.set(Number(e.target.value))}
-              className="w-full accent-purple-500"
+              className="w-full"
+              style={{ accentColor: EMBER }}
               data-testid={`slider-twin-${c.key}`}
             />
             <div className="flex justify-between mt-1">
@@ -351,7 +365,7 @@ function BlockListPanel({ onBack }: { onBack: () => void }) {
               <button
                 onClick={() => unblockMutation.mutate(entry.blockedId)}
                 className="text-xs font-semibold px-3 py-1"
-                style={{ color: "#7C3AED", border: `1px solid #7C3AED`, borderRadius: "8px" }}
+                style={{ color: EMBER, border: `1px solid rgba(255,107,74,0.4)`, borderRadius: "8px" }}
                 data-testid={`button-unblock-${entry.blockedId}`}
               >
                 Unblock
@@ -471,7 +485,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
           <div style={{ padding: "0 16px 14px", borderBottom: `1px solid ${BORDER}` }}>
             {COLLECTED_DATA_ITEMS.map((item, i) => (
               <div key={i} className="flex items-start gap-2 py-1.5">
-                <span style={{ color: "#7C3AED", marginTop: "2px" }}>•</span>
+                <span style={{ color: FAINT, marginTop: "2px" }}>•</span>
                 <p className="text-xs" style={{ color: MUTED }}>{item}</p>
               </div>
             ))}
@@ -528,11 +542,11 @@ function VerifyPanel({ onBack }: { onBack: () => void }) {
       <div className="flex flex-col items-center px-6 pt-8 text-center">
         <div style={{
           width: "80px", height: "80px", borderRadius: "50%",
-          background: GRAD, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "20px",
+          background: EMBER, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "20px",
         }}>
-          <Check className="w-10 h-10 text-white" />
+          <Check className="w-10 h-10" style={{ color: INK }} />
         </div>
-        <h2 className="text-lg font-bold text-white mb-2">Get the Blue Checkmark</h2>
+        <h2 className="text-lg mb-2" style={{ ...SERIF, color: TEXT }}>Get the verified mark</h2>
         <p className="text-sm mb-6" style={{ color: MUTED }}>
           Take a selfie matching one of the reference poses to verify your identity. Verification adds trust and boosts your matches.
         </p>
@@ -640,7 +654,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
       </div>
 
       <p className="text-xs px-4 pt-4 pb-2 text-center" style={{ color: MUTED }}>
-        Questions? Email <span style={{ color: "#7C3AED" }}>support@vibeflow.app</span>
+        Questions? Email <span style={{ color: EMBER }}>support@vibeflow.app</span>
       </p>
     </Panel>
   );
@@ -798,12 +812,12 @@ function ChangeEmailPanel({ onBack }: { onBack: () => void }) {
         {done ? (
           <div className="text-center py-8">
             <div style={{
-              width: "60px", height: "60px", borderRadius: "50%", background: GRAD,
+              width: "60px", height: "60px", borderRadius: "50%", background: EMBER,
               display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
             }}>
-              <Mail className="w-7 h-7 text-white" />
+              <Mail className="w-7 h-7" style={{ color: INK }} />
             </div>
-            <p className="font-semibold text-white mb-2">Email updated</p>
+            <p className="mb-2" style={{ ...SERIF, color: TEXT, fontSize: "18px" }}>Email updated</p>
             <p className="text-sm" style={{ color: MUTED }}>Your account email is now <strong style={{ color: "#FFFFFF" }}>{email}</strong></p>
           </div>
         ) : (
@@ -1003,9 +1017,9 @@ function ClearMemoryPanel({ onBack }: { onBack: () => void }) {
         }}>
           <Brain className="w-10 h-10" style={{ color: "#EF4444" }} />
         </div>
-        <h2 className="text-lg font-bold text-white mb-2">Clear Twin Memory</h2>
+        <h2 className="text-lg mb-2" style={{ ...SERIF, color: TEXT }}>Clear Twin Memory</h2>
         <p className="text-sm mb-6" style={{ color: MUTED }}>
-          This will erase all memory your AI Twin has built up from interviews and conversations. Your Twin will start fresh but can be retrained.
+          Your twin forgets everything. Your reads reset to zero and rebuild over about a week.
         </p>
         {!confirmed ? (
           <GradientButton label="I understand, clear memory" onClick={() => setConfirmed(true)} testId="button-confirm-clear-step1" danger />
@@ -1111,13 +1125,13 @@ export default function Settings() {
   if (activePanel === "clear-memory") return <ClearMemoryPanel onBack={() => setActivePanel(null)} />;
 
   return (
-    <div className="min-h-screen" style={{ background: BG, color: "#FFFFFF", fontFamily: "'Inter', sans-serif" }} data-testid="page-settings">
+    <div className="min-h-screen" style={{ background: BG, color: TEXT }} data-testid="page-settings">
       <div className="sticky top-0 z-10 flex items-center gap-3 px-4"
         style={{ height: "56px", background: BG, borderBottom: `1px solid ${BORDER}` }}>
         <button onClick={() => setLocation("/profile")} className="w-8 h-8 flex items-center justify-center" data-testid="button-settings-back">
-          <ArrowLeft className="w-5 h-5 text-white" />
+          <ArrowLeft className="w-5 h-5" style={{ color: EMBER }} />
         </button>
-        <h1 className="font-bold text-white" style={{ fontSize: "17px" }}>Settings</h1>
+        <h1 style={{ ...SERIF, color: TEXT, fontSize: "20px" }}>Settings</h1>
       </div>
 
       <div style={{ maxWidth: "480px", margin: "0 auto", paddingBottom: "40px" }}>
@@ -1133,7 +1147,7 @@ export default function Settings() {
         <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ChevronRow icon={Brain} label="Interview AI Twin" onClick={() => setLocation("/twin-chat?from=/settings")} testId="row-twin-chat" />
           <ChevronRow icon={Volume2} label="Customize Twin Tone" sublabel="Style, verbosity, formality" onClick={() => setActivePanel("twin-tone")} testId="row-twin-tone" />
-          <ChevronRow icon={X} label="Clear Twin Memory" sublabel="Reset your Twin's learned data" onClick={() => setActivePanel("clear-memory")} testId="row-clear-memory" />
+          <ChevronRow icon={Shield} label="What your twin may discuss" sublabel="Topics it can and can't raise" onClick={() => setLocation("/twin-chat?from=/settings")} testId="row-twin-boundaries" />
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Discovery</div>
@@ -1186,25 +1200,30 @@ export default function Settings() {
           <ChevronRow icon={Shield} label="Privacy Policy" onClick={() => setActivePanel("privacy-policy")} testId="row-privacy-policy" />
         </div>
 
-        <div style={SECTION_HEADER_STYLE}>Danger Zone</div>
+        <div style={SECTION_HEADER_STYLE}>Irreversible</div>
         <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
-          <ChevronRow icon={LogOut} label="Sign Out" onClick={() => logout()} testId="row-sign-out" />
-          <ChevronRow icon={PauseCircle} label="Pause Account" sublabel="Hide your profile temporarily" onClick={() => setShowPauseDialog(true)} destructive testId="row-pause-account" />
+          <ChevronRow icon={X} label="Clear Twin Memory" sublabel="Your twin forgets everything it has learned" onClick={() => setActivePanel("clear-memory")} destructive testId="row-clear-memory" />
           <ChevronRow icon={Trash2} label="Delete Account" sublabel="Permanently remove all data" onClick={() => setShowDeleteDialog(true)} destructive testId="row-delete-account" />
+        </div>
+
+        <div style={SECTION_HEADER_STYLE}>Account actions</div>
+        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+          <ChevronRow icon={PauseCircle} label="Pause Account" sublabel="Hide your profile temporarily" onClick={() => setShowPauseDialog(true)} testId="row-pause-account" />
+          <ChevronRow icon={LogOut} label="Sign Out" onClick={() => logout()} testId="row-sign-out" />
         </div>
       </div>
 
       <Dialog open={showPauseDialog} onOpenChange={setShowPauseDialog}>
         <DialogContent style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "20px" }}>
           <DialogHeader>
-            <DialogTitle className="text-white">Pause Account</DialogTitle>
+            <DialogTitle style={{ ...SERIF, color: TEXT }}>Pause Account</DialogTitle>
             <DialogDescription style={{ color: MUTED }}>Your profile will be hidden from discovery. You can reactivate anytime.</DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
             <button className="px-4 py-2 text-sm font-medium" style={{ color: MUTED }} onClick={() => setShowPauseDialog(false)} data-testid="button-cancel-pause">Cancel</button>
             <button
-              className="px-4 py-2 text-sm font-semibold text-white"
-              style={{ background: "#EF4444", borderRadius: "10px", border: "none" }}
+              className="px-4 py-2 text-sm"
+              style={{ background: EMBER, color: INK, fontWeight: 600, borderRadius: "10px", border: "none" }}
               onClick={async () => {
                 setShowPauseDialog(false);
                 if (profile) await updateProfile.mutateAsync({ userId: profile.userId, data: { isPublic: false } });
@@ -1221,7 +1240,7 @@ export default function Settings() {
       <Dialog open={showDeleteDialog} onOpenChange={(open) => { setShowDeleteDialog(open); setDeleteConfirmText(""); }}>
         <DialogContent style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "20px" }}>
           <DialogHeader>
-            <DialogTitle className="text-white">Delete Account</DialogTitle>
+            <DialogTitle style={{ ...SERIF, color: TEXT }}>Delete Account</DialogTitle>
             <DialogDescription style={{ color: MUTED }}>
               This will permanently delete your profile, matches, Twin memory, and all data. This cannot be undone.
             </DialogDescription>
