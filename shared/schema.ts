@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar, decimal, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar, decimal, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
@@ -44,8 +44,6 @@ export const profiles = pgTable("profiles", {
   maxDistanceKm: integer("max_distance_km").default(100),
   ageMinPreference: integer("age_min_preference").default(18),
   ageMaxPreference: integer("age_max_preference").default(65),
-  passwordHash: text("password_hash"),
-  passwordSalt: text("password_salt"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [
   index("profiles_location_updated_at_idx").on(t.locationUpdatedAt),
@@ -416,12 +414,66 @@ export const supportTickets = pgTable("support_tickets", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Public waitlist requests from the marketing Landing page. No user account
+// exists yet at this point — this is the pre-signup capture. The four "twin
+// questions" are stored verbatim so the eventual onboarding can pre-fill.
+export const inviteRequests = pgTable("invite_requests", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  intent: text("intent").notNull(),
+  twinVoice: text("twin_voice").notNull(),
+  oneTrueThing: text("one_true_thing").notNull(),
+  room: text("room").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const dailyLikeCounts = pgTable("daily_like_counts", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   date: text("date").notNull(),
   count: integer("count").notNull().default(0),
 });
+
+// Small, hosted, in-person events attached to a group (or platform-hosted when
+// groupId is null). seatModel drives allocation:
+//   'open'    - unlimited, seatCount ignored
+//   'capped'  - hard seatCount; overflow attendees land as 'waitlisted'
+//   'curated' - seatCount required; joining creates a 'requested' row, never
+//               'going' directly - the host (or a future resonance-based
+//               allocator) promotes requests
+export const events = pgTable("events", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").references(() => groups.id),
+  hostUserId: varchar("host_user_id").notNull().references(() => users.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  venueName: text("venue_name"),
+  suburb: text("suburb"),
+  city: text("city"),
+  startsAt: timestamp("starts_at").notNull(),
+  endsAt: timestamp("ends_at"),
+  seatModel: text("seat_model").notNull().default("open"),
+  seatCount: integer("seat_count"),
+  emberFirstPick: boolean("ember_first_pick").notNull().default(false),
+  coverImageUrl: text("cover_image_url"),
+  status: text("status").notNull().default("draft"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// One row per (event, user). The unique index is load-bearing: POST
+// /api/events/:id/attend must be safe to call twice in a race (double-tap,
+// retry) without creating two rows - see server/events.ts.
+export const eventAttendees = pgTable("event_attendees", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => events.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  status: text("status").notNull().default("going"),
+  createdAt: timestamp("created_at").defaultNow(),
+  decidedAt: timestamp("decided_at"),
+}, (table) => [
+  uniqueIndex("event_attendees_event_user_idx").on(table.eventId, table.userId),
+]);
 
 export const insertTwinProfilesStructuredSchema = createInsertSchema(twinProfilesStructured).omit({
   id: true,
@@ -455,6 +507,53 @@ export const insertChatRequestSchema = createInsertSchema(chatRequests).omit({
 export const insertProfileSchema = createInsertSchema(profiles).omit({
   id: true,
   userId: true,
+  createdAt: true,
+});
+
+export const seatModelEnum = z.enum(["open", "capped", "curated"]);
+export const eventStatusEnum = z.enum(["draft", "published", "cancelled"]);
+export const attendeeStatusEnum = z.enum(["going", "waitlisted", "requested", "declined", "cancelled"]);
+
+export const insertEventSchema = createInsertSchema(events, {
+  seatModel: seatModelEnum,
+  status: eventStatusEnum,
+}).omit({
+  id: true,
+  hostUserId: true,
+  createdAt: true,
+}).refine(
+  (data) => data.seatModel === "open" || (data.seatCount != null && data.seatCount > 0),
+  { message: "seatCount is required for capped and curated events", path: ["seatCount"] },
+);
+
+// PATCH allows a partial update, so the seatModel/seatCount cross-field rule
+// above doesn't apply here (an update might touch neither field).
+export const updateEventSchema = createInsertSchema(events, {
+  seatModel: seatModelEnum,
+  status: eventStatusEnum,
+}).omit({
+  id: true,
+  hostUserId: true,
+  createdAt: true,
+}).partial();
+
+export const twinVoiceEnum = z.enum(["Dry and direct", "Warm and curious", "Playful", "Measured"]);
+export const inviteRoomEnum = z.enum([
+  "Late Practice",
+  "Sunday Trail",
+  "Table for Six",
+  "Not sure yet",
+]);
+
+export const insertInviteRequestSchema = createInsertSchema(inviteRequests, {
+  email: z.string().trim().email().max(254),
+  intent: z.string().trim().min(10, "Tell us a little more").max(2000),
+  twinVoice: twinVoiceEnum,
+  oneTrueThing: z.string().trim().min(10, "Tell us a little more").max(2000),
+  room: inviteRoomEnum,
+}).omit({
+  id: true,
+  status: true,
   createdAt: true,
 });
 
@@ -580,6 +679,13 @@ export type InsertChatRequest = z.infer<typeof insertChatRequestSchema>;
 export type BlockedUser = typeof blockedUsers.$inferSelect;
 export type SupportTicket = typeof supportTickets.$inferSelect;
 export type DailyLikeCount = typeof dailyLikeCounts.$inferSelect;
+export type InviteRequest = typeof inviteRequests.$inferSelect;
+export type InsertInviteRequest = z.infer<typeof insertInviteRequestSchema>;
+export type Event = typeof events.$inferSelect;
+export type InsertEvent = z.infer<typeof insertEventSchema>;
+export type EventAttendee = typeof eventAttendees.$inferSelect;
+export type SeatModel = z.infer<typeof seatModelEnum>;
+export type AttendeeStatus = z.infer<typeof attendeeStatusEnum>;
 
 export type Story = typeof stories.$inferSelect;
 export type StoryMedia = typeof storyMedia.$inferSelect;

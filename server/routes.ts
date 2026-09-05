@@ -1,18 +1,19 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
+import { setupAuth, registerAuthRoutes, authStorage, createSessionUser, hashPassword, verifyPassword } from "./replit_integrations/auth";
 import { z } from "zod";
 import { GoogleGenAI } from "@google/genai";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
 import { sql, eq, and } from "drizzle-orm";
-import { groupMembers, blockedUsers, profiles, twinMemory as twinMemoryTable, twinMemoryFacts, twinMemorySummary } from "@shared/schema";
+import { groupMembers, blockedUsers, profiles, twinMemory as twinMemoryTable, twinMemoryFacts, twinMemorySummary, insertEventSchema, updateEventSchema, insertInviteRequestSchema } from "@shared/schema";
 import crypto from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 import type { TwinProfileStructured } from "@shared/schema";
+import * as eventsService from "./events";
 
 const aiRateLimits = new Map<string, number[]>();
 function checkAIRateLimit(userId: string, maxPerMinute: number = 10): boolean {
@@ -314,6 +315,29 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       res.json(updated);
     } catch (err) {
       res.status(500).json({ message: "Error updating profile" });
+    }
+  });
+
+  // Check group-nickname availability. MUST stay above "/api/profiles/:userId"
+  // or Express matches this as a userId of "check-nickname".
+  app.get("/api/profiles/check-nickname", async (req, res) => {
+    const nickname = (req.query.nickname as string || "").trim();
+    if (!nickname) return res.status(400).json({ message: "nickname required" });
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(nickname)) {
+      return res.json({
+        available: false,
+        reason: "3-20 chars, letters/numbers/underscores only",
+        suggestions: [],
+      });
+    }
+    try {
+      const taken = await storage.isGroupNicknameTaken(nickname);
+      if (!taken) return res.json({ available: true, suggestions: [] });
+      const suggestions = await storage.suggestAvailableGroupNicknames(nickname, 3);
+      res.json({ available: false, suggestions });
+    } catch (e) {
+      console.error("check-nickname error:", e);
+      res.status(500).json({ message: "Failed to check nickname" });
     }
   });
 
@@ -1897,21 +1921,6 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
-  // Check group nickname uniqueness
-  app.get("/api/profiles/check-nickname", async (req, res) => {
-    const nickname = (req.query.nickname as string || "").trim();
-    if (!nickname) return res.status(400).json({ message: "nickname required" });
-    if (!/^[a-zA-Z0-9_]{3,20}$/.test(nickname)) {
-      return res.json({ available: false, reason: "3-20 chars, letters/numbers/underscores only" });
-    }
-    try {
-      const taken = await storage.isGroupNicknameTaken(nickname);
-      res.json({ available: !taken });
-    } catch (e) {
-      res.status(500).json({ message: "Failed to check nickname" });
-    }
-  });
-
   // Chat requests (DM request system)
   app.post("/api/chat-requests", async (req, res) => {
     const userId = getUserId(req);
@@ -2738,6 +2747,26 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   });
 
   // Support tickets
+  // Public waitlist capture from the marketing Landing page. No auth — there is
+  // no account yet. `company` is a honeypot: it is never rendered visibly, so a
+  // filled value means a bot; we return the same success shape without storing.
+  app.post("/api/invites", async (req, res) => {
+    if (typeof req.body?.company === "string" && req.body.company.trim() !== "") {
+      return res.status(201).json({ ok: true });
+    }
+    const parsed = insertInviteRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid invite request", errors: parsed.error.flatten() });
+    }
+    try {
+      await storage.createInviteRequest(parsed.data);
+      res.status(201).json({ ok: true });
+    } catch (err) {
+      console.error("Invite request error:", err);
+      res.status(500).json({ message: "Failed to submit invite request" });
+    }
+  });
+
   app.post("/api/support/tickets", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -2767,7 +2796,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
-  // Change password — validates input, hashes and stores credential for local auth fallback
+  // Change password — verifies the current password (scrypt) and stores a
+  // freshly-salted hash on the user's account. This is the same credential
+  // /api/auth/login checks, so changing it here actually re-secures sign-in.
   app.post("/api/account/change-password", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -2782,19 +2813,56 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (newPassword.length < 8) {
         return res.status(400).json({ message: "New password must be at least 8 characters" });
       }
-      const profile = await storage.getProfile(userId);
-      if (profile?.passwordHash && profile?.passwordSalt) {
-        const currentHash = crypto.createHmac("sha256", profile.passwordSalt).update(currentPassword).digest("hex");
-        if (currentHash !== profile.passwordHash) {
+      const user = await authStorage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Account not found" });
+      if (user.passwordHash) {
+        const valid = await verifyPassword(currentPassword, user.passwordHash);
+        if (!valid) {
           return res.status(401).json({ message: "Current password is incorrect" });
         }
       }
-      const salt = crypto.randomBytes(32).toString("hex");
-      const hash = crypto.createHmac("sha256", salt).update(newPassword).digest("hex");
-      await db.update(profiles).set({ passwordHash: hash, passwordSalt: salt }).where(eq(profiles.userId, userId));
+      const newHash = await hashPassword(newPassword);
+      await authStorage.updateUser(userId, { passwordHash: newHash });
       res.json({ success: true, message: "Password updated successfully" });
     } catch (err) {
+      console.error("Change password error:", err);
       res.status(500).json({ message: "Failed to update password" });
+    }
+  });
+
+  // Change email — requires the current password as re-authentication since
+  // there's no email service configured to send a verification link yet.
+  // Once one is connected, this can move to token-in-email + confirm.
+  app.post("/api/account/change-email", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const { newEmail, currentPassword } = req.body;
+      if (typeof newEmail !== "string" || typeof currentPassword !== "string" || !currentPassword) {
+        return res.status(400).json({ message: "New email and current password are required" });
+      }
+      const normalizedEmail = newEmail.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+        return res.status(400).json({ message: "Enter a valid email address" });
+      }
+      const user = await authStorage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Account not found" });
+      const valid = await verifyPassword(currentPassword, user.passwordHash);
+      if (!valid) {
+        return res.status(401).json({ message: "Current password is incorrect" });
+      }
+      const existing = await authStorage.getUserByEmail(normalizedEmail);
+      if (existing && existing.id !== userId) {
+        return res.status(409).json({ message: "That email is already in use" });
+      }
+      const updated = await authStorage.updateUser(userId, { email: normalizedEmail });
+      res.json({ success: true, email: updated.email });
+    } catch (err: any) {
+      if (err?.code === "23505") {
+        return res.status(409).json({ message: "That email is already in use" });
+      }
+      console.error("Change email error:", err);
+      res.status(500).json({ message: "Failed to update email" });
     }
   });
 
@@ -2898,6 +2966,128 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // ---- Events ----
+  app.get("/api/events", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const groupId = req.query.groupId ? parseInt(req.query.groupId as string, 10) : undefined;
+      const city = typeof req.query.city === "string" ? req.query.city : undefined;
+      const from = req.query.from ? new Date(req.query.from as string) : undefined;
+      const to = req.query.to ? new Date(req.query.to as string) : undefined;
+      const list = await eventsService.listEvents(userId, { groupId, city, from, to });
+      res.json(list);
+    } catch (e) {
+      console.error("List events error:", e);
+      res.status(500).json({ message: "Failed to fetch events" });
+    }
+  });
+
+  app.get("/api/events/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    try {
+      const event = await eventsService.getEventDetail(eventId, userId);
+      res.json(event);
+    } catch (e) {
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      console.error("Get event error:", e);
+      res.status(500).json({ message: "Failed to fetch event" });
+    }
+  });
+
+  app.post("/api/events", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const parsed = insertEventSchema.safeParse({
+      ...req.body,
+      startsAt: req.body?.startsAt ? new Date(req.body.startsAt) : undefined,
+      endsAt: req.body?.endsAt ? new Date(req.body.endsAt) : undefined,
+    });
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid event data", errors: parsed.error.flatten() });
+    }
+    try {
+      const event = await eventsService.createEvent(userId, parsed.data);
+      res.status(201).json(event);
+    } catch (e) {
+      if (e instanceof eventsService.NotGroupMemberError) return res.status(403).json({ message: e.message });
+      console.error("Create event error:", e);
+      res.status(500).json({ message: "Failed to create event" });
+    }
+  });
+
+  app.patch("/api/events/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    const parsed = updateEventSchema.safeParse({
+      ...req.body,
+      startsAt: req.body?.startsAt ? new Date(req.body.startsAt) : undefined,
+      endsAt: req.body?.endsAt ? new Date(req.body.endsAt) : undefined,
+    });
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid event data", errors: parsed.error.flatten() });
+    }
+    try {
+      const event = await eventsService.updateEvent(eventId, userId, parsed.data);
+      res.json(event);
+    } catch (e) {
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof eventsService.NotEventHostError) return res.status(403).json({ message: e.message });
+      console.error("Update event error:", e);
+      res.status(500).json({ message: "Failed to update event" });
+    }
+  });
+
+  app.post("/api/events/:id/attend", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    try {
+      const result = await eventsService.attendEvent(eventId, userId);
+      res.json(result);
+    } catch (e) {
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      console.error("Attend event error:", e);
+      res.status(500).json({ message: "Failed to join event" });
+    }
+  });
+
+  app.delete("/api/events/:id/attend", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    try {
+      const result = await eventsService.cancelEventAttendance(eventId, userId);
+      res.json(result);
+    } catch (e) {
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      console.error("Cancel event attendance error:", e);
+      res.status(500).json({ message: "Failed to cancel" });
+    }
+  });
+
+  app.get("/api/events/:id/attendees", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    try {
+      const attendees = await eventsService.getEventAttendeesList(eventId, userId);
+      res.json(attendees);
+    } catch (e) {
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      console.error("List attendees error:", e);
+      res.status(500).json({ message: "Failed to fetch attendees" });
+    }
+  });
+
   app.post("/api/demo/seed", async (req, res) => {
     try {
       await storage.seedDemoData();
@@ -2908,11 +3098,59 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // "View Demo" on the landing page: seeds sample data and drops the visitor
+  // straight into a dedicated guest account (not a real signup, and not the
+  // shared auto-login the app used to have for every visitor).
+  app.post("/api/demo/login", async (req: any, res) => {
+    try {
+      await storage.seedDemoData();
+      const demoUser = await authStorage.upsertUser({
+        id: "demo-guest",
+        email: "demo-guest@vibeflow.app",
+        firstName: "Demo",
+        lastName: "Guest",
+      });
+      req.login(createSessionUser(demoUser), (err: any) => {
+        if (err) {
+          console.error("[demo] req.login failed:", err);
+          return res.status(500).json({ message: "Failed to start demo" });
+        }
+        res.json({ success: true });
+      });
+    } catch (e) {
+      console.error("Demo login error:", e);
+      res.status(500).json({ message: "Failed to start demo" });
+    }
+  });
+
   try {
     await storage.seedDemoData();
     console.log("Demo data seeded.");
   } catch (e) {
     console.error("Failed to seed demo data on startup:", e);
+  }
+
+  // Dev convenience only: seed one real (password-protected) local account
+  // so you don't have to sign up by hand on every fresh checkout. This does
+  // NOT auto-log anyone in — you still sign in with these credentials at
+  // /login, so different browser sessions stay distinct accounts.
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      const devEmail = (process.env.DEV_USER_EMAIL || "dev@local.test").trim().toLowerCase();
+      const existingDev = await authStorage.getUserByEmail(devEmail);
+      if (!existingDev) {
+        const devPassword = process.env.DEV_USER_PASSWORD || "devpassword123";
+        await authStorage.createUser({
+          email: devEmail,
+          passwordHash: await hashPassword(devPassword),
+          firstName: "Dev",
+          lastName: "User",
+        });
+        console.log(`[dev] Seeded a local login: ${devEmail} / ${devPassword} (set DEV_USER_EMAIL / DEV_USER_PASSWORD to change).`);
+      }
+    } catch (e) {
+      console.error("Failed to seed dev user:", e);
+    }
   }
 
   try {
@@ -2924,6 +3162,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   } catch (e) {
     console.error("Failed to seed questions on startup:", e);
+  }
+
+  try {
+    await eventsService.seedEvents();
+    console.log("Demo events seeded.");
+  } catch (e) {
+    console.error("Failed to seed events on startup:", e);
   }
 
   // Clean up expired stories periodically

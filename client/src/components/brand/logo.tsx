@@ -1,0 +1,165 @@
+import { useId } from "react";
+
+// The Overlap. Two rings — ember (#FF6B4A, the human) in front, mint
+// (#8FE3C7, the AI twin) behind — tilted 15°, with the lens where they
+// intersect lit in cream. The lens is the resonance. Geometry is transcribed
+// verbatim from the brand spec / docs/redesign-reference; do not "clean up"
+// the viewBox or the circle coordinates.
+
+const EMBER = "#FF6B4A";
+const MINT = "#8FE3C7";
+const CREAM = "#F5F0EA";
+const TILE_LENS = "#FFF6EE";
+
+/** Exclusion zone around the lockup = one ring radius = 0.315 × mark width. */
+export const CLEARSPACE = 0.315;
+
+/** Lockup gap as a fraction of mark width. */
+const LOCKUP_GAP = { horizontal: 0.34, stacked: 0.24 } as const;
+
+/** Wordmark size relative to mark size, tuned per lockup orientation. */
+const WORDMARK_RATIO = { horizontal: 0.9, stacked: 0.52 } as const;
+
+// Two-ring viewBox "26 17 108 86" → 108 wide by 86 tall.
+const MARK_RATIO = 86 / 108;
+
+function strokeForSize(size: number): number {
+  if (size >= 48) return 6;
+  if (size >= 40) return 7;
+  return 8; // 28–39px
+}
+
+export type MarkVariant = "colour" | "mono" | "tile";
+
+interface VibeFlowMarkProps {
+  /** Rendered width in px. Height follows the artwork ratio. */
+  size: number;
+  /** colour = ember+mint+cream · mono = currentColor throughout · tile = lens on an ember square (use <28px). */
+  variant?: MarkVariant;
+  /** aria-hidden the mark when it sits beside the wordmark so the lockup announces once. */
+  decorative?: boolean;
+  className?: string;
+}
+
+export function VibeFlowMark({ size, variant = "colour", decorative = false, className }: VibeFlowMarkProps) {
+  const clipId = useId();
+
+  if (import.meta.env.DEV && variant === "colour" && size < 28) {
+    throw new Error(
+      `VibeFlowMark: the two-ring colour mark stops resolving below 28px (got ${size}px). ` +
+        `Use variant="tile" for small sizes.`,
+    );
+  }
+
+  const a11y = decorative
+    ? ({ "aria-hidden": true } as const)
+    : ({ role: "img", "aria-label": "VibeFlow" } as const);
+
+  if (variant === "tile") {
+    return (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 64 64"
+        width={size}
+        height={size}
+        className={className}
+        {...a11y}
+      >
+        <defs>
+          <clipPath id={clipId}>
+            <circle cx="96" cy="60" r="34" />
+          </clipPath>
+        </defs>
+        <rect x="0" y="0" width="64" height="64" rx="14" fill={EMBER} />
+        <g transform="translate(-34.2 -17.6) scale(0.827)">
+          <g transform="rotate(-15 80 60)">
+            <g clipPath={`url(#${clipId})`}>
+              <circle cx="64" cy="60" r="34" fill={TILE_LENS} />
+            </g>
+          </g>
+        </g>
+      </svg>
+    );
+  }
+
+  const stroke = strokeForSize(size);
+  const isMono = variant === "mono";
+
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="26 17 108 86"
+      width={size}
+      height={Math.round(size * MARK_RATIO)}
+      className={className}
+      {...a11y}
+    >
+      <defs>
+        <clipPath id={clipId}>
+          <circle cx="96" cy="60" r="34" />
+        </clipPath>
+      </defs>
+      <g transform="rotate(-15 80 60)">
+        <circle cx="96" cy="60" r="34" fill="none" stroke={isMono ? "currentColor" : MINT} strokeWidth={stroke} />
+        <circle cx="64" cy="60" r="34" fill="none" stroke={isMono ? "currentColor" : EMBER} strokeWidth={stroke} />
+        <g clipPath={`url(#${clipId})`}>
+          <circle cx="64" cy="60" r="34" fill={isMono ? "currentColor" : CREAM} />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+interface VibeFlowWordmarkProps {
+  /** Font size in px. */
+  size: number;
+  className?: string;
+}
+
+export function VibeFlowWordmark({ size, className }: VibeFlowWordmarkProps) {
+  return (
+    <span
+      className={className}
+      style={{
+        fontFamily: '"Instrument Serif", serif',
+        fontWeight: 400,
+        fontSize: size,
+        lineHeight: 1,
+        letterSpacing: "-0.015em",
+        textTransform: "lowercase",
+      }}
+    >
+      vibeflow
+    </span>
+  );
+}
+
+interface VibeFlowLockupProps {
+  orientation?: "horizontal" | "stacked";
+  /** Mark width in px; the wordmark scales from it. */
+  size: number;
+  variant?: MarkVariant;
+  className?: string;
+}
+
+export function VibeFlowLockup({ orientation = "horizontal", size, variant = "colour", className }: VibeFlowLockupProps) {
+  const gap = size * LOCKUP_GAP[orientation];
+  const wordSize = size * WORDMARK_RATIO[orientation];
+
+  return (
+    <span
+      className={className}
+      role="img"
+      aria-label="VibeFlow"
+      style={{
+        display: "inline-flex",
+        flexDirection: orientation === "horizontal" ? "row" : "column",
+        alignItems: "center",
+        gap,
+      }}
+    >
+      <VibeFlowMark size={size} variant={variant} decorative />
+      <VibeFlowWordmark size={wordSize} />
+    </span>
+  );
+}

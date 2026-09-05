@@ -82,11 +82,30 @@ export default {
           busy: "rgb(239 68 68)",
           offline: "rgb(156 163 175)",
         },
+        // VibeFlow redesign tokens (docs/redesign-handoff.md §1). Semantic,
+        // not decorative — mint is the AI-twin layer and ONLY the AI-twin
+        // layer; gold is Ember (premium) only. See the handoff before using
+        // any of these outside their documented role.
+        vf: {
+          ink: "#0C0910", // page ground
+          surface: "#14101C", // primary card
+          surface2: "#161220", // secondary card
+          line: "rgba(255,255,255,.09)",
+          text: "#F5F0EA",
+          muted: "#A79FB4",
+          faint: "#7E7690", // 12-13px metadata only, never body copy
+          ember: "#FF6B4A", // human action
+          emberSoft: "#FF7A57",
+          mint: "#8FE3C7", // AI-twin layer, never anything else
+          gold: "#E9C46A", // Ember premium only
+          warn: "#FFC46B",
+          soft: "#CFC7DA", // secondary text on dark cards (lighter than vf-muted)
+        },
       },
       fontFamily: {
-        sans: ["Inter", "var(--font-sans)", "sans-serif"],
-        serif: ["var(--font-serif)"],
-        mono: ["var(--font-mono)"],
+        sans: ['"DM Sans"', "var(--font-sans)", "system-ui", "sans-serif"],
+        serif: ['"Instrument Serif"', "serif"],
+        mono: ['"DM Mono"', "monospace"],
         display: ["Inter", "sans-serif"],
         body: ["Inter", "sans-serif"],
       },

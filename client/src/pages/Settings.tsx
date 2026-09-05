@@ -756,25 +756,46 @@ function ContactPanel({ onBack }: { onBack: () => void }) {
 
 function ChangeEmailPanel({ onBack }: { onBack: () => void }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [done, setDone] = useState(false);
+
+  const updateMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/account/change-email", {
+      newEmail: email,
+      currentPassword,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      setDone(true);
+      toast({ title: "Email updated", description: "Your account email has been changed." });
+    },
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message.replace(/^\d+:\s*/, "") : "Failed to update email";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    },
+  });
 
   const handleSubmit = () => {
     if (!email || !email.includes("@")) {
       toast({ title: "Please enter a valid email address", variant: "destructive" });
       return;
     }
-    setSent(true);
-    toast({ title: "Verification email sent", description: "Check your inbox to confirm your new email." });
+    if (!currentPassword) {
+      toast({ title: "Current password required", description: "Confirm your password to change your email.", variant: "destructive" });
+      return;
+    }
+    updateMutation.mutate();
   };
 
   return (
     <Panel title="Change Email" onBack={onBack}>
       <div style={{ padding: "16px" }}>
         <p className="text-sm mb-4" style={{ color: MUTED }}>
-          Enter your new email address. We'll send a verification link to confirm the change.
+          Enter your new email address and confirm your password to update it.
         </p>
-        {sent ? (
+        {done ? (
           <div className="text-center py-8">
             <div style={{
               width: "60px", height: "60px", borderRadius: "50%", background: GRAD,
@@ -782,8 +803,8 @@ function ChangeEmailPanel({ onBack }: { onBack: () => void }) {
             }}>
               <Mail className="w-7 h-7 text-white" />
             </div>
-            <p className="font-semibold text-white mb-2">Check your inbox</p>
-            <p className="text-sm" style={{ color: MUTED }}>A verification link has been sent to <strong style={{ color: "#FFFFFF" }}>{email}</strong></p>
+            <p className="font-semibold text-white mb-2">Email updated</p>
+            <p className="text-sm" style={{ color: MUTED }}>Your account email is now <strong style={{ color: "#FFFFFF" }}>{email}</strong></p>
           </div>
         ) : (
           <>
@@ -799,7 +820,23 @@ function ChangeEmailPanel({ onBack }: { onBack: () => void }) {
                 data-testid="input-new-email"
               />
             </div>
-            <GradientButton label="Send Verification Link" onClick={handleSubmit} testId="button-send-email-verify" />
+            <div style={{ marginBottom: "16px" }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Current Password</label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-3 py-2 text-sm text-white"
+                style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+                data-testid="input-email-current-password"
+              />
+            </div>
+            <GradientButton
+              label={updateMutation.isPending ? "Updating..." : "Update Email"}
+              onClick={handleSubmit}
+              testId="button-send-email-verify"
+            />
           </>
         )}
       </div>
@@ -824,7 +861,7 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
       onBack();
     },
     onError: (err) => {
-      const msg = err instanceof Error ? err.message : "Failed to update password";
+      const msg = err instanceof Error ? err.message.replace(/^\d+:\s*/, "") : "Failed to update password";
       toast({ title: "Error", description: msg, variant: "destructive" });
     },
   });

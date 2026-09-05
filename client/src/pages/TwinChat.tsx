@@ -1,9 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import {
   Sparkles,
@@ -17,11 +14,10 @@ import {
   CheckCheck,
   MessageCircle,
   ArrowLeft,
+  RefreshCw,
 } from "lucide-react";
-import { useTwinMemory } from "@/hooks/use-interactions";
-import { useAuth } from "@/hooks/use-auth";
-import { useProfile } from "@/hooks/use-profiles";
-import { useLocation } from "wouter";
+import { useTwinMemory, useTwinStructuredProfile, useExtractTwinProfile } from "@/hooks/use-interactions";
+import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 
 type MessageStatus = "sending" | "sent" | "delivered";
@@ -49,12 +45,12 @@ function formatRelativeTime(date: Date): string {
 
 function StatusIndicator({ status }: { status: MessageStatus }) {
   if (status === "sending") {
-    return <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />;
+    return <Loader2 className="w-3 h-3 animate-spin text-vf-faint" />;
   }
   if (status === "sent") {
-    return <Check className="w-3 h-3 text-muted-foreground" />;
+    return <Check className="w-3 h-3 text-vf-faint" />;
   }
-  return <CheckCheck className="w-3 h-3 text-primary" />;
+  return <CheckCheck className="w-3 h-3 text-vf-ember" />;
 }
 
 function TypingIndicator() {
@@ -68,33 +64,136 @@ function TypingIndicator() {
     >
       <div className="max-w-[80%]">
         <div className="flex items-center gap-1 ml-3 mb-1">
-          <Brain className="w-3 h-3 text-primary" />
-          <span className="text-xs text-primary font-medium">Your Twin</span>
+          <Brain className="w-3 h-3 text-vf-mint" />
+          <span className="text-xs text-vf-mint font-medium">Your Twin</span>
         </div>
-        <Card className="border">
-          <CardContent className="p-3 flex items-center gap-2">
-            <div className="flex items-center gap-1">
-              <motion.span
-                className="w-2 h-2 rounded-full bg-primary"
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.2, repeat: Infinity, delay: 0 }}
-              />
-              <motion.span
-                className="w-2 h-2 rounded-full bg-primary"
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.2, repeat: Infinity, delay: 0.3 }}
-              />
-              <motion.span
-                className="w-2 h-2 rounded-full bg-primary"
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.2, repeat: Infinity, delay: 0.6 }}
-              />
-            </div>
-            <span className="text-xs text-muted-foreground">Twin is thinking...</span>
-          </CardContent>
-        </Card>
+        <div className="rounded-[18px] rounded-bl-[6px] border border-vf-mint/25 bg-vf-mint/10 px-4 py-3 flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5">
+            <motion.span
+              className="w-1.5 h-1.5 rounded-full bg-vf-mint"
+              animate={{ opacity: [0.35, 1, 0.35] }}
+              transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+            />
+            <motion.span
+              className="w-1.5 h-1.5 rounded-full bg-vf-mint"
+              animate={{ opacity: [0.35, 1, 0.35] }}
+              transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+            />
+            <motion.span
+              className="w-1.5 h-1.5 rounded-full bg-vf-mint"
+              animate={{ opacity: [0.35, 1, 0.35] }}
+              transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+            />
+          </div>
+          <span className="text-xs text-vf-muted">Twin is thinking...</span>
+        </div>
       </div>
     </motion.div>
+  );
+}
+
+// Right-column "trust surface". Two things the redesign brief asks for here
+// (per-fact suppress toggles, three boolean boundary switches) have no
+// backend behind them yet — twin_memory_facts has no visibility flag, and
+// `boundaries` is one AI-extracted sentence, not three togglable topics.
+// Rather than ship controls that look functional but do nothing, this shows
+// the real facts/boundaries read-only, with the one real action available
+// today (re-run extraction) and a link to the real, safely-gated bulk clear
+// in Settings instead of a fake per-fact switch.
+function TwinTrustPanel({
+  memoryFacts,
+  memorySummary,
+  trainingOptOut,
+  onTrainingOptOutChange,
+}: {
+  memoryFacts: any[];
+  memorySummary: string | null;
+  trainingOptOut: boolean;
+  onTrainingOptOutChange: (v: boolean) => void;
+}) {
+  const { data: structured } = useTwinStructuredProfile();
+  const extractProfile = useExtractTwinProfile();
+
+  const structuredLines: { label: string; value: string }[] = [];
+  if (structured?.relationshipGoals) structuredLines.push({ label: "Looking for", value: structured.relationshipGoals });
+  if (structured?.boundaries) structuredLines.push({ label: "Boundaries", value: structured.boundaries });
+  if (structured?.communicationStyle) structuredLines.push({ label: "Communication style", value: structured.communicationStyle });
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-[20px] border border-vf-line bg-vf-surface2 p-5">
+        <h2 className="font-serif text-xl text-vf-text mb-1">What your twin remembers</h2>
+        <p className="text-[13px] text-vf-muted leading-relaxed mb-4">
+          Facts your twin has picked up from your conversations.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {memoryFacts.length > 0 ? (
+            memoryFacts.slice(0, 12).map((fact: any, i: number) => (
+              <span
+                key={i}
+                className="text-[13px] px-3 py-1.5 rounded-full border border-vf-mint/30 bg-vf-mint/10 text-vf-mint"
+                data-testid={`memory-fact-${i}`}
+              >
+                {typeof fact === "string" ? fact : fact.content || fact.fact || fact.factText || ""}
+              </span>
+            ))
+          ) : (
+            <p className="text-[13px] text-vf-faint">Nothing learned yet — keep chatting.</p>
+          )}
+        </div>
+        {memorySummary && (
+          <p className="text-[12.5px] text-vf-muted leading-relaxed mt-4 pt-4 border-t border-vf-line" data-testid="text-memory-summary">
+            {memorySummary}
+          </p>
+        )}
+        <Link href="/settings">
+          <a className="inline-block text-[12.5px] text-vf-faint hover:text-vf-text underline mt-4" data-testid="link-manage-memory">
+            Manage or clear this memory →
+          </a>
+        </Link>
+      </div>
+
+      <div className="rounded-[20px] border border-vf-line bg-vf-surface2 p-5">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <h2 className="font-serif text-xl text-vf-text">About your twin</h2>
+          <button
+            onClick={() => extractProfile.mutate()}
+            disabled={extractProfile.isPending}
+            className="flex items-center gap-1.5 text-[12px] text-vf-mint hover:text-vf-text disabled:opacity-50"
+            data-testid="button-reextract-profile"
+          >
+            {extractProfile.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            Refresh
+          </button>
+        </div>
+        {structuredLines.length > 0 ? (
+          <div className="flex flex-col gap-3 mt-3">
+            {structuredLines.map((line) => (
+              <div key={line.label}>
+                <div className="text-[11px] uppercase tracking-[0.1em] text-vf-faint mb-1">{line.label}</div>
+                <p className="text-[13.5px] text-vf-text leading-relaxed">{line.value}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[13px] text-vf-faint mt-3">
+            Chat a bit more, then hit Refresh to have your twin summarize what it's picked up.
+          </p>
+        )}
+
+        <div className="flex items-center justify-between gap-2 pt-4 mt-4 border-t border-vf-line">
+          <div className="flex items-center gap-2">
+            <Shield className="w-3.5 h-3.5 text-vf-faint" />
+            <span className="text-[12.5px] text-vf-muted">Training opt-out</span>
+          </div>
+          <Switch
+            checked={trainingOptOut}
+            onCheckedChange={onTrainingOptOutChange}
+            data-testid="switch-training-optout"
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -107,8 +206,6 @@ export default function TwinChat() {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [trainingOptOut, setTrainingOptOut] = useState(false);
   const { data: memory } = useTwinMemory();
-  const { user } = useAuth();
-  const { data: profile } = useProfile();
   const [woLocation, setLocation] = useLocation();
 
   const backRoute = useMemo(() => {
@@ -356,39 +453,39 @@ export default function TwinChat() {
     handleSend(reply);
   };
 
-  const userInitial = user?.firstName?.[0] || user?.email?.[0] || "U";
-
   return (
-    <div className="h-screen flex flex-col">
-      <div className="border-b px-4 py-3 flex items-center gap-3 sticky top-0 z-10 bg-background">
+    <div className="h-screen flex flex-col bg-vf-ink">
+      <div className="border-b border-vf-line px-4 py-3 flex items-center gap-3 sticky top-0 z-10 bg-vf-ink shrink-0">
         <Button
           variant="ghost"
           size="icon"
           onClick={() => setLocation(backRoute)}
           data-testid="button-back-twin"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-5 h-5 text-vf-text" />
         </Button>
-        <div className="flex items-center gap-2 flex-1">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-primary/10 text-primary text-xs">
-              <Brain className="w-4 h-4" />
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <h2 className="font-bold text-sm" data-testid="text-twin-title">
-              Chat with My Twin
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="relative w-9 h-9 shrink-0">
+            <div
+              className="absolute inset-0 rounded-full animate-[vf-breathe_5s_ease-in-out_infinite]"
+              style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint), #2E7F6B)" }}
+            />
+          </div>
+          <div className="min-w-0">
+            <h2 className="font-serif text-base text-vf-text truncate" data-testid="text-twin-title">
+              Your Twin
             </h2>
-            <p className="text-xs text-muted-foreground">Self-reflection & growth</p>
+            <p className="text-xs text-vf-mint">Self-reflection &amp; growth</p>
           </div>
         </div>
         <Button
           variant="ghost"
           size="icon"
+          className="md:hidden"
           onClick={() => setMemoryOpen(!memoryOpen)}
           data-testid="button-toggle-memory"
         >
-          {memoryOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          {memoryOpen ? <ChevronUp className="w-4 h-4 text-vf-text" /> : <ChevronDown className="w-4 h-4 text-vf-text" />}
         </Button>
       </div>
 
@@ -398,207 +495,156 @@ export default function TwinChat() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden border-b"
+            className="overflow-hidden border-b border-vf-line md:hidden shrink-0"
           >
-            <div className="p-4 space-y-3 bg-card/50">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Brain className="w-4 h-4 text-primary" />
-                <span className="text-sm font-medium">Twin Memory</span>
-                {memoryFacts.length > 0 && (
-                  <Badge variant="secondary" data-testid="badge-fact-count">
-                    {memoryFacts.length} facts learned
-                  </Badge>
-                )}
-              </div>
-
-              {memorySummary && (
-                <p className="text-xs text-muted-foreground leading-relaxed" data-testid="text-memory-summary">
-                  {memorySummary}
-                </p>
-              )}
-
-              {memoryFacts.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {memoryFacts.slice(0, 8).map((fact: any, i: number) => (
-                    <Badge
-                      key={i}
-                      variant="outline"
-                      className="text-[10px]"
-                      data-testid={`badge-fact-${i}`}
-                    >
-                      {typeof fact === "string" ? fact : fact.content || fact.fact || JSON.stringify(fact)}
-                    </Badge>
-                  ))}
-                  {memoryFacts.length > 8 && (
-                    <Badge variant="outline" className="text-[10px]">
-                      +{memoryFacts.length - 8} more
-                    </Badge>
-                  )}
-                </div>
-              )}
-
-              {memoryFacts.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-3 h-3 text-primary animate-pulse" />
-                  <span className="text-xs text-muted-foreground">Memory is learning</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between gap-2 pt-1 border-t">
-                <div className="flex items-center gap-2">
-                  <Shield className="w-3 h-3 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Training opt-out</span>
-                </div>
-                <Switch
-                  checked={trainingOptOut}
-                  onCheckedChange={setTrainingOptOut}
-                  data-testid="switch-training-optout"
-                />
-              </div>
+            <div className="p-4 max-h-[60vh] overflow-y-auto">
+              <TwinTrustPanel
+                memoryFacts={memoryFacts}
+                memorySummary={memorySummary}
+                trainingOptOut={trainingOptOut}
+                onTrainingOptOutChange={setTrainingOptOut}
+              />
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.length === 0 && !isTyping && (
-          <div className="text-center py-16">
-            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="w-8 h-8 text-primary" />
-            </div>
-            <h3 className="font-bold text-lg mb-2" data-testid="text-empty-title">
-              Your AI Twin is ready
-            </h3>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Chat with your AI Twin to explore your personality, get insights about
-              yourself, and grow. Your twin learns from every conversation.
-            </p>
-            {memoryFacts.length > 0 && (
-              <div className="mt-4 flex items-center justify-center gap-2">
-                <MessageCircle className="w-4 h-4 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">
-                  {memoryFacts.length} facts remembered from past chats
-                </span>
+      <div className="flex-1 flex min-h-0">
+        <div className="flex-1 flex flex-col min-w-0">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.length === 0 && !isTyping && (
+              <div className="text-center py-16">
+                <div className="w-16 h-16 bg-vf-mint/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Sparkles className="w-8 h-8 text-vf-mint" />
+                </div>
+                <h3 className="font-serif text-lg mb-2 text-vf-text" data-testid="text-empty-title">
+                  Your AI Twin is ready
+                </h3>
+                <p className="text-sm text-vf-muted max-w-md mx-auto">
+                  Chat with your AI Twin to explore your personality, get insights about
+                  yourself, and grow. Your twin learns from every conversation.
+                </p>
+                {memoryFacts.length > 0 && (
+                  <div className="mt-4 flex items-center justify-center gap-2">
+                    <MessageCircle className="w-4 h-4 text-vf-faint" />
+                    <span className="text-xs text-vf-faint">
+                      {memoryFacts.length} facts remembered from past chats
+                    </span>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        <AnimatePresence initial={false}>
-          {messages.map((msg) => {
-            const isMe = msg.role === "user";
-            return (
+            <AnimatePresence initial={false}>
+              {messages.map((msg) => {
+                const isMe = msg.role === "user";
+                return (
+                  <motion.div
+                    key={msg.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+                    data-testid={`message-${msg.id}`}
+                  >
+                    <div className="max-w-[80%]">
+                      {!isMe && (
+                        <div className="flex items-center gap-1 ml-3 mb-1">
+                          <Brain className="w-3 h-3 text-vf-mint" />
+                          <span className="text-xs text-vf-mint font-medium">Your Twin</span>
+                        </div>
+                      )}
+                      <div
+                        className={`px-4 py-2.5 text-sm leading-relaxed ${
+                          isMe
+                            ? "rounded-[18px] rounded-br-[6px] bg-vf-ember text-vf-ink font-medium"
+                            : "rounded-[18px] rounded-bl-[6px] border border-vf-mint/25 bg-vf-mint/10 text-vf-text"
+                        }`}
+                      >
+                        {msg.content}
+                      </div>
+                      <div
+                        className={`flex items-center gap-1 mt-1 ${
+                          isMe ? "justify-end mr-1" : "ml-3"
+                        }`}
+                      >
+                        <span className="text-[10px] text-vf-faint">
+                          {formatRelativeTime(msg.timestamp)}
+                        </span>
+                        {isMe && (
+                          <StatusIndicator status={msg.status} />
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+
+              {isTyping && <TypingIndicator key="typing" />}
+            </AnimatePresence>
+
+            {quickReplies.length > 0 && !isStreaming && messages.length > 0 && (
               <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-                className={`flex ${isMe ? "justify-end" : "justify-start"}`}
-                data-testid={`message-${msg.id}`}
+                className="flex flex-wrap gap-1.5 ml-1"
+                data-testid="quick-replies-container"
               >
-                <div className="max-w-[80%]">
-                  {!isMe && (
-                    <div className="flex items-center gap-1 ml-3 mb-1">
-                      <Brain className="w-3 h-3 text-primary" />
-                      <span className="text-xs text-primary font-medium">Your Twin</span>
-                    </div>
-                  )}
-                  <div
-                    className={`rounded-md px-4 py-2.5 text-sm leading-relaxed ${
-                      isMe
-                        ? "gradient-bg text-white"
-                        : "bg-card border text-card-foreground"
-                    }`}
+                {quickReplies.map((reply, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleQuickReply(reply)}
+                    className="text-xs px-3 py-1.5 rounded-full border border-vf-mint/30 bg-vf-mint/10 text-vf-mint hover:bg-vf-mint/20 transition-colors"
+                    data-testid={`chip-quick-reply-bottom-${i}`}
                   >
-                    {msg.content}
-                  </div>
-                  <div
-                    className={`flex items-center gap-1 mt-1 ${
-                      isMe ? "justify-end mr-1" : "ml-3"
-                    }`}
-                  >
-                    <span className="text-[10px] text-muted-foreground">
-                      {formatRelativeTime(msg.timestamp)}
-                    </span>
-                    {isMe && (
-                      <StatusIndicator status={msg.status} />
-                    )}
-                  </div>
-
-                  {false && !isMe && msg.quickReplies && msg.quickReplies.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2 ml-1">
-                      {msg.quickReplies.map((reply, ri) => (
-                        <Badge
-                          key={ri}
-                          variant="outline"
-                          className="cursor-pointer text-xs"
-                          onClick={() => handleQuickReply(reply)}
-                          data-testid={`chip-quick-reply-${ri}`}
-                        >
-                          {reply}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                    {reply}
+                  </button>
+                ))}
               </motion.div>
-            );
-          })}
-
-          {isTyping && <TypingIndicator key="typing" />}
-        </AnimatePresence>
-
-        {quickReplies.length > 0 && !isStreaming && messages.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-wrap gap-1 ml-1"
-            data-testid="quick-replies-container"
-          >
-            {quickReplies.map((reply, i) => (
-              <Badge
-                key={i}
-                variant="outline"
-                className="cursor-pointer text-xs"
-                onClick={() => handleQuickReply(reply)}
-                data-testid={`chip-quick-reply-bottom-${i}`}
-              >
-                {reply}
-              </Badge>
-            ))}
-          </motion.div>
-        )}
-      </div>
-
-      <div className="p-4 border-t bg-background">
-        <form
-          className="flex gap-2 max-w-4xl mx-auto"
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSend(input);
-          }}
-        >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask your twin anything..."
-            className="flex-1"
-            disabled={isStreaming}
-            data-testid="input-twin-message"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            disabled={!input.trim() || isStreaming}
-            data-testid="button-send-twin"
-          >
-            {isStreaming ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
             )}
-          </Button>
-        </form>
+          </div>
+
+          <div className="p-4 border-t border-vf-line bg-vf-ink shrink-0">
+            <form
+              className="flex gap-2 max-w-4xl mx-auto"
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSend(input);
+              }}
+            >
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Tell your twin something true..."
+                className="flex-1 rounded-full bg-white/5 border-vf-line text-vf-text"
+                disabled={isStreaming}
+                data-testid="input-twin-message"
+              />
+              <Button
+                type="submit"
+                size="icon"
+                className="rounded-full bg-vf-mint text-vf-ink hover:bg-[#A9EDD6] disabled:opacity-50"
+                disabled={!input.trim() || isStreaming}
+                data-testid="button-send-twin"
+              >
+                {isStreaming ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </Button>
+            </form>
+          </div>
+        </div>
+
+        <aside className="hidden md:block w-[340px] shrink-0 border-l border-vf-line p-5 overflow-y-auto">
+          <TwinTrustPanel
+            memoryFacts={memoryFacts}
+            memorySummary={memorySummary}
+            trainingOptOut={trainingOptOut}
+            onTrainingOptOutChange={setTrainingOptOut}
+          />
+        </aside>
       </div>
     </div>
   );

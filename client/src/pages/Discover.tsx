@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { LayoutShell } from "@/components/layout-shell";
-import { Brain, X, Loader2, MapPin, Heart, Play, Plus, Crown, Check } from "lucide-react";
+import { ResonanceDial } from "@/components/resonance-dial";
+import { ResonanceAxes } from "@/components/resonance-axes";
+import { Brain, X, Loader2, MapPin, Heart, Play, Plus, Crown, Check, ArrowRight } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -16,6 +18,25 @@ function formatDistance(km: number): string {
   if (km < 1) return "Less than 1km away";
   if (km >= 100) return `${Math.round(km)}km away`;
   return `${km.toFixed(1)}km away`;
+}
+
+// Demo-seeded profiles carry real Big-Five trait scores (openness,
+// conscientiousness, ...); profiles onboarded through the app carry free-text
+// soul-mapping answers instead (see Onboarding.tsx). There's no backend
+// compatibility scoring yet (docs/redesign-handoff.md §4.2 is deferred), so
+// the resonance dial only renders when a profile actually has numeric trait
+// data — no invented numbers for the common case.
+function getResonance(personalityProfile: unknown): { score: number; axes: { label: string; value: number }[] } | null {
+  if (!personalityProfile || typeof personalityProfile !== "object") return null;
+  const numeric = Object.entries(personalityProfile as Record<string, unknown>).filter(
+    (entry): entry is [string, number] => typeof entry[1] === "number"
+  );
+  if (numeric.length === 0) return null;
+  const score = Math.round(numeric.reduce((sum, [, v]) => sum + v, 0) / numeric.length);
+  const axes = numeric
+    .slice(0, 4)
+    .map(([label, value]) => ({ label: label.charAt(0).toUpperCase() + label.slice(1), value }));
+  return { score, axes };
 }
 
 function StoriesCarousel() {
@@ -180,7 +201,7 @@ type FilterChip = "all" | "nearby" | "new" | "online";
 
 const CHIP_LABELS: { key: FilterChip; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "nearby", label: "Nearby 📍" },
+  { key: "nearby", label: "Nearby" },
   { key: "new", label: "New" },
   { key: "online", label: "Online" },
 ];
@@ -196,8 +217,6 @@ function getInitialFilter(): FilterChip {
 
 export default function Discover() {
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [swipeDir, setSwipeDir] = useState<"left" | "right" | null>(null);
-  const [isExiting, setIsExiting] = useState(false);
   const [filter, setFilter] = useState<FilterChip>(getInitialFilter);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
@@ -265,34 +284,36 @@ export default function Discover() {
     return (
       <LayoutShell>
         <div className="h-[60vh] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin" style={{ color: "#7C3AED" }} />
+          <Loader2 className="w-8 h-8 animate-spin text-vf-mint" />
         </div>
       </LayoutShell>
     );
   }
 
+  const weekday = new Date().toLocaleDateString(undefined, { weekday: "long" });
+
   if (!profiles || profiles.length === 0) {
     return (
       <LayoutShell>
-        <div className="max-w-sm mx-auto">
-          <div className="text-center mb-4">
-            <h1 className="font-bold text-white" style={{ fontSize: "22px", letterSpacing: "-0.5px" }}>Discover</h1>
+        <div className="max-w-lg mx-auto">
+          <div className="mb-6">
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint mb-2">
+              {weekday}
+            </div>
+            <h1 className="font-serif font-normal text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-[-0.02em] text-vf-text">
+              Discover
+            </h1>
           </div>
           <div className="flex gap-2 mb-5 overflow-x-auto scrollbar-hide" data-testid="filter-chips">
             {CHIP_LABELS.map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => { setFilter(key); setCurrentIdx(0); }}
-                className="shrink-0 text-sm font-medium"
-                style={{
-                  padding: "6px 16px",
-                  borderRadius: "100px",
-                  border: "1px solid",
-                  borderColor: filter === key ? "transparent" : "#2E2E42",
-                  background: filter === key ? "linear-gradient(135deg, #7C3AED, #EC4899)" : "transparent",
-                  color: filter === key ? "#FFFFFF" : "#9090A8",
-                  transition: "all 0.15s",
-                }}
+                className={`shrink-0 text-sm font-medium px-4 py-1.5 rounded-full border transition-colors ${
+                  filter === key
+                    ? "bg-vf-ember border-transparent text-vf-ink"
+                    : "border-vf-line text-vf-soft hover:border-white/25"
+                }`}
                 data-testid={`chip-${key}`}
               >
                 {label}
@@ -300,20 +321,14 @@ export default function Discover() {
             ))}
           </div>
           <StoriesCarousel />
-          <div
-            className="text-center py-20 px-6 rounded-2xl"
-            style={{ background: "#1A1A24", boxShadow: "0 8px 32px rgba(0,0,0,0.4)", border: "1px solid #2E2E42" }}
-          >
-            <div
-              className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
-              style={{ background: "rgba(124,58,237,0.15)" }}
-            >
-              <Brain className="w-10 h-10" style={{ color: "#7C3AED" }} />
+          <div className="text-center py-20 px-6 rounded-[22px] border border-vf-line bg-vf-surface">
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 bg-vf-mint/10">
+              <Brain className="w-10 h-10 text-vf-mint" />
             </div>
-            <h3 className="text-xl font-bold mb-2 text-white">
+            <h3 className="font-serif text-xl mb-2 text-vf-text">
               {filter === "nearby" ? "Nobody nearby right now" : filter === "online" ? "Nobody online right now" : "No one to discover yet"}
             </h3>
-            <p className="text-sm" style={{ color: "#9090A8" }}>
+            <p className="text-sm text-vf-muted">
               {filter === "nearby"
                 ? "Try All to see everyone, or check back when people are near you."
                 : filter === "online"
@@ -323,8 +338,7 @@ export default function Discover() {
             {filter !== "all" && (
               <button
                 onClick={() => setFilter("all")}
-                className="mt-4 text-sm font-medium"
-                style={{ color: "#7C3AED", background: "none", border: "none" }}
+                className="mt-4 text-sm font-medium text-vf-mint"
               >
                 Show all profiles
               </button>
@@ -342,15 +356,10 @@ export default function Discover() {
   const isVeryClose = distanceKm !== null && distanceKm < 1;
   const cardStories = storiesByUserId[currentProfile.userId] || [];
   const hasCardStories = cardStories.length > 0;
+  const resonance = getResonance(currentProfile.personalityProfile);
 
-  const handleNext = (direction: "left" | "right") => {
-    setSwipeDir(direction);
-    setIsExiting(true);
-    setTimeout(() => {
-      setIsExiting(false);
-      setSwipeDir(null);
-      setCurrentIdx(prev => (prev + 1) % profiles.length);
-    }, 300);
+  const handleNext = () => {
+    setCurrentIdx((prev) => (prev + 1) % profiles.length);
   };
 
   const handleInterview = async () => {
@@ -370,7 +379,7 @@ export default function Discover() {
     }
   };
 
-  const handlePass = () => handleNext("left");
+  const handlePass = () => handleNext();
 
   const handleLike = async () => {
     try {
@@ -396,11 +405,11 @@ export default function Discover() {
         title: "Liked!",
         description: `${currentProfile.displayName} will be notified.`,
       });
-      handleNext("right");
+      handleNext();
     } catch (err) {
       if (err instanceof Error && err.message?.includes("already exists")) {
         toast({ title: "Already Connected", description: "You already have a match request with this person." });
-        handleNext("right");
+        handleNext();
       } else if (err instanceof Error && err.message?.includes("upgradeRequired")) {
         setShowUpgradePrompt(true);
       } else {
@@ -409,107 +418,60 @@ export default function Discover() {
     }
   };
 
-  const personalityTraits = currentProfile.personalityProfile && typeof currentProfile.personalityProfile === "object"
-    ? Object.entries(currentProfile.personalityProfile as Record<string, number>).slice(0, 4)
+  // Free-text soul-mapping answers (real onboarded users) fall back to a
+  // couple of quoted excerpts instead of fake numeric axes — see getResonance().
+  const textAnswers = !resonance && currentProfile.personalityProfile && typeof currentProfile.personalityProfile === "object"
+    ? Object.values(currentProfile.personalityProfile as Record<string, unknown>).filter((v): v is string => typeof v === "string" && v.trim().length > 0).slice(0, 2)
+    : [];
+
+  const upcoming = profiles.length > 1
+    ? [1, 2].map((offset) => profiles[(currentIdx + offset) % profiles.length]).filter((p, i, arr) => arr.findIndex((x) => x.userId === p.userId) === i && p.userId !== currentProfile.userId)
     : [];
 
   return (
     <LayoutShell>
-      <div className="max-w-sm mx-auto">
-        <div className="text-center mb-4">
-          <h1 className="font-bold text-white" style={{ fontSize: "22px", letterSpacing: "-0.5px" }}>Discover</h1>
-        </div>
-
-        <div className="flex gap-2 mb-5 overflow-x-auto scrollbar-hide" data-testid="filter-chips">
-          {CHIP_LABELS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => { setFilter(key); setCurrentIdx(0); }}
-              className="shrink-0 text-sm font-medium"
-              style={{
-                padding: "6px 16px",
-                borderRadius: "100px",
-                border: "1px solid",
-                borderColor: filter === key ? "transparent" : "#2E2E42",
-                background: filter === key ? "linear-gradient(135deg, #7C3AED, #EC4899)" : "transparent",
-                color: filter === key ? "#FFFFFF" : "#9090A8",
-                transition: "all 0.15s",
-              }}
-              data-testid={`chip-${key}`}
-            >
-              {label}
-            </button>
-          ))}
+      <div className="max-w-3xl mx-auto">
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+          <div>
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint mb-2">
+              {weekday} · {profiles.length} {profiles.length === 1 ? "profile" : "profiles"} to explore
+            </div>
+            <h1 className="font-serif font-normal text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-[-0.02em] text-vf-text">
+              Discover
+            </h1>
+          </div>
+          <div className="flex gap-2 flex-wrap" data-testid="filter-chips">
+            {CHIP_LABELS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => { setFilter(key); setCurrentIdx(0); }}
+                className={`shrink-0 text-sm font-medium px-4 py-1.5 rounded-full border transition-colors ${
+                  filter === key
+                    ? "bg-vf-ember border-transparent text-vf-ink"
+                    : "border-vf-line text-vf-soft hover:border-white/25"
+                }`}
+                data-testid={`chip-${key}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <StoriesCarousel />
 
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence mode="wait">
           <motion.div
             key={currentIdx}
-            initial={{ opacity: 0, scale: 0.96, y: 8 }}
-            animate={
-              isExiting
-                ? { opacity: 0, x: swipeDir === "left" ? -280 : 280, rotate: swipeDir === "left" ? -10 : 10 }
-                : { opacity: 1, scale: 1, x: 0, y: 0, rotate: 0 }
-            }
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.28, ease: "easeInOut" }}
-            className="overflow-hidden mb-4 relative"
-            style={{
-              background: "#1A1A24",
-              borderRadius: "20px",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-              border: "1px solid #2E2E42",
-            }}
+            transition={{ duration: 0.3 }}
+            className="rounded-[26px] border border-vf-line bg-vf-surface overflow-hidden grid grid-cols-1 md:grid-cols-2 mb-4"
             data-testid="card-profile"
           >
-            {isExiting && swipeDir === "left" && (
-              <div
-                className="absolute inset-0 z-30 flex items-center justify-center"
-                style={{ pointerEvents: "none" }}
-              >
-                <div
-                  className="font-black tracking-widest"
-                  style={{
-                    color: "#EF4444",
-                    fontSize: "48px",
-                    border: "4px solid #EF4444",
-                    borderRadius: "12px",
-                    padding: "4px 20px",
-                    opacity: 0.9,
-                    transform: "rotate(-15deg)",
-                    textShadow: "0 0 20px rgba(239,68,68,0.5)",
-                  }}
-                >
-                  PASS
-                </div>
-              </div>
-            )}
-            {isExiting && swipeDir === "right" && (
-              <div
-                className="absolute inset-0 z-30 flex items-center justify-center"
-                style={{ pointerEvents: "none" }}
-              >
-                <div
-                  className="font-black tracking-widest"
-                  style={{
-                    color: "#22C55E",
-                    fontSize: "48px",
-                    border: "4px solid #22C55E",
-                    borderRadius: "12px",
-                    padding: "4px 20px",
-                    opacity: 0.9,
-                    transform: "rotate(15deg)",
-                    textShadow: "0 0 20px rgba(34,197,94,0.5)",
-                  }}
-                >
-                  LIKE
-                </div>
-              </div>
-            )}
-
-            <div className="relative" style={{ paddingBottom: "120%" }}>
+            {/* Photo pane */}
+            <div className="relative min-h-[320px] md:min-h-[440px]">
               {currentProfile.coverPhotoUrl ? (
                 <img
                   src={currentProfile.coverPhotoUrl}
@@ -517,35 +479,37 @@ export default function Discover() {
                   className="absolute inset-0 w-full h-full object-cover"
                 />
               ) : (
-                <div
-                  className="absolute inset-0 flex items-center justify-center"
-                  style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
-                >
-                  <span className="font-bold text-white/20" style={{ fontSize: "96px" }}>
+                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#7C3AED] to-[#EC4899]">
+                  <span className="font-serif text-white/25" style={{ fontSize: "96px" }}>
                     {currentProfile.displayName?.[0] || "?"}
                   </span>
                 </div>
               )}
 
+              <div
+                className="absolute inset-x-0 bottom-0 pointer-events-none"
+                style={{ height: "52%", background: "linear-gradient(to top, rgba(12,9,16,.92), rgba(12,9,16,0))" }}
+              />
+
               {nearby && (
                 <div
-                  className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full"
-                  style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", border: "1px solid rgba(34,197,94,0.4)" }}
+                  className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md border border-[#22C55E]/40"
+                  style={{ background: "rgba(0,0,0,0.5)" }}
                   data-testid="badge-nearby-now"
                 >
                   <div className="w-2 h-2 rounded-full" style={{ background: "#22C55E", boxShadow: "0 0 6px #22C55E" }} />
-                  <span style={{ color: "#22C55E", fontSize: "11px", fontWeight: 600 }}>Nearby now</span>
+                  <span className="text-[11px] font-semibold" style={{ color: "#22C55E" }}>Nearby now</span>
                 </div>
               )}
 
               {isVeryClose && !nearby && (
                 <div
-                  className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full"
-                  style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", border: "1px solid rgba(124,58,237,0.4)" }}
+                  className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md border border-vf-mint/40"
+                  style={{ background: "rgba(0,0,0,0.5)" }}
                   data-testid="badge-very-close"
                 >
-                  <MapPin className="w-3 h-3" style={{ color: "#A78BFA" }} />
-                  <span style={{ color: "#A78BFA", fontSize: "11px", fontWeight: 600 }}>Under 1km</span>
+                  <MapPin className="w-3 h-3 text-vf-mint" />
+                  <span className="text-[11px] font-semibold text-vf-mint">Under 1km</span>
                 </div>
               )}
 
@@ -553,181 +517,121 @@ export default function Discover() {
                 <button
                   onClick={() => handleViewCardStory(currentProfile)}
                   className="absolute top-3 left-3 w-11 h-11 rounded-full flex items-center justify-center p-[2px]"
-                  style={{
-                    background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-                    animation: "pulse 2s infinite",
-                  }}
+                  style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", animation: "pulse 2s infinite" }}
                   data-testid="story-ring-indicator"
                   aria-label="View story"
                 >
-                  <div className="w-full h-full rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)" }}>
+                  <div className="w-full h-full rounded-full flex items-center justify-center backdrop-blur-md" style={{ background: "rgba(0,0,0,0.35)" }}>
                     <Play className="w-4 h-4 text-white fill-white" />
                   </div>
                 </button>
               ) : (
                 <div
-                  className="absolute top-3 left-3 w-11 h-11 rounded-full flex items-center justify-center"
-                  style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)", border: "1.5px solid rgba(255,255,255,0.2)" }}
+                  className="absolute top-3 left-3 w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20"
+                  style={{ background: "rgba(0,0,0,0.35)" }}
                   data-testid="story-ring-indicator"
                 >
                   <Play className="w-4 h-4 text-white fill-white" />
                 </div>
               )}
 
-              <div
-                className="absolute inset-x-0 bottom-0 p-5"
-                style={{
-                  background: "rgba(0,0,0,0.5)",
-                  backdropFilter: "blur(20px)",
-                  WebkitBackdropFilter: "blur(20px)",
-                }}
-              >
-                <h2
-                  className="font-bold text-white leading-tight mb-0.5 flex items-center gap-2"
-                  style={{ fontSize: "26px", letterSpacing: "-0.5px" }}
-                  data-testid="text-profile-name"
-                >
+              <div className="absolute left-6 right-6 bottom-5 pointer-events-none">
+                <h2 className="font-serif font-normal text-white leading-none mb-1.5 flex items-center gap-2" style={{ fontSize: "34px" }} data-testid="text-profile-name">
                   <span>{currentProfile.displayName}{currentProfile.age ? `, ${currentProfile.age}` : ""}</span>
                   {currentProfile.isVerified && (
                     <span
                       title="Verified"
                       data-testid="badge-verified"
-                      style={{
-                        display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        width: "22px", height: "22px", borderRadius: "50%",
-                        background: "#3B82F6", flexShrink: 0,
-                      }}
+                      className="inline-flex items-center justify-center rounded-full shrink-0"
+                      style={{ width: 22, height: 22, background: "#3B82F6" }}
                     >
                       <Check className="w-3 h-3 text-white" strokeWidth={3} />
                     </span>
                   )}
                 </h2>
 
-                {currentProfile.locationName && currentProfile.showDistance === false ? (
-                  <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.7)", fontSize: "13px" }}>
-                    <span data-testid="text-profile-location">📍 {currentProfile.locationName}</span>
-                  </div>
-                ) : currentProfile.locationName && distanceKm !== null ? (
-                  <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.7)", fontSize: "13px" }}>
+                {(currentProfile.locationName || currentProfile.location) && (
+                  <div className="flex items-center gap-1.5 text-[13.5px] text-[#CFC7DA] mb-1">
+                    <MapPin className="w-3.5 h-3.5 shrink-0" />
                     <span data-testid="text-profile-location">
-                      📍 {currentProfile.locationName} · {formatDistance(distanceKm)}
+                      {currentProfile.locationName || currentProfile.location}
+                      {currentProfile.showDistance !== false && distanceKm !== null ? ` · ${formatDistance(distanceKm)}` : ""}
                     </span>
                   </div>
-                ) : currentProfile.locationName ? (
-                  <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.7)", fontSize: "13px" }}>
-                    <span data-testid="text-profile-location">📍 {currentProfile.locationName}</span>
-                  </div>
-                ) : currentProfile.location ? (
-                  <div className="flex items-center gap-1 mb-1.5" style={{ color: "rgba(255,255,255,0.7)", fontSize: "14px" }}>
-                    <MapPin className="w-3.5 h-3.5 shrink-0" />
-                    <span data-testid="text-profile-location">{currentProfile.location}</span>
-                  </div>
-                ) : null}
-
-                {currentProfile.bio && (
-                  <p
-                    className="text-sm leading-snug"
-                    style={{ color: "rgba(255,255,255,0.75)", fontSize: "13px", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
-                    data-testid="text-profile-bio"
-                  >
-                    {currentProfile.bio}
-                  </p>
                 )}
               </div>
             </div>
 
-            {personalityTraits.length > 0 && (
-              <div className="px-4 py-3 flex flex-wrap gap-2" style={{ background: "#1A1A24" }}>
-                {personalityTraits.map(([trait, score]) => (
-                  <span
-                    key={trait}
-                    className="capitalize font-semibold"
-                    style={{
-                      background: "rgba(124,58,237,0.15)",
-                      color: "#A78BFA",
-                      fontSize: "12px",
-                      padding: "4px 12px",
-                      borderRadius: "100px",
-                      border: "1px solid rgba(124,58,237,0.3)",
-                    }}
-                    data-testid={`badge-trait-${trait}`}
-                  >
-                    {trait}: {typeof score === "number" ? `${score}%` : score}
-                  </span>
-                ))}
+            {/* Resonance pane */}
+            <div className="p-6 md:p-8 flex flex-col gap-5 min-w-0">
+              {resonance ? (
+                <>
+                  <div className="flex items-center gap-5 flex-wrap">
+                    <ResonanceDial score={resonance.score} />
+                    <div className="min-w-0">
+                      <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted">
+                        resonance read
+                      </div>
+                      {currentProfile.bio && (
+                        <p className="text-[15px] leading-relaxed text-vf-text mt-1.5 max-w-[330px]">{currentProfile.bio}</p>
+                      )}
+                    </div>
+                  </div>
+                  <ResonanceAxes axes={resonance.axes} />
+                </>
+              ) : (
+                <div>
+                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted mb-2">
+                    in their words
+                  </div>
+                  {textAnswers.length > 0 ? (
+                    <div className="flex flex-col gap-3">
+                      {textAnswers.map((answer, i) => (
+                        <p key={i} className="text-[15px] leading-relaxed text-vf-text">"{answer}"</p>
+                      ))}
+                    </div>
+                  ) : currentProfile.bio ? (
+                    <p className="text-[15px] leading-relaxed text-vf-text">{currentProfile.bio}</p>
+                  ) : (
+                    <p className="text-[15px] leading-relaxed text-vf-muted">No soul-mapping answers shared yet.</p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex gap-2.5 flex-wrap mt-auto pt-2">
+                <button
+                  onClick={handlePass}
+                  className="flex items-center justify-center w-12 h-12 rounded-full border border-white/14 text-vf-faint hover:text-vf-text hover:border-white/25 transition-colors btn-press shrink-0"
+                  data-testid="button-pass"
+                  aria-label="Pass"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleInterview}
+                  disabled={startInterview.isPending}
+                  className="flex-1 min-w-[160px] flex items-center justify-center gap-2 h-12 rounded-full border border-vf-mint/35 bg-vf-mint/10 text-vf-mint font-medium text-[14px] transition-colors hover:bg-vf-mint/15 btn-press"
+                  data-testid="button-interview"
+                >
+                  {startInterview.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+                  Interview Twin
+                </button>
+                <button
+                  onClick={handleLike}
+                  disabled={createMatch.isPending}
+                  className="flex items-center justify-center w-12 h-12 rounded-full shrink-0 font-semibold btn-press transition-colors bg-vf-ember text-vf-ink hover:bg-[#FF8163]"
+                  data-testid="button-like"
+                  aria-label="Like"
+                >
+                  {createMatch.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Heart className="w-5 h-5" />}
+                </button>
               </div>
-            )}
-
-            <div className="px-5 pb-5 pt-2 flex items-center justify-center gap-4" style={{ background: "#1A1A24" }}>
-              <button
-                onClick={handlePass}
-                className="flex items-center justify-center btn-press transition-all"
-                style={{
-                  width: "64px",
-                  height: "64px",
-                  borderRadius: "50%",
-                  background: "transparent",
-                  border: "2px solid #EF4444",
-                  color: "#EF4444",
-                  flexShrink: 0,
-                }}
-                data-testid="button-pass"
-              >
-                <X className="w-6 h-6" />
-              </button>
-
-              <button
-                onClick={handleInterview}
-                disabled={startInterview.isPending}
-                className="flex items-center justify-center gap-2 font-semibold btn-press transition-all flex-1"
-                style={{
-                  background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-                  color: "#FFFFFF",
-                  height: "52px",
-                  borderRadius: "14px",
-                  border: "none",
-                  fontSize: "14px",
-                  boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
-                }}
-                data-testid="button-interview"
-              >
-                {startInterview.isPending ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <>
-                    <Brain className="w-4 h-4" />
-                    Interview Twin
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={handleLike}
-                disabled={createMatch.isPending}
-                className="flex items-center justify-center btn-press transition-all"
-                style={{
-                  width: "64px",
-                  height: "64px",
-                  borderRadius: "50%",
-                  background: "transparent",
-                  border: "2px solid #EC4899",
-                  color: "#EC4899",
-                  flexShrink: 0,
-                }}
-                data-testid="button-like"
-              >
-                {createMatch.isPending ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Heart className="w-6 h-6" />
-                )}
-              </button>
             </div>
           </motion.div>
         </AnimatePresence>
 
-        <div className="flex items-center justify-between px-4 mb-8">
-          <p className="text-xs" style={{ color: "#9090A8" }}>
+        <div className="flex items-center justify-between px-1 mb-8">
+          <p className="text-xs text-vf-faint">
             {(currentIdx % profiles.length) + 1} of {profiles.length} profiles
           </p>
           <button
@@ -735,19 +639,73 @@ export default function Discover() {
               if (!currentProfile?.userId) return;
               try {
                 await apiRequest("POST", `/api/users/block/${currentProfile.userId}`, {});
-                handleNext("left");
+                handleNext();
                 toast({ title: "User blocked", description: "They won't appear in your feed anymore." });
               } catch {
                 toast({ title: "Could not block user", variant: "destructive" });
               }
             }}
-            className="text-xs"
-            style={{ color: "#9090A8", textDecoration: "underline" }}
+            className="text-xs text-vf-faint underline hover:text-vf-text"
             data-testid="button-block-user"
           >
             Block / Report
           </button>
         </div>
+
+        {upcoming.length > 0 && (
+          <div>
+            <div className="flex items-baseline justify-between gap-4 mb-3">
+              <h2 className="font-serif font-normal text-[22px] text-vf-text">Next up</h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
+              {upcoming.map((p) => {
+                const r = getResonance(p.personalityProfile);
+                const idx = profiles.findIndex((x) => x.userId === p.userId);
+                return (
+                  <button
+                    key={p.userId}
+                    onClick={() => setCurrentIdx(idx)}
+                    className="text-left rounded-[20px] border border-vf-line bg-vf-surface2 p-4 flex gap-3.5 items-center hover:border-white/20 transition-colors"
+                    data-testid={`card-upcoming-${p.userId}`}
+                  >
+                    <div className="w-[58px] h-[72px] rounded-[14px] shrink-0 overflow-hidden bg-gradient-to-br from-[#7C3AED] to-[#EC4899] flex items-center justify-center">
+                      {p.coverPhotoUrl ? (
+                        <img src={p.coverPhotoUrl} alt={p.displayName} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="font-serif text-white/40 text-2xl">{p.displayName?.[0] || "?"}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[15px] text-vf-text truncate">
+                        {p.displayName}{p.age ? `, ${p.age}` : ""}
+                      </div>
+                      <div className="text-[12px] text-vf-muted truncate mt-0.5">
+                        {p.locationName || p.location || " "}
+                      </div>
+                      {r && (
+                        <div className="font-mono text-[11.5px] text-vf-mint mt-1.5">resonance {r.score}</div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={() => setLocation("/billing")}
+                className="text-left rounded-[20px] border border-dashed border-vf-gold/35 bg-vf-gold/5 p-4 flex flex-col justify-center gap-2 hover:bg-vf-gold/[0.08] transition-colors"
+                data-testid="card-upgrade-teaser"
+              >
+                <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">ember</div>
+                <div className="text-[14px] leading-relaxed text-vf-text">
+                  Free accounts get 5 likes a day. Go Plus or VIP for more room to explore.
+                </div>
+                <span className="inline-flex items-center gap-1.5 text-[13px] text-vf-gold mt-0.5">
+                  See plans <ArrowRight className="w-3.5 h-3.5" />
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {viewingCardStory && (
@@ -771,43 +729,31 @@ export default function Discover() {
 
       {showUpgradePrompt && (
         <div
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
-            display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 100,
-          }}
+          className="fixed inset-0 flex items-end justify-center z-[100]"
+          style={{ background: "rgba(8,6,11,.82)", backdropFilter: "blur(14px)" }}
           onClick={() => setShowUpgradePrompt(false)}
         >
           <div
-            style={{
-              background: "#1A1A24", borderRadius: "24px 24px 0 0",
-              padding: "32px 24px 48px", width: "100%", maxWidth: "480px",
-              border: "1px solid #2E2E42",
-            }}
+            className="w-full max-w-[480px] rounded-t-[24px] border border-vf-line bg-vf-surface p-8 pb-12"
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{
-              width: "60px", height: "60px", borderRadius: "50%",
-              background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-              display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
-            }}>
-              <Crown className="w-7 h-7 text-white" />
+            <div className="w-[60px] h-[60px] rounded-full bg-vf-gold/15 flex items-center justify-center mx-auto mb-4">
+              <Crown className="w-7 h-7 text-vf-gold" />
             </div>
-            <h2 className="text-xl font-bold text-white text-center mb-2">You've reached your daily limit</h2>
-            <p className="text-sm text-center mb-6" style={{ color: "#9090A8" }}>
+            <h2 className="font-serif text-xl text-center mb-2 text-vf-text">You've reached your daily limit</h2>
+            <p className="text-sm text-center mb-6 text-vf-muted">
               Free accounts get 5 likes per day. Upgrade to VibeFlow Plus for 50 likes/day, or go VIP for unlimited.
             </p>
             <button
               onClick={() => { setShowUpgradePrompt(false); setLocation("/billing"); }}
-              className="w-full py-3 text-sm font-semibold text-white mb-3"
-              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", borderRadius: "14px", border: "none", cursor: "pointer" }}
+              className="w-full py-3.5 rounded-full text-sm font-semibold bg-vf-gold text-vf-ink mb-3 hover:bg-[#F3D890] transition-colors"
               data-testid="button-upgrade-prompt"
             >
               Upgrade Now
             </button>
             <button
               onClick={() => setShowUpgradePrompt(false)}
-              className="w-full py-3 text-sm font-medium"
-              style={{ background: "none", border: "none", color: "#9090A8", cursor: "pointer" }}
+              className="w-full py-3 text-sm font-medium text-vf-faint hover:text-vf-text"
               data-testid="button-dismiss-upgrade"
             >
               Maybe later

@@ -7,11 +7,11 @@ export function redirectToLogin(toast?: (options: { title: string; description: 
   if (toast) {
     toast({
       title: "Unauthorized",
-      description: "You are logged out. Logging in again...",
+      description: "You've been signed out. Please log in again.",
       variant: "destructive",
     });
   }
   setTimeout(() => {
-    window.location.href = "/api/login";
+    window.location.href = "/login";
   }, 500);
 }

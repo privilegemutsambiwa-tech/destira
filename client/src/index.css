@@ -1,11 +1,25 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --font-sans: 'Inter', sans-serif;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-serif: 'Instrument Serif', serif;
+  --font-mono: 'DM Mono', monospace;
+
+  /* VibeFlow redesign palette (mirrors tailwind.config.ts theme.extend.colors.vf).
+     Single source for the few spots — conic/radial gradient stops — that
+     Tailwind utility classes can't express and need a raw CSS value. */
+  --vf-ink: #0C0910;
+  --vf-surface: #14101C;
+  --vf-surface2: #161220;
+  --vf-ember: #FF6B4A;
+  --vf-ember-soft: #FF7A57;
+  --vf-mint: #8FE3C7;
+  --vf-gold: #E9C46A;
+  --vf-warn: #FFC46B;
 
   /* VibeFlow Dark Design System */
   --background: 240 14% 7%;         /* #0F0F14 near-black */
@@ -297,6 +311,12 @@
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
+
+/* VibeFlow redesign (docs/redesign-handoff.md §1) */
+@keyframes vf-rise    { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes vf-breathe { 0%, 100% { transform: scale(1); opacity: .55; } 50% { transform: scale(1.08); opacity: .9; } }
+@keyframes vf-pulse   { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+@keyframes vf-sweep   { from { transform: translateX(-120%); } to { transform: translateX(320%); } }
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {

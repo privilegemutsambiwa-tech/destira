@@ -46,58 +46,78 @@ function NicknameStep({
   const showOk = isValidFormat && !isFetching && isAvailable;
 
   return (
-    <div className="bg-card rounded-md p-8 md:p-12 shadow-xl border backdrop-blur-sm">
+    <div className="rounded-[22px] p-8 md:p-12 border border-vf-line bg-vf-surface">
       <div className="flex items-center gap-3 mb-4">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center"
-          style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
-        >
-          <AtSign className="w-5 h-5 text-white" />
+        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-vf-ember">
+          <AtSign className="w-5 h-5 text-vf-ink" />
         </div>
-        <h2 className="text-2xl md:text-3xl font-display font-bold leading-tight" data-testid="text-nickname-title">
+        <h2 className="font-serif font-normal text-2xl md:text-3xl leading-tight text-vf-text" data-testid="text-nickname-title">
           Choose your Group Nickname
         </h2>
       </div>
-      <p className="text-muted-foreground mb-8 text-base">
+      <p className="text-vf-muted mb-8 text-base">
         This is how you'll appear in Lounge groups. It's unique, short, and stays with you.
       </p>
 
       <div className="relative mb-2">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">@</span>
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-vf-faint">@</span>
         <Input
           value={value}
           onChange={(e) => { onChange(e.target.value.replace(/[^a-zA-Z0-9_]/g, "")); setTouched(true); }}
           placeholder="cool_nickname"
-          className="pl-8 text-lg h-12"
+          className="pl-8 text-lg h-12 bg-vf-ink border-vf-line text-vf-text"
           style={{ letterSpacing: "0.02em" }}
           maxLength={20}
           autoFocus
           data-testid="input-nickname"
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2">
-          {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+          {isFetching && <Loader2 className="w-4 h-4 animate-spin text-vf-faint" />}
           {!isFetching && showOk && <Check className="w-4 h-4" style={{ color: "#22C55E" }} />}
-          {!isFetching && showTaken && <X className="w-4 h-4" style={{ color: "#EF4444" }} />}
+          {!isFetching && showTaken && <X className="w-4 h-4 text-vf-ember" />}
         </div>
       </div>
-      <p className="text-xs mb-8" style={{
-        color: showError ? "#EF4444" : showTaken ? "#EF4444" : showOk ? "#22C55E" : "#9090A8"
-      }}>
+      <p
+        className={`text-xs mb-2 ${
+          showError || showTaken ? "text-vf-ember" : showOk ? "" : "text-vf-faint"
+        }`}
+        style={showOk ? { color: "#22C55E" } : undefined}
+      >
         {showError ? "3-20 characters. Letters, numbers, and underscores only." :
           showTaken ? "This nickname is already taken." :
           showOk ? "Looks great! This nickname is available." :
           "3-20 characters. Letters, numbers, and underscores only."}
       </p>
 
-      <div className="flex justify-between">
-        <Button variant="ghost" onClick={onBack} data-testid="button-back-nickname">
+      {showTaken && Array.isArray(nicknameCheck?.suggestions) && nicknameCheck.suggestions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-8" data-testid="nickname-suggestions">
+          <span className="text-xs text-vf-faint">Try:</span>
+          {nicknameCheck.suggestions.map((s: string) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => { onChange(s); setTouched(true); }}
+              className="text-xs px-3 py-1 rounded-full border border-vf-line text-vf-text hover:border-white/25 btn-press transition-colors"
+              data-testid={`nickname-suggestion-${s}`}
+            >
+              @{s}
+            </button>
+          ))}
+        </div>
+      )}
+      {!(showTaken && Array.isArray(nicknameCheck?.suggestions) && nicknameCheck.suggestions.length > 0) && (
+        <div className="mb-8" />
+      )}
+
+      <div className="flex justify-between items-center">
+        <Button variant="ghost" onClick={onBack} className="text-vf-faint hover:text-vf-text" data-testid="button-back-nickname">
           Back
         </Button>
         <Button
           size="lg"
           onClick={onNext}
           disabled={!showOk}
-          className="rounded-full px-8 h-12 text-base font-semibold shadow-lg btn-press"
+          className="rounded-full px-8 h-12 text-base font-semibold btn-press bg-vf-ember text-vf-ink hover:bg-[#FF8163] disabled:opacity-40"
           data-testid="button-next-nickname"
         >
           Create My AI Twin
@@ -114,7 +134,7 @@ export default function Onboarding() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [privacyMode, setPrivacyMode] = useState(false);
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   const generateTwin = useGenerateTwin();
   const createProfile = useCreateProfile();
@@ -127,8 +147,16 @@ export default function Onboarding() {
     }
   };
 
+  // There's no question before the first one, so "Back" here means leaving
+  // onboarding entirely. "/" always redirects a logged-in user straight back
+  // into onboarding (see App.tsx's AuthenticatedHome), so the only way to
+  // actually land on the public page is to log out first.
   const handleBack = () => {
-    if (step > 0) setStep(step - 1);
+    if (step > 0) {
+      setStep(step - 1);
+    } else {
+      logout();
+    }
   };
 
   const handleComplete = async () => {
@@ -157,33 +185,33 @@ export default function Onboarding() {
   const progressPct = Math.round(((step + 1) / TOTAL_STEPS) * 100);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-vf-ink flex flex-col items-center justify-center p-6 relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-primary/10 rounded-full blur-[100px]" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-secondary/10 rounded-full blur-[100px]" />
+        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-vf-mint/[0.06] rounded-full blur-[100px]" />
+        <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-vf-ember/[0.06] rounded-full blur-[100px]" />
       </div>
 
       <div className="w-full max-w-2xl">
         <div className="mb-8">
-          <div className="flex justify-between items-center text-sm font-medium text-muted-foreground mb-4">
+          <div className="flex justify-between items-center text-sm font-medium text-vf-muted mb-4">
             <span>Soul-Mapping in progress</span>
-            <span>{progressPct}%</span>
+            <span className="font-mono">{progressPct}%</span>
           </div>
-          <div className="h-2 bg-muted rounded-full overflow-hidden">
+          <div className="h-1 bg-white/10 rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-gradient-to-r from-primary to-secondary"
+              className="h-full bg-vf-mint"
               initial={{ width: 0 }}
               animate={{ width: `${progressPct}%` }}
               transition={{ duration: 0.5 }}
             />
           </div>
           <div className="flex justify-between items-center mt-4">
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-vf-faint">
               {isNicknameStep ? "Final step" : `Question ${step + 1} of ${QUESTIONS.length}`}
             </span>
             <button
               onClick={() => setPrivacyMode(!privacyMode)}
-              className="flex items-center gap-2 text-xs text-muted-foreground px-3 py-1.5 rounded-full border transition-colors"
+              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-white/25 transition-colors"
               data-testid="button-privacy-toggle"
             >
               {privacyMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -218,16 +246,16 @@ export default function Onboarding() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
-                  className="bg-card rounded-md p-8 md:p-12 shadow-xl border backdrop-blur-sm"
+                  className="rounded-[22px] p-8 md:p-12 border border-vf-line bg-vf-surface"
                 >
-                  <h2 className="text-2xl md:text-3xl font-display font-bold mb-8 leading-tight" data-testid="text-question">
+                  <h2 className="font-serif font-normal text-2xl md:text-3xl mb-8 leading-tight text-vf-text" data-testid="text-question">
                     {QUESTIONS[step]}
                   </h2>
                   <Textarea
                     value={answers[step] || ""}
                     onChange={(e) => setAnswers({ ...answers, [step]: e.target.value })}
                     placeholder="Type your answer honestly..."
-                    className="min-h-[150px] text-lg bg-transparent border-0 border-b-2 border-border rounded-none focus-visible:ring-0 focus-visible:border-primary px-0 resize-none placeholder:text-muted-foreground/50 mb-8"
+                    className="min-h-[150px] text-lg bg-transparent border-0 border-b-2 border-vf-line rounded-none focus-visible:ring-0 focus-visible:border-vf-ember px-0 resize-none text-vf-text placeholder:text-vf-faint mb-8"
                     autoFocus
                     data-testid="input-answer"
                   />
@@ -236,16 +264,16 @@ export default function Onboarding() {
                     <Button
                       variant="ghost"
                       onClick={handleBack}
-                      disabled={step === 0}
+                      className="text-vf-faint hover:text-vf-text"
                       data-testid="button-back"
                     >
-                      Back
+                      {step === 0 ? "Exit" : "Back"}
                     </Button>
                     <Button
                       size="lg"
                       onClick={handleNext}
                       disabled={!answers[step]?.trim()}
-                      className="rounded-full px-8 h-12 text-base font-semibold shadow-lg shadow-primary/20 btn-press"
+                      className="rounded-full px-8 h-12 text-base font-semibold btn-press bg-vf-ember text-vf-ink hover:bg-[#FF8163] disabled:opacity-40"
                       data-testid="button-next"
                     >
                       {step === QUESTIONS.length - 1 ? "Continue" : "Next Question"}
@@ -261,13 +289,13 @@ export default function Onboarding() {
                 className="flex flex-col items-center justify-center text-center h-full pt-12"
               >
                 <div className="relative mb-8">
-                  <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse" />
-                  <div className="relative bg-card p-6 rounded-md shadow-xl">
-                    <Loader2 className="w-12 h-12 text-primary animate-spin" />
+                  <div className="absolute inset-0 bg-vf-mint/20 blur-xl rounded-full animate-pulse" />
+                  <div className="relative p-6 rounded-[22px] border border-vf-line bg-vf-surface">
+                    <Loader2 className="w-12 h-12 text-vf-mint animate-spin" />
                   </div>
                 </div>
-                <h2 className="text-3xl font-display font-bold mb-4" data-testid="text-generating">Initializing AI Twin</h2>
-                <p className="text-lg text-muted-foreground max-w-md mx-auto">
+                <h2 className="font-serif font-normal text-3xl mb-4 text-vf-text" data-testid="text-generating">Initializing AI Twin</h2>
+                <p className="text-lg text-vf-muted max-w-md mx-auto">
                   We are analyzing your responses to create a digital persona that truly represents you. This takes just a moment.
                 </p>
               </motion.div>

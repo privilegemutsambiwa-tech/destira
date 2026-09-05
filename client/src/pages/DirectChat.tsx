@@ -38,28 +38,28 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
   };
 
   return (
-    <div className="h-screen flex flex-col bg-white">
-      <div className="bg-white border-b border-purple-100 px-4 py-3 flex items-center gap-4 sticky top-0 z-10">
+    <div className="h-screen flex flex-col bg-vf-ink">
+      <div className="border-b border-vf-line px-4 py-3 flex items-center gap-4 sticky top-0 z-10 bg-vf-ink">
         <Button variant="ghost" size="icon" onClick={() => setLocation("/matches")} data-testid="button-back">
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-5 h-5 text-vf-text" />
         </Button>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-200 to-pink-200 flex items-center justify-center font-bold text-primary">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center font-serif text-lg bg-vf-surface2 text-vf-text">
             {otherName[0]}
           </div>
           <div>
-            <h2 className="font-bold text-sm" data-testid="text-chat-name">{otherName}</h2>
-            <p className="text-xs text-green-600 font-medium flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Online
+            <h2 className="text-sm text-vf-text" data-testid="text-chat-name">{otherName}</h2>
+            <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: "#22C55E" }}>
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "#22C55E" }} /> Online
             </p>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {isLoading ? (
           <div className="flex justify-center p-12">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <Loader2 className="w-6 h-6 animate-spin text-vf-ember" />
           </div>
         ) : messages && messages.length > 0 ? (
           messages.map((msg: any) => {
@@ -71,28 +71,29 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
                 animate={{ opacity: 1, y: 0 }}
                 className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`
-                  max-w-[80%] rounded-2xl px-5 py-3 shadow-sm text-sm leading-relaxed
-                  ${isMe
-                    ? 'bg-primary text-white rounded-tr-none'
-                    : 'bg-white border border-purple-100 text-gray-800 rounded-tl-none'
-                  }
-                `} data-testid={`message-${msg.id}`}>
+                <div
+                  className={`max-w-[80%] px-4 py-2.5 text-sm leading-relaxed ${
+                    isMe
+                      ? "rounded-[18px] rounded-br-[6px] bg-vf-ember text-vf-ink font-medium"
+                      : "rounded-[18px] rounded-bl-[6px] border border-vf-line bg-vf-surface text-vf-text"
+                  }`}
+                  data-testid={`message-${msg.id}`}
+                >
                   {msg.content}
                 </div>
               </motion.div>
             );
           })
         ) : (
-          <div className="text-center py-12 text-muted-foreground">
-            <p className="text-lg font-medium mb-2">Say hello to {otherName}!</p>
-            <p className="text-sm">You're now matched. Start the conversation.</p>
+          <div className="text-center py-12">
+            <p className="text-lg text-vf-text mb-2">Say hello to {otherName}!</p>
+            <p className="text-sm text-vf-muted">You're now matched. Start the conversation.</p>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 bg-white border-t border-purple-100">
+      <div className="p-4 border-t border-vf-line bg-vf-ink">
         <form
           className="flex gap-2 max-w-4xl mx-auto"
           onSubmit={(e) => { e.preventDefault(); handleSend(); }}
@@ -101,14 +102,14 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={`Message ${otherName}...`}
-            className="flex-1 rounded-full border-purple-200 focus-visible:ring-primary h-12 px-6"
+            className="flex-1 rounded-full h-12 px-6 bg-white/5 border-vf-line text-vf-text"
             data-testid="input-message"
           />
           <Button
             type="submit"
             size="icon"
             disabled={!input.trim() || sendMessage.isPending}
-            className="h-12 w-12 rounded-full bg-primary shadow-md"
+            className="h-12 w-12 rounded-full bg-vf-ember text-vf-ink hover:bg-[#FF8163]"
             data-testid="button-send"
           >
             <Send className="w-5 h-5" />

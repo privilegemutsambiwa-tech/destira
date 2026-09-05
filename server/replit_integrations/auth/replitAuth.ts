@@ -1,69 +1,82 @@
-import * as client from "openid-client";
-import { Strategy, type VerifyFunction } from "openid-client/passport";
+// LOCAL AUTH — replaces Replit Auth (OIDC).
+//
+// The original implementation authenticated against Replit's OIDC provider.
+// Off Replit there's no such provider, so this module implements real
+// email/password auth instead (see ./routes.ts for the /api/auth/signup and
+// /api/auth/login handlers). This file owns the session/passport plumbing
+// that both the old and new implementations share:
+//
+//   GET /api/logout  -> clears the session, redirects to /
+//   GET /api/login, /api/callback -> legacy links; redirect to the real
+//     client-rendered /login page instead of auto-signing anyone in.
+//
+// The logged-in user object matches the shape the app expects elsewhere:
+//   req.user.claims.sub / .email / .first_name / ...
+//
+// To restore real Replit OIDC, reinstate that version from git history.
 
-import passport from "passport";
 import session from "express-session";
+import createMemoryStore from "memorystore";
+import passport from "passport";
 import type { Express, RequestHandler } from "express";
-import memoize from "memoizee";
-import connectPg from "connect-pg-simple";
-import { authStorage } from "./storage";
 
-const getOidcConfig = memoize(
-  async () => {
-    return await client.discovery(
-      new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
-      process.env.REPL_ID!
-    );
-  },
-  { maxAge: 3600 * 1000 }
-);
+const MemoryStore = createMemoryStore(session);
+
+// Sessions here aren't OAuth tokens with a real expiry, so we set a
+// far-future "exp" — this keeps any token-freshness checks elsewhere in the
+// app satisfied without needing a refresh flow.
+const SESSION_EXPIRES_AT = Math.floor(new Date("2100-01-01T00:00:00Z").getTime() / 1000);
+
+export interface SessionSourceUser {
+  id: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  profileImageUrl?: string | null;
+}
+
+// Builds the req.user shape the rest of the app relies on
+// (req.user.claims.sub, etc.) from a DB user row.
+export function createSessionUser(user: SessionSourceUser) {
+  return {
+    claims: {
+      sub: user.id,
+      email: user.email ?? undefined,
+      first_name: user.firstName ?? undefined,
+      last_name: user.lastName ?? undefined,
+      profile_image_url: user.profileImageUrl ?? undefined,
+      exp: SESSION_EXPIRES_AT,
+    },
+    access_token: "local-session",
+    refresh_token: "local-session",
+    expires_at: SESSION_EXPIRES_AT,
+  };
+}
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
-  const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: true,
-    ttl: sessionTtl,
-    tableName: "express_sessions",
-    errorLog: (err: any) => console.error("[SESSION STORE ERROR]", err),
-  });
 
-  sessionStore.on("error", (err: any) => {
-    console.error("[SESSION STORE EVENT ERROR]", err);
-  });
+  if (
+    process.env.NODE_ENV === "production" &&
+    (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === "local-dev-insecure-secret")
+  ) {
+    console.warn(
+      "[SECURITY] SESSION_SECRET is not set (or is using the insecure local-dev default) " +
+        "in production. Set a strong random SESSION_SECRET before real users sign in.",
+    );
+  }
 
   return session({
-    secret: process.env.SESSION_SECRET!,
-    store: sessionStore,
+    secret: process.env.SESSION_SECRET || "local-dev-insecure-secret",
+    store: new MemoryStore({ checkPeriod: sessionTtl }),
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
-      sameSite: "none",
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
       maxAge: sessionTtl,
     },
-  });
-}
-
-function updateUserSession(
-  user: any,
-  tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers
-) {
-  user.claims = tokens.claims();
-  user.access_token = tokens.access_token;
-  user.refresh_token = tokens.refresh_token;
-  user.expires_at = user.claims?.exp;
-}
-
-async function upsertUser(claims: any) {
-  await authStorage.upsertUser({
-    id: claims["sub"],
-    email: claims["email"],
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
-    profileImageUrl: claims["profile_image_url"],
   });
 }
 
@@ -73,148 +86,33 @@ export async function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  const config = await getOidcConfig();
+  passport.serializeUser((user: Express.User, cb) => cb(null, user));
+  passport.deserializeUser((user: Express.User, cb) => cb(null, user as any));
 
-  const verify: VerifyFunction = async (
-    tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
-    verified: passport.AuthenticateCallback
-  ) => {
-    try {
-      const user = {};
-      updateUserSession(user, tokens);
-      console.log("[AUTH VERIFY] Token claims:", JSON.stringify(tokens.claims()));
-      await upsertUser(tokens.claims());
-      console.log("[AUTH VERIFY] User upserted successfully, sub:", tokens.claims()?.sub ?? "unknown");
-      verified(null, user);
-    } catch (err: any) {
-      console.error("[AUTH VERIFY ERROR]", err?.message || err);
-      verified(err);
-    }
-  };
-
-  const registeredStrategies = new Set<string>();
-
-  const ensureStrategy = (domain: string) => {
-    const strategyName = `replitauth:${domain}`;
-    if (!registeredStrategies.has(strategyName)) {
-      const callbackURL = `https://${domain}/api/callback`;
-      console.log("[AUTH] Registering strategy for domain:", domain, "callbackURL:", callbackURL);
-      const strategy = new Strategy(
-        {
-          name: strategyName,
-          config,
-          scope: "openid email profile offline_access",
-          callbackURL,
-        },
-        verify
-      );
-      passport.use(strategy);
-      registeredStrategies.add(strategyName);
-    }
-  };
-
-  passport.serializeUser((user: Express.User, cb) => {
-    console.log("[AUTH SERIALIZE] serializing user");
-    cb(null, user);
-  });
-
-  passport.deserializeUser((user: Express.User, cb) => {
-    cb(null, user);
-  });
-
-  app.get("/api/login", (req, res, next) => {
-    const callbackURL = `https://${req.hostname}/api/callback`;
-    console.log("[AUTH LOGIN] hostname:", req.hostname, "callbackURL:", callbackURL);
-    ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      prompt: "login consent",
-      scope: ["openid", "email", "profile", "offline_access"],
-    })(req, res, next);
-  });
-
-  app.get("/api/callback", (req, res, next) => {
-    const sessionID = (req as any).sessionID;
-    const sessionKeys = Object.keys((req as any).session || {});
-    console.log("[AUTH CALLBACK] Hit. hostname:", req.hostname, "sessionID:", sessionID, "sessionKeys:", sessionKeys, "query:", JSON.stringify(req.query));
-    ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/auth-debug",
-    })(req, res, next);
-  });
-
-  app.get("/api/auth-debug", (req: any, res) => {
-    const sessionData = req.session ? JSON.stringify(req.session, null, 2) : "no session";
-    const queryData = JSON.stringify(req.query, null, 2);
-    console.log("[AUTH DEBUG PAGE] session:", sessionData, "query:", queryData);
-    res.status(200).send(`<!DOCTYPE html><html><head><title>Auth Debug</title></head><body>
-      <h2>Auth Callback Failed</h2>
-      <p><strong>Session ID:</strong> ${req.sessionID || "none"}</p>
-      <p><strong>Is Authenticated:</strong> ${req.isAuthenticated?.() || false}</p>
-      <p><strong>Session Data:</strong></p><pre>${sessionData}</pre>
-      <p><strong>Query Params:</strong></p><pre>${queryData}</pre>
-      <p><strong>Hostname:</strong> ${req.hostname}</p>
-      <p><strong>Expected callback URL:</strong> https://${req.hostname}/api/callback</p>
-      <hr/>
-      <a href="/api/login">Try Again</a>
-    </body></html>`);
-  });
-
-  app.get("/debug/auth", (req: any, res) => {
-    const sessionData = req.session ? JSON.stringify(req.session, null, 2) : "no session";
-    res.status(200).send(`<!DOCTYPE html><html><head><title>Auth State</title></head><body>
-      <h2>Current Auth State</h2>
-      <p><strong>Session ID:</strong> ${req.sessionID || "none"}</p>
-      <p><strong>Is Authenticated:</strong> ${req.isAuthenticated?.() || false}</p>
-      <p><strong>User:</strong> <pre>${JSON.stringify(req.user, null, 2) || "none"}</pre></p>
-      <p><strong>Session Data:</strong></p><pre>${sessionData}</pre>
-      <p><strong>Hostname:</strong> ${req.hostname}</p>
-      <p><strong>Cookies:</strong> <pre>${JSON.stringify(req.headers.cookie)}</pre></p>
-      <hr/>
-      <a href="/api/login">Log In</a> | <a href="/api/logout">Log Out</a> | <a href="/">Home</a>
-    </body></html>`);
-  });
+  // Legacy Replit-style links. These used to auto-sign the visitor in as a
+  // single fixed user — that was the bug. Now they just forward to the real,
+  // credential-checked login page.
+  app.get("/api/login", (_req, res) => res.redirect("/login"));
+  app.get("/api/callback", (_req, res) => res.redirect("/login"));
 
   app.get("/api/logout", (req, res) => {
     req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-        }).href
-      );
+      req.session?.destroy(() => res.redirect("/"));
+    });
+  });
+
+  app.get("/debug/auth", (req: any, res) => {
+    res.status(200).json({
+      isAuthenticated: req.isAuthenticated?.() ?? false,
+      user: req.user ? { id: req.user.claims?.sub, email: req.user.claims?.email } : null,
+      sessionID: req.sessionID ?? null,
     });
   });
 }
 
-export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  const user = req.user as any;
-
-  if (!user?.expires_at) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  if (now <= user.expires_at) {
+export const isAuthenticated: RequestHandler = (req, res, next) => {
+  if (req.isAuthenticated() && (req.user as any)?.claims?.sub) {
     return next();
   }
-
-  const refreshToken = user.refresh_token;
-  if (!refreshToken) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  try {
-    const config = await getOidcConfig();
-    const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
-    updateUserSession(user, tokenResponse);
-    return next();
-  } catch (error) {
-    console.error("[AUTH REFRESH ERROR]", error);
-    return res.status(401).json({ message: "Unauthorized" });
-  }
+  return res.status(401).json({ message: "Unauthorized" });
 };

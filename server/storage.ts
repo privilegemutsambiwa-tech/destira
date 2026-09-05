@@ -7,7 +7,7 @@ import {
   twinProfilesStructured, twinMemoryFacts, twinMemorySummary,
   questions, userAnswers, questionSchedule, auditLogs,
   stories, storyMedia, storyLikes, storyComments, storyViews, plans, chatRequests,
-  blockedUsers, supportTickets, dailyLikeCounts,
+  blockedUsers, supportTickets, dailyLikeCounts, inviteRequests,
   type Profile, type InsertProfile, type UpdateProfileRequest,
   type Match, type Interview, type Group, type GroupMember, type DirectMessage, type GroupMessage,
   type GroupJoinRequest, type GroupInviteLink, type GroupModerationLog,
@@ -17,7 +17,8 @@ import {
   type TwinProfileStructured, type TwinMemoryFact, type TwinMemorySummaryEntry,
   type Question, type UserAnswer, type QuestionScheduleEntry, type AuditLog,
   type Story, type StoryMedia, type StoryLike, type StoryComment, type StoryView, type Plan,
-  type ChatRequest, type BlockedUser, type SupportTicket
+  type ChatRequest, type BlockedUser, type SupportTicket,
+  type InviteRequest, type InsertInviteRequest
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, lte } from "drizzle-orm";
@@ -182,6 +183,7 @@ export interface IStorage {
   updateGroupMemberMute(groupId: number, userId: string, isMuted: boolean): Promise<GroupMember>;
   isGroupNicknameTaken(nickname: string): Promise<boolean>;
   isGroupNicknameTakenByOther(nickname: string, currentUserId: string): Promise<boolean>;
+  suggestAvailableGroupNicknames(base: string, count?: number): Promise<string[]>;
 
   createChatRequest(requesterId: string, targetId: string, groupId: number, expiresAt: Date): Promise<ChatRequest>;
   getChatRequest(id: number): Promise<ChatRequest | undefined>;
@@ -199,6 +201,8 @@ export interface IStorage {
   clearTwinMemorySummary(userId: string): Promise<void>;
 
   createSupportTicket(userId: string, subject: string, message: string): Promise<SupportTicket>;
+
+  createInviteRequest(data: InsertInviteRequest): Promise<InviteRequest>;
 
   incrementDailyLikes(userId: string): Promise<number>;
   getDailyLikeCount(userId: string): Promise<number>;
@@ -1437,6 +1441,51 @@ export class DatabaseStorage implements IStorage {
     return !!row;
   }
 
+  // Given a desired nickname that's already taken, propose a few close
+  // alternatives that are actually free. One query pulls every taken nickname
+  // sharing the base, then we probe numeric/underscore variants in memory.
+  async suggestAvailableGroupNicknames(base: string, count = 3): Promise<string[]> {
+    const cleanedBase = base.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20) || "user";
+
+    const rows = await db
+      .select({ groupNickname: profiles.groupNickname })
+      .from(profiles)
+      .where(ilike(profiles.groupNickname, `${cleanedBase}%`));
+    const taken = new Set(
+      rows
+        .map((r) => (r.groupNickname || "").toLowerCase())
+        .filter(Boolean)
+    );
+
+    // Keep each candidate within the 3-20 char limit by trimming the base
+    // before appending the suffix.
+    const withSuffix = (suffix: string) => {
+      const room = Math.max(3, 20 - suffix.length);
+      return cleanedBase.slice(0, room) + suffix;
+    };
+
+    const candidates: string[] = [];
+    const pushIfNew = (nick: string) => {
+      if (
+        nick.length >= 3 &&
+        nick.length <= 20 &&
+        !taken.has(nick.toLowerCase()) &&
+        !candidates.some((c) => c.toLowerCase() === nick.toLowerCase())
+      ) {
+        candidates.push(nick);
+      }
+    };
+
+    for (let n = 1; n <= 99 && candidates.length < count; n++) {
+      pushIfNew(withSuffix(String(n)));
+      pushIfNew(withSuffix(`_${n}`));
+    }
+    for (let tries = 0; tries < 50 && candidates.length < count; tries++) {
+      pushIfNew(withSuffix(`_${Math.floor(1000 + Math.random() * 9000)}`));
+    }
+    return candidates.slice(0, count);
+  }
+
   async createChatRequest(requesterId: string, targetId: string, groupId: number, expiresAt: Date): Promise<ChatRequest> {
     const [req] = await db.insert(chatRequests).values({ requesterId, targetId, groupId, expiresAt }).returning();
     return req;
@@ -1512,6 +1561,11 @@ export class DatabaseStorage implements IStorage {
   async createSupportTicket(userId: string, subject: string, message: string): Promise<SupportTicket> {
     const [ticket] = await db.insert(supportTickets).values({ userId, subject, message }).returning();
     return ticket;
+  }
+
+  async createInviteRequest(data: InsertInviteRequest): Promise<InviteRequest> {
+    const [row] = await db.insert(inviteRequests).values(data).returning();
+    return row;
   }
 
   async incrementDailyLikes(userId: string): Promise<number> {

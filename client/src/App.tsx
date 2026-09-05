@@ -9,6 +9,8 @@ import { useEffect } from "react";
 
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
+import Login from "@/pages/Login";
+import Signup from "@/pages/Signup";
 import Onboarding from "@/pages/Onboarding";
 import Profile from "@/pages/Profile";
 import Matches from "@/pages/Matches";
@@ -16,6 +18,8 @@ import Discover from "@/pages/Discover";
 import Interviews from "@/pages/Interviews";
 import InterviewChat from "@/pages/InterviewChat";
 import Lounge from "@/pages/Lounge";
+import Events from "@/pages/Events";
+import EventDetail from "@/pages/EventDetail";
 import DirectChat from "@/pages/DirectChat";
 import TwinChat from "@/pages/TwinChat";
 import Billing from "@/pages/Billing";
@@ -84,6 +88,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={user ? AuthenticatedHome : Landing} />
+      <Route path="/login" component={Login} />
+      <Route path="/signup" component={Signup} />
 
       <Route path="/onboarding">
         <ProtectedRoute component={Onboarding} />
@@ -105,6 +111,12 @@ function Router() {
       </Route>
       <Route path="/lounge">
         <ProtectedRoute component={Lounge} />
+      </Route>
+      <Route path="/events">
+        <ProtectedRoute component={Events} />
+      </Route>
+      <Route path="/events/:id">
+        {(params) => <ProtectedRoute component={EventDetail} params={params} />}
       </Route>
       <Route path="/lounge/group/:groupId/info">
         {(params) => <ProtectedRoute component={GroupInfoPage} params={params} />}

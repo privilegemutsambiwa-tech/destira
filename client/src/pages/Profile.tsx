@@ -3,7 +3,6 @@ import { LayoutShell } from "@/components/layout-shell";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useSubscription, useGenerateSummary, useProfileCompletion, useTwinToneProfile, useUpdateTwinToneProfile, useTwinStructuredProfile, useExtractTwinProfile, useTwinMemory } from "@/hooks/use-interactions";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -13,7 +12,7 @@ import {
 import {
   Loader2, MapPin,
   Camera, Crown, Trash2, ImagePlus,
-  CheckCircle2, ArrowRight, Check, X, Pencil,
+  CheckCircle2, Check, X, Pencil,
   Brain, Sparkles, Plus, LogOut, Settings
 } from "lucide-react";
 import { AddStoryButton, OwnStoryViewer, type OwnStory } from "@/components/story-viewer";
@@ -24,14 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 
-const CARD_STYLE = {
-  background: "#1A1A24",
-  borderRadius: "20px",
-  border: "1px solid #2E2E42",
-  boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-};
-
-const SURFACE2 = { background: "#242433", borderRadius: "12px", padding: "12px" };
+const CARD = "rounded-[20px] border border-vf-line bg-vf-surface";
 
 export default function Profile() {
   const { data: profile, isLoading } = useProfile();
@@ -87,7 +79,7 @@ export default function Profile() {
     return (
       <LayoutShell>
         <div className="h-[60vh] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin" style={{ color: "#7C3AED" }} />
+          <Loader2 className="w-8 h-8 animate-spin text-vf-mint" />
         </div>
       </LayoutShell>
     );
@@ -97,18 +89,11 @@ export default function Profile() {
     return (
       <LayoutShell>
         <div className="text-center mt-20">
-          <h2 className="text-2xl font-bold text-white">Welcome to VibeFlow!</h2>
-          <p className="mt-2 mb-6" style={{ color: "#9090A8" }}>Complete your Soul-Mapping to get started.</p>
+          <h2 className="font-serif text-2xl text-vf-text">Welcome to VibeFlow!</h2>
+          <p className="mt-2 mb-6 text-vf-muted">Complete your Soul-Mapping to get started.</p>
           <button
             onClick={() => setLocation("/onboarding")}
-            className="font-semibold btn-press px-8 py-3 text-white"
-            style={{
-              background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-              height: "48px",
-              borderRadius: "14px",
-              border: "none",
-              boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
-            }}
+            className="font-semibold btn-press px-8 h-12 rounded-full bg-vf-ember text-vf-ink hover:bg-[#FF8163] transition-colors"
             data-testid="button-start-onboarding"
           >
             Start Soul-Mapping
@@ -198,7 +183,7 @@ export default function Profile() {
 
   const completionScore = completion?.score ?? profile.profileCompletionScore ?? 0;
   const completionTasks: Array<{ key: string; label: string; benefit: string; completed: boolean }> = completion?.tasks ?? [];
-  const incompleteTasks = completionTasks.filter(t => !t.completed);
+  const nextTask = completionTasks.find(t => !t.completed);
 
   const handleTaskAction = (key: string) => {
     switch (key) {
@@ -254,56 +239,44 @@ export default function Profile() {
     <LayoutShell>
       <div className="space-y-6">
 
-        {/* Hero Section — 200px banner, 96px circular avatar overlapping */}
+        {/* Hero */}
         <div className="relative">
-          <div
-            className="overflow-hidden"
-            style={{
-              height: "200px",
-              background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-              borderRadius: "20px",
-            }}
-          >
-            {profile.coverPhotoUrl && (
+          <div className="overflow-hidden rounded-[20px]" style={{ height: "200px" }}>
+            {profile.coverPhotoUrl ? (
               <img src={profile.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
+            ) : (
+              <div
+                className="w-full h-full"
+                style={{ background: "radial-gradient(120% 140% at 50% 0%, rgba(143,227,199,.14), transparent 60%), var(--vf-surface2)" }}
+              />
             )}
           </div>
-          {/* 96px circular avatar, overlapping banner by half */}
           <div className="flex flex-col items-center" style={{ marginTop: "-48px" }}>
             <div
-              className="relative"
-              style={{
-                width: "96px",
-                height: "96px",
-                borderRadius: "50%",
-                border: "4px solid #0F0F14",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-                overflow: "hidden",
-                background: "#242433",
-                zIndex: 10,
-              }}
+              className="relative rounded-full overflow-hidden bg-vf-surface2"
+              style={{ width: "96px", height: "96px", border: "4px solid var(--vf-ink)", zIndex: 10 }}
               data-testid="avatar-profile"
             >
               {avatarUrl ? (
                 <img src={avatarUrl} alt={profile.displayName || "Profile"} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <span className="text-2xl font-bold text-white">{avatarFallbackLetter}</span>
+                  <span className="font-serif text-2xl text-vf-text">{avatarFallbackLetter}</span>
                 </div>
               )}
             </div>
 
             <div className="mt-3 flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-white" data-testid="text-display-name">
+              <h1 className="font-serif text-2xl text-vf-text" data-testid="text-display-name">
                 {profile.displayName || user?.firstName}
               </h1>
               {profile.isVerified && (
-                <CheckCircle2 className="w-5 h-5" style={{ color: "#60A5FA" }} data-testid="icon-verified" />
+                <CheckCircle2 className="w-5 h-5 text-[#60A5FA]" data-testid="icon-verified" />
               )}
             </div>
 
             {profile.location && (
-              <div className="flex items-center gap-1 text-sm mt-1" style={{ color: "#9090A8" }} data-testid="text-location">
+              <div className="flex items-center gap-1 text-sm mt-1 text-vf-muted" data-testid="text-location">
                 <MapPin className="w-3.5 h-3.5" />
                 <span>{profile.location}</span>
               </div>
@@ -312,13 +285,7 @@ export default function Profile() {
             <div className="flex items-center gap-2 mt-3 flex-wrap justify-center">
               <button
                 onClick={() => setShowEditDialog(true)}
-                className="flex items-center gap-1.5 font-medium text-sm btn-press px-4 py-2"
-                style={{
-                  background: "#1A1A24",
-                  color: "#FFFFFF",
-                  borderRadius: "10px",
-                  border: "1px solid #2E2E42",
-                }}
+                className="flex items-center gap-1.5 font-medium text-sm btn-press px-4 py-2 rounded-[10px] border border-vf-line text-vf-text hover:border-white/25 transition-colors"
                 data-testid="button-edit-profile"
               >
                 <Pencil className="w-4 h-4" />
@@ -326,13 +293,7 @@ export default function Profile() {
               </button>
               <button
                 onClick={() => setShowPhotoDialog(true)}
-                className="flex items-center gap-1.5 font-medium text-sm btn-press px-4 py-2"
-                style={{
-                  background: "#1A1A24",
-                  color: "#FFFFFF",
-                  borderRadius: "10px",
-                  border: "1px solid #2E2E42",
-                }}
+                className="flex items-center gap-1.5 font-medium text-sm btn-press px-4 py-2 rounded-[10px] border border-vf-line text-vf-text hover:border-white/25 transition-colors"
                 data-testid="button-add-photos"
               >
                 <ImagePlus className="w-4 h-4" />
@@ -340,13 +301,7 @@ export default function Profile() {
               </button>
               <button
                 onClick={() => setLocation("/settings")}
-                className="flex items-center gap-1.5 font-medium text-sm btn-press px-4 py-2"
-                style={{
-                  background: "#1A1A24",
-                  color: "#FFFFFF",
-                  borderRadius: "10px",
-                  border: "1px solid #2E2E42",
-                }}
+                className="flex items-center gap-1.5 font-medium text-sm btn-press px-4 py-2 rounded-[10px] border border-vf-line text-vf-text hover:border-white/25 transition-colors"
                 data-testid="button-open-settings"
               >
                 <Settings className="w-4 h-4" />
@@ -363,34 +318,16 @@ export default function Profile() {
               <div className="flex flex-col items-center gap-1">
                 <button
                   onClick={() => setShowOwnStoryViewer(true)}
-                  style={{
-                    padding: "2px",
-                    borderRadius: "50%",
-                    background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-                    border: "none",
-                    cursor: "pointer",
-                  }}
+                  className="p-[2px] rounded-full border-2 border-vf-ember cursor-pointer"
                   data-testid="button-view-own-story"
                 >
-                  <div style={{ padding: "2px", borderRadius: "50%", background: "#0F0F14" }}>
-                    <div
-                      className="w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl"
-                      style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", color: "#FFFFFF" }}
-                    >
+                  <div className="p-[2px] rounded-full bg-vf-ink">
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center font-serif text-xl bg-vf-surface2 text-vf-text">
                       {(profile.displayName || user?.firstName || "U")[0]}
                     </div>
                   </div>
                 </button>
-                <span
-                  className="text-xs font-medium"
-                  style={{
-                    background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
-                  }}
-                  data-testid="text-story-active"
-                >
+                <span className="text-xs font-medium text-vf-ember" data-testid="text-story-active">
                   Story active
                 </span>
               </div>
@@ -414,8 +351,7 @@ export default function Profile() {
           {photos?.slice(0, 6).map((photo: any) => (
             <div
               key={photo.id}
-              className="w-16 h-16 rounded-full overflow-hidden shrink-0"
-              style={{ border: "2px solid #2E2E42" }}
+              className="w-16 h-16 rounded-full overflow-hidden shrink-0 border-2 border-vf-line"
               data-testid={`photo-circle-${photo.id}`}
             >
               <img src={photo.photoUrl} alt="" className="w-full h-full object-cover" />
@@ -424,11 +360,10 @@ export default function Profile() {
           {(photos?.length || 0) < 6 && (
             <button
               onClick={() => setShowPhotoDialog(true)}
-              className="w-16 h-16 rounded-full flex items-center justify-center shrink-0 cursor-pointer"
-              style={{ border: "2px dashed #2E2E42" }}
+              className="w-16 h-16 rounded-full flex items-center justify-center shrink-0 cursor-pointer border-2 border-dashed border-vf-line hover:border-white/25 transition-colors"
               data-testid="button-add-photo-circle"
             >
-              <Plus className="w-5 h-5" style={{ color: "#9090A8" }} />
+              <Plus className="w-5 h-5 text-vf-faint" />
             </button>
           )}
         </div>
@@ -437,45 +372,34 @@ export default function Profile() {
           <div className="lg:col-span-2 space-y-6">
 
             {/* About Me */}
-            <div style={CARD_STYLE} className="p-5">
+            <div className={`${CARD} p-5`}>
               <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-white" style={{ fontSize: "16px" }}>About Me</h3>
+                  <h3 className="font-serif text-lg text-vf-text">About Me</h3>
                   <button
                     onClick={handleOpenBioEditor}
-                    className="btn-press p-1 rounded-md"
-                    style={{ color: "#9090A8" }}
+                    className="btn-press p-1 rounded-md text-vf-faint hover:text-vf-text"
                     data-testid="button-edit-bio-inline"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                 </div>
                 <button
-                  className="text-xs font-medium flex items-center gap-1 btn-press px-3 py-1.5"
-                  style={{
-                    background: "rgba(124,58,237,0.15)",
-                    color: "#A78BFA",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(124,58,237,0.3)",
-                  }}
+                  className="text-xs font-medium flex items-center gap-1.5 btn-press px-3 py-1.5 rounded-lg border border-vf-mint/30 bg-vf-mint/10 text-vf-mint hover:bg-vf-mint/15 transition-colors"
                   onClick={handleGenerateSummary}
                   disabled={generateSummary.isPending}
                   data-testid="button-generate-summary"
                 >
                   {generateSummary.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                  ✦ Refresh Summary
+                  Refresh Summary
                 </button>
               </div>
 
               {bioEditorOpen && (
-                <div
-                  className="mb-4 p-3"
-                  style={{ background: "#242433", borderRadius: "12px", border: "1px solid #2E2E42" }}
-                  data-testid="bio-editor"
-                >
+                <div className="mb-4 p-3 rounded-xl border border-vf-line bg-vf-surface2" data-testid="bio-editor">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium" style={{ color: "#9090A8" }}>Edit your bio</p>
-                    <span className="text-xs" style={{ color: bioEditorValue.length > 280 ? "#EC4899" : "#9090A8" }}>
+                    <p className="text-xs font-medium text-vf-muted">Edit your bio</p>
+                    <span className={`text-xs ${bioEditorValue.length > 280 ? "text-vf-ember" : "text-vf-muted"}`}>
                       {bioEditorValue.length}/300
                     </span>
                   </div>
@@ -484,14 +408,12 @@ export default function Profile() {
                     onChange={e => setBioEditorValue(e.target.value.slice(0, 300))}
                     placeholder="Tell people about yourself..."
                     rows={4}
-                    className="text-sm text-white mb-3 resize-none"
-                    style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "10px" }}
+                    className="text-sm text-vf-text mb-3 resize-none bg-vf-ink border-vf-line rounded-[10px]"
                     data-testid="input-bio-editor"
                   />
                   <div className="flex gap-2 flex-wrap">
                     <button
-                      className="text-xs font-medium btn-press px-3 py-1.5"
-                      style={{ background: "#1A1A24", color: "#FFFFFF", borderRadius: "8px", border: "1px solid #2E2E42" }}
+                      className="text-xs font-medium btn-press px-3 py-1.5 rounded-lg border border-vf-line text-vf-text hover:border-white/25 transition-colors"
                       onClick={handleSaveBioAsIs}
                       disabled={updateProfile.isPending}
                       data-testid="button-save-bio-as-is"
@@ -500,18 +422,16 @@ export default function Profile() {
                       Save as is
                     </button>
                     <button
-                      className="text-xs font-medium btn-press px-3 py-1.5 text-white"
-                      style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", borderRadius: "8px", border: "none" }}
+                      className="text-xs font-medium btn-press px-3 py-1.5 rounded-lg bg-vf-mint/10 border border-vf-mint/30 text-vf-mint hover:bg-vf-mint/15 transition-colors"
                       onClick={handlePolishBio}
                       disabled={polishingBio || !bioEditorValue.trim()}
                       data-testid="button-polish-bio"
                     >
                       {polishingBio ? <Loader2 className="w-3 h-3 animate-spin inline mr-1" /> : <Sparkles className="w-3 h-3 inline mr-1" />}
-                      ✦ Polish with AI
+                      Polish with AI
                     </button>
                     <button
-                      className="text-xs btn-press px-2 py-1.5"
-                      style={{ color: "#9090A8" }}
+                      className="text-xs btn-press px-2 py-1.5 text-vf-faint hover:text-vf-text"
                       onClick={() => { setBioEditorOpen(false); setPolishedPreview(null); }}
                       data-testid="button-close-bio-editor"
                     >
@@ -519,25 +439,19 @@ export default function Profile() {
                     </button>
                   </div>
                   {polishedPreview && (
-                    <div
-                      className="mt-3 p-3"
-                      style={{ background: "rgba(124,58,237,0.08)", borderRadius: "10px", border: "1px dashed rgba(124,58,237,0.4)" }}
-                      data-testid="polished-bio-preview"
-                    >
-                      <p className="text-xs font-medium mb-2" style={{ color: "#A78BFA" }}>✦ AI-polished version</p>
-                      <p className="text-sm text-white leading-relaxed mb-3">{polishedPreview}</p>
+                    <div className="mt-3 p-3 rounded-[10px] border border-dashed border-vf-mint/40 bg-vf-mint/5" data-testid="polished-bio-preview">
+                      <p className="text-xs font-medium mb-2 text-vf-mint">AI-polished version</p>
+                      <p className="text-sm text-vf-text leading-relaxed mb-3">{polishedPreview}</p>
                       <div className="flex gap-2">
                         <button
-                          className="text-xs font-medium btn-press px-3 py-1.5 text-white"
-                          style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", borderRadius: "8px", border: "none" }}
+                          className="text-xs font-medium btn-press px-3 py-1.5 rounded-lg bg-vf-mint text-vf-ink hover:bg-[#A9EDD6] transition-colors"
                           onClick={handleAcceptPolished}
                           data-testid="button-accept-polished"
                         >
                           <Check className="w-3 h-3 inline mr-1" /> Use this
                         </button>
                         <button
-                          className="text-xs btn-press px-3 py-1.5"
-                          style={{ background: "#1A1A24", color: "#9090A8", borderRadius: "8px", border: "1px solid #2E2E42" }}
+                          className="text-xs btn-press px-3 py-1.5 rounded-lg border border-vf-line text-vf-muted hover:text-vf-text transition-colors"
                           onClick={() => setPolishedPreview(null)}
                           data-testid="button-discard-polished"
                         >
@@ -550,27 +464,21 @@ export default function Profile() {
               )}
 
               {profile.aboutSummary && (
-                <p className="text-sm font-medium mb-3 italic" style={{ color: "#A78BFA" }} data-testid="text-about-summary">
+                <p className="text-sm font-medium mb-3 italic text-vf-mint" data-testid="text-about-summary">
                   {profile.aboutSummary}
                 </p>
               )}
 
-              <p className="leading-relaxed" style={{ color: "#9090A8" }} data-testid="text-bio">
+              <p className="leading-relaxed text-vf-muted" data-testid="text-bio">
                 {profile.aboutMe || profile.bio || "No bio yet."}
               </p>
 
               {highlightChips.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-4 pt-3" style={{ borderTop: "1px solid #2E2E42" }}>
+                <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-vf-line">
                   {highlightChips.map((trait) => (
                     <span
                       key={trait}
-                      className="capitalize text-xs font-medium px-2 py-0.5"
-                      style={{
-                        background: "rgba(124,58,237,0.15)",
-                        color: "#A78BFA",
-                        borderRadius: "100px",
-                        border: "1px solid rgba(124,58,237,0.3)",
-                      }}
+                      className="capitalize text-xs font-medium px-2.5 py-1 rounded-full border border-vf-line text-vf-soft"
                     >
                       {trait}
                     </span>
@@ -580,23 +488,19 @@ export default function Profile() {
             </div>
 
             {/* Twin Intelligence */}
-            <div style={CARD_STYLE} className="p-5">
+            <div className={`${CARD} p-5`}>
               <div className="flex items-center gap-2 mb-3">
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ background: "rgba(124,58,237,0.18)" }}
-                >
-                  <Brain className="w-4 h-4" style={{ color: "#A78BFA" }} />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-vf-mint/12">
+                  <Brain className="w-4 h-4 text-vf-mint" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-bold text-white" style={{ fontSize: "16px" }}>Twin Intelligence</h3>
-                  <p style={{ fontSize: "12px", color: "#9090A8" }}>Chat with your Twin to train it</p>
+                  <h3 className="font-serif text-lg text-vf-text">Twin Intelligence</h3>
+                  <p className="text-xs text-vf-muted">Chat with your Twin to train it</p>
                 </div>
                 <button
                   onClick={handleExtractProfile}
                   disabled={extractProfile.isPending}
-                  className="text-xs font-medium hover:opacity-80"
-                  style={{ color: "#A78BFA" }}
+                  className="text-xs font-medium text-vf-mint hover:text-vf-text transition-colors"
                   data-testid="button-extract-profile"
                 >
                   {extractProfile.isPending ? <Loader2 className="w-3 h-3 animate-spin inline" /> : <Sparkles className="w-3 h-3 inline" />}
@@ -606,36 +510,23 @@ export default function Profile() {
 
               <button
                 onClick={() => setLocation("/twin-chat?from=/profile")}
-                className="w-full font-semibold text-white py-3 mb-4 btn-press"
-                style={{
-                  background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-                  height: "48px",
-                  fontSize: "15px",
-                  border: "none",
-                  borderRadius: "14px",
-                  boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
-                }}
+                className="w-full font-medium py-3 mb-4 btn-press rounded-full border border-vf-mint/35 bg-vf-mint/10 text-vf-mint hover:bg-vf-mint/15 transition-colors"
+                style={{ height: "48px", fontSize: "15px" }}
                 data-testid="button-interview-ai-twin"
               >
                 <Brain className="w-4 h-4 inline mr-2" />
-                Interview AI Twin
+                Chat with My Twin
               </button>
 
               <div className="space-y-3">
                 {structuredProfile?.topValues?.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium mb-1" style={{ color: "#9090A8" }}>Core Values</p>
-                    <div className="flex flex-wrap gap-1">
+                    <p className="text-xs font-medium mb-1 text-vf-muted">Core Values</p>
+                    <div className="flex flex-wrap gap-1.5">
                       {structuredProfile.topValues.map((v: string) => (
                         <span
                           key={v}
-                          className="text-xs px-2 py-0.5 font-medium capitalize"
-                          style={{
-                            background: "rgba(124,58,237,0.15)",
-                            color: "#A78BFA",
-                            borderRadius: "100px",
-                            border: "1px solid rgba(124,58,237,0.25)",
-                          }}
+                          className="text-xs px-2.5 py-1 font-medium capitalize rounded-full border border-vf-mint/25 bg-vf-mint/10 text-vf-mint"
                         >
                           {v}
                         </span>
@@ -645,18 +536,12 @@ export default function Profile() {
                 )}
                 {structuredProfile?.interests?.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium mb-1" style={{ color: "#9090A8" }}>Interests</p>
-                    <div className="flex flex-wrap gap-1">
+                    <p className="text-xs font-medium mb-1 text-vf-muted">Interests</p>
+                    <div className="flex flex-wrap gap-1.5">
                       {structuredProfile.interests.map((i: string) => (
                         <span
                           key={i}
-                          className="text-xs px-2 py-0.5"
-                          style={{
-                            background: "#242433",
-                            color: "#FFFFFF",
-                            borderRadius: "100px",
-                            border: "1px solid #2E2E42",
-                          }}
+                          className="text-xs px-2.5 py-1 rounded-full border border-vf-line text-vf-soft"
                         >
                           {i}
                         </span>
@@ -666,45 +551,42 @@ export default function Profile() {
                 )}
                 {structuredProfile?.communicationStyle && (
                   <div>
-                    <p className="text-xs font-medium mb-1" style={{ color: "#9090A8" }}>Communication Style</p>
-                    <p className="text-sm text-white">{structuredProfile.communicationStyle}</p>
+                    <p className="text-xs font-medium mb-1 text-vf-muted">Communication Style</p>
+                    <p className="text-sm text-vf-text">{structuredProfile.communicationStyle}</p>
                   </div>
                 )}
                 {(!structuredProfile?.topValues?.length && !structuredProfile?.interests?.length) && (
-                  <p className="text-sm text-center py-2" style={{ color: "#9090A8" }}>Answer questions to help your Twin learn about you.</p>
+                  <p className="text-sm text-center py-2 text-vf-faint">Answer questions to help your Twin learn about you.</p>
                 )}
               </div>
 
               {(() => {
                 const memoryFacts = twinMemory?.facts || [];
-                const chatFacts = memoryFacts.filter(f => f.source !== "onboarding").length;
+                const chatFacts = memoryFacts.filter((f: any) => f.source !== "onboarding").length;
                 const onboardingAnswered = profile.twinQuestionsAnswered || 0;
                 const totalAnswered = onboardingAnswered + chatFacts;
                 const total = 100;
                 const pct = Math.min(Math.round((totalAnswered / total) * 100), 100);
                 let message = "Just getting started — your onboarding is saved!";
-                if (pct >= 100) message = "✦ Twin fully trained — you're getting the best matches!";
+                if (pct >= 100) message = "Twin fully trained — you're getting the best matches!";
                 else if (pct >= 76) message = "Your Twin is nearly fully trained!";
                 else if (pct >= 51) message = "Your Twin knows you well. Almost there!";
                 else if (pct >= 26) message = "Your Twin is learning — keep the conversations going.";
                 else if (pct >= 11) message = "Good start! Chat with your Twin to teach it more.";
                 return (
-                  <div className="pt-3 mt-3" style={{ borderTop: "1px solid #2E2E42" }}>
+                  <div className="pt-3 mt-3 border-t border-vf-line">
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <p className="text-xs font-medium" style={{ color: "#9090A8" }}>Twin Training Progress</p>
-                      <span className="text-xs font-bold" style={{ color: "#A78BFA" }} data-testid="text-twin-progress-count">{totalAnswered} of {total} answered ({pct}%)</span>
+                      <p className="text-xs font-medium text-vf-muted">Twin Training Progress</p>
+                      <span className="font-mono text-xs text-vf-mint" data-testid="text-twin-progress-count">{totalAnswered} of {total} answered ({pct}%)</span>
                     </div>
-                    <div className="w-full rounded-full h-2" style={{ background: "#242433" }}>
+                    <div className="w-full rounded-full h-1.5 bg-white/10 overflow-hidden">
                       <div
-                        className="h-2 rounded-full transition-all duration-500"
-                        style={{
-                          width: `${pct}%`,
-                          background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-                        }}
+                        className="h-full rounded-full bg-vf-mint transition-all duration-500"
+                        style={{ width: `${pct}%` }}
                         data-testid="progress-questions"
                       />
                     </div>
-                    <p className="text-xs mt-2 italic" style={{ color: "#9090A8" }} data-testid="text-progress-message">{message}</p>
+                    <p className="text-xs mt-2 italic text-vf-muted" data-testid="text-progress-message">{message}</p>
                   </div>
                 );
               })()}
@@ -712,36 +594,49 @@ export default function Profile() {
 
           </div>
 
-          {/* Sidebar — Your Plan */}
+          {/* Sidebar */}
           <div className="lg:col-span-1 space-y-6">
-            <div style={CARD_STYLE} className="p-5">
-              <h3 className="font-bold text-white mb-4" style={{ fontSize: "16px" }}>Your Plan</h3>
+            {nextTask && (
+              <div className="rounded-[20px] border border-dashed border-vf-line bg-vf-surface2 p-5">
+                <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-vf-faint mb-2">
+                  profile completion · {completionScore}%
+                </div>
+                <div className="h-1 rounded-full bg-white/10 overflow-hidden mb-3">
+                  <div className="h-full bg-vf-ember" style={{ width: `${completionScore}%` }} />
+                </div>
+                <p className="text-sm text-vf-text mb-1">{nextTask.label}</p>
+                <p className="text-xs text-vf-muted mb-3">{nextTask.benefit}</p>
+                <button
+                  onClick={() => handleTaskAction(nextTask.key)}
+                  className="text-xs font-medium text-vf-ember hover:text-[#FF8163] transition-colors"
+                  data-testid="button-next-task"
+                >
+                  Do this now →
+                </button>
+              </div>
+            )}
+
+            <div className="rounded-[22px] border border-vf-gold/30 p-5" style={{ background: "linear-gradient(150deg, rgba(233,196,106,.11), rgba(233,196,106,.02))" }}>
               <div className="flex items-center gap-2 mb-4">
-                <Crown className="w-5 h-5" style={{ color: "#F59E0B" }} />
+                <Crown className="w-5 h-5 text-vf-gold" />
                 <span
-                  className="text-sm font-semibold px-2 py-0.5"
-                  style={{
-                    background: "rgba(245,158,11,0.15)",
-                    color: "#FCD34D",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(245,158,11,0.3)",
-                  }}
+                  className="text-sm font-semibold px-2.5 py-0.5 rounded-lg border border-vf-gold/30 bg-vf-gold/15 text-vf-gold"
                   data-testid="badge-tier"
                 >
                   {tierLabel}
                 </span>
-                <span className="text-xs ml-auto" style={{ color: "#9090A8" }}>{subscription?.status || "active"}</span>
+                <span className="text-xs ml-auto text-vf-muted">{subscription?.status || "active"}</span>
               </div>
 
               <div className="space-y-2 mb-4">
                 {currentFeatures.map((feature) => (
                   <div key={feature.label} className="flex items-center gap-2 text-sm">
                     {feature.included ? (
-                      <Check className="w-4 h-4 shrink-0" style={{ color: "#22C55E" }} />
+                      <Check className="w-4 h-4 shrink-0 text-vf-mint" />
                     ) : (
-                      <X className="w-4 h-4 shrink-0" style={{ color: "#9090A8" }} />
+                      <X className="w-4 h-4 shrink-0 text-vf-faint" />
                     )}
-                    <span style={{ color: feature.included ? "#FFFFFF" : "#9090A8" }}>
+                    <span className={feature.included ? "text-vf-text" : "text-vf-faint"}>
                       {feature.label}
                     </span>
                   </div>
@@ -749,26 +644,20 @@ export default function Profile() {
               </div>
 
               {currentTierKey !== "vip" && (
-                <div className="space-y-2 pt-3" style={{ borderTop: "1px solid #2E2E42" }}>
+                <div className="space-y-2 pt-3 border-t border-vf-gold/20">
                   {currentTierKey === "free" && (
-                    <p className="text-xs mb-2" style={{ color: "#9090A8" }}>
+                    <p className="text-xs mb-2 text-vf-muted">
                       Upgrade to Plus for $9.99/mo or VIP for $19.99/mo
                     </p>
                   )}
                   {currentTierKey === "plus" && (
-                    <p className="text-xs mb-2" style={{ color: "#9090A8" }}>
+                    <p className="text-xs mb-2 text-vf-muted">
                       Upgrade to VIP for $19.99/mo
                     </p>
                   )}
                   <button
-                    className="w-full font-semibold text-white btn-press py-3"
-                    style={{
-                      background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-                      borderRadius: "14px",
-                      border: "none",
-                      fontSize: "15px",
-                      boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
-                    }}
+                    className="w-full font-semibold btn-press py-3 rounded-full bg-vf-gold text-vf-ink hover:bg-[#F3D890] transition-colors"
+                    style={{ fontSize: "15px" }}
                     onClick={() => setLocation("/billing")}
                     data-testid="button-upgrade"
                   >
@@ -783,14 +672,8 @@ export default function Profile() {
         {/* Mobile sign out */}
         <div className="md:hidden mt-2">
           <button
-            className="w-full flex justify-center items-center gap-2 font-medium btn-press py-3"
-            style={{
-              background: "transparent",
-              color: "#9090A8",
-              border: "1px solid #2E2E42",
-              borderRadius: "14px",
-              fontSize: "14px",
-            }}
+            className="w-full flex justify-center items-center gap-2 font-medium btn-press py-3 rounded-2xl border border-vf-line text-vf-faint hover:text-vf-text transition-colors"
+            style={{ fontSize: "14px" }}
             onClick={() => logout()}
             data-testid="button-logout-profile"
           >
@@ -1072,25 +955,17 @@ function PhotoManagementDialog({
 
         <div className="grid grid-cols-3 gap-3">
           {photos.map((photo: any) => (
-            <div key={photo.id} className="aspect-square rounded-xl overflow-hidden relative group" style={{ background: "#242433" }} data-testid={`edit-photo-${photo.id}`}>
+            <div key={photo.id} className="aspect-square rounded-xl overflow-hidden relative group bg-vf-surface2" data-testid={`edit-photo-${photo.id}`}>
               <img src={photo.photoUrl} alt="" className="w-full h-full object-cover" />
               {profile.coverPhotoUrl === photo.photoUrl && (
-                <span
-                  className="absolute top-1 left-1 text-white font-semibold px-1.5 py-0.5"
-                  style={{
-                    background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-                    borderRadius: "6px",
-                    fontSize: "10px",
-                  }}
-                >
+                <span className="absolute top-1 left-1 font-semibold px-1.5 py-0.5 rounded-md bg-vf-ember text-vf-ink" style={{ fontSize: "10px" }}>
                   Cover
                 </span>
               )}
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 {profile.coverPhotoUrl !== photo.photoUrl && (
                   <button
-                    className="w-8 h-8 rounded-full flex items-center justify-center"
-                    style={{ background: "rgba(255,255,255,0.2)" }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center bg-white/20"
                     onClick={() => handleSetCover(photo.photoUrl)}
                     data-testid={`button-set-cover-${photo.id}`}
                   >
@@ -1098,8 +973,7 @@ function PhotoManagementDialog({
                   </button>
                 )}
                 <button
-                  className="w-8 h-8 rounded-full flex items-center justify-center"
-                  style={{ background: "rgba(239,68,68,0.3)" }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center bg-red-500/30"
                   onClick={() => handleDelete(photo.id)}
                   data-testid={`button-delete-photo-${photo.id}`}
                 >
@@ -1113,8 +987,7 @@ function PhotoManagementDialog({
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors"
-              style={{ border: "2px dashed #2E2E42", color: "#9090A8" }}
+              className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors border-2 border-dashed border-vf-line text-vf-faint hover:border-white/25"
               data-testid="button-upload-photo"
             >
               {uploading ? (

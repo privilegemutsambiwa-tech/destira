@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="26 17 108 86" role="img" aria-label="VibeFlow">
+  <defs><clipPath id="vfMarkLens"><circle cx="96" cy="60" r="34"/></clipPath></defs>
+  <g transform="rotate(-15 80 60)">
+    <circle cx="96" cy="60" r="34" fill="none" stroke="#8FE3C7" stroke-width="6"/>
+    <circle cx="64" cy="60" r="34" fill="none" stroke="#FF6B4A" stroke-width="6"/>
+    <g clip-path="url(#vfMarkLens)"><circle cx="64" cy="60" r="34" fill="#F5F0EA"/></g>
+  </g>
+</svg>

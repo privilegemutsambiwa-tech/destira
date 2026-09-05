@@ -6,6 +6,8 @@ import { runMigrations } from 'stripe-replit-sync';
 import { getStripeSync } from './stripeClient';
 import { WebhookHandlers } from './webhookHandlers';
 import { writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 function initVertexCredentials() {
   const saJson = process.env.GOOGLE_VERTEX_SA_JSON;
@@ -18,7 +20,7 @@ function initVertexCredentials() {
     if (parsed.type !== "service_account") {
       throw new Error("GOOGLE_VERTEX_SA_JSON is not a service account credential");
     }
-    const credPath = "/tmp/vertex-sa.json";
+    const credPath = join(tmpdir(), "vertex-sa.json");
     writeFileSync(credPath, JSON.stringify(parsed), { encoding: "utf8", mode: 0o600 });
     process.env.GOOGLE_APPLICATION_CREDENTIALS = credPath;
     console.log("Vertex AI credentials initialized");
@@ -39,6 +41,14 @@ declare module "http" {
 }
 
 async function initStripe() {
+  // Stripe billing depends on the Replit Stripe connector + a real Postgres URL.
+  // Off Replit it is opt-in: set ENABLE_STRIPE=1 (and provide the connector env)
+  // to turn it back on. Billing routes will simply error until then.
+  if (process.env.ENABLE_STRIPE !== '1') {
+    console.log('Stripe disabled (set ENABLE_STRIPE=1 to enable)');
+    return;
+  }
+
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     console.warn('DATABASE_URL not set, skipping Stripe init');
@@ -168,14 +178,17 @@ app.use((req, res, next) => {
   }
 
   const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
+  // Bind host: containers/Replit need 0.0.0.0; for local dev default to "::" so
+  // both http://localhost (IPv6 ::1 on Windows) and http://127.0.0.1 resolve.
+  const host =
+    process.env.HOST ||
+    (process.env.NODE_ENV === "production" ? "0.0.0.0" : "::");
+  // `reusePort` triggers a libuv assertion on Windows; only pass it elsewhere.
+  const listenOpts: Record<string, unknown> = { port, host };
+  if (process.platform !== "win32") {
+    listenOpts.reusePort = true;
+  }
+  httpServer.listen(listenOpts, () => {
+    log(`serving on port ${port} (host ${host})`);
+  });
 })();
