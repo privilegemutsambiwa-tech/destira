@@ -14,6 +14,8 @@ import path from "path";
 import fs from "fs";
 import type { TwinProfileStructured } from "@shared/schema";
 import * as eventsService from "./events";
+import * as referralsService from "./referrals";
+import { referralClaimSchema } from "@shared/schema";
 
 const aiRateLimits = new Map<string, number[]>();
 function checkAIRateLimit(userId: string, maxPerMinute: number = 10): boolean {
@@ -278,12 +280,14 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         if (isCompletingOnboarding && !existing.onboardingCompleted) {
           seedOnboardingIntoTwinMemory(userId, req.body.personalityProfile).catch(() => {});
         }
+        referralsService.checkQualification(userId).catch(() => {});
         return res.json(updated);
       }
       const profile = await storage.createProfile({ ...safeCounted, userId });
       if (isCompletingOnboarding) {
         seedOnboardingIntoTwinMemory(userId, req.body.personalityProfile).catch(() => {});
       }
+      referralsService.checkQualification(userId).catch(() => {});
       res.status(201).json(profile);
     } catch (err) {
       console.error("Profile create error:", err);
@@ -2747,6 +2751,46 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       res.json(enriched);
     } catch (err) {
       res.status(500).json({ message: "Failed to get blocked users" });
+    }
+  });
+
+  // Referrals — bringing a friend gets you profile views, never an extra read.
+  app.get("/api/referrals/me", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const summary = await referralsService.getReferralSummary(userId);
+      const origin = `${req.protocol}://${req.get("host")}`;
+      res.json({ ...summary, url: `${origin}/?ref=${summary.code}` });
+    } catch (err) {
+      console.error("Referral summary error:", err);
+      res.status(500).json({ message: "Failed to load referrals" });
+    }
+  });
+
+  app.post("/api/referrals/claim", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const parsed = referralClaimSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid code" });
+    }
+    try {
+      const result = await referralsService.claimCode(userId, parsed.data.code);
+      if (!result.ok) {
+        const msg =
+          result.reason === "self"
+            ? "That is your own code."
+            : result.reason === "already"
+              ? "You have already been referred."
+              : "That code is not valid.";
+        return res.status(409).json({ message: msg, reason: result.reason });
+      }
+      const summary = await referralsService.getReferralSummary(userId);
+      res.json(summary);
+    } catch (err) {
+      console.error("Referral claim error:", err);
+      res.status(500).json({ message: "Failed to claim code" });
     }
   });
 

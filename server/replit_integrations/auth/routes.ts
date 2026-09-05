@@ -3,8 +3,20 @@ import { authStorage } from "./storage";
 import { isAuthenticated, createSessionUser } from "./replitAuth";
 import { hashPassword, verifyPassword } from "./password";
 import type { User } from "@shared/models/auth";
+import * as referrals from "../../referrals";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// No cookie-parser in the app — pull one cookie value straight off the header.
+function readCookie(req: any, name: string): string | null {
+  const raw = req.headers?.cookie;
+  if (typeof raw !== "string") return null;
+  for (const part of raw.split(";")) {
+    const [k, ...v] = part.trim().split("=");
+    if (k === name) return decodeURIComponent(v.join("="));
+  }
+  return null;
+}
 
 function sanitizeUser(user: User) {
   const { passwordHash, ...safe } = user as User & { passwordHash?: string | null };
@@ -112,6 +124,15 @@ export function registerAuthRoutes(app: Express): void {
         if (err) {
           console.error("[signup] req.login failed:", err);
           return res.status(500).json({ message: "Account created, but sign-in failed. Please log in." });
+        }
+        // Attribute a referral if the visitor arrived via ?ref=CODE.
+        const refCode = readCookie(req, "vf_ref");
+        if (refCode) {
+          referrals
+            .attachReferral(user.id, refCode)
+            .then((r) => { if (r.ok) return referrals.checkQualification(user.id); })
+            .catch(() => {});
+          res.setHeader("Set-Cookie", "vf_ref=; Path=/; Max-Age=0; SameSite=Lax");
         }
         res.status(201).json(sanitizeUser(user));
       });

@@ -428,6 +428,51 @@ export const inviteRequests = pgTable("invite_requests", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Growth, kept strictly separate from matching. A referral only ever grants
+// PROFILE VIEWS (looking someone up), never an extra daily read.
+export const referralCodes = pgTable("referral_codes", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id).unique(),
+  code: text("code").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const referrals = pgTable(
+  "referrals",
+  {
+    id: serial("id").primaryKey(),
+    referrerUserId: varchar("referrer_user_id").notNull().references(() => users.id),
+    invitedUserId: varchar("invited_user_id").notNull().references(() => users.id),
+    code: text("code").notNull(),
+    // pending  -> invited user signed up, not yet activated
+    // qualified-> activation gate passed but reward capped/held
+    // rewarded -> referrer has been granted their profile views
+    status: text("status").notNull().default("pending"),
+    createdAt: timestamp("created_at").defaultNow(),
+    qualifiedAt: timestamp("qualified_at"),
+  },
+  (t) => ({
+    invitedIdx: uniqueIndex("referrals_invited_user_idx").on(t.invitedUserId),
+  }),
+);
+
+export const profileViewGrants = pgTable("profile_view_grants", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  amount: integer("amount").notNull(),
+  reason: text("reason").notNull(), // weekly | referral | ember
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const referralClaimSchema = z.object({
+  code: z.string().trim().toUpperCase().regex(/^[2-9A-HJ-NP-Z]{8}$/, "That code is not valid"),
+});
+
+export type ReferralCode = typeof referralCodes.$inferSelect;
+export type Referral = typeof referrals.$inferSelect;
+export type ProfileViewGrant = typeof profileViewGrants.$inferSelect;
+
 export const dailyLikeCounts = pgTable("daily_like_counts", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),

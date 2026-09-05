@@ -333,6 +333,14 @@ export default function Landing() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // ?ref=CODE → stash for 30 days so signup can attribute the referral.
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref && /^[2-9A-HJ-NP-Z]{8}$/i.test(ref)) {
+      document.cookie = `vf_ref=${ref.toUpperCase()}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
+    }
+  }, []);
+
   // Page-level head meta. (No react-helmet in this repo — a native effect
   // gets the same title/OG tags without a new dep + provider.)
   useEffect(() => {
