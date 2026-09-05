@@ -1,14 +1,12 @@
 import { useState, useEffect } from "react";
-import { useLocation, Link } from "wouter";
-import { Eye, EyeOff } from "lucide-react";
+import { useLocation } from "wouter";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { VibeFlowLockup } from "@/components/brand/logo";
 import { useAuth } from "@/hooks/use-auth";
 
-const BG = "#0C0910";
-const CARD = "#161220";
-const BORDER = "rgba(255,255,255,0.09)";
-const MUTED = "#A79FB4";
-const EMBER = "#FF6B4A";
+const INPUT =
+  "w-full rounded-[12px] border border-vf-line bg-white/5 px-3.5 h-11 text-sm text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow";
+const LABEL = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-1.5 block";
 
 export default function Login() {
   const { user, isLoading, login, isLoggingIn } = useAuth();
@@ -16,6 +14,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [company, setCompany] = useState(""); // honeypot
   const [error, setError] = useState<string | null>(null);
   const [demoLoading, setDemoLoading] = useState(false);
 
@@ -26,15 +25,16 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!email || !password) {
+    if (company) return; // bot
+    if (!email.trim() || !password) {
       setError("Enter your email and password.");
       return;
     }
     try {
-      await login({ email, password });
+      await login({ email: email.trim(), password });
       setLocation("/");
-    } catch (err) {
-      setError(err instanceof Error ? err.message.replace(/^\d+:\s*/, "") : "Failed to log in");
+    } catch {
+      setError("Email or password is wrong.");
     }
   };
 
@@ -43,66 +43,83 @@ export default function Login() {
     setError(null);
     try {
       const res = await fetch("/api/demo/login", { method: "POST", credentials: "include" });
-      if (!res.ok) throw new Error("Demo is unavailable right now.");
+      if (!res.ok) throw new Error();
       window.location.href = "/";
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Demo is unavailable right now.");
+    } catch {
+      setError("Demo is unavailable right now.");
       setDemoLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: BG }}>
-      <div className="w-full" style={{ maxWidth: "380px" }}>
-        <div className="flex items-center justify-center mb-8 text-white">
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-vf-ink text-vf-text">
+      <div className="w-full max-w-[460px]">
+        <div className="flex justify-center mb-8 text-vf-text">
           <VibeFlowLockup orientation="horizontal" size={30} />
         </div>
 
-        <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "20px", padding: "28px" }}>
-          <h1 className="text-center mb-1" style={{ fontFamily: '"Instrument Serif", serif', fontWeight: 400, color: "#F5F0EA", fontSize: "24px" }} data-testid="text-login-title">
+        <div className="rounded-[24px] border border-vf-line bg-vf-surface p-7 sm:p-8">
+          <h1
+            className="font-serif font-normal text-vf-text text-center"
+            style={{ fontSize: "28px", letterSpacing: "-0.01em" }}
+            data-testid="text-login-title"
+          >
             Welcome back
           </h1>
-          <p className="text-center text-sm mb-6" style={{ color: MUTED }}>
-            Log in to keep the conversation going.
-          </p>
 
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: "12px" }}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>
-                Email
+          <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-4">
+            <div
+              aria-hidden="true"
+              style={{ position: "absolute", left: "-9999px", width: 1, height: 1, overflow: "hidden" }}
+            >
+              <label>
+                Company
+                <input type="text" tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} />
               </label>
+            </div>
+
+            <div>
+              <label htmlFor="login-email" className={LABEL}>Email</label>
               <input
+                id="login-email"
                 type="email"
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full px-3 py-2 text-sm text-white"
-                style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+                placeholder="you@email.com"
+                className={INPUT}
                 data-testid="input-login-email"
               />
             </div>
-            <div style={{ marginBottom: "16px" }}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>
-                Password
-              </label>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="login-password" className={`${LABEL} mb-0`}>Password</label>
+                <button
+                  type="button"
+                  onClick={() => setError("Password reset isn't wired up yet — for now, ask an admin.")}
+                  className="text-[12px] text-vf-muted hover:text-vf-text transition-colors"
+                  data-testid="link-forgot-password"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <div className="relative">
                 <input
+                  id="login-password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-3 pr-10 py-2 text-sm text-white"
-                  style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+                  className={`${INPUT} pr-10`}
                   data-testid="input-login-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1"
-                  style={{ color: MUTED }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-vf-muted hover:text-vf-text transition-colors"
                   data-testid="button-toggle-password"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -111,7 +128,7 @@ export default function Login() {
             </div>
 
             {error && (
-              <p className="text-sm mb-4" style={{ color: "#F87171" }} data-testid="text-login-error">
+              <p className="text-[13px] text-vf-ember" role="alert" data-testid="text-login-error">
                 {error}
               </p>
             )}
@@ -119,52 +136,36 @@ export default function Login() {
             <button
               type="submit"
               disabled={isLoggingIn}
-              className="w-full font-bold btn-press"
-              style={{
-                background: EMBER,
-                color: "#0C0910",
-                height: "48px",
-                borderRadius: "12px",
-                fontSize: "15px",
-                border: "none",
-                opacity: isLoggingIn ? 0.7 : 1,
-              }}
+              className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-50"
               data-testid="button-submit-login"
             >
-              {isLoggingIn ? "Logging in..." : "Log In"}
+              {isLoggingIn && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isLoggingIn ? "Logging in…" : "Log in"}
             </button>
           </form>
-
-          <div className="flex items-center gap-3 my-5">
-            <div style={{ flex: 1, height: 1, background: BORDER }} />
-            <span className="text-xs" style={{ color: MUTED }}>or</span>
-            <div style={{ flex: 1, height: 1, background: BORDER }} />
-          </div>
 
           <button
             onClick={handleDemo}
             disabled={demoLoading}
-            className="w-full font-medium text-sm"
-            style={{
-              background: "transparent",
-              border: `1px solid ${BORDER}`,
-              color: "#FFFFFF",
-              height: "44px",
-              borderRadius: "12px",
-              opacity: demoLoading ? 0.7 : 1,
-            }}
+            className="mt-3 w-full inline-flex items-center justify-center rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-white/25 h-11 text-sm transition-colors disabled:opacity-50"
             data-testid="button-demo-login"
           >
-            {demoLoading ? "Starting demo..." : "View Demo"}
+            {demoLoading ? "Starting demo…" : "Try a demo"}
           </button>
-        </div>
 
-        <p className="text-center text-sm mt-6" style={{ color: MUTED }}>
-          New to VibeFlow?{" "}
-          <Link href="/signup" className="font-semibold text-white underline underline-offset-4" data-testid="link-go-signup">
-            Create an account
-          </Link>
-        </p>
+          <div className="my-6 h-px bg-vf-line" />
+
+          <p className="text-center text-sm text-vf-muted">
+            New here?{" "}
+            <button
+              onClick={() => setLocation("/signup")}
+              className="text-vf-text underline underline-offset-4 hover:text-vf-muted transition-colors"
+              data-testid="link-go-signup"
+            >
+              Create your account
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );
