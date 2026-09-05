@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+﻿import { useState, useRef, useEffect, useMemo } from "react";
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +52,24 @@ const REACTIONS = [
   { key: "star", Icon: Star },
 ];
 
+// vf-* tokens as literals (this file styles inline)
+const INK = "#0C0910";
+const SURFACE2 = "#161220";
+const ELEVATED = "rgba(255,255,255,0.05)";
+const LINE = "rgba(255,255,255,0.09)";
+const MUTED = "#A79FB4";
+const FAINT = "#7E7690";
+const TEXT = "#F5F0EA";
+const EMBER = "#FF6B4A";
+const MINT = "#8FE3C7";
+const SERIF: React.CSSProperties = { fontFamily: '"Instrument Serif", serif', fontWeight: 400 };
+const MONO: React.CSSProperties = {
+  fontFamily: '"DM Mono", ui-monospace, monospace',
+  fontSize: "10.5px",
+  letterSpacing: "0.16em",
+  textTransform: "uppercase",
+};
+
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -95,7 +113,7 @@ function PollBubble({ messageId, groupId }: { messageId: number; groupId: number
   return (
     <div className="space-y-2 min-w-[200px]" data-testid={`poll-bubble-${messageId}`}>
       <p className="font-medium text-sm text-white">{poll.question}</p>
-      {poll.allowMultiple && <p className="text-xs" style={{ color: "#9090A8" }}>Multiple answers allowed</p>}
+      {poll.allowMultiple && <p className="text-xs" style={{ color: MUTED }}>Multiple answers allowed</p>}
       <div className="space-y-1.5">
         {options?.map((opt: any) => {
           const optVotes = votes?.filter((v: any) => v.optionId === opt.id).length || 0;
@@ -109,24 +127,24 @@ function PollBubble({ messageId, groupId }: { messageId: number; groupId: number
               className="w-full text-left p-2 text-xs relative overflow-hidden transition-colors"
               style={{
                 borderRadius: "8px",
-                border: isVoted ? "1px solid rgba(124,58,237,0.6)" : "1px solid #2E2E42",
-                background: isVoted ? "rgba(124,58,237,0.12)" : "#1A1A24",
+                border: isVoted ? "1px solid rgba(255,107,74,0.6)" : `1px solid ${LINE}`,
+                background: isVoted ? "rgba(255,107,74,0.12)" : SURFACE2,
               }}
               data-testid={`poll-option-${opt.id}`}
             >
               <div
                 className="absolute inset-0 rounded-md"
-                style={{ width: `${pct}%`, background: "rgba(124,58,237,0.1)" }}
+                style={{ width: `${pct}%`, background: "rgba(255,107,74,0.1)" }}
               />
               <div className="relative flex items-center justify-between gap-2">
                 <span className={isVoted ? "font-medium text-white" : "text-white/80"}>{opt.text}</span>
-                <span style={{ color: "#9090A8" }}>{optVotes} ({pct}%)</span>
+                <span style={{ color: MUTED }}>{optVotes} ({pct}%)</span>
               </div>
             </button>
           );
         })}
       </div>
-      <p className="text-xs" style={{ color: "#9090A8" }}>{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</p>
+      <p className="text-xs" style={{ color: MUTED }}>{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</p>
     </div>
   );
 }
@@ -218,7 +236,7 @@ function PollComposerDialog({ groupId, open, onClose }: { groupId: number; open:
             onClick={handleSubmit}
             disabled={!question.trim() || options.filter((o) => o.trim()).length < 2 || createPoll.isPending}
             className="btn-press"
-            style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", border: "none", color: "#fff" }}
+            style={{ background: EMBER, border: "none", color: INK }}
             data-testid="button-submit-poll"
           >
             {createPoll.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
@@ -373,34 +391,34 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   }
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "#0F0F14" }}>
+    <div className="h-screen flex flex-col" style={{ background: INK }}>
       <div
         className="px-4 py-3 flex items-center gap-3 sticky top-0 z-50"
         style={{
-          background: "#1A1A24",
-          borderBottom: "1px solid #2E2E42",
+          background: SURFACE2,
+          borderBottom: `1px solid ${LINE}`,
         }}
       >
         <button
           onClick={() => setLocation("/lounge")}
           className="w-9 h-9 flex items-center justify-center btn-press rounded-full transition-colors"
-          style={{ color: "#FFFFFF", background: "transparent" }}
+          style={{ color: EMBER, background: "transparent" }}
           data-testid="button-back-lounge"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <h2 className="font-bold text-white truncate" style={{ fontSize: "15px" }} data-testid="text-group-name">
+          <h2 className="truncate" style={{ ...SERIF, color: TEXT, fontSize: "18px" }} data-testid="text-group-name">
             {group?.name || "Group"}
           </h2>
-          <p style={{ fontSize: "12px", color: "#9090A8" }}>
+          <p style={{ ...MONO, color: MUTED, marginTop: "2px" }}>
             {group?.memberCount || 0} members
           </p>
         </div>
         <button
           onClick={() => setLocation(`/lounge/group/${groupId}/info`)}
           className="w-9 h-9 flex items-center justify-center btn-press rounded-full transition-colors"
-          style={{ color: "#FFFFFF", background: "transparent" }}
+          style={{ color: MUTED, background: "transparent" }}
           data-testid="button-group-info"
         >
           <Info className="w-5 h-5" />
@@ -410,12 +428,14 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
       <div className="flex-1 overflow-y-auto p-4 space-y-1" onClick={() => setActiveMessageId(null)}>
         {msgsLoading ? (
           <div className="flex justify-center p-12">
-            <Loader2 className="w-6 h-6 animate-spin" style={{ color: "#7C3AED" }} />
+            <Loader2 className="w-6 h-6 animate-spin" style={{ color: EMBER }} />
           </div>
         ) : messages && messages.length > 0 ? (
           messages.map((msg: any, idx: number) => {
             const isMe = msg.userId === user?.id;
-            const showDate = idx === 0 || !isSameDay(messages[idx - 1].createdAt, msg.createdAt);
+            const prevMsg = idx > 0 ? messages[idx - 1] : null;
+            const showDate = idx === 0 || !isSameDay(prevMsg!.createdAt, msg.createdAt);
+            const groupedWithPrev = !!prevMsg && !showDate && prevMsg.userId === msg.userId && isSameDay(prevMsg.createdAt, msg.createdAt);
             const isDeleted = msg.isDeletedByAdmin || msg.deletedForEveryone;
             const repliedMsg = msg.replyToMessageId ? messagesMap[msg.replyToMessageId] : null;
 
@@ -433,11 +453,11 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                     <span
                       style={{
                         fontSize: "11px",
-                        color: "#9090A8",
-                        background: "#1A1A24",
+                        color: MUTED,
+                        background: SURFACE2,
                         borderRadius: "100px",
                         padding: "2px 12px",
-                        border: "1px solid #2E2E42",
+                        border: `1px solid ${LINE}`,
                       }}
                       data-testid={`date-separator-${idx}`}
                     >
@@ -448,29 +468,33 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
 
                 <div
                   id={`msg-${msg.id}`}
-                  className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2 transition-all duration-500`}
-                  style={highlightedMsgId === msg.id ? { background: "rgba(124,58,237,0.12)", borderRadius: "12px", marginLeft: "-8px", marginRight: "-8px", paddingLeft: "8px", paddingRight: "8px" } : undefined}
+                  className={`flex ${isMe ? "justify-end" : "justify-start"} ${groupedWithPrev ? "mb-0.5" : "mb-2"} transition-all duration-500`}
+                  style={highlightedMsgId === msg.id ? { background: "rgba(255,107,74,0.12)", borderRadius: "12px", marginLeft: "-8px", marginRight: "-8px", paddingLeft: "8px", paddingRight: "8px" } : undefined}
                   data-testid={`message-${msg.id}`}
                 >
                   {!isMe && (
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-2 self-end"
-                      style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", fontSize: "12px", fontWeight: 700, color: "#fff" }}
-                    >
-                      {initials}
-                    </div>
+                    groupedWithPrev ? (
+                      <div className="w-8 mr-2 shrink-0" />
+                    ) : (
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-2 self-end"
+                        style={{ background: ELEVATED, border: `1px solid ${LINE}`, fontSize: "12px", fontWeight: 600, color: MUTED }}
+                      >
+                        {initials}
+                      </div>
+                    )
                   )}
 
                   <div className="max-w-[75%]">
-                    {!isMe && (
+                    {!isMe && !groupedWithPrev && (
                       <span
                         className="flex items-center gap-1 ml-1 mb-0.5"
-                        style={{ fontSize: "11px", color: "#9090A8", fontWeight: 600 }}
+                        style={{ fontSize: "12.5px", color: MUTED, fontWeight: 500 }}
                         data-testid={`nickname-${msg.id}`}
                       >
                         {msg.nickname || "Anonymous"}
                         {msg.subscriptionTier === "vip" && (
-                          <Crown className="w-3 h-3 shrink-0" style={{ color: "#F59E0B" }} />
+                          <Crown className="w-3 h-3 shrink-0" style={{ color: TEXT }} />
                         )}
                       </span>
                     )}
@@ -482,17 +506,16 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                           style={{
                             borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
                             ...(isDeleted
-                              ? { background: "#242433", color: "#9090A8", fontStyle: "italic" }
+                              ? { background: ELEVATED, color: MUTED, fontStyle: "italic" }
                               : isMe
                                 ? {
-                                    background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-                                    color: "#FFFFFF",
-                                    boxShadow: "0 2px 12px rgba(124,58,237,0.3)",
+                                    background: EMBER,
+                                    color: "#180B07",
+                                    fontWeight: 500,
                                   }
                                 : {
-                                    background: "#1A1A24",
-                                    color: "#FFFFFF",
-                                    border: "1px solid #2E2E42",
+                                    background: "rgba(255,255,255,0.07)",
+                                    color: TEXT,
                                   }),
                           }}
                           onClick={(e) => {
@@ -505,15 +528,15 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                               className="mb-1.5 p-1.5"
                               style={{
                                 borderRadius: "6px",
-                                borderLeft: isMe ? "2px solid rgba(255,255,255,0.4)" : "2px solid #7C3AED",
-                                background: isMe ? "rgba(255,255,255,0.1)" : "rgba(124,58,237,0.12)",
+                                borderLeft: isMe ? "2px solid rgba(255,255,255,0.4)" : "2px solid #FF6B4A",
+                                background: isMe ? "rgba(255,255,255,0.1)" : "rgba(255,107,74,0.12)",
                                 fontSize: "12px",
                               }}
                             >
-                              <span className="font-medium" style={{ color: isMe ? "rgba(255,255,255,0.9)" : "#A78BFA" }}>
+                              <span className="font-medium" style={{ color: isMe ? "rgba(255,255,255,0.9)" : EMBER }}>
                                 {repliedMsg.nickname || "Anonymous"}
                               </span>
-                              <p className="truncate" style={{ color: isMe ? "rgba(255,255,255,0.7)" : "#9090A8" }}>
+                              <p className="truncate" style={{ color: isMe ? "rgba(255,255,255,0.7)" : MUTED }}>
                                 {repliedMsg.content}
                               </p>
                             </div>
@@ -536,7 +559,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                           className="w-auto p-2"
                           side={isMe ? "left" : "right"}
                           align="start"
-                          style={{ background: "#1A1A24", border: "1px solid #2E2E42" }}
+                          style={{ background: SURFACE2, border: `1px solid ${LINE}` }}
                         >
                           <div className="flex items-center gap-1 mb-2 flex-wrap">
                             {REACTIONS.map(({ key, Icon }) => (
@@ -544,7 +567,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                                 key={key}
                                 onClick={() => handleReact(msg.id, key)}
                                 className="w-8 h-8 rounded-full flex items-center justify-center btn-press transition-colors"
-                                style={{ color: "#9090A8" }}
+                                style={{ color: MUTED }}
                                 data-testid={`reaction-${key}-${msg.id}`}
                               >
                                 <Icon className="w-4 h-4" />
@@ -626,7 +649,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                                 onClick={action.onClick}
                                 className="flex items-center w-full px-3 py-1.5 text-sm rounded-md btn-press transition-colors text-left"
                                 style={{
-                                  color: action.danger ? "#EF4444" : "#FFFFFF",
+                                  color: action.danger ? "#EF4444" : TEXT,
                                   background: "transparent",
                                 }}
                                 data-testid={action.testId}
@@ -648,7 +671,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                             <span
                               key={reaction}
                               className="text-xs gap-1 px-1.5 py-0.5 flex items-center"
-                              style={{ background: "#242433", borderRadius: "100px", border: "1px solid #2E2E42", color: "#9090A8" }}
+                              style={{ background: ELEVATED, borderRadius: "100px", border: `1px solid ${LINE}`, color: MUTED }}
                               data-testid={`reactions-${reaction}-${msg.id}`}
                             >
                               <RIcon className="w-3 h-3" /> {count}
@@ -660,7 +683,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
 
                     <p
                       className={`mt-0.5 px-2 ${isMe ? "text-right" : "text-left"}`}
-                      style={{ fontSize: "10px", color: "#9090A8" }}
+                      style={{ fontSize: "10px", color: MUTED }}
                     >
                       {formatTime(msg.createdAt)}
                     </p>
@@ -670,28 +693,35 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
             );
           })
         ) : (
-          <div className="text-center py-12">
-            <Users className="w-12 h-12 mx-auto mb-3 opacity-30" style={{ color: "#9090A8" }} />
-            <p className="font-medium mb-1 text-white">Welcome to {group?.name}!</p>
-            <p className="text-sm" style={{ color: "#9090A8" }}>Be the first to start the conversation.</p>
+          <div className="text-center py-16 max-w-sm mx-auto">
+            <p className="mb-2" style={{ ...SERIF, color: TEXT, fontSize: "22px" }}>Nothing here yet.</p>
+            <p className="text-sm" style={{ color: MUTED }}>
+              Say the first thing. Your twin learns most from how you are with your own people.
+            </p>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      <div style={{ background: "#1A1A24", borderTop: "1px solid #2E2E42" }}>
+      <div style={{ background: SURFACE2, borderTop: `1px solid ${LINE}` }}>
+        {isMember && (
+          <div className="px-4 pt-2.5 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: MINT }} />
+            <span style={{ ...MONO, color: MINT }}>Your twin is listening in this room</span>
+          </div>
+        )}
         {replyTo && (
           <div className="px-4 pt-2 flex items-center gap-2">
             <div
               className="flex-1 min-w-0 p-2 text-xs"
-              style={{ background: "#242433", borderRadius: "8px", borderLeft: "2px solid #7C3AED" }}
+              style={{ background: ELEVATED, borderRadius: "8px", borderLeft: "2px solid #FF6B4A" }}
             >
-              <span className="font-medium" style={{ color: "#A78BFA" }}>{replyTo.nickname || "Anonymous"}</span>
-              <p className="truncate" style={{ color: "#9090A8" }}>{replyTo.content}</p>
+              <span className="font-medium" style={{ color: EMBER }}>{replyTo.nickname || "Anonymous"}</span>
+              <p className="truncate" style={{ color: MUTED }}>{replyTo.content}</p>
             </div>
             <button
               className="w-7 h-7 flex items-center justify-center btn-press rounded-full"
-              style={{ color: "#9090A8", background: "transparent" }}
+              style={{ color: MUTED, background: "transparent" }}
               onClick={() => setReplyTo(null)}
               data-testid="button-cancel-reply"
             >
@@ -706,12 +736,11 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
               onClick={handleJoin}
               disabled={joinGroup.isPending}
               style={{
-                background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-                color: "#FFFFFF",
+                background: EMBER,
+                color: "#180B07",
                 height: "48px",
-                borderRadius: "14px",
+                borderRadius: "12px",
                 border: "none",
-                boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
               }}
               data-testid="button-join-group"
             >
@@ -734,7 +763,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
               <button
                 type="button"
                 className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
-                style={{ color: "#9090A8", background: "transparent" }}
+                style={{ color: MUTED, background: "transparent" }}
                 onClick={() => fileInputRef.current?.click()}
                 data-testid="button-attach"
               >
@@ -743,7 +772,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
               <button
                 type="button"
                 className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
-                style={{ color: "#9090A8", background: "transparent" }}
+                style={{ color: MUTED, background: "transparent" }}
                 onClick={() => setShowPollDialog(true)}
                 data-testid="button-poll"
               >
@@ -755,10 +784,10 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                 placeholder="Type a message..."
                 className="flex-1 px-4 py-2 text-sm outline-none"
                 style={{
-                  background: "#242433",
+                  background: ELEVATED,
                   borderRadius: "100px",
-                  border: "1px solid #2E2E42",
-                  color: "#FFFFFF",
+                  border: `1px solid ${LINE}`,
+                  color: TEXT,
                   height: "40px",
                 }}
                 data-testid="input-group-message"
@@ -771,10 +800,9 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                   width: "40px",
                   height: "40px",
                   borderRadius: "50%",
-                  background: input.trim() ? "linear-gradient(135deg, #7C3AED, #EC4899)" : "#242433",
+                  background: input.trim() ? EMBER : ELEVATED,
                   border: "none",
-                  color: "#FFFFFF",
-                  boxShadow: input.trim() ? "0 2px 12px rgba(124,58,237,0.4)" : "none",
+                  color: input.trim() ? "#180B07" : MUTED,
                   transition: "all 0.2s ease",
                 }}
                 data-testid="button-send-group"
