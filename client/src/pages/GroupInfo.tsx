@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+﻿import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,48 @@ const PRIVACY_LABELS: Record<string, { icon: any; label: string }> = {
   "request-to-join": { icon: UserPlus, label: "Request to Join" },
   "invite-only": { icon: Lock, label: "Invite Only" },
 };
+
+// vf-* tokens as literals (this file styles inline, not via Tailwind classes)
+const INK = "#0C0910";
+const SURFACE2 = "#161220";
+const ELEVATED = "rgba(255,255,255,0.05)";
+const LINE = "rgba(255,255,255,0.09)";
+const MUTED = "#A79FB4";
+const FAINT = "#7E7690";
+const TEXT = "#F5F0EA";
+const EMBER = "#FF6B4A";
+const MINT = "#8FE3C7";
+const SERIF: React.CSSProperties = { fontFamily: '"Instrument Serif", serif', fontWeight: 400 };
+const MONO: React.CSSProperties = {
+  fontFamily: '"DM Mono", ui-monospace, monospace',
+  fontSize: "10.5px",
+  letterSpacing: "0.16em",
+  textTransform: "uppercase",
+};
+
+function PillAction({
+  icon: Icon, label, onClick, disabled, active, testId,
+}: {
+  icon: any; label: string; onClick: () => void; disabled?: boolean; active?: boolean; testId?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="flex items-center gap-2 btn-press rounded-full disabled:opacity-50"
+      style={{
+        height: "36px", padding: "0 16px",
+        border: `1px solid ${active ? "rgba(255,107,74,0.5)" : LINE}`,
+        color: active ? EMBER : MUTED,
+        background: "transparent",
+      }}
+      data-testid={testId}
+    >
+      <Icon className="w-4 h-4" />
+      <span style={{ ...MONO }}>{label}</span>
+    </button>
+  );
+}
 
 export default function GroupInfoPage({ params }: { params?: { groupId?: string } }) {
   const groupId = Number(params?.groupId);
@@ -66,6 +108,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   const [isMuted, setIsMuted] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareLink, setShareLink] = useState("");
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
 
   const iconUploadRef = useRef<HTMLInputElement>(null);
   const bannerUploadRef = useRef<HTMLInputElement>(null);
@@ -269,8 +312,8 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
 
   if (groupLoading) {
     return (
-      <div className="h-screen flex items-center justify-center" style={{ background: "#0F0F14" }}>
-        <Loader2 className="w-8 h-8 animate-spin" style={{ color: "#7C3AED" }} />
+      <div className="h-screen flex items-center justify-center" style={{ background: INK }}>
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: EMBER }} />
       </div>
     );
   }
@@ -282,20 +325,20 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   const currentlyMuted = currentMember?.isMuted ?? isMuted;
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "#0F0F14" }}>
+    <div className="h-screen flex flex-col" style={{ background: INK }}>
       <div
         className="px-4 py-3 flex items-center gap-3 sticky top-0 z-50"
-        style={{ background: "#1A1A24", borderBottom: "1px solid #2E2E42" }}
+        style={{ background: SURFACE2, borderBottom: `1px solid ${LINE}` }}
       >
         <button
           onClick={() => setLocation(`/lounge/group/${groupId}`)}
           className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
-          style={{ color: "#FFFFFF", background: "transparent" }}
+          style={{ color: TEXT, background: "transparent" }}
           data-testid="button-back-chat"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h2 className="font-bold text-white" style={{ fontSize: "15px" }}>Group Info</h2>
+        <h2 style={{ ...SERIF, color: TEXT, fontSize: "18px" }}>Group Info</h2>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -315,197 +358,105 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             onChange={(e) => { if (e.target.files?.[0]) handleUploadIcon(e.target.files[0]); }}
           />
           <div
-            style={{
-              height: "160px",
-              background: group?.bannerUrl ? `url(${group.bannerUrl}) center/cover` : "linear-gradient(135deg, #7C3AED, #EC4899)",
-              position: "relative",
-              cursor: isAdmin ? "pointer" : "default",
-            }}
+            className="relative w-full"
+            style={{ aspectRatio: "21 / 9", background: SURFACE2, borderBottom: `1px solid ${LINE}`, cursor: isAdmin ? "pointer" : "default" }}
             onClick={() => isAdmin && bannerUploadRef.current?.click()}
             data-testid="banner-area"
           >
-            {group?.groupPhotoUrl && !group?.bannerUrl && (
+            {(group?.bannerUrl || group?.groupPhotoUrl) ? (
               <img
-                src={group.groupPhotoUrl}
+                src={group.bannerUrl || group.groupPhotoUrl}
                 alt={group.name}
-                className="w-full h-full object-cover"
+                className="absolute inset-0 w-full h-full object-cover"
               />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span style={{ ...MONO, color: FAINT }}>Cover photo</span>
+              </div>
             )}
+            <div
+              className="absolute inset-0 bg-gradient-to-t from-vf-ink via-vf-ink/40 to-transparent"
+              aria-hidden="true"
+            />
+            <div className="absolute left-4 right-4 bottom-3">
+              <h2 style={{ ...SERIF, color: TEXT, fontSize: "26px", lineHeight: 1.1 }} data-testid="text-group-info-name">
+                {group?.name}
+              </h2>
+              <p style={{ ...MONO, color: MUTED, marginTop: "4px" }} data-testid="text-group-subtitle">
+                {group?.memberCount || sortedMembers.length} members{privacy.label !== "Open" ? ` · ${privacy.label}` : ""}
+              </p>
+            </div>
             {isAdmin && (
               <div
-                className="absolute bottom-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium"
-                style={{ background: "rgba(0,0,0,0.6)", color: "#fff" }}
+                className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium"
+                style={{ background: "rgba(0,0,0,0.55)", color: TEXT }}
               >
-                <Pencil className="w-3 h-3" /> Edit Banner
+                <Pencil className="w-3 h-3" /> Edit
               </div>
             )}
           </div>
-          <div className="flex flex-col items-center">
-            <div
-              className="flex items-center justify-center"
-              style={{
-                width: "64px",
-                height: "64px",
-                borderRadius: "50%",
-                border: "3px solid #0F0F14",
-                background: "#242433",
-                marginTop: "-32px",
-                zIndex: 10,
-                overflow: "hidden",
-                cursor: isAdmin ? "pointer" : "default",
-                position: "relative",
-              }}
-              onClick={() => isAdmin && iconUploadRef.current?.click()}
-              data-testid="placeholder-group-photo"
-            >
-              {(group?.iconUrl || group?.groupPhotoUrl) ? (
-                <img src={group.iconUrl || group.groupPhotoUrl} alt={group.name} className="w-full h-full object-cover" data-testid="img-group-photo" />
-              ) : (
-                <Users className="w-8 h-8" style={{ color: "#9090A8" }} />
-              )}
+
+          {group?.categoryTags && group.categoryTags.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap px-4 mt-3">
+              {group.categoryTags.map((tag: string) => (
+                <span
+                  key={tag}
+                  style={{
+                    background: "rgba(255,107,74,0.12)",
+                    color: EMBER,
+                    fontSize: "12px",
+                    padding: "3px 10px",
+                    borderRadius: "100px",
+                    border: "1px solid rgba(255,107,74,0.4)",
+                  }}
+                  data-testid={`tag-${tag}`}
+                >
+                  {tag}
+                </span>
+              ))}
             </div>
-
-            <h2
-              className="font-bold text-white text-center mt-3"
-              style={{ fontSize: "22px", letterSpacing: "-0.5px" }}
-              data-testid="text-group-info-name"
-            >
-              {group?.name}
-            </h2>
-            <p className="text-center mt-0.5" style={{ fontSize: "13px", color: "#9090A8" }} data-testid="text-group-subtitle">
-              {group?.memberCount || sortedMembers.length} Members{privacy.label !== "Open" ? ` · ${privacy.label}` : ""}
-            </p>
-
-            {group?.categoryTags && group.categoryTags.length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap justify-center mt-2">
-                {group.categoryTags.map((tag: string) => (
-                  <span
-                    key={tag}
-                    style={{
-                      background: "rgba(124,58,237,0.15)",
-                      color: "#A78BFA",
-                      fontSize: "12px",
-                      padding: "3px 10px",
-                      borderRadius: "100px",
-                      border: "1px solid rgba(124,58,237,0.3)",
-                    }}
-                    data-testid={`tag-${tag}`}
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
-        <div className="flex items-center justify-center gap-5 py-5 mt-2">
+        <div className="flex items-center gap-2 flex-wrap px-4 py-5">
           {canAddMembers && (
-            <button
-              className="flex flex-col items-center gap-1.5 btn-press"
-              onClick={() => setAddMemberOpen(true)}
-              data-testid="button-action-add-members"
-            >
-              <div
-                className="flex items-center justify-center"
-                style={{
-                  width: "52px",
-                  height: "52px",
-                  borderRadius: "50%",
-                  background: "#1A1A24",
-                  border: "1px solid #2E2E42",
-                }}
-              >
-                <UserPlus className="w-5 h-5 text-white" />
-              </div>
-              <span style={{ fontSize: "11px", color: "#9090A8", fontWeight: 500 }}>Add</span>
-            </button>
+            <PillAction icon={UserPlus} label="Invite" onClick={() => setAddMemberOpen(true)} testId="button-action-add-members" />
           )}
-          <button
-            className="flex flex-col items-center gap-1.5 btn-press"
-            onClick={() => setSearchOpen(true)}
-            data-testid="button-action-search"
-          >
-            <div
-              className="flex items-center justify-center"
-              style={{
-                width: "52px",
-                height: "52px",
-                borderRadius: "50%",
-                background: "#1A1A24",
-                border: "1px solid #2E2E42",
-              }}
-            >
-              <Search className="w-5 h-5 text-white" />
-            </div>
-            <span style={{ fontSize: "11px", color: "#9090A8", fontWeight: 500 }}>Search</span>
-          </button>
-          <button
-            className="flex flex-col items-center gap-1.5 btn-press"
+          <PillAction icon={Search} label="Search" onClick={() => setSearchOpen(true)} testId="button-action-search" />
+          <PillAction
+            icon={currentlyMuted ? BellOff : Bell}
+            label={currentlyMuted ? "Unmute" : "Mute"}
             onClick={handleToggleMute}
             disabled={toggleMute.isPending}
-            data-testid="button-action-mute"
-          >
-            <div
-              className="flex items-center justify-center"
-              style={{
-                width: "52px",
-                height: "52px",
-                borderRadius: "50%",
-                background: currentlyMuted ? "rgba(124,58,237,0.15)" : "#1A1A24",
-                border: currentlyMuted ? "1px solid rgba(124,58,237,0.5)" : "1px solid #2E2E42",
-              }}
-            >
-              {currentlyMuted ? <BellOff className="w-5 h-5" style={{ color: "#A78BFA" }} /> : <Bell className="w-5 h-5 text-white" />}
-            </div>
-            <span style={{ fontSize: "11px", color: currentlyMuted ? "#A78BFA" : "#9090A8", fontWeight: 500 }}>
-              {currentlyMuted ? "Unmute" : "Mute"}
-            </span>
-          </button>
-          <button
-            className="flex flex-col items-center gap-1.5 btn-press"
-            onClick={handleShare}
-            data-testid="button-action-share"
-          >
-            <div
-              className="flex items-center justify-center"
-              style={{
-                width: "52px",
-                height: "52px",
-                borderRadius: "50%",
-                background: "#1A1A24",
-                border: "1px solid #2E2E42",
-              }}
-            >
-              <Share2 className="w-5 h-5 text-white" />
-            </div>
-            <span style={{ fontSize: "11px", color: "#9090A8", fontWeight: 500 }}>Share</span>
-          </button>
+            active={currentlyMuted}
+            testId="button-action-mute"
+          />
+          <PillAction icon={Share2} label="Share" onClick={handleShare} testId="button-action-share" />
         </div>
 
-        <div className="px-4 pb-4 space-y-3 max-w-lg mx-auto">
+        <div className="px-4 pt-4 pb-4 space-y-3 max-w-lg mx-auto">
           {(group?.description || group?.rulesText || isAdmin) && (
             <div
-              style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px", padding: "16px" }}
+              style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: "18px", padding: "16px" }}
               data-testid="card-group-info"
             >
               {group?.description && (
-                <p className="text-sm text-white mb-3" data-testid="text-group-description">{group.description}</p>
+                <p className="text-sm mb-3" style={{ color: TEXT }} data-testid="text-group-description">{group.description}</p>
               )}
-              {(group?.description && (group?.rulesText || isAdmin)) && (
-                <div className="my-3" style={{ height: "1px", background: "#2E2E42" }} />
+              {group?.rulesText && (
+                <>
+                  {group?.description && <div className="my-3" style={{ height: "1px", background: LINE }} />}
+                  <p style={{ ...MONO, color: FAINT, marginBottom: "6px" }}>Group rules</p>
+                  <p className="text-sm" style={{ color: MUTED }} data-testid="text-group-rules">
+                    {group.rulesText}
+                  </p>
+                </>
               )}
-              <p className="font-semibold mb-1" style={{ fontSize: "11px", color: "#9090A8", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                Group Rules
-              </p>
-              <p className="text-sm text-white/80" data-testid="text-group-rules">
-                {group?.rulesText || "No rules set"}
-              </p>
               {isAdmin && (
                 <button
                   onClick={openEditDescDialog}
                   className="mt-3 flex items-center gap-1.5 text-sm btn-press font-medium"
-                  style={{ color: "#A78BFA", background: "transparent", border: "none" }}
+                  style={{ color: EMBER, background: "transparent", border: "none" }}
                   data-testid="button-edit-desc-rules"
                 >
                   <Pencil className="w-3.5 h-3.5" /> Edit
@@ -514,10 +465,29 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             </div>
           )}
 
+          <div
+            style={{ background: "rgba(143,227,199,0.05)", border: "1px solid rgba(143,227,199,0.22)", borderRadius: "18px", padding: "16px" }}
+            data-testid="card-twin-in-room"
+          >
+            <p style={{ ...MONO, color: MINT, marginBottom: "6px" }}>Your twin in this room</p>
+            <p className="text-sm" style={{ color: TEXT }}>
+              It listens here and learns how you are with your own people.
+            </p>
+            <button
+              onClick={() => setLocation(`/twin-chat?from=/lounge/group/${groupId}`)}
+              className="mt-3 text-sm btn-press font-medium"
+              style={{ color: MINT, background: "transparent", border: "none" }}
+              data-testid="link-twin-learned"
+            >
+              See what it's learned →
+            </button>
+          </div>
+
           {[
             {
               icon: <ImageIcon className="w-5 h-5" />,
-              label: `${mediaCount} Media`,
+              label: "Media",
+              count: mediaCount,
               testId: "card-media",
               onClick: () => setMediaExpanded(!mediaExpanded),
               expanded: mediaExpanded,
@@ -526,7 +496,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                   {mediaCount > 0 ? (
                     <div className="grid grid-cols-3 gap-2">
                       {media!.map((item: any, idx: number) => (
-                        <div key={idx} className="aspect-square rounded-lg overflow-hidden" style={{ background: "#242433" }} data-testid={`media-${idx}`}>
+                        <div key={idx} className="aspect-square rounded-lg overflow-hidden" style={{ background: ELEVATED }} data-testid={`media-${idx}`}>
                           {item.contentType === "video" ? (
                             <video src={item.mediaUrl} className="w-full h-full object-cover" />
                           ) : (
@@ -536,14 +506,15 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm" style={{ color: "#9090A8" }}>No shared media yet</p>
+                    <p className="text-sm" style={{ color: MUTED }}>No shared media yet</p>
                   )}
                 </div>
               ) : null,
             },
             {
               icon: <Star className="w-5 h-5" />,
-              label: `Starred Messages (${starredCount})`,
+              label: "Starred messages",
+              count: starredCount,
               testId: "card-starred",
               onClick: () => setStarredExpanded(!starredExpanded),
               expanded: starredExpanded,
@@ -551,18 +522,18 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                 <div className="mt-3 space-y-2 px-1">
                   {starredCount > 0 ? (
                     starredMessages!.map((msg: any) => (
-                      <div key={msg.id} className="rounded-lg p-3" style={{ background: "#242433" }} data-testid={`starred-msg-${msg.id}`}>
+                      <div key={msg.id} className="rounded-lg p-3" style={{ background: ELEVATED }} data-testid={`starred-msg-${msg.id}`}>
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <span className="text-xs font-semibold text-white">{msg.nickname || "Unknown"}</span>
-                          <span className="text-xs" style={{ color: "#9090A8" }}>
+                          <span className="text-xs" style={{ color: MUTED }}>
                             {msg.createdAt ? new Date(msg.createdAt).toLocaleDateString() : ""}
                           </span>
                         </div>
-                        <p className="text-sm line-clamp-2" style={{ color: "#9090A8" }}>{msg.content}</p>
+                        <p className="text-sm line-clamp-2" style={{ color: MUTED }}>{msg.content}</p>
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm" style={{ color: "#9090A8" }}>No starred messages</p>
+                    <p className="text-sm" style={{ color: MUTED }}>No starred messages</p>
                   )}
                 </div>
               ) : null,
@@ -573,22 +544,25 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
               onClick={row.onClick}
               className="w-full text-left"
               style={{
-                background: "#1A1A24",
-                border: "1px solid #2E2E42",
-                borderRadius: "12px",
+                background: SURFACE2,
+                border: `1px solid ${LINE}`,
+                borderRadius: "18px",
                 padding: "0 16px",
               }}
               data-testid={row.testId}
             >
               <div className="flex items-center justify-between gap-2" style={{ height: "52px" }}>
                 <div className="flex items-center gap-3">
-                  <span style={{ color: "#9090A8" }}>{row.icon}</span>
-                  <span className="text-sm font-medium text-white">{row.label}</span>
+                  <span style={{ color: MUTED }}>{row.icon}</span>
+                  <span className="text-sm font-medium" style={{ color: TEXT }}>{row.label}</span>
                 </div>
-                <ChevronRight
-                  className="w-4 h-4 transition-transform"
-                  style={{ color: "#9090A8", transform: row.expanded ? "rotate(90deg)" : "rotate(0deg)" }}
-                />
+                <div className="flex items-center gap-2">
+                  <span style={{ ...MONO, color: FAINT }}>{row.count}</span>
+                  <ChevronRight
+                    className="w-4 h-4 transition-transform"
+                    style={{ color: EMBER, transform: row.expanded ? "rotate(90deg)" : "rotate(0deg)" }}
+                  />
+                </div>
               </div>
               {row.content}
             </button>
@@ -596,9 +570,9 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
 
           <div
             style={{
-              background: "#1A1A24",
-              border: "1px solid #2E2E42",
-              borderRadius: "12px",
+              background: SURFACE2,
+              border: `1px solid ${LINE}`,
+              borderRadius: "18px",
               padding: "0 16px",
             }}
             data-testid="card-members"
@@ -612,32 +586,35 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
               style={{ height: "52px" }}
             >
               <div className="flex items-center gap-3">
-                <Users className="w-5 h-5" style={{ color: "#9090A8" }} />
-                <span className="text-sm font-medium text-white">Members ({sortedMembers.length})</span>
+                <Users className="w-5 h-5" style={{ color: MUTED }} />
+                <span className="text-sm font-medium" style={{ color: TEXT }}>Members</span>
               </div>
-              <ChevronRight
-                className="w-4 h-4 transition-transform"
-                style={{ color: "#9090A8", transform: membersExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
-              />
+              <div className="flex items-center gap-2">
+                <span style={{ ...MONO, color: FAINT }}>{sortedMembers.length}</span>
+                <ChevronRight
+                  className="w-4 h-4 transition-transform"
+                  style={{ color: EMBER, transform: membersExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+                />
+              </div>
             </div>
             {membersExpanded && (
               <div className="mb-3 space-y-0">
                 {sortedMembers.map((member: any) => (
-                  <div key={member.id} className="flex items-center justify-between gap-2 py-2.5" style={{ borderTop: "1px solid #2E2E42" }} data-testid={`member-${member.id}`}>
+                  <div key={member.id} className="flex items-center justify-between gap-2 py-2.5" style={{ borderTop: `1px solid ${LINE}` }} data-testid={`member-${member.id}`}>
                     <div className="flex items-center gap-3 min-w-0">
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold text-white"
-                        style={{ background: "#242433", border: "1px solid #2E2E42" }}
+                        style={{ background: ELEVATED, border: `1px solid ${LINE}` }}
                       >
                         {member.nickname?.[0]?.toUpperCase() || "?"}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className="text-sm font-medium text-white truncate">{member.nickname || "Anonymous"}</p>
-                          {member.role === "owner" && <Crown className="w-3.5 h-3.5 shrink-0" style={{ color: "#F59E0B" }} />}
-                          {member.role === "admin" && <Shield className="w-3.5 h-3.5 shrink-0" style={{ color: "#60A5FA" }} />}
+                          {member.role === "owner" && <Crown className="w-3.5 h-3.5 shrink-0" style={{ color: TEXT }} />}
+                          {member.role === "admin" && <Shield className="w-3.5 h-3.5 shrink-0" style={{ color: MUTED }} />}
                         </div>
-                        <span className="text-xs capitalize" style={{ color: "#9090A8" }}>{member.role}</span>
+                        <span className="text-xs capitalize" style={{ color: MUTED }}>{member.role}</span>
                       </div>
                     </div>
                     {isOwner && member.userId !== user?.id && (
@@ -646,7 +623,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                           <button
                             onClick={() => handlePromote(member.userId, "admin")}
                             className="px-2 py-1 text-xs rounded btn-press"
-                            style={{ background: "#242433", color: "#FFFFFF", border: "1px solid #2E2E42" }}
+                            style={{ background: ELEVATED, color: TEXT, border: `1px solid ${LINE}` }}
                             data-testid={`button-promote-${member.id}`}
                           >
                             <Shield className="w-3 h-3 inline mr-1" />Admin
@@ -656,7 +633,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                           <button
                             onClick={() => handlePromote(member.userId, "member")}
                             className="px-2 py-1 text-xs rounded btn-press"
-                            style={{ background: "#242433", color: "#FFFFFF", border: "1px solid #2E2E42" }}
+                            style={{ background: ELEVATED, color: TEXT, border: `1px solid ${LINE}` }}
                             data-testid={`button-demote-${member.id}`}
                           >
                             Demote
@@ -680,11 +657,11 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
 
           {isAdmin && (
             <div
-              style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px", padding: "16px" }}
+              style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: "12px", padding: "16px" }}
               data-testid="card-invite-links"
             >
               <div className="flex items-center gap-2 mb-3">
-                <Link2 className="w-4 h-4" style={{ color: "#9090A8" }} />
+                <Link2 className="w-4 h-4" style={{ color: MUTED }} />
                 <span className="text-sm font-medium text-white">Invite Links</span>
               </div>
               <button
@@ -694,9 +671,9 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                 style={{
                   height: "40px",
                   borderRadius: "10px",
-                  background: "#242433",
-                  border: "1px solid #2E2E42",
-                  color: "#FFFFFF",
+                  background: ELEVATED,
+                  border: `1px solid ${LINE}`,
+                  color: TEXT,
                 }}
                 data-testid="button-create-invite"
               >
@@ -711,13 +688,13 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                         value={makeInviteUrl(link.token)}
                         readOnly
                         className="text-xs flex-1 px-3 py-2 outline-none"
-                        style={{ background: "#242433", border: "1px solid #2E2E42", borderRadius: "8px", color: "#9090A8" }}
+                        style={{ background: ELEVATED, border: `1px solid ${LINE}`, borderRadius: "8px", color: MUTED }}
                         data-testid={`input-invite-${link.id}`}
                       />
                       <button
                         onClick={() => handleCopyLink(link.token)}
                         className="w-9 h-9 flex items-center justify-center rounded-lg btn-press"
-                        style={{ background: "#242433", border: "1px solid #2E2E42", color: "#FFFFFF" }}
+                        style={{ background: ELEVATED, border: `1px solid ${LINE}`, color: TEXT }}
                         data-testid={`button-copy-invite-${link.id}`}
                       >
                         {copiedLink === link.token ? <Check className="w-4 h-4" style={{ color: "#22C55E" }} /> : <Copy className="w-4 h-4" />}
@@ -731,18 +708,18 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
 
           {isAdmin && (
             <div
-              style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px", padding: "16px" }}
+              style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: "12px", padding: "16px" }}
               data-testid="card-group-settings"
             >
               <div className="flex items-center justify-between gap-2 mb-4">
                 <div className="flex items-center gap-2">
-                  <Settings className="w-4 h-4" style={{ color: "#9090A8" }} />
+                  <Settings className="w-4 h-4" style={{ color: MUTED }} />
                   <span className="text-sm font-medium text-white">Group Settings</span>
                 </div>
                 <button
                   onClick={() => setLocation(`/lounge/group/${groupId}/settings`)}
                   className="text-xs font-medium btn-press px-3 py-1 rounded-full"
-                  style={{ background: "#242433", color: "#A78BFA", border: "1px solid #2E2E42" }}
+                  style={{ background: ELEVATED, color: EMBER, border: `1px solid ${LINE}` }}
                   data-testid="button-open-full-settings"
                 >
                   Full Settings
@@ -763,14 +740,14 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                     />
                   </div>
                 ))}
-                <div style={{ height: "1px", background: "#2E2E42" }} />
+                <div style={{ height: "1px", background: LINE }} />
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-sm text-white">Posting permission</label>
                   <Select
                     value={group?.postingPermission || "everyone"}
                     onValueChange={(v) => handleSettingSelect("postingPermission", v)}
                   >
-                    <SelectTrigger className="w-36" data-testid="select-posting-permission" style={{ background: "#242433", border: "1px solid #2E2E42" }}>
+                    <SelectTrigger className="w-36" data-testid="select-posting-permission" style={{ background: ELEVATED, border: `1px solid ${LINE}` }}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -785,7 +762,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                     value={group?.mediaPermission || "everyone"}
                     onValueChange={(v) => handleSettingSelect("mediaPermission", v)}
                   >
-                    <SelectTrigger className="w-36" data-testid="select-media-permission" style={{ background: "#242433", border: "1px solid #2E2E42" }}>
+                    <SelectTrigger className="w-36" data-testid="select-media-permission" style={{ background: ELEVATED, border: `1px solid ${LINE}` }}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -798,22 +775,15 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             </div>
           )}
 
-          <div className="pt-2 pb-4 space-y-3">
+          <div className="pt-2 pb-4 space-y-3 flex flex-col items-center">
             <button
-              onClick={handleLeave}
+              onClick={() => setLeaveConfirmOpen(true)}
               disabled={leaveGroup.isPending}
-              className="w-full flex items-center justify-center gap-2 text-sm font-semibold btn-press"
-              style={{
-                height: "48px",
-                borderRadius: "12px",
-                background: "rgba(239,68,68,0.1)",
-                border: "1.5px solid #EF4444",
-                color: "#EF4444",
-              }}
+              className="text-sm font-medium btn-press py-2"
+              style={{ color: MUTED, background: "transparent", border: "none" }}
               data-testid="button-leave-group"
             >
-              {leaveGroup.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              Leave Group
+              {leaveGroup.isPending ? "Leaving…" : "Leave group"}
             </button>
             {isOwner && (
               <button
@@ -840,21 +810,21 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
       </div>
 
       <Dialog open={addMemberOpen} onOpenChange={setAddMemberOpen}>
-        <DialogContent style={{ background: "#1A1A24", border: "1px solid #2E2E42" }}>
+        <DialogContent style={{ background: SURFACE2, border: `1px solid ${LINE}` }}>
           <DialogHeader>
-            <DialogTitle className="text-white">Add Member</DialogTitle>
-            <DialogDescription style={{ color: "#9090A8" }}>Search for a user to add to the group.</DialogDescription>
+            <DialogTitle style={{ ...SERIF, color: TEXT }}>Add Member</DialogTitle>
+            <DialogDescription style={{ color: MUTED }}>Search for a user to add to the group.</DialogDescription>
           </DialogHeader>
           <Input
             placeholder="Search by name or nickname..."
             value={addMemberQuery}
             onChange={(e) => setAddMemberQuery(e.target.value)}
-            style={{ background: "#242433", border: "1px solid #2E2E42", color: "#FFFFFF" }}
+            style={{ background: ELEVATED, border: `1px solid ${LINE}`, color: TEXT }}
             data-testid="input-add-member-search"
           />
           <div className="space-y-1 max-h-64 overflow-y-auto mt-1">
             {addMemberQuery.trim().length >= 2 && ((userSearchResults as { userId: string; displayName: string; groupNickname?: string }[]) || []).length === 0 && (
-              <p className="text-sm text-center py-4" style={{ color: "#9090A8" }}>No users found</p>
+              <p className="text-sm text-center py-4" style={{ color: MUTED }}>No users found</p>
             )}
             {((userSearchResults as { userId: string; displayName: string; groupNickname?: string }[]) || []).map((u) => (
               <div
@@ -865,20 +835,20 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                 <div className="flex items-center gap-3">
                   <div
                     className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
-                    style={{ background: "#242433", border: "1px solid #2E2E42" }}
+                    style={{ background: ELEVATED, border: `1px solid ${LINE}` }}
                   >
                     {(u.displayName || "?")[0].toUpperCase()}
                   </div>
                   <div>
                     <p className="text-sm font-medium text-white">{u.displayName}</p>
-                    {u.groupNickname && <p className="text-xs" style={{ color: "#9090A8" }}>@{u.groupNickname}</p>}
+                    {u.groupNickname && <p className="text-xs" style={{ color: MUTED }}>@{u.groupNickname}</p>}
                   </div>
                 </div>
                 <Button
                   size="sm"
                   onClick={() => handleAddMember(u.userId)}
                   disabled={addGroupMember.isPending}
-                  style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", border: "none", color: "#fff", height: "32px", fontSize: "12px" }}
+                  style={{ background: EMBER, border: "none", color: INK, height: "32px", fontSize: "12px" }}
                   data-testid={`button-add-user-${u.userId}`}
                 >
                   Add
@@ -890,27 +860,27 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
       </Dialog>
 
       <Dialog open={searchOpen} onOpenChange={(open) => { setSearchOpen(open); if (!open) setSearchQuery(""); }}>
-        <DialogContent style={{ background: "#1A1A24", border: "1px solid #2E2E42" }}>
+        <DialogContent style={{ background: SURFACE2, border: `1px solid ${LINE}` }}>
           <DialogHeader>
-            <DialogTitle className="text-white">Search Messages</DialogTitle>
-            <DialogDescription style={{ color: "#9090A8" }}>Find messages in this group.</DialogDescription>
+            <DialogTitle style={{ ...SERIF, color: TEXT }}>Search Messages</DialogTitle>
+            <DialogDescription style={{ color: MUTED }}>Find messages in this group.</DialogDescription>
           </DialogHeader>
           <Input
             placeholder="Search..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ background: "#242433", border: "1px solid #2E2E42", color: "#FFFFFF" }}
+            style={{ background: ELEVATED, border: `1px solid ${LINE}`, color: TEXT }}
             data-testid="input-search-messages"
           />
           <div className="space-y-2 max-h-80 overflow-y-auto mt-1">
             {searchQuery.trim().length > 0 && ((messageSearchResults as { id: number; content: string; nickname?: string; createdAt?: string }[]) || []).length === 0 && (
-              <p className="text-sm text-center py-4" style={{ color: "#9090A8" }}>No messages found</p>
+              <p className="text-sm text-center py-4" style={{ color: MUTED }}>No messages found</p>
             )}
             {((messageSearchResults as { id: number; content: string; nickname?: string; createdAt?: string }[]) || []).map((msg) => (
               <button
                 key={msg.id}
                 className="w-full text-left rounded-lg p-3 btn-press"
-                style={{ background: "#242433" }}
+                style={{ background: ELEVATED }}
                 onClick={() => {
                   setSearchOpen(false);
                   setSearchQuery("");
@@ -920,11 +890,11 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-semibold text-white">{msg.nickname || "Unknown"}</span>
-                  <span className="text-xs" style={{ color: "#9090A8" }}>
+                  <span className="text-xs" style={{ color: MUTED }}>
                     {msg.createdAt ? new Date(msg.createdAt).toLocaleDateString() : ""}
                   </span>
                 </div>
-                <p className="text-sm" style={{ color: "#9090A8" }}>{msg.content}</p>
+                <p className="text-sm" style={{ color: MUTED }}>{msg.content}</p>
               </button>
             ))}
           </div>
@@ -964,7 +934,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             <Button
               onClick={handleSaveDescRules}
               disabled={updateGroup.isPending || updateSettings.isPending}
-              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", border: "none", color: "#fff" }}
+              style={{ background: EMBER, border: "none", color: INK }}
               data-testid="button-save-desc-rules"
             >
               {(updateGroup.isPending || updateSettings.isPending) && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
@@ -975,14 +945,14 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
       </Dialog>
 
       <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent style={{ background: "#1A1A24", border: "1px solid #2E2E42" }}>
+        <DialogContent style={{ background: SURFACE2, border: `1px solid ${LINE}` }}>
           <DialogHeader>
-            <DialogTitle className="text-white">Invite Link</DialogTitle>
-            <DialogDescription style={{ color: "#9090A8" }}>Share this link to invite people to the group.</DialogDescription>
+            <DialogTitle style={{ ...SERIF, color: TEXT }}>Invite Link</DialogTitle>
+            <DialogDescription style={{ color: MUTED }}>Share this link to invite people to the group.</DialogDescription>
           </DialogHeader>
           <div
             className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm break-all"
-            style={{ background: "#242433", border: "1px solid #2E2E42", color: "#9090A8" }}
+            style={{ background: ELEVATED, border: `1px solid ${LINE}`, color: MUTED }}
             data-testid="text-share-link"
           >
             {shareLink}
@@ -990,11 +960,40 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
           <DialogFooter>
             <Button
               onClick={handleCopyShareLink}
-              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", border: "none", color: "#fff" }}
+              style={{ background: EMBER, border: "none", color: INK }}
               data-testid="button-copy-share-link"
             >
               Copy Link
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={leaveConfirmOpen} onOpenChange={setLeaveConfirmOpen}>
+        <DialogContent style={{ background: SURFACE2, border: `1px solid ${LINE}` }}>
+          <DialogHeader>
+            <DialogTitle style={{ ...SERIF, color: TEXT }}>Leave {group?.name || "this group"}?</DialogTitle>
+            <DialogDescription style={{ color: MUTED }}>
+              You'll stop seeing this room. You can rejoin later if it's open or you're invited back.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <button
+              className="px-4 py-2 text-sm font-medium"
+              style={{ color: MUTED }}
+              onClick={() => setLeaveConfirmOpen(false)}
+              data-testid="button-cancel-leave"
+            >
+              Cancel
+            </button>
+            <button
+              className="px-4 py-2 text-sm font-semibold"
+              style={{ background: EMBER, color: INK, borderRadius: "10px", border: "none" }}
+              onClick={() => { setLeaveConfirmOpen(false); handleLeave(); }}
+              data-testid="button-confirm-leave"
+            >
+              Leave group
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
