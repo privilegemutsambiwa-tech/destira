@@ -99,293 +99,78 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** The single ember CTA — reused three times on the page, always identical.
- *  Opens the invite modal; the page owns the open/close state. */
-function InviteButton({ onOpen, className = "" }: { onOpen: () => void; className?: string }) {
+/** The primary ember CTA — routes straight to open signup. */
+function SignupButton({
+  label = "Create your account",
+  className = "",
+}: {
+  label?: string;
+  className?: string;
+}) {
+  const [, setLocation] = useLocation();
   return (
     <button
-      onClick={onOpen}
+      onClick={() => setLocation("/signup")}
       className={`inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-7 h-12 text-[15px] btn-press transition-colors hover:bg-[#FF8163] ${className}`}
-      data-testid="button-get-invite"
+      data-testid="button-create-account"
     >
-      Get an invite
+      {label}
     </button>
   );
 }
 
-const TWIN_VOICES = ["Dry and direct", "Warm and curious", "Playful", "Measured"] as const;
-const INVITE_ROOMS = ["Late Practice", "Sunday Trail", "Table for Six", "Not sure yet"] as const;
-
-/** One question's set of choices, rendered as ember-selectable pills. */
-function ChoiceRow({
-  options,
-  value,
-  onChange,
-  name,
-}: {
-  options: readonly string[];
-  value: string;
-  onChange: (v: string) => void;
-  name: string;
-}) {
+/** Ghost-bordered secondary — always paired with SignupButton so returning
+ *  users never hunt for log in. */
+function LoginButton({ className = "" }: { className?: string }) {
+  const [, setLocation] = useLocation();
   return (
-    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={name}>
-      {options.map((opt) => {
-        const active = value === opt;
-        return (
-          <button
-            key={opt}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            onClick={() => onChange(opt)}
-            className={`rounded-full border px-4 h-9 text-[13.5px] transition-colors ${
-              active
-                ? "border-vf-ember bg-vf-ember/10 text-vf-text"
-                : "border-vf-line text-vf-muted hover:text-vf-text hover:border-white/20"
-            }`}
-          >
-            {opt}
-          </button>
-        );
-      })}
-    </div>
+    <button
+      onClick={() => setLocation("/login")}
+      className={`inline-flex items-center justify-center rounded-full border border-vf-line text-vf-text font-medium px-7 h-12 text-[15px] btn-press transition-colors hover:border-white/25 ${className}`}
+      data-testid="button-log-in"
+    >
+      Log in
+    </button>
   );
 }
 
-/** The invite flow — four twin questions + email, honeypot-guarded, posts to
- *  /api/invites. Closes on Escape / backdrop. Success state replaces the form. */
-function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const firstFieldRef = useRef<HTMLInputElement>(null);
+/** Inline email capture — removes a page from the signup funnel by carrying the
+ *  address straight into /signup as step one. */
+function EmailCapture({ className = "" }: { className?: string }) {
+  const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
-  const [intent, setIntent] = useState("");
-  const [twinVoice, setTwinVoice] = useState("");
-  const [oneTrueThing, setOneTrueThing] = useState("");
-  const [room, setRoom] = useState("");
-  const [company, setCompany] = useState(""); // honeypot — humans never see this
-  const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const t = window.setTimeout(() => firstFieldRef.current?.focus(), 60);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-      window.clearTimeout(t);
-    };
-  }, [open, onClose]);
-
-  // Reset back to a blank form once the modal has fully closed.
-  useEffect(() => {
-    if (open) return;
-    const t = window.setTimeout(() => {
-      setEmail("");
-      setIntent("");
-      setTwinVoice("");
-      setOneTrueThing("");
-      setRoom("");
-      setCompany("");
-      setStatus("idle");
-      setError(null);
-    }, 200);
-    return () => window.clearTimeout(t);
-  }, [open]);
-
-  if (!open) return null;
-
-  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const valid =
-    emailOk &&
-    intent.trim().length >= 10 &&
-    oneTrueThing.trim().length >= 10 &&
-    twinVoice !== "" &&
-    room !== "";
-
-  const submit = async (e: React.FormEvent) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valid || status === "submitting") return;
-    setStatus("submitting");
-    setError(null);
-    try {
-      const res = await fetch("/api/invites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          email: email.trim(),
-          intent: intent.trim(),
-          twinVoice,
-          oneTrueThing: oneTrueThing.trim(),
-          room,
-          company,
-        }),
-      });
-      if (!res.ok) throw new Error("bad status");
-      setStatus("done");
-    } catch {
-      setStatus("idle");
-      setError("Something went wrong. Try again in a moment.");
+    const trimmed = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setLocation("/signup");
+      return;
     }
+    setLocation(`/signup?email=${encodeURIComponent(trimmed)}`);
   };
 
-  const fieldClass =
-    "w-full rounded-[14px] border border-vf-line bg-vf-surface2 px-4 py-3 text-[14.5px] text-vf-text placeholder:text-vf-faint focus:outline-none focus:border-white/25 transition-colors";
-
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto p-4 sm:p-8"
-      style={{ background: "rgba(12,9,16,0.82)", backdropFilter: "blur(6px)" }}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="invite-modal-heading"
-      data-testid="invite-modal"
-    >
-      <div className="relative w-full max-w-[520px] my-auto rounded-[28px] border border-vf-line bg-vf-surface p-6 sm:p-8">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute right-5 top-5 text-vf-faint hover:text-vf-text transition-colors text-[13px] font-mono uppercase tracking-[0.16em]"
-          data-testid="invite-modal-close"
-        >
-          Esc
-        </button>
-
-        {status === "done" ? (
-          <div className="py-6 text-center">
-            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-              Request received
-            </div>
-            <h2
-              id="invite-modal-heading"
-              className="font-serif font-normal text-vf-text mt-4"
-              style={{ fontSize: "clamp(26px, 4vw, 38px)", lineHeight: 1.08, letterSpacing: "-0.02em" }}
-            >
-              Your twin will be ready before you are.
-            </h2>
-            <p className="mt-4 text-[14.5px] leading-[1.6] text-vf-muted mx-auto max-w-[40ch]">
-              We will write to {email.trim()} when there is a room near you worth walking into.
-            </p>
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-7 inline-flex items-center justify-center rounded-full border border-vf-line px-6 h-11 text-[14px] text-vf-muted hover:text-vf-text hover:border-white/20 transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={submit} className="flex flex-col gap-5">
-            <div>
-              <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-                By invitation
-              </div>
-              <h2
-                id="invite-modal-heading"
-                className="font-serif font-normal text-vf-text mt-3"
-                style={{ fontSize: "clamp(24px, 3.6vw, 34px)", lineHeight: 1.1, letterSpacing: "-0.02em" }}
-              >
-                Your twin asks four questions.
-              </h2>
-              <p className="mt-2 text-[13.5px] leading-[1.55] text-vf-muted">
-                No photos. Two minutes. We write when there is a room worth joining.
-              </p>
-            </div>
-
-            {/* honeypot: off-screen, never tab-reachable, ignored by humans */}
-            <div aria-hidden="true" style={{ position: "absolute", left: "-9999px", width: 1, height: 1, overflow: "hidden" }}>
-              <label>
-                Company
-                <input
-                  type="text"
-                  tabIndex={-1}
-                  autoComplete="off"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                />
-              </label>
-            </div>
-
-            <label className="flex flex-col gap-2">
-              <span className="text-[13px] text-vf-soft">Where do we send it?</span>
-              <input
-                ref={firstFieldRef}
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className={fieldClass}
-                data-testid="invite-email"
-              />
-            </label>
-
-            <label className="flex flex-col gap-2">
-              <span className="text-[13px] text-vf-soft">What are you actually looking for?</span>
-              <textarea
-                required
-                rows={2}
-                value={intent}
-                onChange={(e) => setIntent(e.target.value)}
-                placeholder="Not a type. A situation you want to be in."
-                className={`${fieldClass} resize-none`}
-                data-testid="invite-intent"
-              />
-            </label>
-
-            <div className="flex flex-col gap-2">
-              <span className="text-[13px] text-vf-soft">How should your twin sound?</span>
-              <ChoiceRow name="Twin voice" options={TWIN_VOICES} value={twinVoice} onChange={setTwinVoice} />
-            </div>
-
-            <label className="flex flex-col gap-2">
-              <span className="text-[13px] text-vf-soft">One true thing about you.</span>
-              <textarea
-                required
-                rows={2}
-                value={oneTrueThing}
-                onChange={(e) => setOneTrueThing(e.target.value)}
-                placeholder="Something a photo would never tell us."
-                className={`${fieldClass} resize-none`}
-                data-testid="invite-truth"
-              />
-            </label>
-
-            <div className="flex flex-col gap-2">
-              <span className="text-[13px] text-vf-soft">Which room first?</span>
-              <ChoiceRow name="First room" options={INVITE_ROOMS} value={room} onChange={setRoom} />
-            </div>
-
-            {error && (
-              <p className="text-[13px] text-vf-ember" role="alert">
-                {error}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={!valid || status === "submitting"}
-              className="mt-1 inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-7 h-12 text-[15px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-40 disabled:cursor-not-allowed"
-              data-testid="invite-submit"
-            >
-              {status === "submitting" ? "Sending…" : "Request an invite"}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
+    <form onSubmit={submit} className={`flex flex-col sm:flex-row gap-2.5 max-w-[440px] ${className}`}>
+      <input
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@email.com"
+        aria-label="Your email"
+        className="flex-1 rounded-full border border-vf-line bg-white/5 px-5 h-12 text-[14.5px] text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow"
+        data-testid="input-hero-email"
+      />
+      <button
+        type="submit"
+        className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-6 h-12 text-[14.5px] btn-press transition-colors hover:bg-[#FF8163] shrink-0"
+        data-testid="button-hero-email-continue"
+      >
+        Continue
+      </button>
+    </form>
   );
 }
 
@@ -527,8 +312,6 @@ export default function Landing() {
   const inIframe = isInIframe();
   const [, setLocation] = useLocation();
   const [scrolled, setScrolled] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const openInvite = () => setInviteOpen(true);
 
   const handleDemo = async () => {
     try {
@@ -616,7 +399,7 @@ export default function Landing() {
           <a href="/" className="flex items-center" data-testid="link-logo">
             <VibeFlowLockup orientation="horizontal" size={28} />
           </a>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 sm:gap-6">
             <a
               href="#how-it-works"
               className="hidden md:inline text-[14px] text-vf-muted hover:text-vf-text transition-colors"
@@ -629,7 +412,14 @@ export default function Landing() {
             >
               Communities
             </a>
-            <InviteButton onOpen={openInvite} className="!h-10 !px-5 text-[13.5px]" />
+            <button
+              onClick={() => setLocation("/login")}
+              className="text-[14px] text-vf-text hover:text-vf-muted transition-colors"
+              data-testid="nav-log-in"
+            >
+              Log in
+            </button>
+            <SignupButton label="Sign up" className="!h-10 !px-5 text-[13.5px]" />
           </div>
         </div>
       </nav>
@@ -644,7 +434,7 @@ export default function Landing() {
         <div className="max-w-[1180px] mx-auto w-full">
           <div className="max-w-[900px]">
             <Reveal>
-              <Eyebrow>By invitation · Johannesburg</Eyebrow>
+              <Eyebrow>Johannesburg · Free to join</Eyebrow>
             </Reveal>
             <Reveal delay={80}>
               <h1
@@ -669,8 +459,14 @@ export default function Landing() {
             </Reveal>
             <Reveal delay={240}>
               <div className="mt-9">
-                <InviteButton onOpen={openInvite} />
-                <p className="mt-3 text-[13px] text-vf-faint">Free. One read a day. No swiping, ever.</p>
+                <EmailCapture />
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <SignupButton />
+                  <LoginButton />
+                </div>
+                <p className="mt-3 text-[13px] text-vf-faint">
+                  Free forever. One read a day. No swiping, ever.
+                </p>
               </div>
             </Reveal>
           </div>
@@ -943,16 +739,20 @@ export default function Landing() {
           </Reveal>
           <Reveal delay={120}>
             <p className="mt-7 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted mx-auto max-w-[56ch]">
-              VibeFlow is invitation-only while we keep the rooms small. Tell us what you are actually
-              looking for and we will let you in when there are enough people worth meeting near you.
+              Free to join. Your twin asks four questions, then it starts talking to people near you.
+              No photos needed to begin.
             </p>
           </Reveal>
           <Reveal delay={200}>
-            <div className="mt-9">
-              <InviteButton onOpen={openInvite} />
-              <p className="mt-3 text-[13px] text-vf-faint">
-                Takes two minutes. Your twin asks four questions. No photos yet.
-              </p>
+            <div className="mt-9 flex flex-col items-center gap-3">
+              <EmailCapture className="w-full mx-auto sm:justify-center" />
+              <button
+                onClick={() => setLocation("/login")}
+                className="text-[13px] text-vf-muted hover:text-vf-text transition-colors"
+                data-testid="closing-log-in"
+              >
+                Already here? Log in
+              </button>
             </div>
           </Reveal>
         </div>
@@ -1016,8 +816,6 @@ export default function Landing() {
           </div>
         </div>
       </footer>
-
-      <InviteModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
     </div>
   );
 }

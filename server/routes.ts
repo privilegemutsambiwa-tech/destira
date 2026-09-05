@@ -7,7 +7,7 @@ import { GoogleGenAI } from "@google/genai";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
 import { sql, eq, and } from "drizzle-orm";
-import { groupMembers, blockedUsers, profiles, twinMemory as twinMemoryTable, twinMemoryFacts, twinMemorySummary, insertEventSchema, updateEventSchema, insertInviteRequestSchema } from "@shared/schema";
+import { groupMembers, blockedUsers, profiles, twinMemory as twinMemoryTable, twinMemoryFacts, twinMemorySummary, insertEventSchema, updateEventSchema } from "@shared/schema";
 import crypto from "crypto";
 import multer from "multer";
 import path from "path";
@@ -2751,26 +2751,6 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   });
 
   // Support tickets
-  // Public waitlist capture from the marketing Landing page. No auth — there is
-  // no account yet. `company` is a honeypot: it is never rendered visibly, so a
-  // filled value means a bot; we return the same success shape without storing.
-  app.post("/api/invites", async (req, res) => {
-    if (typeof req.body?.company === "string" && req.body.company.trim() !== "") {
-      return res.status(201).json({ ok: true });
-    }
-    const parsed = insertInviteRequestSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: "Invalid invite request", errors: parsed.error.flatten() });
-    }
-    try {
-      await storage.createInviteRequest(parsed.data);
-      res.status(201).json({ ok: true });
-    } catch (err) {
-      console.error("Invite request error:", err);
-      res.status(500).json({ message: "Failed to submit invite request" });
-    }
-  });
-
   app.post("/api/support/tickets", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
