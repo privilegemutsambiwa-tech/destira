@@ -9,7 +9,7 @@
 import { db } from "./db";
 import {
   events, eventAttendees, profiles, groupMembers, blockedUsers, groups, suburbCentroids,
-  twinNotifications,
+  twinNotifications, twinAlertLog,
   type Event, type InsertEvent, type EventAttendee,
   type HostEventInput,
 } from "@shared/schema";
@@ -31,8 +31,34 @@ export class NotGroupMemberError extends Error {
 export class HostRateLimitError extends Error {
   constructor() { super("You've put up 3 events this week. Give it a few days."); }
 }
+export class ModeratorOnlyError extends Error {
+  constructor() { super("Only a moderator can review events"); }
+}
 
 export const HOST_WEEKLY_LIMIT = 3;
+
+// Comma-separated user ids in EVENT_MODERATOR_IDS may approve first events out
+// of the pending_review queue. Empty = nobody (events stay held).
+export function isEventModerator(userId: string): boolean {
+  const ids = (process.env.EVENT_MODERATOR_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return ids.includes(userId);
+}
+
+export async function approveEvent(eventId: number, moderatorId: string): Promise<Event> {
+  if (!isEventModerator(moderatorId)) throw new ModeratorOnlyError();
+  const [event] = await db.select().from(events).where(eq(events.id, eventId));
+  if (!event) throw new EventNotFoundError();
+  if (event.status !== "pending_review") return event;
+  const [updated] = await db
+    .update(events)
+    .set({ status: "published" })
+    .where(eq(events.id, eventId))
+    .returning();
+  return updated;
+}
 
 type AttendeeStatus = "going" | "waitlisted" | "requested" | "declined" | "cancelled";
 
@@ -154,17 +180,21 @@ export async function getEventDetail(eventId: number, viewerId: string) {
   const [event] = await db.select().from(events).where(eq(events.id, eventId));
   if (!event) throw new EventNotFoundError();
 
-  const [blocks, [myRow]] = await Promise.all([
+  const [blocks, [myRow], [flagRow]] = await Promise.all([
     buildResonanceBlocks([eventId], viewerId),
     db.select({ status: eventAttendees.status })
       .from(eventAttendees)
       .where(and(eq(eventAttendees.eventId, eventId), eq(eventAttendees.userId, viewerId))),
+    db.select({ id: twinAlertLog.id })
+      .from(twinAlertLog)
+      .where(and(eq(twinAlertLog.eventId, eventId), eq(twinAlertLog.userId, viewerId))),
   ]);
 
   return {
     ...event,
     resonance: blocks.get(eventId) || { goingCount: 0, highReadCount: 0, notableAttendees: [] },
     myStatus: (myRow?.status as AttendeeStatus | undefined) ?? null,
+    twinFlagged: !!flagRow,
   };
 }
 

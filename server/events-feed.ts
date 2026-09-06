@@ -36,6 +36,7 @@ import {
   suburbCentroids,
   groupMembers,
   profiles,
+  twinAlertLog,
   type Event,
   type EventPreferences,
   type UpdateEventPreferences,
@@ -92,7 +93,7 @@ export async function updatePreferences(
   return row;
 }
 
-async function buildContext(userId: string): Promise<FeedContext> {
+export async function buildContext(userId: string): Promise<FeedContext> {
   const [profileRows, groupRows, centroids] = await Promise.all([
     db
       .select({ lat: profiles.locationLat, lng: profiles.locationLng, location: profiles.location })
@@ -140,6 +141,7 @@ export interface FeedEvent extends Event {
   fitScore: number;
   resonance: ResonanceBlock;
   myStatus: string | null;
+  twinFlagged: boolean;
 }
 
 const EMPTY_BLOCK: ResonanceBlock = { goingCount: 0, highReadCount: 0, notableAttendees: [] };
@@ -149,7 +151,7 @@ async function decorate(
   userId: string,
 ): Promise<FeedEvent[]> {
   const ids = scored.map((s) => s.event.id);
-  const [blocks, myRows] = await Promise.all([
+  const [blocks, myRows, flaggedRows] = await Promise.all([
     buildResonanceBlocks(ids, userId),
     ids.length
       ? db
@@ -157,14 +159,22 @@ async function decorate(
           .from(eventAttendees)
           .where(and(inArray(eventAttendees.eventId, ids), eq(eventAttendees.userId, userId)))
       : Promise.resolve([] as Array<{ eventId: number; status: string }>),
+    ids.length
+      ? db
+          .select({ eventId: twinAlertLog.eventId })
+          .from(twinAlertLog)
+          .where(and(inArray(twinAlertLog.eventId, ids), eq(twinAlertLog.userId, userId)))
+      : Promise.resolve([] as Array<{ eventId: number }>),
   ]);
   const myStatusByEvent = new Map(myRows.map((r) => [r.eventId, r.status]));
+  const flagged = new Set(flaggedRows.map((r) => r.eventId));
   return scored.map((s) => ({
     ...s.event,
     distanceKm: Math.round(s.distanceKm * 10) / 10,
     fitScore: s.score,
     resonance: blocks.get(s.event.id) ?? EMPTY_BLOCK,
     myStatus: myStatusByEvent.get(s.event.id) ?? null,
+    twinFlagged: flagged.has(s.event.id),
   }));
 }
 

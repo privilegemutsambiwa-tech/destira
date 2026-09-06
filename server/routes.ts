@@ -15,6 +15,7 @@ import fs from "fs";
 import type { TwinProfileStructured } from "@shared/schema";
 import * as eventsService from "./events";
 import * as eventsFeed from "./events-feed";
+import * as twinEventAlerts from "./services/twin-event-alerts";
 import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
@@ -3120,12 +3121,40 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
     try {
       const event = await eventsService.createHostedEvent(userId, parsed.data);
+      if (event.status === "published") {
+        void twinEventAlerts
+          .runTwinEventAlerts(event.id)
+          .catch((err) => console.error("twin event alerts failed:", err));
+      }
       res.status(201).json(event);
     } catch (e) {
       if (e instanceof eventsService.NotGroupMemberError) return res.status(403).json({ message: e.message });
       if (e instanceof eventsService.HostRateLimitError) return res.status(429).json({ message: e.message });
       console.error("Create event error:", e);
       res.status(500).json({ message: "Failed to create event" });
+    }
+  });
+
+  // Moderator action: move a first event out of pending_review. Gated by
+  // EVENT_MODERATOR_IDS. Firing the twin alerts here mirrors the publish path.
+  app.post("/api/events/:id/approve", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    try {
+      const event = await eventsService.approveEvent(eventId, userId);
+      if (event.status === "published") {
+        void twinEventAlerts
+          .runTwinEventAlerts(event.id)
+          .catch((err) => console.error("twin event alerts failed:", err));
+      }
+      res.json(event);
+    } catch (e) {
+      if (e instanceof eventsService.ModeratorOnlyError) return res.status(403).json({ message: e.message });
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      console.error("Approve event error:", e);
+      res.status(500).json({ message: "Failed to approve event" });
     }
   });
 

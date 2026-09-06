@@ -176,6 +176,11 @@ export default function EventDetail({ params }: { params: { id: string } }) {
               <div className="text-[12px] text-vf-faint mt-1.5">{SEAT_MODEL_COPY[event.seatModel]}</div>
             </div>
 
+            {event.twinFlagged && (
+              <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-vf-mint" data-testid="event-twin-flag">
+                Your twin flagged this
+              </div>
+            )}
             {signal && (
               <div className={`font-mono text-[11.5px] ${signal.color === "mint" ? "text-vf-mint" : "text-vf-gold"}`}>
                 {signal.text}

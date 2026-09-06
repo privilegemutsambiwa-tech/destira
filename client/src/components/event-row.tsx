@@ -102,6 +102,14 @@ export function EventRow({ event, groupName, isHost, pending, onOpen, onAttend, 
       <div className="min-w-0">
         <div className="text-[17.5px] text-vf-text truncate">{event.title}</div>
         <div className="text-[13px] text-vf-muted mt-1 truncate">{metaParts.join(" · ")}</div>
+        {event.twinFlagged && (
+          <div
+            className="font-mono text-[11px] mt-2 uppercase tracking-[0.14em] text-vf-mint"
+            data-testid={`event-twin-flag-${event.id}`}
+          >
+            Your twin flagged this
+          </div>
+        )}
         {signalOverride != null ? (
           <div
             className="font-mono text-[11.5px] mt-2 tracking-[0.1em] text-vf-faint truncate"

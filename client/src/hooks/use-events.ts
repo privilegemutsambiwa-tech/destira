@@ -40,6 +40,7 @@ export interface EventItem {
   distanceKm?: number;
   fitScore?: number;
   cancelReason?: string | null;
+  twinFlagged?: boolean;
 }
 
 interface FeedResponse {
