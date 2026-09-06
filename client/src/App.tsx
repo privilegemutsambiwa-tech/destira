@@ -22,6 +22,7 @@ import Events from "@/pages/Events";
 import EventDetail from "@/pages/EventDetail";
 import EventPreferences from "@/pages/EventPreferences";
 import HostEvent from "@/pages/HostEvent";
+import PhotoManager from "@/pages/PhotoManager";
 import DirectChat from "@/pages/DirectChat";
 import TwinChat from "@/pages/TwinChat";
 import Billing from "@/pages/Billing";
@@ -98,6 +99,9 @@ function Router() {
       </Route>
       <Route path="/profile">
         <ProtectedRoute component={Profile} />
+      </Route>
+      <Route path="/photos">
+        <ProtectedRoute component={PhotoManager} />
       </Route>
       <Route path="/matches">
         <ProtectedRoute component={Matches} />

@@ -1,15 +1,12 @@
-import { useMemo, useRef, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { useProfile, useUpdateProfile, useUpdatePrompts, useProfileWeek, type ProfilePrompt } from "@/hooks/use-profiles";
 import { useSubscription, useProfileCompletion, useTwinStructuredProfile, useTwinMemory, useGroups } from "@/hooks/use-interactions";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
-} from "@/components/ui/dialog";
-import { Loader2, Trash2, ImagePlus, Plus, X, LogOut } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Loader2, Plus, X, LogOut } from "lucide-react";
 import { AddStoryButton, OwnStoryViewer, type OwnStory } from "@/components/story-viewer";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -131,7 +128,7 @@ function YourEventsCard() {
                   )}
                 </div>
                 <div className="text-[11.5px] text-vf-faint mt-0.5">
-                  {new Date(e.startsAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {e.goingCount} going
+                  {new Date(e.startsAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} Â· {e.goingCount} going
                 </div>
               </button>
             );
@@ -181,7 +178,6 @@ export default function Profile() {
   const { data: groups } = useGroups();
 
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showPhotoDialog, setShowPhotoDialog] = useState(false);
   const [showOwnStoryViewer, setShowOwnStoryViewer] = useState(false);
   const [showStoryCreator, setShowStoryCreator] = useState(false);
 
@@ -272,7 +268,7 @@ export default function Profile() {
     profile.age ? String(profile.age) : null,
     profile.location || null,
     "here with intent",
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join(" Â· ");
 
   const openBio = () => { setBioValue(bio); setBioOpen(true); };
   const saveBio = async () => {
@@ -285,8 +281,8 @@ export default function Profile() {
       toast({ title: "Couldn't save", variant: "destructive" });
     }
   };
-  // §D: drafts a starting point INTO the editor. Never auto-saves, never
-  // overwrites — only offered while the editor is empty.
+  // Â§D: drafts a starting point INTO the editor. Never auto-saves, never
+  // overwrites â€” only offered while the editor is empty.
   const draftBio = async () => {
     setBioDrafting(true);
     try {
@@ -338,7 +334,7 @@ export default function Profile() {
       <div className="flex flex-col gap-8">
         <ReferralNudge completionScore={completionScore} />
 
-        {/* ── HEADER ─────────────────────────────────────────── */}
+        {/* â”€â”€ HEADER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <header className="relative">
           <div className="relative overflow-hidden rounded-[24px] aspect-[16/9] sm:aspect-[21/9] bg-vf-surface2">
             {cover?.photoUrl ? (
@@ -401,7 +397,7 @@ export default function Profile() {
                 {profile.displayName || user?.firstName}
               </h1>
               <p className="text-[14px] text-vf-muted mt-1" data-testid="text-meta-line">
-                {metaLine}{profile.isVerified ? " · verified" : ""}
+                {metaLine}{profile.isVerified ? " Â· verified" : ""}
               </p>
               <div className="mt-3 flex items-center gap-4 justify-center sm:justify-start flex-wrap">
                 <button
@@ -412,7 +408,7 @@ export default function Profile() {
                   Edit profile
                 </button>
                 <button
-                  onClick={() => setShowPhotoDialog(true)}
+                  onClick={() => setLocation("/photos")}
                   className="text-[13px] text-vf-muted hover:text-vf-text transition-colors"
                   data-testid="button-photos"
                 >
@@ -430,7 +426,7 @@ export default function Profile() {
           </div>
         </header>
 
-        {/* story creator entry (kept compact — stories are a separate feature) */}
+        {/* story creator entry (kept compact â€” stories are a separate feature) */}
         <div className="-mt-2">
           <AddStoryButton
             onStoryAdded={() => { setShowStoryCreator(false); queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] }); }}
@@ -439,9 +435,9 @@ export default function Profile() {
           />
         </div>
 
-        {/* ── BODY ───────────────────────────────────────────── */}
+        {/* â”€â”€ BODY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className="grid gap-6 lg:gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)]">
-          {/* LEFT — you */}
+          {/* LEFT â€” you */}
           <div className="flex flex-col gap-9">
             {/* In your words */}
             <section>
@@ -481,7 +477,7 @@ export default function Profile() {
                         className="text-[13px] text-vf-mint hover:text-vf-text transition-colors ml-auto"
                         data-testid="button-draft-bio"
                       >
-                        {bioDrafting ? "Drafting…" : "Ask your twin for a starting point"}
+                        {bioDrafting ? "Draftingâ€¦" : "Ask your twin for a starting point"}
                       </button>
                     )}
                   </div>
@@ -514,7 +510,7 @@ export default function Profile() {
                     className={`w-full text-left p-4 border-dashed border-vf-line ${prompts.length > 0 ? "border-t" : "border"} rounded-[16px]`}
                     data-testid="prompt-add"
                   >
-                    <div className="text-[13.5px] text-vf-muted">Answer one more — your twin quotes these</div>
+                    <div className="text-[13.5px] text-vf-muted">Answer one more â€” your twin quotes these</div>
                   </button>
                 )}
               </div>
@@ -577,7 +573,7 @@ export default function Profile() {
                   </div>
                 ))}
                 <button
-                  onClick={() => setShowPhotoDialog(true)}
+                  onClick={() => setLocation("/photos")}
                   className="rounded-[16px] border border-dashed border-vf-line text-vf-faint hover:border-white/25 hover:text-vf-text transition-colors flex items-center justify-center"
                   style={{ aspectRatio: "3 / 4" }}
                   data-testid="button-add-photo"
@@ -628,7 +624,7 @@ export default function Profile() {
             <YourEventsCard />
           </div>
 
-          {/* RIGHT — your twin and your state */}
+          {/* RIGHT â€” your twin and your state */}
           <div className="flex flex-col gap-9">
             {/* Your twin */}
             <section>
@@ -637,7 +633,7 @@ export default function Profile() {
                 <div className="min-w-0">
                   <h2 className="font-serif font-normal text-2xl text-vf-text leading-none">Your twin</h2>
                   <p className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mt-1.5">
-                    learning · {twinWords.toLocaleString()} words of you so far
+                    learning Â· {twinWords.toLocaleString()} words of you so far
                   </p>
                 </div>
               </div>
@@ -668,7 +664,7 @@ export default function Profile() {
                   ))}
                 </div>
               ) : (
-                <p className="text-[14px] text-vf-muted mt-3">Nothing yet — a few conversations fill this in.</p>
+                <p className="text-[14px] text-vf-muted mt-3">Nothing yet â€” a few conversations fill this in.</p>
               )}
               <button
                 onClick={() => setLocation("/twin-chat?from=/profile")}
@@ -704,7 +700,7 @@ export default function Profile() {
             >
               {emberActive ? (
                 <>
-                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">Ember · active</div>
+                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">Ember Â· active</div>
                   <p className="text-[13.5px] text-vf-muted mt-2 leading-[1.55]">
                     Four twin conversations a night, full transcripts, first pick at dinners.
                   </p>
@@ -714,7 +710,7 @@ export default function Profile() {
                 </>
               ) : (
                 <>
-                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">Ember · $9.99 / month</div>
+                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">Ember Â· $9.99 / month</div>
                   <p className="font-serif font-normal text-2xl text-vf-text mt-2 leading-[1.2]">
                     Four twin conversations a night. Full transcripts. First pick at dinners.
                   </p>
@@ -748,7 +744,6 @@ export default function Profile() {
       </div>
 
       <EditProfileDialog open={showEditDialog} onOpenChange={setShowEditDialog} profile={profile} userId={user?.id || ""} />
-      <PhotoManagementDialog open={showPhotoDialog} onOpenChange={setShowPhotoDialog} photos={photos || []} profile={profile} userId={user?.id || ""} />
 
       {showOwnStoryViewer && hasStories && (
         <OwnStoryViewer
@@ -859,159 +854,6 @@ function EditProfileDialog({
             {saving && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
             Save
           </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function PhotoManagementDialog({
-  open,
-  onOpenChange,
-  photos,
-  profile,
-  userId,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  photos: any[];
-  profile: any;
-  userId: string;
-}) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const { toast } = useToast();
-  const updateProfile = useUpdateProfile();
-
-  const measure = (file: File) =>
-    new Promise<{ width?: number; height?: number }>((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-      img.onerror = () => resolve({});
-      img.src = URL.createObjectURL(file);
-    });
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "File too large", description: "Maximum size is 5MB.", variant: "destructive" });
-      return;
-    }
-    setUploading(true);
-    try {
-      const dims = await measure(file);
-      const formData = new FormData();
-      formData.append("image", file);
-      const uploadRes = await fetch("/api/uploads/image", { method: "POST", body: formData, credentials: "include" });
-      if (!uploadRes.ok) throw new Error("Upload failed");
-      const { url } = await uploadRes.json();
-
-      const isFirst = photos.length === 0;
-      await fetch("/api/photos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photoUrl: url, orderIndex: photos.length, isMainProfilePhoto: isFirst, width: dims.width, height: dims.height }),
-        credentials: "include",
-      });
-      if (isFirst) await updateProfile.mutateAsync({ userId, data: { coverPhotoUrl: url } });
-
-      queryClient.invalidateQueries({ queryKey: ["/api/photos", userId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
-      toast({ title: "Photo uploaded" });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to upload photo.", variant: "destructive" });
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
-
-  const handleDelete = async (photoId: number) => {
-    try {
-      await fetch(`/api/photos/${photoId}`, { method: "DELETE", credentials: "include" });
-      queryClient.invalidateQueries({ queryKey: ["/api/photos", userId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
-      toast({ title: "Photo removed" });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to remove photo.", variant: "destructive" });
-    }
-  };
-
-  const setRole = async (photoId: number, role: "cover" | "portrait" | "gallery") => {
-    try {
-      const res = await fetch(`/api/photos/${photoId}/role`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.message || "Couldn't set role");
-      }
-      queryClient.invalidateQueries({ queryKey: ["/api/photos", userId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
-    } catch (e: any) {
-      toast({ title: "Couldn't update", description: e.message, variant: "destructive" });
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Photos</DialogTitle>
-          <DialogDescription>Assign one cover and one portrait. Everything else is gallery.</DialogDescription>
-        </DialogHeader>
-
-        <div className="grid grid-cols-3 gap-3">
-          {photos.map((photo: any) => (
-            <div key={photo.id} className="rounded-xl overflow-hidden relative group bg-vf-surface2" style={{ aspectRatio: "3 / 4" }} data-testid={`edit-photo-${photo.id}`}>
-              <img src={photo.photoUrl} alt="" className="w-full h-full object-cover" />
-              {photo.role === "cover" && (
-                <span className="absolute top-1 left-1 font-mono uppercase tracking-[0.12em] px-1.5 py-0.5 rounded bg-vf-mint text-vf-ink text-[9px]">Cover</span>
-              )}
-              {photo.role === "portrait" && (
-                <span className="absolute top-1 left-1 font-mono uppercase tracking-[0.12em] px-1.5 py-0.5 rounded bg-vf-ember text-vf-ink text-[9px]">Portrait</span>
-              )}
-              <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-2">
-                <button className="text-[11px] text-white/90 hover:text-white" onClick={() => setRole(photo.id, "cover")} data-testid={`button-role-cover-${photo.id}`}>Set cover</button>
-                <button className="text-[11px] text-white/90 hover:text-white" onClick={() => setRole(photo.id, "portrait")} data-testid={`button-role-portrait-${photo.id}`}>Set portrait</button>
-                {photo.role !== "gallery" && (
-                  <button className="text-[11px] text-white/70 hover:text-white" onClick={() => setRole(photo.id, "gallery")}>To gallery</button>
-                )}
-                <button className="mt-1 w-7 h-7 rounded-full flex items-center justify-center bg-red-500/30" onClick={() => handleDelete(photo.id)} data-testid={`button-delete-photo-${photo.id}`}>
-                  <Trash2 className="w-3.5 h-3.5 text-white" />
-                </button>
-              </div>
-            </div>
-          ))}
-
-          {photos.length < 9 && (
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="rounded-xl flex flex-col items-center justify-center gap-1 border-2 border-dashed border-vf-line text-vf-faint hover:border-white/25"
-              style={{ aspectRatio: "3 / 4" }}
-              data-testid="button-upload-photo"
-            >
-              {uploading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><ImagePlus className="w-6 h-6" /><span className="text-xs">Upload</span></>}
-            </button>
-          )}
-        </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          onChange={handleFileSelect}
-          className="hidden"
-          data-testid="input-file-upload"
-        />
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Done</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

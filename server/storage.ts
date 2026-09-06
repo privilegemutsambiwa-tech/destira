@@ -1221,11 +1221,11 @@ export class DatabaseStorage implements IStorage {
     const photos = await this.getUserPhotos(userId);
 
     const tasks = [
-      { key: "bio", label: "Add About Me", benefit: "+10% more visibility", completed: !!profile?.bio && profile.bio.length > 5, weight: 20 },
-      { key: "photos", label: "Add More Photos", benefit: "Increase your appeal", completed: photos.length >= 3, weight: 25 },
-      { key: "onboarding", label: "Complete Soul-Mapping", benefit: "Unlock AI Twin features", completed: !!profile?.onboardingCompleted, weight: 25 },
-      { key: "verify", label: "Get Verified", benefit: "Build trust, get more matches", completed: !!profile?.isVerified, weight: 15 },
-      { key: "personality", label: "Generate AI Summary", benefit: "Show your personality", completed: !!profile?.aboutSummary, weight: 15 },
+      { key: "bio", label: "Say something in your words", benefit: "Your twin sounds more like you", completed: !!profile?.bio && profile.bio.length > 5, weight: 20 },
+      { key: "photos", label: "Add two more photos", benefit: "Two more photos and your twin has more to work with", completed: photos.length >= 3, weight: 25 },
+      { key: "onboarding", label: "Finish Soul-Mapping", benefit: "This is what your twin learns from", completed: !!profile?.onboardingCompleted, weight: 25 },
+      { key: "verify", label: "Get verified", benefit: "One less thing for people to wonder about", completed: !!profile?.isVerified, weight: 15 },
+      { key: "personality", label: "Answer a few more questions", benefit: "Sharper reads, both directions", completed: !!profile?.aboutSummary, weight: 15 },
     ];
 
     const totalWeight = tasks.reduce((sum, t) => sum + t.weight, 0);
