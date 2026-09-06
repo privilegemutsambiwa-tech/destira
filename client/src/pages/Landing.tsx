@@ -111,6 +111,55 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Vision order: Zimbabwe → the rest of Africa → the world. VibeFlow is not a
+// Zimbabwe-only product; it starts there.
+const PLACES = [
+  "Harare",
+  "Bulawayo",
+  "Nairobi",
+  "Lagos",
+  "Accra",
+  "Kampala",
+  "Cape Town",
+  "Dar es Salaam",
+  "Kigali",
+  "London",
+  "Berlin",
+  "New York",
+  "São Paulo",
+  "Sydney",
+];
+
+/** A place name that cycles through PLACES with a soft fade. Static (first item)
+ *  under prefers-reduced-motion. Decorative — the sentence around it still reads
+ *  with any single value. */
+function RotatingPlace({ className = "" }: { className?: string }) {
+  const reduce = usePrefersReducedMotion();
+  const [i, setI] = useState(0);
+  const [shown, setShown] = useState(true);
+
+  useEffect(() => {
+    if (reduce) return;
+    const id = window.setInterval(() => {
+      setShown(false);
+      window.setTimeout(() => {
+        setI((n) => (n + 1) % PLACES.length);
+        setShown(true);
+      }, 240);
+    }, 2400);
+    return () => window.clearInterval(id);
+  }, [reduce]);
+
+  return (
+    <span
+      className={`inline-block transition-opacity duration-[240ms] ${shown ? "opacity-100" : "opacity-0"} ${className}`}
+      aria-hidden="true"
+    >
+      {PLACES[i]}
+    </span>
+  );
+}
+
 /** The primary ember CTA — routes straight to open signup. */
 function SignupButton({
   label = "Create your account",
@@ -430,7 +479,10 @@ export default function Landing() {
           {/* LEFT — type column (unchanged copy) */}
           <div>
             <Reveal>
-              <Eyebrow>Harare &amp; Bulawayo · Free to join</Eyebrow>
+              <Eyebrow>
+                <RotatingPlace /> · Free to join
+              </Eyebrow>
+              <span className="sr-only">In Harare and opening city by city across Africa and the world. Free to join.</span>
             </Reveal>
             <Reveal delay={80}>
               <h1
@@ -450,8 +502,8 @@ export default function Landing() {
             <Reveal delay={160}>
               <p className="mt-7 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
                 If it feels like everybody else got the simple version of this, you are not
-                behind and you are not too late. VibeFlow is a place to actually meet people in
-                Harare and Bulawayo — your AI twin does the first awkward part, and the rest is a
+                behind and you are not too late. VibeFlow is a place to actually meet people,
+                wherever you are — your AI twin does the first awkward part, and the rest is a
                 home worth spending time in: groups, events, and a feed that is about the people.
               </p>
             </Reveal>
@@ -556,9 +608,9 @@ export default function Landing() {
           <Reveal delay={160}>
             <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted mx-auto max-w-[56ch]">
               Nobody on VibeFlow is here to collect matches and disappear. It is built for
-              meeting — groups you actually show up to, events on real evenings, and a few
-              thousand people in Harare and Bulawayo who got tired of pretending they weren't
-              looking.
+              meeting — groups you actually show up to, events on real evenings, and people who
+              got tired of pretending they weren't looking. It started in Harare. It opens in a
+              new city most months.
             </p>
           </Reveal>
           <Reveal delay={240}>
@@ -844,7 +896,7 @@ export default function Landing() {
                   n: "06",
                   title: "Events",
                   body:
-                    "Small hosted evenings in Harare and Bulawayo. Your twin flags who is going that you would get on with.",
+                    "Small hosted evenings, starting in Harare and rolling out city by city. Your twin flags who is going that you would get on with.",
                   fragment: (
                     <div className="w-14 rounded-[12px] border border-vf-line bg-vf-surface overflow-hidden text-center">
                       <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-faint py-1 border-b border-vf-line">
