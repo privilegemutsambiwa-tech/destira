@@ -39,6 +39,7 @@ export interface EventItem {
   placeType?: string | null;
   distanceKm?: number;
   fitScore?: number;
+  cancelReason?: string | null;
 }
 
 interface FeedResponse {
@@ -104,6 +105,115 @@ export function useEventSearch(params: EventSearchParams, enabled: boolean) {
       const res = await fetch(`/api/events/search?${query}`, { credentials: "include", signal });
       if (!res.ok) return { events: [], moreThanShown: false };
       return res.json();
+    },
+  });
+}
+
+export interface HostEventInput {
+  title: string;
+  description?: string;
+  kind: string;
+  vibes: string[];
+  placeType: string;
+  venueName?: string;
+  suburb: string;
+  city: string;
+  startsAt: string; // ISO
+  endsAt?: string | null;
+  seatModel: SeatModel;
+  seatCount?: number | null;
+  isSober: boolean;
+  accessibility: string[];
+  visibility: "public" | "group" | "invite";
+  groupId?: number | null;
+}
+
+export interface MyEvent extends EventItem {
+  goingCount: number;
+  cancelReason: string | null;
+  createdByUserId: string | null;
+}
+
+// Everything the current user hosts or created — any status, soonest first.
+export function useMyEvents() {
+  return useQuery<MyEvent[]>({
+    queryKey: ["/api/events/mine"],
+    queryFn: async () => {
+      const res = await fetch("/api/events/mine", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
+
+export function useHostEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: HostEventInput) => {
+      const res = await fetch("/api/events", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || "Could not create the event");
+      return body as MyEvent & { status: string };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events/mine"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/feed"] });
+      queryClient.invalidateQueries({ queryKey: ["events-search"] });
+    },
+  });
+}
+
+export function useUpdateEvent() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ eventId, patch }: { eventId: number; patch: Record<string, unknown> }) => {
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || "Could not save changes");
+      return body as MyEvent;
+    },
+    onError: (err: Error) => toast({ title: "Couldn't save", description: err.message, variant: "destructive" }),
+    onSettled: (_d, _e, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events", vars.eventId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/mine"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/feed"] });
+      queryClient.invalidateQueries({ queryKey: ["events-search"] });
+    },
+  });
+}
+
+export function useCancelEvent() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ eventId, reason }: { eventId: number; reason: string }) => {
+      const res = await fetch(`/api/events/${eventId}/cancel`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || "Could not cancel");
+      return body;
+    },
+    onError: (err: Error) => toast({ title: "Couldn't cancel", description: err.message, variant: "destructive" }),
+    onSettled: (_d, _e, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events/mine"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events", vars.eventId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/feed"] });
+      queryClient.invalidateQueries({ queryKey: ["events-search"] });
     },
   });
 }

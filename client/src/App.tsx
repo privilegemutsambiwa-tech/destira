@@ -21,6 +21,7 @@ import Lounge from "@/pages/Lounge";
 import Events from "@/pages/Events";
 import EventDetail from "@/pages/EventDetail";
 import EventPreferences from "@/pages/EventPreferences";
+import HostEvent from "@/pages/HostEvent";
 import DirectChat from "@/pages/DirectChat";
 import TwinChat from "@/pages/TwinChat";
 import Billing from "@/pages/Billing";
@@ -118,6 +119,9 @@ function Router() {
       </Route>
       <Route path="/settings/events">
         <ProtectedRoute component={EventPreferences} />
+      </Route>
+      <Route path="/events/host">
+        <ProtectedRoute component={HostEvent} />
       </Route>
       <Route path="/events/:id">
         {(params) => <ProtectedRoute component={EventDetail} params={params} />}

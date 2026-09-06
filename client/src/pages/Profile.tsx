@@ -74,6 +74,77 @@ function ReferralNudge({ completionScore }: { completionScore: number }) {
   );
 }
 
+function myEventStatusChip(status: string): { label: string; cls: string } | null {
+  if (status === "pending_review") return { label: "In review", cls: "text-vf-gold border-vf-gold/30 bg-vf-gold/10" };
+  if (status === "cancelled") return { label: "Called off", cls: "text-vf-faint border-vf-line" };
+  if (status === "draft") return { label: "Draft", cls: "text-vf-faint border-vf-line" };
+  return null;
+}
+
+function YourEventsCard() {
+  const [, setLocation] = useLocation();
+  const { data } = useQuery<any[]>({
+    queryKey: ["/api/events/mine"],
+    queryFn: async () => {
+      const r = await fetch("/api/events/mine", { credentials: "include" });
+      return r.ok ? r.json() : [];
+    },
+  });
+  const events = data ?? [];
+  const shown = events
+    .filter((e) => e.status === "cancelled" || new Date(e.startsAt).getTime() > Date.now())
+    .slice(0, 4);
+
+  return (
+    <div className="rounded-[20px] border border-vf-line bg-vf-surface2 p-5" data-testid="section-your-events">
+      <div className="flex items-center justify-between mb-3">
+        <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">Your events</div>
+        <button
+          onClick={() => setLocation("/events/host")}
+          className="text-[12px] text-vf-ember hover:text-[#FF8163] transition-colors"
+          data-testid="button-host-from-profile"
+        >
+          Host one
+        </button>
+      </div>
+      {shown.length === 0 ? (
+        <p className="text-[13px] text-vf-muted leading-[1.5]">
+          Nothing you're hosting yet. Put on the thing you'd want to be invited to.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          {shown.map((e) => {
+            const chip = myEventStatusChip(e.status);
+            return (
+              <button
+                key={e.id}
+                onClick={() => setLocation(`/events/${e.id}`)}
+                className="text-left group"
+                data-testid={`my-event-${e.id}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[13.5px] text-vf-text truncate group-hover:text-white">{e.title}</span>
+                  {chip && (
+                    <span
+                      className={`shrink-0 font-mono text-[9.5px] uppercase tracking-[0.12em] border rounded-full px-1.5 py-0.5 ${chip.cls}`}
+                    >
+                      {chip.label}
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11.5px] text-vf-faint mt-0.5">
+                  {new Date(e.startsAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {e.goingCount}{" "}
+                  going
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Profile() {
   const { data: profile, isLoading } = useProfile();
   const { data: subscription } = useSubscription();
@@ -647,6 +718,7 @@ export default function Profile() {
 
           {/* Sidebar */}
           <div className="lg:col-span-1 space-y-6">
+            <YourEventsCard />
             {nextTask && (
               <div className="rounded-[20px] border border-dashed border-vf-line bg-vf-surface2 p-5">
                 <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-vf-faint mb-2">

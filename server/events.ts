@@ -9,10 +9,12 @@
 import { db } from "./db";
 import {
   events, eventAttendees, profiles, groupMembers, blockedUsers, groups, suburbCentroids,
+  twinNotifications,
   type Event, type InsertEvent, type EventAttendee,
+  type HostEventInput,
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
-import { eq, and, ne, inArray, asc, gte, lte, count, isNull } from "drizzle-orm";
+import { eq, and, ne, or, inArray, asc, desc, gte, lte, count, isNull } from "drizzle-orm";
 import { computeResonance } from "./resonance";
 
 export class EventNotFoundError extends Error {
@@ -24,6 +26,13 @@ export class NotEventHostError extends Error {
 export class NotGroupMemberError extends Error {
   constructor() { super("Must be a member of the group to host an event there"); }
 }
+// A host may put up to 3 events into the world per rolling 7 days (published or
+// still in review). Keeps the calendar real and the review queue sane.
+export class HostRateLimitError extends Error {
+  constructor() { super("You've put up 3 events this week. Give it a few days."); }
+}
+
+export const HOST_WEEKLY_LIMIT = 3;
 
 type AttendeeStatus = "going" | "waitlisted" | "requested" | "declined" | "cancelled";
 
@@ -159,23 +168,149 @@ export async function getEventDetail(eventId: number, viewerId: string) {
   };
 }
 
-export async function createEvent(hostUserId: string, data: InsertEvent): Promise<Event> {
+async function suburbCentroidFor(suburb: string, city: string): Promise<{ lat: string; lng: string } | null> {
+  const [row] = await db
+    .select({ lat: suburbCentroids.lat, lng: suburbCentroids.lng })
+    .from(suburbCentroids)
+    .where(eq(suburbCentroids.suburb, suburb));
+  return row ?? null;
+}
+
+export async function createHostedEvent(hostUserId: string, data: HostEventInput): Promise<Event> {
   if (data.groupId != null) {
     const [membership] = await db.select().from(groupMembers).where(
       and(eq(groupMembers.groupId, data.groupId), eq(groupMembers.userId, hostUserId))
     );
     if (!membership) throw new NotGroupMemberError();
   }
-  const [event] = await db.insert(events).values({ ...data, hostUserId }).returning();
+
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const recent = await db
+    .select({ status: events.status })
+    .from(events)
+    .where(and(eq(events.createdByUserId, hostUserId), gte(events.createdAt, weekAgo)));
+  const liveOrPending = recent.filter((r) => r.status === "published" || r.status === "pending_review");
+  if (liveOrPending.length >= HOST_WEEKLY_LIMIT) throw new HostRateLimitError();
+
+  // First time this user has ever hosted -> hold it for a look. After one
+  // event has gone live, they publish straight away (still rate-limited).
+  const [prior] = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(and(eq(events.createdByUserId, hostUserId), eq(events.status, "published")))
+    .limit(1);
+  const status = prior ? "published" : "pending_review";
+
+  const centroid = await suburbCentroidFor(data.suburb, data.city);
+
+  const [event] = await db
+    .insert(events)
+    .values({
+      hostUserId,
+      createdByUserId: hostUserId,
+      status,
+      title: data.title,
+      description: data.description || null,
+      kind: data.kind,
+      vibes: data.vibes,
+      placeType: data.placeType,
+      venueName: data.venueName || null,
+      suburb: data.suburb,
+      city: data.city,
+      lat: centroid?.lat ?? null,
+      lng: centroid?.lng ?? null,
+      startsAt: data.startsAt,
+      endsAt: data.endsAt ?? null,
+      seatModel: data.seatModel,
+      seatCount: data.seatModel === "open" ? null : data.seatCount ?? null,
+      isSober: data.isSober,
+      accessibility: data.accessibility,
+      visibility: data.visibility,
+      groupId: data.groupId ?? null,
+    })
+    .returning();
   return event;
 }
 
+// Host edits. status is deliberately not patchable here — it moves only via
+// the review queue and the cancel path.
 export async function updateEvent(eventId: number, hostUserId: string, data: Partial<InsertEvent>): Promise<Event> {
   const [event] = await db.select().from(events).where(eq(events.id, eventId));
   if (!event) throw new EventNotFoundError();
   if (event.hostUserId !== hostUserId) throw new NotEventHostError();
-  const [updated] = await db.update(events).set(data).where(eq(events.id, eventId)).returning();
+  const { status, cancelReason, cancelledAt, hostUserId: _h, createdByUserId: _c, ...safe } = data as any;
+  const patch: Record<string, unknown> = { ...safe };
+  if (typeof safe.suburb === "string" || typeof safe.city === "string") {
+    const centroid = await suburbCentroidFor(
+      (safe.suburb as string) ?? event.suburb ?? "",
+      (safe.city as string) ?? event.city ?? "",
+    );
+    patch.lat = centroid?.lat ?? null;
+    patch.lng = centroid?.lng ?? null;
+  }
+  const [updated] = await db.update(events).set(patch).where(eq(events.id, eventId)).returning();
   return updated;
+}
+
+export async function cancelHostedEvent(
+  eventId: number,
+  hostUserId: string,
+  reason: string,
+): Promise<Event> {
+  const [event] = await db.select().from(events).where(eq(events.id, eventId));
+  if (!event) throw new EventNotFoundError();
+  if (event.hostUserId !== hostUserId) throw new NotEventHostError();
+  if (event.status === "cancelled") return event;
+
+  const [updated] = await db
+    .update(events)
+    .set({ status: "cancelled", cancelReason: reason, cancelledAt: new Date() })
+    .where(eq(events.id, eventId))
+    .returning();
+
+  const affected = await db
+    .select({ userId: eventAttendees.userId })
+    .from(eventAttendees)
+    .where(
+      and(
+        eq(eventAttendees.eventId, eventId),
+        inArray(eventAttendees.status, ["going", "waitlisted", "requested"]),
+      ),
+    );
+  if (affected.length > 0) {
+    await db.insert(twinNotifications).values(
+      affected.map((a) => ({
+        userId: a.userId,
+        type: "event_cancelled",
+        title: `"${event.title}" was called off`,
+        body: reason,
+      })),
+    );
+  }
+  return updated;
+}
+
+export interface HostedEventRow extends Event {
+  goingCount: number;
+}
+
+// Everything the current user hosts or created, any status, soonest first.
+export async function listHostedByUser(userId: string): Promise<HostedEventRow[]> {
+  const rows = await db
+    .select()
+    .from(events)
+    .where(or(eq(events.createdByUserId, userId), eq(events.hostUserId, userId)))
+    .orderBy(desc(events.startsAt));
+  const ids = rows.map((r) => r.id);
+  const counts = ids.length
+    ? await db
+        .select({ eventId: eventAttendees.eventId, c: count() })
+        .from(eventAttendees)
+        .where(and(inArray(eventAttendees.eventId, ids), eq(eventAttendees.status, "going")))
+        .groupBy(eventAttendees.eventId)
+    : [];
+  const countById = new Map(counts.map((r) => [r.eventId, Number(r.c)]));
+  return rows.map((r) => ({ ...r, goingCount: countById.get(r.id) ?? 0 }));
 }
 
 function seatStatusFor(seatModel: string, goingCount: number, seatCount: number | null): AttendeeStatus {

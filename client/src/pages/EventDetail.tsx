@@ -4,11 +4,18 @@ import {
   eventActionState,
   eventResonanceSignal,
 } from "@/components/event-row";
-import { useEvent, useAttendEvent, useCancelAttendance } from "@/hooks/use-events";
+import { useEvent, useAttendEvent, useCancelAttendance, useUpdateEvent, useCancelEvent } from "@/hooks/use-events";
 import { useGroups } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
-import { Loader2, ArrowLeft, MapPin, CalendarDays } from "lucide-react";
+import { useState } from "react";
+import { Loader2, ArrowLeft, MapPin, CalendarDays, Pencil } from "lucide-react";
+
+function toLocalInput(dateStr: string): string {
+  const d = new Date(dateStr);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 function formatFullDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -33,6 +40,12 @@ export default function EventDetail({ params }: { params: { id: string } }) {
   const [, setLocation] = useLocation();
   const attend = useAttendEvent();
   const cancel = useCancelAttendance();
+  const updateEvent = useUpdateEvent();
+  const cancelEvent = useCancelEvent();
+  const [editing, setEditing] = useState(false);
+  const [edit, setEdit] = useState({ title: "", description: "", startsAt: "" });
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   if (isLoading) {
     return (
@@ -83,6 +96,23 @@ export default function EventDetail({ params }: { params: { id: string } }) {
         >
           <ArrowLeft className="w-4 h-4" /> Events
         </button>
+
+        {event.status === "cancelled" && (
+          <div className="mb-4 rounded-[14px] border border-vf-line bg-vf-surface2 px-4 py-3" data-testid="banner-cancelled">
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">This event was called off</div>
+            {event.cancelReason && (
+              <p className="text-[13.5px] text-vf-muted mt-1 leading-[1.5]">{event.cancelReason}</p>
+            )}
+          </div>
+        )}
+        {event.status === "pending_review" && isHost && (
+          <div className="mb-4 rounded-[14px] border border-vf-gold/30 bg-vf-gold/[0.06] px-4 py-3" data-testid="banner-review">
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">In review</div>
+            <p className="text-[13.5px] text-vf-muted mt-1 leading-[1.5]">
+              Your first event gets a quick look before it goes public. Nobody else can see it yet.
+            </p>
+          </div>
+        )}
 
         {/* Cover + title */}
         <div className="relative rounded-[24px] overflow-hidden border border-vf-line h-[clamp(200px,32vw,320px)]">
@@ -164,8 +194,126 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                 {state.label}
               </button>
             )}
-            {isHost && (
-              <div className="text-[12px] text-vf-faint text-center">You're hosting this one.</div>
+            {isHost && event.status !== "cancelled" && (
+              <div className="border-t border-vf-line pt-4 flex flex-col gap-3">
+                <div className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-faint">You're hosting</div>
+
+                {!editing && !cancelOpen && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setEdit({
+                          title: event.title,
+                          description: event.description ?? "",
+                          startsAt: toLocalInput(event.startsAt),
+                        });
+                        setEditing(true);
+                      }}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-full border border-vf-line text-vf-soft hover:border-white/25 text-[13px] transition-colors"
+                      data-testid="button-edit-event"
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> Edit
+                    </button>
+                    <button
+                      onClick={() => setCancelOpen(true)}
+                      className="flex-1 h-9 rounded-full border border-vf-line text-vf-faint hover:text-vf-text hover:border-white/25 text-[13px] transition-colors"
+                      data-testid="button-open-cancel-event"
+                    >
+                      Call it off
+                    </button>
+                  </div>
+                )}
+
+                {editing && (
+                  <div className="flex flex-col gap-2.5">
+                    <input
+                      className="w-full bg-vf-ink border border-vf-line rounded-[10px] px-3 h-10 text-[14px] text-vf-text outline-none focus:border-vf-mint/50"
+                      value={edit.title}
+                      onChange={(e) => setEdit((s) => ({ ...s, title: e.target.value }))}
+                      data-testid="input-edit-title"
+                    />
+                    <textarea
+                      className="w-full bg-vf-ink border border-vf-line rounded-[10px] px-3 py-2 h-20 text-[14px] text-vf-text outline-none focus:border-vf-mint/50 leading-[1.5]"
+                      value={edit.description}
+                      onChange={(e) => setEdit((s) => ({ ...s, description: e.target.value }))}
+                      placeholder="Description"
+                      data-testid="input-edit-description"
+                    />
+                    <input
+                      type="datetime-local"
+                      className="w-full bg-vf-ink border border-vf-line rounded-[10px] px-3 h-10 text-[14px] text-vf-text outline-none focus:border-vf-mint/50"
+                      value={edit.startsAt}
+                      onChange={(e) => setEdit((s) => ({ ...s, startsAt: e.target.value }))}
+                      data-testid="input-edit-starts"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setEditing(false)}
+                        className="flex-1 h-9 rounded-full border border-vf-line text-vf-muted text-[13px]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        disabled={updateEvent.isPending || edit.title.trim().length < 4 || !edit.startsAt}
+                        onClick={() => {
+                          const dt = new Date(edit.startsAt);
+                          if (Number.isNaN(dt.getTime())) return;
+                          updateEvent.mutate(
+                            {
+                              eventId: event.id,
+                              patch: {
+                                title: edit.title.trim(),
+                                description: edit.description.trim() || null,
+                                startsAt: dt.toISOString(),
+                              },
+                            },
+                            { onSuccess: () => setEditing(false) },
+                          );
+                        }}
+                        className="flex-1 h-9 rounded-full bg-vf-ember text-vf-ink font-semibold text-[13px] btn-press hover:bg-[#FF8163] disabled:opacity-40 inline-flex items-center justify-center gap-2"
+                        data-testid="button-save-event"
+                      >
+                        {updateEvent.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {cancelOpen && (
+                  <div className="flex flex-col gap-2.5">
+                    <textarea
+                      className="w-full bg-vf-ink border border-vf-line rounded-[10px] px-3 py-2 h-20 text-[14px] text-vf-text outline-none focus:border-vf-mint/50 leading-[1.5]"
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                      placeholder="What should people who signed up know?"
+                      data-testid="input-cancel-reason"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setCancelOpen(false); setCancelReason(""); }}
+                        className="flex-1 h-9 rounded-full border border-vf-line text-vf-muted text-[13px]"
+                      >
+                        Keep it
+                      </button>
+                      <button
+                        disabled={cancelEvent.isPending || cancelReason.trim().length < 3}
+                        onClick={() =>
+                          cancelEvent.mutate(
+                            { eventId: event.id, reason: cancelReason.trim() },
+                            { onSuccess: () => setCancelOpen(false) },
+                          )
+                        }
+                        className="flex-1 h-9 rounded-full bg-vf-ember text-vf-ink font-semibold text-[13px] btn-press hover:bg-[#FF8163] disabled:opacity-40 inline-flex items-center justify-center gap-2"
+                        data-testid="button-confirm-cancel-event"
+                      >
+                        {cancelEvent.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        Call it off
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {notable.length > 0 && (

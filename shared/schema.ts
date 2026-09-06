@@ -514,7 +514,11 @@ export const events = pgTable("events", {
   seatCount: integer("seat_count"),
   emberFirstPick: boolean("ember_first_pick").notNull().default(false),
   coverImageUrl: text("cover_image_url"),
+  // draft | pending_review (a host's first event, held for a look) |
+  // published | cancelled
   status: text("status").notNull().default("draft"),
+  cancelReason: text("cancel_reason"),
+  cancelledAt: timestamp("cancelled_at"),
   createdAt: timestamp("created_at").defaultNow(),
   // v2
   kind: text("kind"),                                     // one EVENT_KINDS value
@@ -557,6 +561,20 @@ export const suburbCentroids = pgTable("suburb_centroids", {
   lat: decimal("lat", { precision: 9, scale: 6 }).notNull(),
   lng: decimal("lng", { precision: 9, scale: 6 }).notNull(),
 });
+
+// One alert per (user, event) ever — the unique index is the "never nag twice"
+// guarantee. The rate windows (<=3 / 7d, <=1 / 24h, quiet hours) are enforced
+// in server/services/twin-event-alerts.ts by reading sentAt.
+export const twinAlertLog = pgTable("twin_alert_log", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  eventId: integer("event_id").notNull().references(() => events.id),
+  fitScore: integer("fit_score").notNull(),
+  template: text("template").notNull(),
+  sentAt: timestamp("sent_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("twin_alert_log_user_event_idx").on(table.userId, table.eventId),
+]);
 
 // One row per (event, user). The unique index is load-bearing: POST
 // /api/events/:id/attend must be safe to call twice in a race (double-tap,
@@ -608,7 +626,7 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
 });
 
 export const seatModelEnum = z.enum(["open", "capped", "curated"]);
-export const eventStatusEnum = z.enum(["draft", "published", "cancelled"]);
+export const eventStatusEnum = z.enum(["draft", "pending_review", "published", "cancelled"]);
 export const attendeeStatusEnum = z.enum(["going", "waitlisted", "requested", "declined", "cancelled"]);
 
 export const insertEventSchema = createInsertSchema(events, {
@@ -675,6 +693,47 @@ export const eventSearchQuerySchema = z.object({
   when: z.enum(["any", "week", "weekend", "month"]).optional(),
   sober: boolParam.optional(),
   stepFree: boolParam.optional(),
+});
+
+// POST /api/events — what a host is allowed to set. The server owns
+// hostUserId, createdByUserId, status (first event -> pending_review), and
+// lat/lng (derived from the suburb centroid). emberFirstPick is not
+// host-settable here.
+export const hostEventSchema = z
+  .object({
+    title: z.string().trim().min(4, "Give it a title").max(120),
+    description: z.string().trim().max(2000).optional().or(z.literal("")),
+    kind: eventKindEnum,
+    vibes: z.array(eventVibeEnum).max(7).default([]),
+    placeType: eventPlaceTypeEnum,
+    venueName: z.string().trim().max(120).optional().or(z.literal("")),
+    suburb: z.string().trim().min(2, "Which suburb?").max(80),
+    city: z.string().trim().min(2, "Which city?").max(80),
+    startsAt: z.coerce.date(),
+    endsAt: z.coerce.date().optional().nullable(),
+    seatModel: seatModelEnum,
+    seatCount: z.coerce.number().int().min(2).max(500).nullable().optional(),
+    isSober: z.boolean().default(false),
+    accessibility: z.array(eventAccessEnum).max(3).default([]),
+    visibility: eventVisibilityEnum.default("public"),
+    groupId: z.coerce.number().int().positive().nullable().optional(),
+  })
+  .refine((d) => d.seatModel === "open" || (d.seatCount != null && d.seatCount > 0), {
+    message: "Set how many seats",
+    path: ["seatCount"],
+  })
+  .refine((d) => !d.endsAt || d.endsAt.getTime() > d.startsAt.getTime(), {
+    message: "End time has to be after the start",
+    path: ["endsAt"],
+  })
+  .refine((d) => d.startsAt.getTime() > Date.now(), {
+    message: "Pick a date in the future",
+    path: ["startsAt"],
+  });
+
+// POST /api/events/:id/cancel — a reason attendees will see.
+export const cancelEventSchema = z.object({
+  reason: z.string().trim().min(3, "Tell people why").max(500),
 });
 
 export const twinVoiceEnum = z.enum(["Dry and direct", "Warm and curious", "Playful", "Measured"]);
@@ -828,6 +887,9 @@ export type EventPreferences = typeof eventPreferences.$inferSelect;
 export type SuburbCentroid = typeof suburbCentroids.$inferSelect;
 export type UpdateEventPreferences = z.infer<typeof updateEventPreferencesSchema>;
 export type EventSearchQuery = z.infer<typeof eventSearchQuerySchema>;
+export type HostEventInput = z.infer<typeof hostEventSchema>;
+export type CancelEventInput = z.infer<typeof cancelEventSchema>;
+export type TwinAlertLogEntry = typeof twinAlertLog.$inferSelect;
 export type SeatModel = z.infer<typeof seatModelEnum>;
 export type AttendeeStatus = z.infer<typeof attendeeStatusEnum>;
 

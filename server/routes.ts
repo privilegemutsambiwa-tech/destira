@@ -7,7 +7,7 @@ import { GoogleGenAI } from "@google/genai";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
 import { sql, eq, and } from "drizzle-orm";
-import { groupMembers, blockedUsers, profiles, twinMemory as twinMemoryTable, twinMemoryFacts, twinMemorySummary, insertEventSchema, updateEventSchema } from "@shared/schema";
+import { groupMembers, blockedUsers, profiles, twinMemory as twinMemoryTable, twinMemoryFacts, twinMemorySummary, updateEventSchema } from "@shared/schema";
 import crypto from "crypto";
 import multer from "multer";
 import path from "path";
@@ -15,7 +15,7 @@ import fs from "fs";
 import type { TwinProfileStructured } from "@shared/schema";
 import * as eventsService from "./events";
 import * as eventsFeed from "./events-feed";
-import { updateEventPreferencesSchema, eventSearchQuerySchema } from "@shared/schema";
+import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
 
@@ -3069,6 +3069,18 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Events the caller hosts or created — any status. Registered before /:id.
+  app.get("/api/events/mine", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      res.json(await eventsService.listHostedByUser(userId));
+    } catch (e) {
+      console.error("List hosted events error:", e);
+      res.status(500).json({ message: "Failed to load your events" });
+    }
+  });
+
   app.patch("/api/event-preferences", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -3102,21 +3114,38 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   app.post("/api/events", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
-    const parsed = insertEventSchema.safeParse({
-      ...req.body,
-      startsAt: req.body?.startsAt ? new Date(req.body.startsAt) : undefined,
-      endsAt: req.body?.endsAt ? new Date(req.body.endsAt) : undefined,
-    });
+    const parsed = hostEventSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid event data", errors: parsed.error.flatten() });
     }
     try {
-      const event = await eventsService.createEvent(userId, parsed.data);
+      const event = await eventsService.createHostedEvent(userId, parsed.data);
       res.status(201).json(event);
     } catch (e) {
       if (e instanceof eventsService.NotGroupMemberError) return res.status(403).json({ message: e.message });
+      if (e instanceof eventsService.HostRateLimitError) return res.status(429).json({ message: e.message });
       console.error("Create event error:", e);
       res.status(500).json({ message: "Failed to create event" });
+    }
+  });
+
+  app.post("/api/events/:id/cancel", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    const parsed = cancelEventSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "A reason is required", errors: parsed.error.flatten() });
+    }
+    try {
+      const event = await eventsService.cancelHostedEvent(eventId, userId, parsed.data.reason);
+      res.json(event);
+    } catch (e) {
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof eventsService.NotEventHostError) return res.status(403).json({ message: e.message });
+      console.error("Cancel event error:", e);
+      res.status(500).json({ message: "Failed to cancel event" });
     }
   });
 
