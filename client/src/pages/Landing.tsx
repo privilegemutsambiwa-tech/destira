@@ -6,6 +6,7 @@ import { VibeFlowLockup } from "@/components/brand/logo";
 import { PhotoFrame } from "@/components/brand/photo-frame";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
+import { photos as HERO_PHOTOS, type Photo } from "@/lib/photos";
 
 /* ------------------------------------------------------------------ *
  *  Landing — marketing page, route "/" for unauthenticated visitors.
@@ -94,8 +95,10 @@ function Reveal({
 
 const PHOTO_WIDTHS = [640, 960, 1440, 1920] as const;
 
-/** Placeholder imagery lives in client/public/photos/ — swap freely; the slot
- *  ids match docs/photo-manifest.md and the [data-photo-slot] attributes. */
+/** Non-hero imagery (the Turn, Communities, closing) still uses flat slot ids
+ *  in client/public/photos/ — ids match docs/photo-manifest.md and the
+ *  [data-photo-slot] attributes. The hero rotation uses the generated manifest
+ *  in @/lib/photos instead. */
 function photo(slot: string) {
   return {
     src: `/photos/${slot}.jpg`,
@@ -103,13 +106,14 @@ function photo(slot: string) {
   };
 }
 
-// The hero cycles through hero-primary + hero-1..hero-16 (couples-in-love set).
-// Missing files self-heal: a 404 image drops out of the rotation, so before the
-// files are added this degrades to the single static hero-primary.
-const HERO_SET = ["hero-primary", ...Array.from({ length: 16 }, (_, i) => `hero-${i + 1}`)];
+// The hero cycles through every photo in the generated manifest (hero-1..22,
+// the couples-in-love set). A 404 self-heals out of the rotation.
+const HERO_SET: Photo[] = HERO_PHOTOS;
 
-/** Crossfades through a list of photo slots. Mounts at most two <img> at a time.
- *  Static (first slot) under prefers-reduced-motion. Never renders empty. */
+const HERO_SIZES = "(min-width: 1024px) 45vw, 100vw";
+
+/** Crossfades through a list of manifest photos. Mounts at most two <img> at a
+ *  time. Static (first item) under prefers-reduced-motion. Never renders empty. */
 function RotatingPhoto({
   slots,
   ratio,
@@ -117,14 +121,14 @@ function RotatingPhoto({
   className = "",
   intervalMs = 4600,
 }: {
-  slots: string[];
+  slots: Photo[];
   ratio: string;
   priority?: boolean;
   className?: string;
   intervalMs?: number;
 }) {
   const reduce = usePrefersReducedMotion();
-  const [live, setLive] = useState<string[]>(slots);
+  const [live, setLive] = useState<Photo[]>(slots);
   const [i, setI] = useState(0);
   const [prev, setPrev] = useState<number | null>(null);
 
@@ -138,9 +142,9 @@ function RotatingPhoto({
     return () => window.clearInterval(id);
   }, [reduce, live.length, intervalMs, i]);
 
-  const dropSlot = (slot: string) =>
+  const dropPhoto = (name: string) =>
     setLive((cur) => {
-      const next = cur.filter((s) => s !== slot);
+      const next = cur.filter((p) => p.name !== name);
       return next.length ? next : cur; // never empty
     });
 
@@ -151,24 +155,31 @@ function RotatingPhoto({
     <figure
       className={`relative overflow-hidden ${className}`}
       style={{ aspectRatio: ratio, borderRadius: "20px" }}
-      data-photo-slot="hero-primary"
+      data-photo-slot={live[idx]?.name}
     >
       {showIdxs.map((n) => {
-        const slot = live[n];
-        const p = photo(slot);
+        const p = live[n];
         return (
-          <img
-            key={slot}
-            src={p.src}
-            srcSet={p.srcSet}
-            sizes="(min-width: 1024px) 45vw, 100vw"
-            alt=""
-            loading={priority && n === 0 ? "eager" : "lazy"}
-            decoding="async"
-            onError={() => dropSlot(slot)}
-            className="absolute inset-0 h-full w-full object-cover transition-opacity duration-[900ms] ease-in-out"
-            style={{ opacity: n === idx ? 1 : 0, filter: "saturate(1.05)" }}
-          />
+          <picture key={p.name}>
+            <source type="image/webp" srcSet={p.webpSrcSet} sizes={HERO_SIZES} />
+            <img
+              src={p.src}
+              srcSet={p.srcSet}
+              sizes={HERO_SIZES}
+              alt=""
+              loading={priority && n === 0 ? "eager" : "lazy"}
+              decoding="async"
+              onError={() => dropPhoto(p.name)}
+              className="absolute inset-0 h-full w-full object-cover transition-opacity duration-[900ms] ease-in-out"
+              style={{
+                opacity: n === idx ? 1 : 0,
+                filter: "saturate(1.05)",
+                backgroundImage: `url("${p.lqip}")`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }}
+            />
+          </picture>
         );
       })}
       <span
