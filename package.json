@@ -10,7 +10,8 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "build:icons": "node scripts/build-icons.mjs",
-    "photos": "node scripts/resize-photos.mjs"
+    "photos": "node scripts/resize-photos.mjs",
+    "check:feed": "tsx scripts/assert-feed-sort.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

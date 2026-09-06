@@ -8,11 +8,11 @@
 // serialize on the same event row instead of doing a read-then-write race.
 import { db } from "./db";
 import {
-  events, eventAttendees, profiles, groupMembers, blockedUsers, groups,
+  events, eventAttendees, profiles, groupMembers, blockedUsers, groups, suburbCentroids,
   type Event, type InsertEvent, type EventAttendee,
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
-import { eq, and, ne, inArray, asc, gte, lte, count } from "drizzle-orm";
+import { eq, and, ne, inArray, asc, gte, lte, count, isNull } from "drizzle-orm";
 import { computeResonance } from "./resonance";
 
 export class EventNotFoundError extends Error {
@@ -43,7 +43,7 @@ interface ResonanceBlock {
 // profile those attendees need, and the viewer's blocked-pairs set, then
 // builds the resonance block for each event in memory. Called once per
 // request (list or detail), never per-event.
-async function buildResonanceBlocks(
+export async function buildResonanceBlocks(
   eventIds: number[],
   viewerId: string,
 ): Promise<Map<number, ResonanceBlock>> {
@@ -339,6 +339,10 @@ export async function seedEvents(): Promise<void> {
       seatCount: null,
       emberFirstPick: false,
       status: "published",
+      kind: "outdoors",
+      vibes: ["active", "early", "outdoors"],
+      placeType: "outdoors",
+      visibility: "public",
     },
     {
       groupId: groupIdByName.get("Book Club") ?? null,
@@ -353,6 +357,10 @@ export async function seedEvents(): Promise<void> {
       seatCount: 8,
       emberFirstPick: false,
       status: "published",
+      kind: "books",
+      vibes: ["quiet", "seated"],
+      placeType: "venue",
+      visibility: "public",
     },
     {
       groupId: groupIdByName.get("Foodies Unite") ?? null,
@@ -367,6 +375,10 @@ export async function seedEvents(): Promise<void> {
       seatCount: 6,
       emberFirstPick: true,
       status: "published",
+      kind: "food",
+      vibes: ["seated", "late"],
+      placeType: "restaurant",
+      visibility: "public",
     },
   ];
 
@@ -381,5 +393,48 @@ export async function seedEvents(): Promise<void> {
       status: seeds[i].seatModel === "curated" ? "requested" : "going",
       decidedAt: seeds[i].seatModel === "curated" ? null : new Date(),
     });
+  }
+}
+
+// Suburb centroids for distance math when an event has no explicit lat/lng.
+// Approximate; good enough for dev.
+const SUBURB_CENTROIDS: Array<{ suburb: string; city: string; lat: number; lng: number }> = [
+  { suburb: "Avondale", city: "Harare", lat: -17.7969, lng: 31.0389 },
+  { suburb: "Borrowdale", city: "Harare", lat: -17.75, lng: 31.0833 },
+  { suburb: "Mount Pleasant", city: "Harare", lat: -17.7667, lng: 31.05 },
+  { suburb: "Newlands", city: "Harare", lat: -17.8, lng: 31.0667 },
+  { suburb: "Milton Park", city: "Harare", lat: -17.82, lng: 31.03 },
+  { suburb: "Belgravia", city: "Harare", lat: -17.81, lng: 31.045 },
+  { suburb: "Highlands", city: "Harare", lat: -17.79, lng: 31.09 },
+  { suburb: "Msasa", city: "Harare", lat: -17.84, lng: 31.12 },
+  { suburb: "Hillside", city: "Bulawayo", lat: -20.17, lng: 28.61 },
+  { suburb: "Suburbs", city: "Bulawayo", lat: -20.16, lng: 28.58 },
+  { suburb: "Kumalo", city: "Bulawayo", lat: -20.15, lng: 28.6 },
+  { suburb: "Famona", city: "Bulawayo", lat: -20.155, lng: 28.59 },
+];
+
+export async function seedSuburbCentroids(): Promise<void> {
+  for (const c of SUBURB_CENTROIDS) {
+    await db
+      .insert(suburbCentroids)
+      .values({ suburb: c.suburb, city: c.city, lat: String(c.lat), lng: String(c.lng) })
+      .onConflictDoNothing();
+  }
+}
+
+// One-time backfill for pre-v2 seed events (columns added by drizzle-kit push
+// land as null on existing rows). Idempotent — only touches rows where kind IS
+// NULL and the title matches a known seed.
+export async function backfillSeedEventsV2(): Promise<void> {
+  const v2 = [
+    { title: "Sunrise trail run, then breakfast", kind: "outdoors", vibes: ["active", "early", "outdoors"], placeType: "outdoors" },
+    { title: "This month's pick — small room, real conversation", kind: "books", vibes: ["quiet", "seated"], placeType: "venue" },
+    { title: "Table for six — long dinner", kind: "food", vibes: ["seated", "late"], placeType: "restaurant" },
+  ];
+  for (const e of v2) {
+    await db
+      .update(events)
+      .set({ kind: e.kind, vibes: e.vibes, placeType: e.placeType, visibility: "public" })
+      .where(and(eq(events.title, e.title), isNull(events.kind)));
   }
 }

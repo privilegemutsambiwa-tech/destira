@@ -487,6 +487,18 @@ export const dailyLikeCounts = pgTable("daily_like_counts", {
 //   'curated' - seatCount required; joining creates a 'requested' row, never
 //               'going' directly - the host (or a future resonance-based
 //               allocator) promotes requests
+// ── Events v2 taxonomy — fixed, closed lists. Hosts pick from these; a
+// free-text `kind` would destroy filtering within a month.
+export const EVENT_KINDS = [
+  "music", "food", "outdoors", "sport", "film", "books", "art", "faith",
+  "games", "making", "learning", "dancing", "volunteering", "nightlife", "wellness",
+] as const;
+export const EVENT_VIBES = ["quiet", "loud", "active", "seated", "outdoors", "late", "early"] as const;
+export const EVENT_PLACE_TYPES = ["home", "bar", "restaurant", "outdoors", "venue", "studio", "sports"] as const;
+export const EVENT_TIME_WINDOWS = ["morning", "afternoon", "evening", "late"] as const;
+export const EVENT_ACCESS_NEEDS = ["step-free", "seated", "quiet-space"] as const;
+export const EVENT_VISIBILITY = ["public", "group", "invite"] as const;
+
 export const events = pgTable("events", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").references(() => groups.id),
@@ -504,6 +516,46 @@ export const events = pgTable("events", {
   coverImageUrl: text("cover_image_url"),
   status: text("status").notNull().default("draft"),
   createdAt: timestamp("created_at").defaultNow(),
+  // v2
+  kind: text("kind"),                                     // one EVENT_KINDS value
+  vibes: text("vibes").array(),
+  placeType: text("place_type"),                          // one EVENT_PLACE_TYPES value
+  lat: decimal("lat", { precision: 9, scale: 6 }),        // null → suburb centroid
+  lng: decimal("lng", { precision: 9, scale: 6 }),
+  isSober: boolean("is_sober").notNull().default(false),
+  accessibility: text("accessibility").array(),
+  ageMin: integer("age_min"),
+  ageMax: integer("age_max"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id), // null = seed/system
+  visibility: text("visibility").notNull().default("public"), // public | group | invite
+});
+
+// One row per user. Created lazily on first /api/events/feed hit.
+export const eventPreferences = pgTable("event_preferences", {
+  userId: varchar("user_id").primaryKey().references(() => users.id),
+  kinds: text("kinds").array(),
+  vibes: text("vibes").array(),
+  maxDistanceKm: integer("max_distance_km").notNull().default(15),
+  placeTypes: text("place_types").array(),
+  groupSizeMax: integer("group_size_max"),                // null = no preference
+  daysOfWeek: integer("days_of_week").array(),            // 0-6, empty/null = any
+  timeWindows: text("time_windows").array(),
+  ageRangeMin: integer("age_range_min"),
+  ageRangeMax: integer("age_range_max"),
+  soberOnly: boolean("sober_only").notNull().default(false),
+  accessibilityNeeds: text("accessibility_needs").array(),
+  notifyOnGoodMatch: boolean("notify_on_good_match").notNull().default(true),
+  notifyThreshold: integer("notify_threshold").notNull().default(82),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Distance is computed from these when an event has no explicit lat/lng.
+// An event whose suburb isn't here is excluded from /feed (logged).
+export const suburbCentroids = pgTable("suburb_centroids", {
+  suburb: text("suburb").primaryKey(),
+  city: text("city").notNull(),
+  lat: decimal("lat", { precision: 9, scale: 6 }).notNull(),
+  lng: decimal("lng", { precision: 9, scale: 6 }).notNull(),
 });
 
 // One row per (event, user). The unique index is load-bearing: POST
@@ -581,6 +633,49 @@ export const updateEventSchema = createInsertSchema(events, {
   hostUserId: true,
   createdAt: true,
 }).partial();
+
+// ── Events v2: preferences + search ──────────────────────────────────
+export const eventKindEnum = z.enum(EVENT_KINDS);
+export const eventVibeEnum = z.enum(EVENT_VIBES);
+export const eventPlaceTypeEnum = z.enum(EVENT_PLACE_TYPES);
+export const eventTimeWindowEnum = z.enum(EVENT_TIME_WINDOWS);
+export const eventAccessEnum = z.enum(EVENT_ACCESS_NEEDS);
+export const eventVisibilityEnum = z.enum(EVENT_VISIBILITY);
+
+// PATCH /api/event-preferences — every field optional; arrays validated against
+// the closed taxonomies; numeric bounds enforced.
+export const updateEventPreferencesSchema = z.object({
+  kinds: z.array(eventKindEnum).max(15),
+  vibes: z.array(eventVibeEnum).max(7),
+  maxDistanceKm: z.number().int().min(1).max(100),
+  placeTypes: z.array(eventPlaceTypeEnum).max(7),
+  groupSizeMax: z.number().int().min(2).max(500).nullable(),
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).max(7),
+  timeWindows: z.array(eventTimeWindowEnum).max(4),
+  ageRangeMin: z.number().int().min(18).max(99).nullable(),
+  ageRangeMax: z.number().int().min(18).max(99).nullable(),
+  soberOnly: z.boolean(),
+  accessibilityNeeds: z.array(eventAccessEnum).max(3),
+  notifyOnGoodMatch: z.boolean(),
+  notifyThreshold: z.number().int().min(70).max(95),
+}).partial();
+
+// Query-param helpers: Express gives a bare string for one value, an array for
+// repeated keys.
+const arrayParam = <T extends z.ZodTypeAny>(inner: T) =>
+  z.preprocess((v) => (v == null ? undefined : Array.isArray(v) ? v : [v]), z.array(inner));
+const boolParam = z.preprocess((v) => v === "true" || v === "1" || v === true, z.boolean());
+
+// GET /api/events/search — explicit filters, ignores saved preferences.
+export const eventSearchQuerySchema = z.object({
+  q: z.string().trim().max(120).optional(),
+  kind: arrayParam(eventKindEnum).optional(),
+  placeType: arrayParam(eventPlaceTypeEnum).optional(),
+  distanceKm: z.coerce.number().int().min(1).max(100).optional(),
+  when: z.enum(["any", "week", "weekend", "month"]).optional(),
+  sober: boolParam.optional(),
+  stepFree: boolParam.optional(),
+});
 
 export const twinVoiceEnum = z.enum(["Dry and direct", "Warm and curious", "Playful", "Measured"]);
 export const inviteRoomEnum = z.enum([
@@ -729,6 +824,10 @@ export type InsertInviteRequest = z.infer<typeof insertInviteRequestSchema>;
 export type Event = typeof events.$inferSelect;
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type EventAttendee = typeof eventAttendees.$inferSelect;
+export type EventPreferences = typeof eventPreferences.$inferSelect;
+export type SuburbCentroid = typeof suburbCentroids.$inferSelect;
+export type UpdateEventPreferences = z.infer<typeof updateEventPreferencesSchema>;
+export type EventSearchQuery = z.infer<typeof eventSearchQuerySchema>;
 export type SeatModel = z.infer<typeof seatModelEnum>;
 export type AttendeeStatus = z.infer<typeof attendeeStatusEnum>;
 

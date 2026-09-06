@@ -14,6 +14,8 @@ import path from "path";
 import fs from "fs";
 import type { TwinProfileStructured } from "@shared/schema";
 import * as eventsService from "./events";
+import * as eventsFeed from "./events-feed";
+import { updateEventPreferencesSchema, eventSearchQuerySchema } from "@shared/schema";
 import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
 
@@ -3011,6 +3013,64 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // The default Events view: filtered by the caller's saved event_preferences,
+  // sorted by fit, capped at 30. Registered before /:id so "feed" / "search"
+  // aren't parsed as an event id.
+  app.get("/api/events/feed", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const result = await eventsFeed.getEventsFeed(userId);
+      res.json(result);
+    } catch (e) {
+      console.error("Events feed error:", e);
+      res.status(500).json({ message: "Failed to load your events feed" });
+    }
+  });
+
+  // Explicit search — ignores saved preferences, sorts by date, hard cap 30.
+  app.get("/api/events/search", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const parsed = eventSearchQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid search", errors: parsed.error.flatten() });
+    }
+    try {
+      const result = await eventsFeed.searchEvents(userId, parsed.data);
+      res.json(result);
+    } catch (e) {
+      console.error("Events search error:", e);
+      res.status(500).json({ message: "Search failed" });
+    }
+  });
+
+  app.get("/api/event-preferences", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      res.json(await eventsFeed.getOrCreatePreferences(userId));
+    } catch (e) {
+      console.error("Get event preferences error:", e);
+      res.status(500).json({ message: "Failed to load preferences" });
+    }
+  });
+
+  app.patch("/api/event-preferences", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const parsed = updateEventPreferencesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid preferences", errors: parsed.error.flatten() });
+    }
+    try {
+      res.json(await eventsFeed.updatePreferences(userId, parsed.data));
+    } catch (e) {
+      console.error("Update event preferences error:", e);
+      res.status(500).json({ message: "Failed to save preferences" });
+    }
+  });
+
   app.get("/api/events/:id", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -3206,8 +3266,10 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   }
 
   try {
+    await eventsService.seedSuburbCentroids();
     await eventsService.seedEvents();
-    console.log("Demo events seeded.");
+    await eventsService.backfillSeedEventsV2();
+    console.log("Demo events + suburb centroids seeded.");
   } catch (e) {
     console.error("Failed to seed events on startup:", e);
   }
