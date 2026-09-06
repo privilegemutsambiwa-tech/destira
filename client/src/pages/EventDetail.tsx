@@ -9,7 +9,7 @@ import { useGroups } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { useState } from "react";
-import { Loader2, ArrowLeft, MapPin, CalendarDays, Pencil } from "lucide-react";
+import { Loader2, ArrowLeft, Pencil } from "lucide-react";
 
 function toLocalInput(dateStr: string): string {
   const d = new Date(dateStr);
@@ -144,24 +144,25 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                 <p className="text-[15px] leading-relaxed text-vf-text whitespace-pre-line">{event.description}</p>
               </div>
             )}
-            <div className="flex flex-col gap-3">
+            <dl className="grid grid-cols-[64px_1fr] gap-x-4 gap-y-2.5 text-[14px]">
               {(event.venueName || event.suburb || event.city) && (
-                <div className="flex items-start gap-2.5 text-[14px] text-vf-muted">
-                  <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-vf-faint" />
-                  <span>{[event.venueName, event.suburb, event.city].filter(Boolean).join(" · ")}</span>
-                </div>
+                <>
+                  <dt className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-faint pt-0.5">Where</dt>
+                  <dd className="text-vf-text">{[event.venueName, event.suburb, event.city].filter(Boolean).join(" · ")}</dd>
+                </>
               )}
-              <div className="flex items-start gap-2.5 text-[14px] text-vf-muted">
-                <CalendarDays className="w-4 h-4 shrink-0 mt-0.5 text-vf-faint" />
-                <span>
-                  {formatFullDate(event.startsAt)} · {formatTime(event.startsAt)}
-                  {event.endsAt ? `–${formatTime(event.endsAt)}` : ""}
-                </span>
-              </div>
+              <dt className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-faint pt-0.5">When</dt>
+              <dd className="text-vf-text">
+                {formatFullDate(event.startsAt)} · {formatTime(event.startsAt)}
+                {event.endsAt ? `–${formatTime(event.endsAt)}` : ""}
+              </dd>
               {groupName && (
-                <div className="text-[13px] text-vf-faint">Hosted by {groupName}</div>
+                <>
+                  <dt className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-faint pt-0.5">Host</dt>
+                  <dd className="text-vf-muted">{groupName}</dd>
+                </>
               )}
-            </div>
+            </dl>
           </div>
 
           {/* Right: sticky action card */}
