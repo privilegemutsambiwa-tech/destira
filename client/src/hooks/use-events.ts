@@ -41,6 +41,19 @@ export interface EventItem {
   fitScore?: number;
   cancelReason?: string | null;
   twinFlagged?: boolean;
+  // v3
+  locationTier?: "venue_verified" | "venue_public_unverified" | "private_residence";
+  addressLine?: string | null;
+  addressWithheld?: boolean;
+  costModel?: "free_hosted" | "contribute" | "pay_own_way";
+  contributionAmount?: number | null;
+  contributionNote?: string | null;
+  contributionCurrency?: string;
+  minAttendees?: number | null;
+  hostVideoUrl?: string | null;
+  hostVideoPosterUrl?: string | null;
+  hostVideoStatus?: "none" | "processing" | "approved" | "rejected";
+  photos?: EventPhoto[];
 }
 
 interface FeedResponse {
@@ -110,6 +123,9 @@ export function useEventSearch(params: EventSearchParams, enabled: boolean) {
   });
 }
 
+export type EventCostModel = "free_hosted" | "contribute" | "pay_own_way";
+export type EventLocationTier = "venue_verified" | "venue_public_unverified" | "private_residence";
+
 export interface HostEventInput {
   title: string;
   description?: string;
@@ -127,6 +143,105 @@ export interface HostEventInput {
   accessibility: string[];
   visibility: "public" | "group" | "invite";
   groupId?: number | null;
+  // v3
+  placeId?: number | null;
+  addressLine?: string;
+  isPrivateAddress?: boolean;
+  costModel?: EventCostModel;
+  contributionAmount?: number | null;
+  contributionNote?: string;
+  contactPhone?: string;
+  contactWhatsapp?: string;
+}
+
+export interface Place {
+  id: number;
+  name: string;
+  addressLine: string;
+  suburb: string;
+  city: string;
+  verifiedAt: string | null;
+}
+
+export interface EventPhoto {
+  id: number;
+  eventId: number;
+  url: string;
+  caption: string | null;
+  sortOrder: number;
+  width: number | null;
+  height: number | null;
+}
+
+export function usePlaces(q: string) {
+  return useQuery<Place[]>({
+    queryKey: ["/api/places", q],
+    queryFn: async () => {
+      const res = await fetch(`/api/places?q=${encodeURIComponent(q)}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useAddEventPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, file, caption }: { eventId: number; file: File; caption?: string }) => {
+      const fd = new FormData();
+      fd.append("image", file);
+      if (caption) fd.append("caption", caption);
+      const res = await fetch(`/api/events/${eventId}/photos`, { method: "POST", credentials: "include", body: fd });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || "Couldn't add that photo");
+      return body as EventPhoto;
+    },
+    onSuccess: (_d, v) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events", v.eventId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/mine"] });
+    },
+  });
+}
+
+export function useDeleteEventPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, photoId }: { eventId: number; photoId: number }) => {
+      const res = await fetch(`/api/events/${eventId}/photos/${photoId}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error("Couldn't remove that photo");
+    },
+    onSuccess: (_d, v) => queryClient.invalidateQueries({ queryKey: ["/api/events", v.eventId] }),
+  });
+}
+
+export function useSetHostVideo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, video, poster, durationSec }: { eventId: number; video: Blob; poster: Blob | null; durationSec: number }) => {
+      const fd = new FormData();
+      fd.append("video", video, "host-video.webm");
+      if (poster) fd.append("poster", poster, "poster.jpg");
+      fd.append("durationSec", String(Math.round(durationSec)));
+      const res = await fetch(`/api/events/${eventId}/host-video`, { method: "POST", credentials: "include", body: fd });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || "Couldn't save the video");
+      return body as { hostVideoStatus: string };
+    },
+    onSuccess: (_d, v) => queryClient.invalidateQueries({ queryKey: ["/api/events", v.eventId] }),
+  });
+}
+
+export function useContactViews(eventId: number, enabled: boolean) {
+  return useQuery<Array<{ firstName: string; viewedAt: string | null }>>({
+    queryKey: ["/api/events", eventId, "contact-views"],
+    queryFn: async () => {
+      const res = await fetch(`/api/events/${eventId}/contact-views`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled,
+  });
 }
 
 export interface MyEvent extends EventItem {

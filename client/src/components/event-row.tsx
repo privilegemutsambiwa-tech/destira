@@ -102,6 +102,11 @@ export function EventRow({ event, groupName, isHost, pending, onOpen, onAttend, 
       <div className="min-w-0">
         <div className="text-[17.5px] text-vf-text truncate">{event.title}</div>
         <div className="text-[13px] text-vf-muted mt-1 truncate">{metaParts.join(" · ")}</div>
+        {event.costModel === "contribute" && event.contributionAmount != null && (
+          <div className="font-mono text-[10px] mt-2 uppercase tracking-[0.12em] text-vf-faint truncate" data-testid={`event-contribution-${event.id}`}>
+            {`Contribution · $${event.contributionAmount} · settled in person on the day · VibeFlow never handles it`}
+          </div>
+        )}
         {event.twinFlagged && (
           <div
             className="font-mono text-[11px] mt-2 uppercase tracking-[0.14em] text-vf-mint"

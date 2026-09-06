@@ -175,6 +175,14 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                 {formatTime(event.startsAt)} · {event.resonance.goingCount} going
               </div>
               <div className="text-[12px] text-vf-faint mt-1.5">{SEAT_MODEL_COPY[event.seatModel]}</div>
+              {event.costModel === "contribute" && event.contributionAmount != null && (
+                <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-vf-faint leading-[1.5]" data-testid="event-contribution-line">
+                  Contribution · ${event.contributionAmount} · settled in person on the day · VibeFlow never handles it
+                </div>
+              )}
+              {event.costModel === "free_hosted" && (
+                <div className="mt-2 text-[12px] text-vf-faint">The host is covering it.</div>
+              )}
             </div>
 
             {event.twinFlagged && (
