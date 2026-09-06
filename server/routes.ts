@@ -17,7 +17,7 @@ import * as eventsService from "./events";
 import * as eventsFeed from "./events-feed";
 import * as twinEventAlerts from "./services/twin-event-alerts";
 import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema } from "@shared/schema";
-import { updatePhotoRoleSchema, updatePhotoFocalSchema } from "@shared/schema";
+import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
 
@@ -150,6 +150,36 @@ export async function registerRoutes(
     } catch (e) {
       console.error("Polish bio error:", e);
       res.status(500).json({ message: "Failed to polish bio" });
+    }
+  });
+
+  // Up to 3 short prompts the twin can quote. Free-form { q, a } — the question
+  // bank lives on the client.
+  app.patch("/api/profile/prompts", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const parsed = profilePromptsSchema.safeParse(req.body?.prompts);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid prompts", errors: parsed.error.flatten() });
+    }
+    try {
+      const row = await storage.updateProfilePrompts(userId, parsed.data);
+      res.json(row);
+    } catch (e) {
+      console.error("Update prompts error:", e);
+      res.status(500).json({ message: "Failed to save prompts" });
+    }
+  });
+
+  // "This week" block — derived counts, honestly labelled.
+  app.get("/api/profile/week", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      res.json(await storage.getProfileWeekStats(userId));
+    } catch (e) {
+      console.error("Week stats error:", e);
+      res.status(500).json({ message: "Failed to load week stats" });
     }
   });
 

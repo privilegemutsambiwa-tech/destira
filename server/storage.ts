@@ -22,7 +22,7 @@ import {
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import type { PhotoRole } from "@shared/schema";
-import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, lte } from "drizzle-orm";
+import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lte } from "drizzle-orm";
 
 export class PhotoNotFoundError extends Error {
   constructor() { super("Photo not found"); }
@@ -114,6 +114,8 @@ export interface IStorage {
   reorderUserPhotos(userId: string, photoIds: number[]): Promise<void>;
   setPhotoRole(userId: string, photoId: number, role: PhotoRole): Promise<{ photoId: number; role: PhotoRole; displaced: { id: number; role: PhotoRole } | null }>;
   setPhotoFocal(userId: string, photoId: number, target: "cover" | "portrait", x: number, y: number): Promise<UserPhoto>;
+  updateProfilePrompts(userId: string, prompts: { q: string; a: string }[]): Promise<Profile>;
+  getProfileWeekStats(userId: string): Promise<{ twinTalks: number; readsOver80: number; meetsSet: number }>;
 
   addTwinMemory(userId: string, message: string, role: string, useForTraining?: boolean): Promise<TwinMemoryEntry>;
   getTwinMemory(userId: string, limit?: number): Promise<TwinMemoryEntry[]>;
@@ -940,6 +942,41 @@ export class DatabaseStorage implements IStorage {
       .returning();
     if (!row) throw new PhotoNotFoundError();
     return row;
+  }
+
+  async updateProfilePrompts(userId: string, prompts: { q: string; a: string }[]): Promise<Profile> {
+    const [row] = await db
+      .update(profiles)
+      .set({ prompts })
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return row;
+  }
+
+  async getProfileWeekStats(
+    userId: string,
+  ): Promise<{ twinTalks: number; readsOver80: number; meetsSet: number }> {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const mine = or(eq(matches.user1Id, userId), eq(matches.user2Id, userId));
+    const [[talks], [reads], [meets]] = await Promise.all([
+      db
+        .select({ c: count() })
+        .from(twinMemory)
+        .where(and(eq(twinMemory.userId, userId), eq(twinMemory.role, "user"), gt(twinMemory.createdAt, since))),
+      db
+        .select({ c: count() })
+        .from(matches)
+        .where(and(mine, gte(matches.compatibilityScore, 80), gt(matches.createdAt, since))),
+      db
+        .select({ c: count() })
+        .from(matches)
+        .where(and(mine, eq(matches.status, "matched"), gt(matches.createdAt, since))),
+    ]);
+    return {
+      twinTalks: Number(talks?.c ?? 0),
+      readsOver80: Number(reads?.c ?? 0),
+      meetsSet: Number(meets?.c ?? 0),
+    };
   }
 
   async addTwinMemory(userId: string, message: string, role: string, useForTraining: boolean = true): Promise<TwinMemoryEntry> {

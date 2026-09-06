@@ -1,31 +1,34 @@
-import { useState, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { LayoutShell } from "@/components/layout-shell";
-import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
-import { useSubscription, useGenerateSummary, useProfileCompletion, useTwinToneProfile, useUpdateTwinToneProfile, useTwinStructuredProfile, useExtractTwinProfile, useTwinMemory } from "@/hooks/use-interactions";
+import { useProfile, useUpdateProfile, useUpdatePrompts, useProfileWeek, type ProfilePrompt } from "@/hooks/use-profiles";
+import { useSubscription, useProfileCompletion, useTwinStructuredProfile, useTwinMemory, useGroups } from "@/hooks/use-interactions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Loader2, MapPin,
-  Camera, Crown, Trash2, ImagePlus,
-  CheckCircle2, Check, X, Pencil,
-  Brain, Sparkles, Plus, LogOut, Settings
-} from "lucide-react";
+import { Loader2, Trash2, ImagePlus, Plus, X, LogOut } from "lucide-react";
 import { AddStoryButton, OwnStoryViewer, type OwnStory } from "@/components/story-viewer";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 
-const CARD = "rounded-[20px] border border-vf-line bg-vf-surface";
-
 const NUDGE_KEY = "vf_referral_nudge_dismissed";
+
+const PROMPT_BANK = [
+  "The last thing that made me change my mind",
+  "A small thing I'd never compromise on",
+  "What I'm actually looking for here",
+  "Something I could talk about for an hour",
+  "The way to my good side",
+  "A quiet Sunday, done right",
+  "What my closest friend would warn you about",
+  "I get unreasonably excited about",
+];
 
 /** Shown once the user is clearly enjoying it (readiness > 60) and hasn't
  *  referred anyone yet. Dismissal persists. */
@@ -47,10 +50,7 @@ function ReferralNudge({ completionScore }: { completionScore: number }) {
   const copy = () => { navigator.clipboard?.writeText(data.url).catch(() => {}); };
 
   return (
-    <div
-      className="relative rounded-[18px] border border-vf-line bg-vf-surface2 p-4 pr-10"
-      data-testid="referral-nudge"
-    >
+    <div className="relative rounded-[18px] border border-vf-line bg-vf-surface2 p-4 pr-10" data-testid="referral-nudge">
       <button
         onClick={dismiss}
         aria-label="Dismiss"
@@ -96,9 +96,9 @@ function YourEventsCard() {
     .slice(0, 4);
 
   return (
-    <div className="rounded-[20px] border border-vf-line bg-vf-surface2 p-5" data-testid="section-your-events">
+    <section data-testid="section-your-events">
       <div className="flex items-center justify-between mb-3">
-        <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">Your events</div>
+        <SectionLabel>Your events</SectionLabel>
         <button
           onClick={() => setLocation("/events/host")}
           className="text-[12px] text-vf-ember hover:text-[#FF8163] transition-colors"
@@ -108,7 +108,7 @@ function YourEventsCard() {
         </button>
       </div>
       {shown.length === 0 ? (
-        <p className="text-[13px] text-vf-muted leading-[1.5]">
+        <p className="text-[13.5px] text-vf-muted leading-[1.55]">
           Nothing you're hosting yet. Put on the thing you'd want to be invited to.
         </p>
       ) : (
@@ -125,24 +125,45 @@ function YourEventsCard() {
                 <div className="flex items-center gap-2">
                   <span className="text-[13.5px] text-vf-text truncate group-hover:text-white">{e.title}</span>
                   {chip && (
-                    <span
-                      className={`shrink-0 font-mono text-[9.5px] uppercase tracking-[0.12em] border rounded-full px-1.5 py-0.5 ${chip.cls}`}
-                    >
+                    <span className={`shrink-0 font-mono text-[9.5px] uppercase tracking-[0.12em] border rounded-full px-1.5 py-0.5 ${chip.cls}`}>
                       {chip.label}
                     </span>
                   )}
                 </div>
                 <div className="text-[11.5px] text-vf-faint mt-0.5">
-                  {new Date(e.startsAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {e.goingCount}{" "}
-                  going
+                  {new Date(e.startsAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {e.goingCount} going
                 </div>
               </button>
             );
           })}
         </div>
       )}
-    </div>
+    </section>
   );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">{children}</div>;
+}
+
+function TwinOrb({ size = 44 }: { size?: number }) {
+  return (
+    <span
+      className="block rounded-full shrink-0 motion-safe:animate-[vf-breathe_5s_ease-in-out_infinite]"
+      style={{
+        width: size,
+        height: size,
+        background: "radial-gradient(circle at 35% 30%, var(--vf-mint), #2E7F6B)",
+      }}
+      aria-hidden
+    />
+  );
+}
+
+function focalPos(x?: number | null, y?: number | null): string {
+  const fx = typeof x === "number" ? x : 0.5;
+  const fy = typeof y === "number" ? y : 0.5;
+  return `${Math.round(fx * 100)}% ${Math.round(fy * 100)}%`;
 }
 
 export default function Profile() {
@@ -153,27 +174,22 @@ export default function Profile() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const updateProfile = useUpdateProfile();
-  const generateSummary = useGenerateSummary();
-  const { data: toneProfile } = useTwinToneProfile();
-  const updateTone = useUpdateTwinToneProfile();
+  const updatePrompts = useUpdatePrompts();
   const { data: structuredProfile } = useTwinStructuredProfile();
-  const extractProfile = useExtractTwinProfile();
   const { data: twinMemory } = useTwinMemory();
-  const [showPhotoDialog, setShowPhotoDialog] = useState(false);
+  const { data: week } = useProfileWeek();
+  const { data: groups } = useGroups();
+
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showToneDialog, setShowToneDialog] = useState(false);
-  const [bioEditorOpen, setBioEditorOpen] = useState(false);
-  const [bioEditorValue, setBioEditorValue] = useState("");
-  const [polishingBio, setPolishingBio] = useState(false);
-  const [polishedPreview, setPolishedPreview] = useState<string | null>(null);
+  const [showPhotoDialog, setShowPhotoDialog] = useState(false);
   const [showOwnStoryViewer, setShowOwnStoryViewer] = useState(false);
   const [showStoryCreator, setShowStoryCreator] = useState(false);
-  const [toneValues, setToneValues] = useState({
-    tone_style: "supportive",
-    verbosity_level: "balanced",
-    emoji_usage: "minimal",
-    formality_level: "neutral",
-  });
+
+  const [bioOpen, setBioOpen] = useState(false);
+  const [bioValue, setBioValue] = useState("");
+  const [bioDrafting, setBioDrafting] = useState(false);
+
+  const [promptEditor, setPromptEditor] = useState<{ index: number; q: string; a: string } | null>(null);
 
   const { data: photos } = useQuery<any[]>({
     queryKey: ["/api/photos", user?.id],
@@ -194,6 +210,32 @@ export default function Profile() {
     },
     enabled: !!user?.id,
   });
+
+  const cover = useMemo(() => (photos ?? []).find((p) => p.role === "cover"), [photos]);
+  const portrait = useMemo(
+    () => (photos ?? []).find((p) => p.role === "portrait") ?? (photos ?? []).find((p) => p.isMainProfilePhoto),
+    [photos],
+  );
+  const gallery = useMemo(
+    () => (photos ?? []).filter((p) => p.id !== cover?.id && p.id !== portrait?.id),
+    [photos, cover, portrait],
+  );
+
+  const facts: any[] = twinMemory?.facts ?? [];
+  const messages: any[] = twinMemory?.messages ?? [];
+  const twinWords = useMemo(() => {
+    const text = [
+      ...facts.map((f: any) => f.factText || ""),
+      ...messages.filter((m: any) => m.role === "user").map((m: any) => m.message || ""),
+    ].join(" ").trim();
+    return text ? text.split(/\s+/).length : 0;
+  }, [facts, messages]);
+
+  const answered = (profile?.twinQuestionsAnswered || 0) + facts.filter((f: any) => f.source !== "onboarding").length;
+  const answeredPct = Math.min(Math.round((answered / 100) * 100), 100);
+
+  const completionScore = completion?.score ?? profile?.profileCompletionScore ?? 0;
+  const emberActive = subscription?.tier && subscription.tier !== "free";
 
   if (isLoading) {
     return (
@@ -223,580 +265,479 @@ export default function Profile() {
     );
   }
 
-  const personalityTraits = profile.personalityProfile && typeof profile.personalityProfile === 'object'
-    ? Object.values(profile.personalityProfile as Record<string, any>).filter((v): v is string => typeof v === 'string')
-    : [];
+  const prompts: ProfilePrompt[] = Array.isArray(profile.prompts) ? profile.prompts : [];
+  const hasStories = (ownStories?.length ?? 0) > 0;
+  const bio = profile.aboutMe || profile.bio || "";
+  const metaLine = [
+    profile.age ? String(profile.age) : null,
+    profile.location || null,
+    "here with intent",
+  ].filter(Boolean).join(" · ");
 
-  const handleGenerateSummary = async () => {
+  const openBio = () => { setBioValue(bio); setBioOpen(true); };
+  const saveBio = async () => {
     try {
-      await generateSummary.mutateAsync();
-      toast({ title: "Summary generated!", description: "AI has created your profile summaries." });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to generate summary.", variant: "destructive" });
-    }
-  };
-
-  const handleSaveTone = async () => {
-    try {
-      await updateTone.mutateAsync(toneValues);
-      setShowToneDialog(false);
-      toast({ title: "Twin tone updated!" });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to update tone.", variant: "destructive" });
-    }
-  };
-
-  const handleExtractProfile = async () => {
-    try {
-      await extractProfile.mutateAsync();
-      toast({ title: "Profile insights extracted!", description: "Your AI Twin now knows you better." });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to extract insights.", variant: "destructive" });
-    }
-  };
-
-  const handleOpenBioEditor = () => {
-    setBioEditorValue(profile.aboutMe || profile.bio || "");
-    setBioEditorOpen(true);
-  };
-
-  const handleSaveBioAsIs = async () => {
-    try {
-      await updateProfile.mutateAsync({ userId: user!.id, data: { aboutMe: bioEditorValue, bio: bioEditorValue } });
-      setBioEditorOpen(false);
-      toast({ title: "Bio saved!" });
+      await updateProfile.mutateAsync({ userId: user!.id, data: { aboutMe: bioValue, bio: bioValue } });
+      setBioOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+      toast({ title: "Saved" });
     } catch {
-      toast({ title: "Error", description: "Failed to save.", variant: "destructive" });
+      toast({ title: "Couldn't save", variant: "destructive" });
     }
   };
-
-  const handlePolishBio = async () => {
-    if (!bioEditorValue.trim()) return;
-    setPolishingBio(true);
-    setPolishedPreview(null);
+  // §D: drafts a starting point INTO the editor. Never auto-saves, never
+  // overwrites — only offered while the editor is empty.
+  const draftBio = async () => {
+    setBioDrafting(true);
     try {
+      const seed =
+        (structuredProfile?.interests ?? []).join(", ") ||
+        (structuredProfile?.topValues ?? []).join(", ") ||
+        "someone here with intent";
       const res = await fetch("/api/profile/polish-bio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bio: bioEditorValue }),
+        body: JSON.stringify({ bio: seed }),
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to polish");
-      const data = await res.json();
-      setPolishedPreview(data.polished);
+      if (!res.ok) throw new Error();
+      const { polished } = await res.json();
+      setBioValue(polished || "");
     } catch {
-      toast({ title: "Error", description: "Failed to polish bio.", variant: "destructive" });
+      toast({ title: "Your twin couldn't draft one right now", variant: "destructive" });
     } finally {
-      setPolishingBio(false);
+      setBioDrafting(false);
     }
   };
 
-  const handleAcceptPolished = () => {
-    if (!polishedPreview) return;
-    setBioEditorValue(polishedPreview);
-    setPolishedPreview(null);
-    toast({ title: "Bio polished!", description: "AI refinement applied. Save when ready." });
-  };
-
-  const tierLabel = subscription?.tier === "vip" ? "VIP" : subscription?.tier === "plus" ? "Plus" : "Free";
-
-  const completionScore = completion?.score ?? profile.profileCompletionScore ?? 0;
-  const completionTasks: Array<{ key: string; label: string; benefit: string; completed: boolean }> = completion?.tasks ?? [];
-  const nextTask = completionTasks.find(t => !t.completed);
-
-  const handleTaskAction = (key: string) => {
-    switch (key) {
-      case "bio": setShowEditDialog(true); break;
-      case "photos": setShowPhotoDialog(true); break;
-      case "onboarding": setLocation("/onboarding"); break;
-      case "verify": toast({ title: "Verification coming soon" }); break;
-      case "personality": handleGenerateSummary(); break;
-      default: break;
+  const savePrompt = async () => {
+    if (!promptEditor) return;
+    const next = [...prompts];
+    const entry = { q: promptEditor.q, a: promptEditor.a.trim() };
+    if (promptEditor.index >= next.length) next.push(entry);
+    else next[promptEditor.index] = entry;
+    const cleaned = next.filter((p) => p.a.length > 0).slice(0, 3);
+    try {
+      await updatePrompts.mutateAsync(cleaned);
+      setPromptEditor(null);
+      toast({ title: "Saved" });
+    } catch {
+      toast({ title: "Couldn't save", variant: "destructive" });
     }
   };
 
-  const avatarUrl = (!profile.isPublic && profile.cartoonPhotoUrl)
-    ? profile.cartoonPhotoUrl
-    : profile.coverPhotoUrl || null;
-
-  const avatarFallbackLetter = profile.displayName?.[0] || user?.firstName?.[0] || "?";
-  const highlightChips: string[] = personalityTraits.filter(t => t.length < 20).slice(0, 6);
-  const hasStories = (ownStories?.length ?? 0) > 0;
-
-  const planFeatures = {
-    free: [
-      { label: "5 matches/day", included: true },
-      { label: "Basic discovery", included: true },
-      { label: "1 group", included: true },
-      { label: "Priority discovery", included: false },
-      { label: "AI Twin coaching", included: false },
-      { label: "Profile boost", included: false },
-      { label: "Super Matches", included: false },
-    ],
-    plus: [
-      { label: "Unlimited matches", included: true },
-      { label: "Priority discovery", included: true },
-      { label: "10 groups", included: true },
-      { label: "AI Twin coaching", included: true },
-      { label: "Profile boost", included: false },
-      { label: "Super Matches", included: false },
-      { label: "Priority support", included: false },
-    ],
-    vip: [
-      { label: "Everything in Plus", included: true },
-      { label: "Profile boost", included: true },
-      { label: "Super Matches", included: true },
-      { label: "Unlimited groups", included: true },
-      { label: "Priority support", included: true },
-    ],
+  const myRooms = (groups ?? []).filter((g: any) => g.isMember);
+  const referralUrl = (queryClient.getQueryData(["/api/referrals/me"]) as any)?.url as string | undefined;
+  const askFriends = () => {
+    if (referralUrl) navigator.clipboard?.writeText(referralUrl).catch(() => {});
+    toast({ title: referralUrl ? "Invite link copied" : "Invite link isn't ready yet" });
   };
-
-  const currentTierKey = (subscription?.tier || "free") as keyof typeof planFeatures;
-  const currentFeatures = planFeatures[currentTierKey] || planFeatures.free;
 
   return (
     <LayoutShell>
-      <div className="space-y-6">
-
+      <div className="flex flex-col gap-8">
         <ReferralNudge completionScore={completionScore} />
 
-        {/* Hero */}
-        <div className="relative">
-          <div className="overflow-hidden rounded-[20px]" style={{ height: "200px" }}>
-            {profile.coverPhotoUrl ? (
-              <img src={profile.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
+        {/* ── HEADER ─────────────────────────────────────────── */}
+        <header className="relative">
+          <div className="relative overflow-hidden rounded-[24px] aspect-[16/9] sm:aspect-[21/9] bg-vf-surface2">
+            {cover?.photoUrl ? (
+              <img
+                src={cover.photoUrl}
+                alt=""
+                className="w-full h-full object-cover"
+                style={{ objectPosition: focalPos(cover.coverFocalX, cover.coverFocalY) }}
+              />
+            ) : profile.coverPhotoUrl ? (
+              <img src={profile.coverPhotoUrl} alt="" className="w-full h-full object-cover" />
             ) : (
               <div
                 className="w-full h-full"
-                style={{ background: "radial-gradient(120% 140% at 50% 0%, rgba(143,227,199,.14), transparent 60%), var(--vf-surface2)" }}
+                style={{ background: "radial-gradient(120% 140% at 30% 0%, rgba(143,227,199,.12), transparent 60%), var(--vf-surface2)" }}
               />
             )}
-          </div>
-          <div className="flex flex-col items-center" style={{ marginTop: "-48px" }}>
             <div
-              className="relative rounded-full overflow-hidden bg-vf-surface2"
-              style={{ width: "96px", height: "96px", border: "4px solid var(--vf-ink)", zIndex: 10 }}
-              data-testid="avatar-profile"
+              className="absolute inset-x-0 bottom-0 pointer-events-none"
+              style={{ height: "55%", background: "linear-gradient(to top, rgba(12,9,16,.9), transparent)" }}
+            />
+            <div className="absolute top-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-text/90 bg-vf-ink/45 backdrop-blur px-2.5 py-1 rounded-full border border-white/12" data-testid="chip-twin-readiness">
+              Twin readiness {completionScore}%
+            </div>
+          </div>
+
+          {/* portrait + name, overlapping the cover's bottom edge */}
+          <div className="flex flex-col items-center text-center -mt-7 sm:flex-row sm:items-end sm:text-left sm:-mt-8 sm:pl-9 sm:gap-5">
+            <div
+              className="relative overflow-hidden rounded-[20px] bg-vf-surface2 shrink-0"
+              style={{ width: "clamp(120px,14vw,168px)", aspectRatio: "4 / 5", border: "4px solid #0C0910" }}
+              data-testid="portrait-photo"
             >
-              {avatarUrl ? (
-                <img src={avatarUrl} alt={profile.displayName || "Profile"} className="w-full h-full object-cover" />
+              {portrait?.photoUrl ? (
+                <img
+                  src={portrait.photoUrl}
+                  alt={profile.displayName || "Portrait"}
+                  className="w-full h-full object-cover"
+                  style={{ objectPosition: focalPos(portrait.portraitFocalX, portrait.portraitFocalY) }}
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <span className="font-serif text-2xl text-vf-text">{avatarFallbackLetter}</span>
+                  <span className="font-serif text-3xl text-vf-text">
+                    {(profile.displayName || user?.firstName || "?")[0]}
+                  </span>
                 </div>
               )}
-            </div>
-
-            <div className="mt-3 flex items-center gap-2">
-              <h1 className="font-serif text-2xl text-vf-text" data-testid="text-display-name">
-                {profile.displayName || user?.firstName}
-              </h1>
-              {profile.isVerified && (
-                <CheckCircle2 className="w-5 h-5 text-[#60A5FA]" data-testid="icon-verified" />
-              )}
-            </div>
-
-            {profile.location && (
-              <div className="flex items-center gap-1 text-sm mt-1 text-vf-muted" data-testid="text-location">
-                <MapPin className="w-3.5 h-3.5" />
-                <span>{profile.location}</span>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 mt-3 flex-wrap justify-center">
-              <button
-                onClick={() => setShowEditDialog(true)}
-                className="flex items-center gap-1.5 font-medium text-sm btn-press px-4 py-2 rounded-[10px] border border-vf-line text-vf-text hover:border-white/25 transition-colors"
-                data-testid="button-edit-profile"
-              >
-                <Pencil className="w-4 h-4" />
-                Edit Profile
-              </button>
-              <button
-                onClick={() => setShowPhotoDialog(true)}
-                className="flex items-center gap-1.5 font-medium text-sm btn-press px-4 py-2 rounded-[10px] border border-vf-line text-vf-text hover:border-white/25 transition-colors"
-                data-testid="button-add-photos"
-              >
-                <ImagePlus className="w-4 h-4" />
-                Photos
-              </button>
-              <button
-                onClick={() => setLocation("/settings")}
-                className="flex items-center gap-1.5 font-medium text-sm btn-press px-4 py-2 rounded-[10px] border border-vf-line text-vf-text hover:border-white/25 transition-colors"
-                data-testid="button-open-settings"
-              >
-                <Settings className="w-4 h-4" />
-                Settings
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Story section */}
-        <div className="flex items-center gap-4 px-4 py-3" data-testid="section-profile-stories">
-          {hasStories ? (
-            <>
-              <div className="flex flex-col items-center gap-1">
+              {hasStories && (
                 <button
                   onClick={() => setShowOwnStoryViewer(true)}
-                  className="p-[2px] rounded-full border-2 border-vf-ember cursor-pointer"
+                  className="absolute inset-0 ring-2 ring-inset ring-vf-ember/80 rounded-[16px]"
                   data-testid="button-view-own-story"
-                >
-                  <div className="p-[2px] rounded-full bg-vf-ink">
-                    <div className="w-14 h-14 rounded-full flex items-center justify-center font-serif text-xl bg-vf-surface2 text-vf-text">
-                      {(profile.displayName || user?.firstName || "U")[0]}
-                    </div>
-                  </div>
-                </button>
-                <span className="text-xs font-medium text-vf-ember" data-testid="text-story-active">
-                  Story active
-                </span>
-              </div>
-              <AddStoryButton
-                onStoryAdded={() => { setShowStoryCreator(false); queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] }); }}
-                open={showStoryCreator}
-                onOpenChange={setShowStoryCreator}
-              />
-            </>
-          ) : (
-            <AddStoryButton
-              onStoryAdded={() => { setShowStoryCreator(false); queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] }); }}
-              open={showStoryCreator}
-              onOpenChange={setShowStoryCreator}
-            />
-          )}
-        </div>
-
-        {/* Photo row */}
-        <div className="flex gap-3 justify-center overflow-x-auto px-4 scrollbar-hide">
-          {photos?.slice(0, 6).map((photo: any) => (
-            <div
-              key={photo.id}
-              className="w-16 h-16 rounded-full overflow-hidden shrink-0 border-2 border-vf-line"
-              data-testid={`photo-circle-${photo.id}`}
-            >
-              <img src={photo.photoUrl} alt="" className="w-full h-full object-cover" />
-            </div>
-          ))}
-          {(photos?.length || 0) < 6 && (
-            <button
-              onClick={() => setShowPhotoDialog(true)}
-              className="w-16 h-16 rounded-full flex items-center justify-center shrink-0 cursor-pointer border-2 border-dashed border-vf-line hover:border-white/25 transition-colors"
-              data-testid="button-add-photo-circle"
-            >
-              <Plus className="w-5 h-5 text-vf-faint" />
-            </button>
-          )}
-        </div>
-
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-
-            {/* About Me */}
-            <div className={`${CARD} p-5`}>
-              <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-serif text-lg text-vf-text">About Me</h3>
-                  <button
-                    onClick={handleOpenBioEditor}
-                    className="btn-press p-1 rounded-md text-vf-faint hover:text-vf-text"
-                    data-testid="button-edit-bio-inline"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <button
-                  className="text-xs font-medium flex items-center gap-1.5 btn-press px-3 py-1.5 rounded-lg border border-vf-mint/30 bg-vf-mint/10 text-vf-mint hover:bg-vf-mint/15 transition-colors"
-                  onClick={handleGenerateSummary}
-                  disabled={generateSummary.isPending}
-                  data-testid="button-generate-summary"
-                >
-                  {generateSummary.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                  Refresh Summary
-                </button>
-              </div>
-
-              {bioEditorOpen && (
-                <div className="mb-4 p-3 rounded-xl border border-vf-line bg-vf-surface2" data-testid="bio-editor">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-vf-muted">Edit your bio</p>
-                    <span className={`text-xs ${bioEditorValue.length > 280 ? "text-vf-ember" : "text-vf-muted"}`}>
-                      {bioEditorValue.length}/300
-                    </span>
-                  </div>
-                  <Textarea
-                    value={bioEditorValue}
-                    onChange={e => setBioEditorValue(e.target.value.slice(0, 300))}
-                    placeholder="Tell people about yourself..."
-                    rows={4}
-                    className="text-sm text-vf-text mb-3 resize-none bg-vf-ink border-vf-line rounded-[10px]"
-                    data-testid="input-bio-editor"
-                  />
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      className="text-xs font-medium btn-press px-3 py-1.5 rounded-lg border border-vf-line text-vf-text hover:border-white/25 transition-colors"
-                      onClick={handleSaveBioAsIs}
-                      disabled={updateProfile.isPending}
-                      data-testid="button-save-bio-as-is"
-                    >
-                      {updateProfile.isPending ? <Loader2 className="w-3 h-3 animate-spin inline mr-1" /> : <Check className="w-3 h-3 inline mr-1" />}
-                      Save as is
-                    </button>
-                    <button
-                      className="text-xs font-medium btn-press px-3 py-1.5 rounded-lg bg-vf-mint/10 border border-vf-mint/30 text-vf-mint hover:bg-vf-mint/15 transition-colors"
-                      onClick={handlePolishBio}
-                      disabled={polishingBio || !bioEditorValue.trim()}
-                      data-testid="button-polish-bio"
-                    >
-                      {polishingBio ? <Loader2 className="w-3 h-3 animate-spin inline mr-1" /> : <Sparkles className="w-3 h-3 inline mr-1" />}
-                      Polish with AI
-                    </button>
-                    <button
-                      className="text-xs btn-press px-2 py-1.5 text-vf-faint hover:text-vf-text"
-                      onClick={() => { setBioEditorOpen(false); setPolishedPreview(null); }}
-                      data-testid="button-close-bio-editor"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                  {polishedPreview && (
-                    <div className="mt-3 p-3 rounded-[10px] border border-dashed border-vf-mint/40 bg-vf-mint/5" data-testid="polished-bio-preview">
-                      <p className="text-xs font-medium mb-2 text-vf-mint">AI-polished version</p>
-                      <p className="text-sm text-vf-text leading-relaxed mb-3">{polishedPreview}</p>
-                      <div className="flex gap-2">
-                        <button
-                          className="text-xs font-medium btn-press px-3 py-1.5 rounded-lg bg-vf-mint text-vf-ink hover:bg-[#A9EDD6] transition-colors"
-                          onClick={handleAcceptPolished}
-                          data-testid="button-accept-polished"
-                        >
-                          <Check className="w-3 h-3 inline mr-1" /> Use this
-                        </button>
-                        <button
-                          className="text-xs btn-press px-3 py-1.5 rounded-lg border border-vf-line text-vf-muted hover:text-vf-text transition-colors"
-                          onClick={() => setPolishedPreview(null)}
-                          data-testid="button-discard-polished"
-                        >
-                          Discard
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  aria-label="View your story"
+                />
               )}
+            </div>
 
-              {profile.aboutSummary && (
-                <p className="text-sm font-medium mb-3 italic text-vf-mint" data-testid="text-about-summary">
-                  {profile.aboutSummary}
+            <div className="mt-3 sm:mt-0 sm:pb-2 min-w-0">
+              <h1 className="font-serif font-normal text-vf-text leading-[1.02] text-[clamp(32px,4.2vw,48px)]" data-testid="text-display-name">
+                {profile.displayName || user?.firstName}
+              </h1>
+              <p className="text-[14px] text-vf-muted mt-1" data-testid="text-meta-line">
+                {metaLine}{profile.isVerified ? " · verified" : ""}
+              </p>
+              <div className="mt-3 flex items-center gap-4 justify-center sm:justify-start flex-wrap">
+                <button
+                  onClick={() => setShowEditDialog(true)}
+                  className="inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press hover:bg-[#FF8163] transition-colors"
+                  data-testid="button-edit-profile"
+                >
+                  Edit profile
+                </button>
+                <button
+                  onClick={() => setShowPhotoDialog(true)}
+                  className="text-[13px] text-vf-muted hover:text-vf-text transition-colors"
+                  data-testid="button-photos"
+                >
+                  Photos
+                </button>
+                <button
+                  onClick={() => setLocation("/settings")}
+                  className="text-[13px] text-vf-muted hover:text-vf-text transition-colors"
+                  data-testid="button-open-settings"
+                >
+                  Settings
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* story creator entry (kept compact — stories are a separate feature) */}
+        <div className="-mt-2">
+          <AddStoryButton
+            onStoryAdded={() => { setShowStoryCreator(false); queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] }); }}
+            open={showStoryCreator}
+            onOpenChange={setShowStoryCreator}
+          />
+        </div>
+
+        {/* ── BODY ───────────────────────────────────────────── */}
+        <div className="grid gap-6 lg:gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)]">
+          {/* LEFT — you */}
+          <div className="flex flex-col gap-9">
+            {/* In your words */}
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-serif font-normal text-2xl text-vf-text">In your words</h2>
+                {!bioOpen && (
+                  <button onClick={openBio} className="text-[13px] text-vf-muted hover:text-vf-text transition-colors" data-testid="button-edit-bio">
+                    Edit
+                  </button>
+                )}
+              </div>
+              {bioOpen ? (
+                <div className="rounded-[16px] border border-vf-line bg-vf-surface2 p-4">
+                  <Textarea
+                    value={bioValue}
+                    onChange={(e) => setBioValue(e.target.value.slice(0, 400))}
+                    rows={5}
+                    placeholder="What someone should know before your twin does the talking."
+                    className="text-[15px] leading-[1.6] text-vf-text resize-none bg-vf-ink border-vf-line rounded-[12px]"
+                    data-testid="input-bio"
+                  />
+                  <div className="flex items-center gap-3 mt-3 flex-wrap">
+                    <button
+                      onClick={saveBio}
+                      disabled={updateProfile.isPending}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[#FF8163] transition-colors disabled:opacity-40"
+                      data-testid="button-save-bio"
+                    >
+                      {updateProfile.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      Save
+                    </button>
+                    <button onClick={() => setBioOpen(false)} className="text-[13px] text-vf-muted hover:text-vf-text">Cancel</button>
+                    {bioValue.trim() === "" && (
+                      <button
+                        onClick={draftBio}
+                        disabled={bioDrafting}
+                        className="text-[13px] text-vf-mint hover:text-vf-text transition-colors ml-auto"
+                        data-testid="button-draft-bio"
+                      >
+                        {bioDrafting ? "Drafting…" : "Ask your twin for a starting point"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[16px] leading-[1.65] text-vf-muted whitespace-pre-line" data-testid="text-bio">
+                  {bio || "Nothing here yet. A few honest lines help your twin sound like you."}
                 </p>
               )}
+            </section>
 
-              <p className="leading-relaxed text-vf-muted" data-testid="text-bio">
-                {profile.aboutMe || profile.bio || "No bio yet."}
-              </p>
+            {/* Prompts */}
+            <section>
+              <SectionLabel>Prompts</SectionLabel>
+              <div className="mt-3 rounded-[16px] border border-vf-line bg-vf-surface2">
+                {prompts.map((p, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setPromptEditor({ index: i, q: p.q, a: p.a })}
+                    className={`w-full text-left p-4 ${i > 0 ? "border-t border-vf-line" : ""}`}
+                    data-testid={`prompt-${i}`}
+                  >
+                    <div className="text-[12.5px] text-vf-muted">{p.q}</div>
+                    <div className="text-[15px] text-vf-text mt-1 leading-[1.5]">{p.a}</div>
+                  </button>
+                ))}
+                {prompts.length < 3 && (
+                  <button
+                    onClick={() => setPromptEditor({ index: prompts.length, q: PROMPT_BANK[0], a: "" })}
+                    className={`w-full text-left p-4 border-dashed border-vf-line ${prompts.length > 0 ? "border-t" : "border"} rounded-[16px]`}
+                    data-testid="prompt-add"
+                  >
+                    <div className="text-[13.5px] text-vf-muted">Answer one more — your twin quotes these</div>
+                  </button>
+                )}
+              </div>
 
-              {highlightChips.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-vf-line">
-                  {highlightChips.map((trait) => (
-                    <span
-                      key={trait}
-                      className="capitalize text-xs font-medium px-2.5 py-1 rounded-full border border-vf-line text-vf-soft"
+              {promptEditor && (
+                <div className="mt-3 rounded-[16px] border border-vf-line bg-vf-surface2 p-4 flex flex-col gap-3" data-testid="prompt-editor">
+                  <select
+                    value={promptEditor.q}
+                    onChange={(e) => setPromptEditor({ ...promptEditor, q: e.target.value })}
+                    className="bg-vf-ink border border-vf-line rounded-[10px] h-10 px-3 text-[14px] text-vf-text outline-none focus:border-vf-mint/50"
+                    data-testid="select-prompt-question"
+                  >
+                    {Array.from(new Set([promptEditor.q, ...PROMPT_BANK])).map((q) => (
+                      <option key={q} value={q}>{q}</option>
+                    ))}
+                  </select>
+                  <Textarea
+                    value={promptEditor.a}
+                    onChange={(e) => setPromptEditor({ ...promptEditor, a: e.target.value.slice(0, 400) })}
+                    rows={3}
+                    placeholder="Keep it specific. One real thing beats three vague ones."
+                    className="text-[14px] leading-[1.5] text-vf-text resize-none bg-vf-ink border-vf-line rounded-[12px]"
+                    data-testid="input-prompt-answer"
+                  />
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={savePrompt}
+                      disabled={updatePrompts.isPending}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[#FF8163] transition-colors disabled:opacity-40"
+                      data-testid="button-save-prompt"
                     >
-                      {trait}
-                    </span>
+                      {updatePrompts.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      Save
+                    </button>
+                    <button onClick={() => setPromptEditor(null)} className="text-[13px] text-vf-muted hover:text-vf-text">Cancel</button>
+                    {promptEditor.index < prompts.length && (
+                      <button
+                        onClick={async () => {
+                          const next = prompts.filter((_, idx) => idx !== promptEditor.index);
+                          try { await updatePrompts.mutateAsync(next); setPromptEditor(null); } catch { /* toasted below */ }
+                        }}
+                        className="text-[13px] text-vf-faint hover:text-vf-text ml-auto"
+                        data-testid="button-remove-prompt"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* Photos */}
+            <section>
+              <SectionLabel>Photos</SectionLabel>
+              <div className="mt-3 grid grid-cols-3 gap-3">
+                {gallery.slice(0, 5).map((p: any) => (
+                  <div key={p.id} className="rounded-[16px] overflow-hidden border border-vf-line bg-vf-surface2" style={{ aspectRatio: "3 / 4" }} data-testid={`gallery-photo-${p.id}`}>
+                    <img src={p.photoUrl} alt="" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+                <button
+                  onClick={() => setShowPhotoDialog(true)}
+                  className="rounded-[16px] border border-dashed border-vf-line text-vf-faint hover:border-white/25 hover:text-vf-text transition-colors flex items-center justify-center"
+                  style={{ aspectRatio: "3 / 4" }}
+                  data-testid="button-add-photo"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+            </section>
+
+            {/* Vouched by */}
+            <section>
+              <SectionLabel>Vouched by</SectionLabel>
+              <p className="text-[14px] text-vf-muted mt-3">Nobody has vouched for you yet.</p>
+              <button
+                onClick={askFriends}
+                className="mt-3 inline-flex items-center rounded-full border border-vf-line text-vf-soft hover:border-white/25 px-4 h-9 text-[13px] transition-colors"
+                data-testid="button-ask-friends"
+              >
+                Ask two friends
+              </button>
+            </section>
+
+            {/* Rooms you're in */}
+            <section>
+              <SectionLabel>Rooms you're in</SectionLabel>
+              {myRooms.length === 0 ? (
+                <p className="text-[14px] text-vf-muted mt-3">
+                  You haven't joined a room yet.{" "}
+                  <button onClick={() => setLocation("/lounge")} className="text-vf-mint hover:text-vf-text">Find one</button>
+                </p>
+              ) : (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {myRooms.map((g: any) => (
+                    <button
+                      key={g.id}
+                      onClick={() => setLocation(`/lounge/group/${g.id}`)}
+                      className="inline-flex items-center gap-2 rounded-full border border-vf-line text-vf-soft hover:border-white/25 px-3.5 h-9 text-[13px] transition-colors"
+                      data-testid={`room-chip-${g.id}`}
+                    >
+                      {g.name}
+                      <span className="font-mono text-[10.5px] text-vf-faint">{g.memberCount}</span>
+                    </button>
                   ))}
                 </div>
               )}
-            </div>
+            </section>
 
-            {/* Twin Intelligence */}
-            <div className={`${CARD} p-5`}>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-vf-mint/12">
-                  <Brain className="w-4 h-4 text-vf-mint" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-serif text-lg text-vf-text">Twin Intelligence</h3>
-                  <p className="text-xs text-vf-muted">Chat with your Twin to train it</p>
-                </div>
-                <button
-                  onClick={handleExtractProfile}
-                  disabled={extractProfile.isPending}
-                  className="text-xs font-medium text-vf-mint hover:text-vf-text transition-colors"
-                  data-testid="button-extract-profile"
-                >
-                  {extractProfile.isPending ? <Loader2 className="w-3 h-3 animate-spin inline" /> : <Sparkles className="w-3 h-3 inline" />}
-                  {" "}Refresh
-                </button>
-              </div>
-
-              <button
-                onClick={() => setLocation("/twin-chat?from=/profile")}
-                className="w-full font-medium py-3 mb-4 btn-press rounded-full border border-vf-mint/35 bg-vf-mint/10 text-vf-mint hover:bg-vf-mint/15 transition-colors"
-                style={{ height: "48px", fontSize: "15px" }}
-                data-testid="button-interview-ai-twin"
-              >
-                <Brain className="w-4 h-4 inline mr-2" />
-                Chat with My Twin
-              </button>
-
-              <div className="space-y-3">
-                {structuredProfile?.topValues?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium mb-1 text-vf-muted">Core Values</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {structuredProfile.topValues.map((v: string) => (
-                        <span
-                          key={v}
-                          className="text-xs px-2.5 py-1 font-medium capitalize rounded-full border border-vf-mint/25 bg-vf-mint/10 text-vf-mint"
-                        >
-                          {v}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {structuredProfile?.interests?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium mb-1 text-vf-muted">Interests</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {structuredProfile.interests.map((i: string) => (
-                        <span
-                          key={i}
-                          className="text-xs px-2.5 py-1 rounded-full border border-vf-line text-vf-soft"
-                        >
-                          {i}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {structuredProfile?.communicationStyle && (
-                  <div>
-                    <p className="text-xs font-medium mb-1 text-vf-muted">Communication Style</p>
-                    <p className="text-sm text-vf-text">{structuredProfile.communicationStyle}</p>
-                  </div>
-                )}
-                {(!structuredProfile?.topValues?.length && !structuredProfile?.interests?.length) && (
-                  <p className="text-sm text-center py-2 text-vf-faint">Answer questions to help your Twin learn about you.</p>
-                )}
-              </div>
-
-              {(() => {
-                const memoryFacts = twinMemory?.facts || [];
-                const chatFacts = memoryFacts.filter((f: any) => f.source !== "onboarding").length;
-                const onboardingAnswered = profile.twinQuestionsAnswered || 0;
-                const totalAnswered = onboardingAnswered + chatFacts;
-                const total = 100;
-                const pct = Math.min(Math.round((totalAnswered / total) * 100), 100);
-                let message = "Just getting started — your onboarding is saved!";
-                if (pct >= 100) message = "Twin fully trained — you're getting the best matches!";
-                else if (pct >= 76) message = "Your Twin is nearly fully trained!";
-                else if (pct >= 51) message = "Your Twin knows you well. Almost there!";
-                else if (pct >= 26) message = "Your Twin is learning — keep the conversations going.";
-                else if (pct >= 11) message = "Good start! Chat with your Twin to teach it more.";
-                return (
-                  <div className="pt-3 mt-3 border-t border-vf-line">
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <p className="text-xs font-medium text-vf-muted">Twin Training Progress</p>
-                      <span className="font-mono text-xs text-vf-mint" data-testid="text-twin-progress-count">{totalAnswered} of {total} answered ({pct}%)</span>
-                    </div>
-                    <div className="w-full rounded-full h-1.5 bg-white/10 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-vf-mint transition-all duration-500"
-                        style={{ width: `${pct}%` }}
-                        data-testid="progress-questions"
-                      />
-                    </div>
-                    <p className="text-xs mt-2 italic text-vf-muted" data-testid="text-progress-message">{message}</p>
-                  </div>
-                );
-              })()}
-            </div>
-
+            <YourEventsCard />
           </div>
 
-          {/* Sidebar */}
-          <div className="lg:col-span-1 space-y-6">
-            <YourEventsCard />
-            {nextTask && (
-              <div className="rounded-[20px] border border-dashed border-vf-line bg-vf-surface2 p-5">
-                <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-vf-faint mb-2">
-                  profile completion · {completionScore}%
+          {/* RIGHT — your twin and your state */}
+          <div className="flex flex-col gap-9">
+            {/* Your twin */}
+            <section>
+              <div className="flex items-center gap-3">
+                <TwinOrb size={44} />
+                <div className="min-w-0">
+                  <h2 className="font-serif font-normal text-2xl text-vf-text leading-none">Your twin</h2>
+                  <p className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mt-1.5">
+                    learning · {twinWords.toLocaleString()} words of you so far
+                  </p>
                 </div>
-                <div className="h-1 rounded-full bg-white/10 overflow-hidden mb-3">
-                  <div className="h-full bg-vf-ember" style={{ width: `${completionScore}%` }} />
+              </div>
+              <button
+                onClick={() => setLocation("/twin-chat?from=/profile")}
+                className="mt-4 inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press hover:bg-[#FF8163] transition-colors"
+                data-testid="button-talk-to-twin"
+              >
+                Talk to your twin
+              </button>
+              <div className="mt-4">
+                <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                  <div className="h-full bg-vf-mint transition-all duration-500" style={{ width: `${answeredPct}%` }} data-testid="bar-twin-training" />
                 </div>
-                <p className="text-sm text-vf-text mb-1">{nextTask.label}</p>
-                <p className="text-xs text-vf-muted mb-3">{nextTask.benefit}</p>
-                <button
-                  onClick={() => handleTaskAction(nextTask.key)}
-                  className="text-xs font-medium text-vf-ember hover:text-[#FF8163] transition-colors"
-                  data-testid="button-next-task"
-                >
-                  Do this now →
-                </button>
+                <p className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mt-2">{answered} of 100 answered</p>
               </div>
-            )}
+            </section>
 
-            <div className="rounded-[22px] border border-vf-gold/30 p-5" style={{ background: "linear-gradient(150deg, rgba(233,196,106,.11), rgba(233,196,106,.02))" }}>
-              <div className="flex items-center gap-2 mb-4">
-                <Crown className="w-5 h-5 text-vf-gold" />
-                <span
-                  className="text-sm font-semibold px-2.5 py-0.5 rounded-lg border border-vf-gold/30 bg-vf-gold/15 text-vf-gold"
-                  data-testid="badge-tier"
-                >
-                  {tierLabel}
-                </span>
-                <span className="text-xs ml-auto text-vf-muted">{subscription?.status || "active"}</span>
-              </div>
-
-              <div className="space-y-2 mb-4">
-                {currentFeatures.map((feature) => (
-                  <div key={feature.label} className="flex items-center gap-2 text-sm">
-                    {feature.included ? (
-                      <Check className="w-4 h-4 shrink-0 text-vf-mint" />
-                    ) : (
-                      <X className="w-4 h-4 shrink-0 text-vf-faint" />
-                    )}
-                    <span className={feature.included ? "text-vf-text" : "text-vf-faint"}>
-                      {feature.label}
+            {/* What your twin can say */}
+            <section>
+              <SectionLabel>What your twin can say</SectionLabel>
+              {facts.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {facts.slice(0, 10).map((f: any, i: number) => (
+                    <span key={i} className="text-[12.5px] px-2.5 py-1 rounded-full border border-vf-mint/25 bg-vf-mint/10 text-vf-mint" data-testid={`twin-fact-${i}`}>
+                      {f.factText}
                     </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[14px] text-vf-muted mt-3">Nothing yet — a few conversations fill this in.</p>
+              )}
+              <button
+                onClick={() => setLocation("/twin-chat?from=/profile")}
+                className="mt-3 text-[13px] text-vf-mint hover:text-vf-text transition-colors"
+                data-testid="button-manage-twin"
+              >
+                Manage what it knows
+              </button>
+            </section>
+
+            {/* This week */}
+            <section>
+              <SectionLabel>This week</SectionLabel>
+              <div className="mt-3 grid grid-cols-3 gap-3">
+                {[
+                  { n: week?.twinTalks ?? 0, label: "twin talks" },
+                  { n: week?.readsOver80 ?? 0, label: "reads over 80" },
+                  { n: week?.meetsSet ?? 0, label: "meetings set" },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-[16px] border border-vf-line bg-vf-surface2 p-4">
+                    <div className="font-serif text-[32px] leading-none text-vf-text">{s.n}</div>
+                    <div className="text-[11.5px] text-vf-faint mt-1.5 leading-[1.3]">{s.label}</div>
                   </div>
                 ))}
               </div>
+            </section>
 
-              {currentTierKey !== "vip" && (
-                <div className="space-y-2 pt-3 border-t border-vf-gold/20">
-                  {currentTierKey === "free" && (
-                    <p className="text-xs mb-2 text-vf-muted">
-                      Upgrade to Plus for $9.99/mo or VIP for $19.99/mo
-                    </p>
-                  )}
-                  {currentTierKey === "plus" && (
-                    <p className="text-xs mb-2 text-vf-muted">
-                      Upgrade to VIP for $19.99/mo
-                    </p>
-                  )}
-                  <button
-                    className="w-full font-semibold btn-press py-3 rounded-full bg-vf-gold text-vf-ink hover:bg-[#F3D890] transition-colors"
-                    style={{ fontSize: "15px" }}
-                    onClick={() => setLocation("/billing")}
-                    data-testid="button-upgrade"
-                  >
-                    Upgrade Now
+            {/* Ember */}
+            <section
+              className="rounded-[22px] border border-vf-gold/30 p-5"
+              style={{ background: "linear-gradient(150deg, rgba(233,196,106,.11), transparent)" }}
+              data-testid="card-ember"
+            >
+              {emberActive ? (
+                <>
+                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">Ember · active</div>
+                  <p className="text-[13.5px] text-vf-muted mt-2 leading-[1.55]">
+                    Four twin conversations a night, full transcripts, first pick at dinners.
+                  </p>
+                  <button onClick={() => setLocation("/billing")} className="mt-3 text-[13px] text-vf-gold hover:text-vf-text transition-colors" data-testid="button-manage-ember">
+                    Manage
                   </button>
-                </div>
+                </>
+              ) : (
+                <>
+                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">Ember · $9.99 / month</div>
+                  <p className="font-serif font-normal text-2xl text-vf-text mt-2 leading-[1.2]">
+                    Four twin conversations a night. Full transcripts. First pick at dinners.
+                  </p>
+                  <p className="text-[13.5px] text-vf-muted mt-3 leading-[1.55]">
+                    Your one daily read stays free and is never for sale. Ember only makes your twin work harder.
+                  </p>
+                  <button
+                    onClick={() => setLocation("/billing")}
+                    className="mt-4 inline-flex items-center rounded-full bg-vf-gold text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press hover:bg-[#F3D890] transition-colors"
+                    data-testid="button-see-ember"
+                  >
+                    See what changes
+                  </button>
+                </>
               )}
-            </div>
+            </section>
           </div>
         </div>
 
         {/* Mobile sign out */}
-        <div className="md:hidden mt-2">
+        <div className="md:hidden">
           <button
-            className="w-full flex justify-center items-center gap-2 font-medium btn-press py-3 rounded-2xl border border-vf-line text-vf-faint hover:text-vf-text transition-colors"
-            style={{ fontSize: "14px" }}
+            className="w-full flex justify-center items-center gap-2 font-medium btn-press py-3 rounded-2xl border border-vf-line text-vf-faint hover:text-vf-text transition-colors text-[14px]"
             onClick={() => logout()}
             data-testid="button-logout-profile"
           >
@@ -804,87 +745,10 @@ export default function Profile() {
             Sign Out
           </button>
         </div>
-
       </div>
 
-      <EditProfileDialog
-        open={showEditDialog}
-        onOpenChange={setShowEditDialog}
-        profile={profile}
-        userId={user?.id || ""}
-      />
-
-      <PhotoManagementDialog
-        open={showPhotoDialog}
-        onOpenChange={setShowPhotoDialog}
-        photos={photos || []}
-        profile={profile}
-        userId={user?.id || ""}
-      />
-
-      <Dialog open={showToneDialog} onOpenChange={setShowToneDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Customize Twin Tone</DialogTitle>
-            <DialogDescription>Choose how your AI Twin communicates</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label className="text-sm">Communication Style</Label>
-              <Select value={toneValues.tone_style} onValueChange={(v) => setToneValues(prev => ({ ...prev, tone_style: v }))}>
-                <SelectTrigger data-testid="select-tone-style"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="supportive">Supportive</SelectItem>
-                  <SelectItem value="playful">Playful</SelectItem>
-                  <SelectItem value="direct">Direct</SelectItem>
-                  <SelectItem value="philosophical">Philosophical</SelectItem>
-                  <SelectItem value="motivational">Motivational</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-sm">Verbosity</Label>
-              <Select value={toneValues.verbosity_level} onValueChange={(v) => setToneValues(prev => ({ ...prev, verbosity_level: v }))}>
-                <SelectTrigger data-testid="select-verbosity"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="concise">Concise</SelectItem>
-                  <SelectItem value="balanced">Balanced</SelectItem>
-                  <SelectItem value="detailed">Detailed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-sm">Formality</Label>
-              <Select value={toneValues.formality_level} onValueChange={(v) => setToneValues(prev => ({ ...prev, formality_level: v }))}>
-                <SelectTrigger data-testid="select-formality"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="casual">Casual</SelectItem>
-                  <SelectItem value="neutral">Neutral</SelectItem>
-                  <SelectItem value="formal">Formal</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-sm">Expression Level</Label>
-              <Select value={toneValues.emoji_usage} onValueChange={(v) => setToneValues(prev => ({ ...prev, emoji_usage: v }))}>
-                <SelectTrigger data-testid="select-emoji-usage"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Minimal</SelectItem>
-                  <SelectItem value="minimal">Some</SelectItem>
-                  <SelectItem value="moderate">Moderate</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowToneDialog(false)}>Cancel</Button>
-            <Button onClick={handleSaveTone} disabled={updateTone.isPending} data-testid="button-save-tone">
-              {updateTone.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EditProfileDialog open={showEditDialog} onOpenChange={setShowEditDialog} profile={profile} userId={user?.id || ""} />
+      <PhotoManagementDialog open={showPhotoDialog} onOpenChange={setShowPhotoDialog} photos={photos || []} profile={profile} userId={user?.id || ""} />
 
       {showOwnStoryViewer && hasStories && (
         <OwnStoryViewer
@@ -892,7 +756,7 @@ export default function Profile() {
           onClose={() => setShowOwnStoryViewer(false)}
           onAddStory={() => { setShowOwnStoryViewer(false); setShowStoryCreator(true); }}
           userName={profile.displayName || user?.firstName || "You"}
-          profileImageUrl={avatarUrl || undefined}
+          profileImageUrl={portrait?.photoUrl || cover?.photoUrl || undefined}
         />
       )}
     </LayoutShell>
@@ -949,10 +813,7 @@ function EditProfileDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="sm:max-w-md bg-vf-surface border-vf-line"
-        style={{ borderRadius: "26px" }}
-      >
+      <DialogContent className="sm:max-w-md bg-vf-surface border-vf-line" style={{ borderRadius: "26px" }}>
         <DialogHeader>
           <DialogTitle className="font-serif font-normal text-vf-text text-2xl">Edit profile</DialogTitle>
         </DialogHeader>
@@ -960,21 +821,13 @@ function EditProfileDialog({
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="edit-display-name" className="text-vf-soft text-[13px]">Display name</Label>
-            <Input
-              id="edit-display-name"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              className={inputClass}
-              data-testid="input-display-name"
-            />
+            <Input id="edit-display-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={inputClass} data-testid="input-display-name" />
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="edit-bio" className="text-vf-soft text-[13px]">In your words</Label>
-              <span className="font-mono text-[10.5px] text-vf-faint tabular-nums">
-                {bio.length}/{BIO_MAX}
-              </span>
+              <span className="font-mono text-[10.5px] text-vf-faint tabular-nums">{bio.length}/{BIO_MAX}</span>
             </div>
             <Textarea
               id="edit-bio"
@@ -983,28 +836,18 @@ function EditProfileDialog({
               onChange={(e) => setBio(e.target.value.slice(0, BIO_MAX))}
               rows={4}
               className={`${inputClass} resize-none`}
-              data-testid="input-bio"
+              data-testid="input-bio-dialog"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="edit-location" className="text-vf-soft text-[13px]">Location</Label>
-            <Input
-              id="edit-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className={inputClass}
-              data-testid="input-location"
-            />
+            <Input id="edit-location" value={location} onChange={(e) => setLocation(e.target.value)} className={inputClass} data-testid="input-location" />
           </div>
         </div>
 
         <DialogFooter className="gap-2">
-          <button
-            onClick={() => onOpenChange(false)}
-            className="text-sm font-medium text-vf-muted hover:text-vf-text px-4 h-11 transition-colors"
-            data-testid="button-cancel-edit"
-          >
+          <button onClick={() => onOpenChange(false)} className="text-sm font-medium text-vf-muted hover:text-vf-text px-4 h-11 transition-colors" data-testid="button-cancel-edit">
             Cancel
           </button>
           <button
@@ -1040,24 +883,27 @@ function PhotoManagementDialog({
   const { toast } = useToast();
   const updateProfile = useUpdateProfile();
 
+  const measure = (file: File) =>
+    new Promise<{ width?: number; height?: number }>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      img.onerror = () => resolve({});
+      img.src = URL.createObjectURL(file);
+    });
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (file.size > 5 * 1024 * 1024) {
       toast({ title: "File too large", description: "Maximum size is 5MB.", variant: "destructive" });
       return;
     }
-
     setUploading(true);
     try {
+      const dims = await measure(file);
       const formData = new FormData();
       formData.append("image", file);
-      const uploadRes = await fetch("/api/uploads/image", {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
+      const uploadRes = await fetch("/api/uploads/image", { method: "POST", body: formData, credentials: "include" });
       if (!uploadRes.ok) throw new Error("Upload failed");
       const { url } = await uploadRes.json();
 
@@ -1065,17 +911,14 @@ function PhotoManagementDialog({
       await fetch("/api/photos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photoUrl: url, orderIndex: photos.length, isMainProfilePhoto: isFirst }),
+        body: JSON.stringify({ photoUrl: url, orderIndex: photos.length, isMainProfilePhoto: isFirst, width: dims.width, height: dims.height }),
         credentials: "include",
       });
-
-      if (isFirst) {
-        await updateProfile.mutateAsync({ userId, data: { coverPhotoUrl: url } });
-      }
+      if (isFirst) await updateProfile.mutateAsync({ userId, data: { coverPhotoUrl: url } });
 
       queryClient.invalidateQueries({ queryKey: ["/api/photos", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
-      toast({ title: "Photo uploaded!" });
+      toast({ title: "Photo uploaded" });
     } catch (e) {
       toast({ title: "Error", description: "Failed to upload photo.", variant: "destructive" });
     } finally {
@@ -1088,19 +931,29 @@ function PhotoManagementDialog({
     try {
       await fetch(`/api/photos/${photoId}`, { method: "DELETE", credentials: "include" });
       queryClient.invalidateQueries({ queryKey: ["/api/photos", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
       toast({ title: "Photo removed" });
     } catch (e) {
       toast({ title: "Error", description: "Failed to remove photo.", variant: "destructive" });
     }
   };
 
-  const handleSetCover = async (photoUrl: string) => {
+  const setRole = async (photoId: number, role: "cover" | "portrait" | "gallery") => {
     try {
-      await updateProfile.mutateAsync({ userId, data: { coverPhotoUrl: photoUrl } });
+      const res = await fetch(`/api/photos/${photoId}/role`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.message || "Couldn't set role");
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/photos", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
-      toast({ title: "Cover photo updated!" });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to update cover photo.", variant: "destructive" });
+    } catch (e: any) {
+      toast({ title: "Couldn't update", description: e.message, variant: "destructive" });
     }
   };
 
@@ -1108,55 +961,42 @@ function PhotoManagementDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Manage Photos</DialogTitle>
-          <DialogDescription>Upload up to 6 photos. The first one becomes your cover photo.</DialogDescription>
+          <DialogTitle>Photos</DialogTitle>
+          <DialogDescription>Assign one cover and one portrait. Everything else is gallery.</DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-3 gap-3">
           {photos.map((photo: any) => (
-            <div key={photo.id} className="aspect-square rounded-xl overflow-hidden relative group bg-vf-surface2" data-testid={`edit-photo-${photo.id}`}>
+            <div key={photo.id} className="rounded-xl overflow-hidden relative group bg-vf-surface2" style={{ aspectRatio: "3 / 4" }} data-testid={`edit-photo-${photo.id}`}>
               <img src={photo.photoUrl} alt="" className="w-full h-full object-cover" />
-              {profile.coverPhotoUrl === photo.photoUrl && (
-                <span className="absolute top-1 left-1 font-semibold px-1.5 py-0.5 rounded-md bg-vf-ember text-vf-ink" style={{ fontSize: "10px" }}>
-                  Cover
-                </span>
+              {photo.role === "cover" && (
+                <span className="absolute top-1 left-1 font-mono uppercase tracking-[0.12em] px-1.5 py-0.5 rounded bg-vf-mint text-vf-ink text-[9px]">Cover</span>
               )}
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                {profile.coverPhotoUrl !== photo.photoUrl && (
-                  <button
-                    className="w-8 h-8 rounded-full flex items-center justify-center bg-white/20"
-                    onClick={() => handleSetCover(photo.photoUrl)}
-                    data-testid={`button-set-cover-${photo.id}`}
-                  >
-                    <Camera className="w-4 h-4 text-white" />
-                  </button>
+              {photo.role === "portrait" && (
+                <span className="absolute top-1 left-1 font-mono uppercase tracking-[0.12em] px-1.5 py-0.5 rounded bg-vf-ember text-vf-ink text-[9px]">Portrait</span>
+              )}
+              <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-2">
+                <button className="text-[11px] text-white/90 hover:text-white" onClick={() => setRole(photo.id, "cover")} data-testid={`button-role-cover-${photo.id}`}>Set cover</button>
+                <button className="text-[11px] text-white/90 hover:text-white" onClick={() => setRole(photo.id, "portrait")} data-testid={`button-role-portrait-${photo.id}`}>Set portrait</button>
+                {photo.role !== "gallery" && (
+                  <button className="text-[11px] text-white/70 hover:text-white" onClick={() => setRole(photo.id, "gallery")}>To gallery</button>
                 )}
-                <button
-                  className="w-8 h-8 rounded-full flex items-center justify-center bg-red-500/30"
-                  onClick={() => handleDelete(photo.id)}
-                  data-testid={`button-delete-photo-${photo.id}`}
-                >
-                  <Trash2 className="w-4 h-4 text-white" />
+                <button className="mt-1 w-7 h-7 rounded-full flex items-center justify-center bg-red-500/30" onClick={() => handleDelete(photo.id)} data-testid={`button-delete-photo-${photo.id}`}>
+                  <Trash2 className="w-3.5 h-3.5 text-white" />
                 </button>
               </div>
             </div>
           ))}
 
-          {photos.length < 6 && (
+          {photos.length < 9 && (
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors border-2 border-dashed border-vf-line text-vf-faint hover:border-white/25"
+              className="rounded-xl flex flex-col items-center justify-center gap-1 border-2 border-dashed border-vf-line text-vf-faint hover:border-white/25"
+              style={{ aspectRatio: "3 / 4" }}
               data-testid="button-upload-photo"
             >
-              {uploading ? (
-                <Loader2 className="w-6 h-6 animate-spin" />
-              ) : (
-                <>
-                  <ImagePlus className="w-6 h-6" />
-                  <span className="text-xs">Upload</span>
-                </>
-              )}
+              {uploading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><ImagePlus className="w-6 h-6" /><span className="text-xs">Upload</span></>}
             </button>
           )}
         </div>
