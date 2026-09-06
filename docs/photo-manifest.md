@@ -21,7 +21,7 @@ the commissioned/curated frames. Source originals: `client/public/photos/_src/`
 
 | slot id | source | photo page |
 |---|---|---|
-| `hero-primary` | Pexels, Felicity Tai | https://www.pexels.com/photo/two-people-sitting-and-talking-7964139/ |
+| `hero-primary` | Pexels, Andres Ayrton | https://www.pexels.com/photo/faceless-black-couple-holding-hands-while-having-date-at-table-6579002/ (alt: https://www.pexels.com/photo/photo-of-a-laughing-couple-sitting-in-a-cafe-16756653/) |
 | `hero-secondary` | Pexels | https://www.pexels.com/photo/man-and-woman-looking-at-vinyl-records-6827193/ |
 | `turn` | Pexels | https://www.pexels.com/photo/people-eating-and-dining-together-6954063/ |
 | `group-late-practice` | Pexels, Jeff Vinluan | https://www.pexels.com/photo/group-of-musicians-in-a-rehearsal-space-8827042/ |
@@ -30,8 +30,9 @@ the commissioned/curated frames. Source originals: `client/public/photos/_src/`
 | `closing` | Pexels, Tokuo Nobuhiro | https://www.pexels.com/photo/couple-walking-on-street-during-night-time-9676247/ |
 
 Known compromises to fix on the real pass: `group-sunday-trail` is hikers, not
-runners, and `hero-primary` is upscaled to fill the 4/5 crop. Vet all seven
-against the evidence-vs-catalogue test before shipping for real.
+runners. `hero-primary` is a native 2:3 portrait (no upscale) centre-cropped to
+4:5. Vet all seven against the evidence-vs-catalogue test before shipping for
+real.
 
 ---
 

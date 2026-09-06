@@ -486,7 +486,7 @@ export default function Landing() {
               <PhotoFrame
                 slot="hero-primary"
                 {...photo("hero-primary")}
-                alt="Two people at a café table, one leaning in mid-sentence with a hand raised"
+                alt="A couple holding hands across a restaurant table on a date, faces out of frame"
                 ratio="4/5"
                 treatment="warm"
                 priority
@@ -510,7 +510,7 @@ export default function Landing() {
               <PhotoFrame
                 slot="hero-primary"
                 {...photo("hero-primary")}
-                alt="Two people at a café table, one leaning in mid-sentence with a hand raised"
+                alt="A couple holding hands across a restaurant table on a date, faces out of frame"
                 ratio="4/5"
                 treatment="warm"
                 priority
