@@ -66,9 +66,11 @@ interface EventRowProps {
   onAttend: () => void;
   onCancel: () => void;
   onManage?: () => void;
+  /** Search results replace the resonance line with a plain KIND · DISTANCE · SUBURB string. */
+  signalOverride?: string;
 }
 
-export function EventRow({ event, groupName, isHost, pending, onOpen, onAttend, onCancel, onManage }: EventRowProps) {
+export function EventRow({ event, groupName, isHost, pending, onOpen, onAttend, onCancel, onManage, signalOverride }: EventRowProps) {
   const { resonance } = event;
   const signal = eventResonanceSignal(event);
   const state = eventActionState(event, isHost);
@@ -100,14 +102,21 @@ export function EventRow({ event, groupName, isHost, pending, onOpen, onAttend, 
       <div className="min-w-0">
         <div className="text-[17.5px] text-vf-text truncate">{event.title}</div>
         <div className="text-[13px] text-vf-muted mt-1 truncate">{metaParts.join(" · ")}</div>
-        {signal && (
+        {signalOverride != null ? (
+          <div
+            className="font-mono text-[11.5px] mt-2 tracking-[0.1em] text-vf-faint truncate"
+            data-testid={`event-signal-${event.id}`}
+          >
+            {signalOverride}
+          </div>
+        ) : signal ? (
           <div
             className={`font-mono text-[11.5px] mt-2 ${signal.color === "mint" ? "text-vf-mint" : "text-vf-gold"}`}
             data-testid={`event-signal-${event.id}`}
           >
             {signal.text}
           </div>
-        )}
+        ) : null}
       </div>
 
       <button

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
 export type SeatModel = "open" | "capped" | "curated";
@@ -33,6 +33,17 @@ export interface EventItem {
   // this is undefined on a fresh page load even while myStatus is
   // 'waitlisted'. See use-events.ts's useAttendEvent onSuccess.
   myWaitlistPosition?: number;
+  // v2 — present on /feed and /search rows
+  kind?: string | null;
+  vibes?: string[] | null;
+  placeType?: string | null;
+  distanceKm?: number;
+  fitScore?: number;
+}
+
+interface FeedResponse {
+  events: EventItem[];
+  moreThanShown: boolean;
 }
 
 export function useEvents() {
@@ -41,6 +52,57 @@ export function useEvents() {
     queryFn: async () => {
       const res = await fetch("/api/events", { credentials: "include" });
       if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
+
+// The default Events view — filtered by the caller's saved event_preferences,
+// sorted by fit, capped at 30.
+export function useEventsFeed() {
+  return useQuery<FeedResponse>({
+    queryKey: ["/api/events/feed"],
+    queryFn: async () => {
+      const res = await fetch("/api/events/feed", { credentials: "include" });
+      if (!res.ok) return { events: [], moreThanShown: false };
+      return res.json();
+    },
+  });
+}
+
+export interface EventSearchParams {
+  q?: string;
+  kind?: string[];
+  placeType?: string[];
+  distanceKm?: number;
+  when?: "any" | "week" | "weekend" | "month";
+  sober?: boolean;
+  stepFree?: boolean;
+}
+
+export function searchParamsToQuery(p: EventSearchParams): string {
+  const qs = new URLSearchParams();
+  if (p.q) qs.set("q", p.q);
+  (p.kind ?? []).forEach((k) => qs.append("kind", k));
+  (p.placeType ?? []).forEach((k) => qs.append("placeType", k));
+  if (p.distanceKm) qs.set("distanceKm", String(p.distanceKm));
+  if (p.when && p.when !== "any") qs.set("when", p.when);
+  if (p.sober) qs.set("sober", "true");
+  if (p.stepFree) qs.set("stepFree", "true");
+  return qs.toString();
+}
+
+// Explicit search — ignores preferences, sorts by date. Keeps the previous
+// results on screen while a new query loads (no empty flash mid-type).
+export function useEventSearch(params: EventSearchParams, enabled: boolean) {
+  const query = searchParamsToQuery(params);
+  return useQuery<FeedResponse>({
+    queryKey: ["events-search", query],
+    enabled,
+    placeholderData: keepPreviousData,
+    queryFn: async ({ signal }) => {
+      const res = await fetch(`/api/events/search?${query}`, { credentials: "include", signal });
+      if (!res.ok) return { events: [], moreThanShown: false };
       return res.json();
     },
   });
@@ -112,6 +174,8 @@ export function useAttendEvent() {
     onSettled: (_data, _err, { eventId }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/feed"] });
+      queryClient.invalidateQueries({ queryKey: ["events-search"] });
     },
   });
 }
@@ -148,6 +212,8 @@ export function useCancelAttendance() {
     onSettled: (_data, _err, eventId) => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/feed"] });
+      queryClient.invalidateQueries({ queryKey: ["events-search"] });
     },
   });
 }
