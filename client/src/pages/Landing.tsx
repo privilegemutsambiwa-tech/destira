@@ -406,7 +406,7 @@ export default function Landing() {
               href="#communities"
               className="hidden md:inline text-[14px] text-vf-muted hover:text-vf-text transition-colors"
             >
-              Communities
+              The Lounge
             </a>
             <button
               onClick={() => setLocation("/login")}
@@ -450,16 +450,16 @@ export default function Landing() {
             <Reveal delay={160}>
               <p className="mt-7 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
                 If it feels like everybody else got the simple version of this, you are not
-                behind and you are not too late. VibeFlow is for people who actually want to be
-                found — and who would rather meet one person worth the evening than scroll past
-                four hundred who are not.
+                behind and you are not too late. VibeFlow is a place to actually meet people in
+                Harare and Bulawayo — your AI twin does the first awkward part, and the rest is a
+                home worth spending time in: groups, events, and a feed that is about the people.
               </p>
             </Reveal>
             <Reveal delay={240}>
               <div className="mt-9">
                 <EmailCapture />
                 <p className="mt-3 text-[13px] text-vf-faint">
-                  Free, forever. One real match a day. No swiping, ever.{" "}
+                  Free, forever. No swiping through strangers.{" "}
                   <span aria-hidden="true">·</span>{" "}
                   <button
                     onClick={() => setLocation("/login")}
@@ -555,17 +555,18 @@ export default function Landing() {
           </Reveal>
           <Reveal delay={160}>
             <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted mx-auto max-w-[56ch]">
-              Nobody on VibeFlow is here to collect matches. There is one read a day, so there
-              is no point in it. What is left is a few thousand people in Harare and Bulawayo
-              who want something real and got tired of pretending otherwise.
+              Nobody on VibeFlow is here to collect matches and disappear. It is built for
+              meeting — groups you actually show up to, events on real evenings, and a few
+              thousand people in Harare and Bulawayo who got tired of pretending they weren't
+              looking.
             </p>
           </Reveal>
           <Reveal delay={240}>
             <div className="mt-10 flex flex-col sm:flex-row sm:divide-x divide-vf-line border-y border-vf-line">
               {[
-                ["One match a day", "curated, not scrolled"],
+                ["Your twin talks first", "the first message is never cold"],
                 ["Built for meeting", "every match points at a real evening"],
-                ["Free forever", "the daily read is never for sale"],
+                ["Free forever", "the twin, the groups, the events — all of it"],
               ].map(([label, sub]) => (
                 <div key={label} className="flex-1 py-5 px-4">
                   <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-text">
@@ -645,7 +646,7 @@ export default function Landing() {
         <div className="max-w-[1180px] mx-auto">
           <div className="max-w-[720px]">
             <Reveal>
-              <Eyebrow>What you wake up to</Eyebrow>
+              <Eyebrow>Who your twin brings you</Eyebrow>
             </Reveal>
             <Reveal delay={80}>
               <h2
@@ -653,15 +654,15 @@ export default function Landing() {
                 className="font-serif font-normal text-vf-text mt-4"
                 style={{ fontSize: "clamp(32px, 4.4vw, 52px)", lineHeight: 1.05, letterSpacing: "-0.02em" }}
               >
-                One person a day, with the reasons shown.
+                People, with the reasons shown.
               </h2>
             </Reveal>
             <Reveal delay={160}>
               <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
-                Not a queue. Not a grid of faces to rank. One person, a resonance score, and the
-                four things it is built from — including the one you score worst on. We would
-                rather tell you she moves slower than you do than sell you a match we cannot
-                defend.
+                Your twin brings you people it has already talked to — each with a resonance
+                score and the four things it is built from, including the one you score worst on.
+                We would rather tell you she moves slower than you do than sell you a match we
+                cannot defend.
               </p>
             </Reveal>
           </div>
@@ -712,7 +713,7 @@ export default function Landing() {
           <Reveal delay={120} className="mt-12">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-6 max-w-[900px] mx-auto">
               {[
-                ["No infinite feed", "The queue unlocks at 18:00. One at a time, on purpose."],
+                ["No cold openers", "Your twins talk before you do, so nobody starts from nothing."],
                 ["No paid matches", "We do not sell you back people who already liked you."],
                 ["No guessing", "Every score opens into the conversation it came from."],
               ].map(([label, note]) => (
@@ -728,7 +729,188 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 5 · COMMUNITIES ============ */}
+      {/* ============ 6 · WHAT'S INSIDE (the tour) ============ */}
+      <section
+        className="px-6"
+        style={{ paddingBlock: "clamp(88px, 12vh, 160px)" }}
+        aria-labelledby="inside-heading"
+        data-testid="section-inside"
+      >
+        <div className="max-w-[1180px] mx-auto">
+          <div className="max-w-[720px]">
+            <Reveal>
+              <Eyebrow>Everything in there, now</Eyebrow>
+            </Reveal>
+            <Reveal delay={80}>
+              <h2
+                id="inside-heading"
+                className="font-serif font-normal text-vf-text mt-4"
+                style={{ fontSize: "clamp(32px, 4.4vw, 52px)", lineHeight: 1.05, letterSpacing: "-0.02em" }}
+              >
+                What you get on day one.
+              </h2>
+            </Reveal>
+            <Reveal delay={160}>
+              <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
+                No trial, no tiers to compare, nothing held back to sell you later. This is the
+                free account.
+              </p>
+            </Reveal>
+          </div>
+
+          <Reveal delay={200} className="mt-12">
+            <div className="grid gap-[18px] [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
+              {[
+                {
+                  n: "01",
+                  title: "Your AI twin",
+                  body:
+                    "A version of you that learns from how you talk to it. It never sends messages as you and never agrees to anything on your behalf.",
+                  fragment: (
+                    <div className="relative w-11 h-11">
+                      <div
+                        className="absolute inset-0 rounded-full animate-[vf-breathe_5s_ease-in-out_infinite]"
+                        style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint), #2E7F6B)" }}
+                      />
+                    </div>
+                  ),
+                },
+                {
+                  n: "02",
+                  title: "Matches worth meeting",
+                  body:
+                    "Your twin brings you people it has already talked to. Every match points at a real evening, not an endless thread.",
+                  fragment: <ResonanceDial score={87} size={76} />,
+                },
+                {
+                  n: "03",
+                  title: "Resonance, with the maths",
+                  body:
+                    "Four axes, scored honestly, including where you are weak. Every score opens into the conversation it came from.",
+                  fragment: (
+                    <div className="w-full max-w-[220px]">
+                      <ResonanceAxes
+                        axes={[
+                          { label: "How you argue", value: 94 },
+                          { label: "What you want next", value: 89 },
+                          { label: "Daily rhythm", value: 71 },
+                          { label: "Pace", value: 58 },
+                        ]}
+                      />
+                    </div>
+                  ),
+                },
+                {
+                  n: "04",
+                  title: "Twin transcripts",
+                  body:
+                    "Read what the two twins actually said before you met. Nobody starts from nothing.",
+                  fragment: (
+                    <div className="flex flex-col gap-1.5 text-[12px] leading-[1.4]">
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
+                        <span className="font-mono uppercase text-vf-mint">Hers</span>
+                        <span className="text-vf-text">She won't move cities again for someone.</span>
+                      </div>
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
+                        <span className="font-mono uppercase text-vf-ember">Yours</span>
+                        <span className="text-vf-text">He isn't asking anyone to.</span>
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  n: "05",
+                  title: "The Lounge",
+                  body:
+                    "Interest groups — musicians, runners, long dinners — where you actually talk to people. Your twin sits in the rooms you join and learns who you are with your own people.",
+                  fragment: (
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex -space-x-2">
+                        {["#3A3350", "#4A2F3A", "#2E4A3F"].map((bg, i) => (
+                          <span
+                            key={i}
+                            className="w-6 h-6 rounded-full border-2 border-vf-surface2"
+                            style={{ background: bg }}
+                          />
+                        ))}
+                      </div>
+                      <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
+                        412 members
+                      </span>
+                    </div>
+                  ),
+                },
+                {
+                  n: "06",
+                  title: "Events",
+                  body:
+                    "Small hosted evenings in Harare and Bulawayo. Your twin flags who is going that you would get on with.",
+                  fragment: (
+                    <div className="w-14 rounded-[12px] border border-vf-line bg-vf-surface overflow-hidden text-center">
+                      <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-faint py-1 border-b border-vf-line">
+                        Thu
+                      </div>
+                      <div className="font-serif text-vf-text text-[22px] py-1.5">14</div>
+                    </div>
+                  ),
+                },
+                {
+                  n: "07",
+                  title: "Stories",
+                  body:
+                    "Post a moment, see everyone else's. A feed that is actually about the people, not the performance.",
+                  fragment: (
+                    <div className="flex -space-x-1.5">
+                      {["#4A2F3A", "#2E4A3F", "#3A3350"].map((bg, i) => (
+                        <span
+                          key={i}
+                          className="w-8 h-8 rounded-full p-[2px]"
+                          style={{ background: "#FF6B4A" }}
+                        >
+                          <span className="block w-full h-full rounded-full border-2 border-vf-surface2" style={{ background: bg }} />
+                        </span>
+                      ))}
+                    </div>
+                  ),
+                },
+                {
+                  n: "08",
+                  title: "Boundaries you set",
+                  body:
+                    "Your twin discusses exactly what you allow and nothing else. Strike any fact out of its memory whenever you want.",
+                  fragment: (
+                    <div className="flex flex-col gap-2.5" aria-hidden="true">
+                      <BoundaryToggle label="Can discuss wanting kids" on />
+                      <BoundaryToggle label="Cannot discuss earnings" on={false} />
+                    </div>
+                  ),
+                },
+              ].map((card) => (
+                <div
+                  key={card.n}
+                  className="rounded-[20px] border border-vf-line bg-vf-surface2 p-6 flex flex-col gap-3"
+                  data-testid={`inside-card-${card.n}`}
+                >
+                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
+                    {card.n}
+                  </div>
+                  <div className="text-[17px] text-vf-text">{card.title}</div>
+                  <p className="text-[14px] leading-[1.6] text-vf-muted">{card.body}</p>
+                  <div className="mt-1 min-h-[44px] flex items-center">{card.fragment}</div>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+
+          <Reveal delay={120}>
+            <p className="mt-10 text-center text-[14px] text-vf-muted">
+              Ember, our paid tier, only makes your twin work harder. It never buys you matches.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ============ 7 · COMMUNITIES ============ */}
       <section
         id="communities"
         className="px-6"
@@ -739,7 +921,7 @@ export default function Landing() {
         <div className="max-w-[1180px] mx-auto">
           <div className="max-w-[720px]">
             <Reveal>
-              <Eyebrow>Where the reads come from</Eyebrow>
+              <Eyebrow>The Lounge</Eyebrow>
             </Reveal>
             <Reveal delay={80}>
               <h2
@@ -747,14 +929,14 @@ export default function Landing() {
                 className="font-serif font-normal text-vf-text mt-4"
                 style={{ fontSize: "clamp(30px, 3.6vw, 44px)", lineHeight: 1.05, letterSpacing: "-0.02em" }}
               >
-                Rooms, not feeds.
+                Groups you actually show up to.
               </h2>
             </Reveal>
             <Reveal delay={160}>
               <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
-                A few hundred people who actually share the thing. Your twin sits in the rooms you
-                join and learns who you are with your own people — which is a better signal than
-                anything you would write about yourself.
+                Rooms for the things you actually do — musicians, runners, long dinners. You talk
+                to people like you first, and your twin sits in and learns who you are with your
+                own people, which is a better signal than anything you would write about yourself.
               </p>
             </Reveal>
           </div>
@@ -791,8 +973,8 @@ export default function Landing() {
               Every friend who joins gets you five more profile views.
             </p>
             <p className="mt-3 text-[14.5px] leading-[1.6] text-vf-muted max-w-[62ch]">
-              Your daily read is always one a day — that never changes, and it is not for sale.
-              Profile views are for looking someone up properly.
+              Profile views are for looking someone up properly. They never buy you a match —
+              your twin still does all the introducing, and that part is not for sale.
             </p>
           </Reveal>
         </div>
@@ -883,8 +1065,8 @@ export default function Landing() {
           </Reveal>
           <Reveal delay={120}>
             <p className="mt-7 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted mx-auto max-w-[56ch]">
-              Free to join, free to stay. Your twin asks four questions, then it starts talking
-              to people worth your evening. No photos needed to begin.
+              Free to join, free to stay. Your twin asks four questions, then you are in —
+              matches, groups, events, the whole thing. No photos needed to begin.
             </p>
           </Reveal>
           <Reveal delay={200}>
