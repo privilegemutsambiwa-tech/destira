@@ -20,6 +20,7 @@ import InterviewChat from "@/pages/InterviewChat";
 import Lounge from "@/pages/Lounge";
 import Events from "@/pages/Events";
 import EventDetail from "@/pages/EventDetail";
+import EventPreferences from "@/pages/EventPreferences";
 import DirectChat from "@/pages/DirectChat";
 import TwinChat from "@/pages/TwinChat";
 import Billing from "@/pages/Billing";
@@ -114,6 +115,9 @@ function Router() {
       </Route>
       <Route path="/events">
         <ProtectedRoute component={Events} />
+      </Route>
+      <Route path="/settings/events">
+        <ProtectedRoute component={EventPreferences} />
       </Route>
       <Route path="/events/:id">
         {(params) => <ProtectedRoute component={EventDetail} params={params} />}

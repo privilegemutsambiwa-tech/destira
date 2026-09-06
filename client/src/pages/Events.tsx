@@ -69,9 +69,16 @@ export default function Events() {
         <h1 className="font-serif font-normal text-[clamp(30px,3.6vw,44px)] leading-[1.05] tracking-[-0.02em] text-vf-text mb-2">
           The point is the meeting.
         </h1>
-        <p className="text-[15px] text-vf-muted max-w-[560px] mb-8">
+        <p className="text-[15px] text-vf-muted max-w-[560px] mb-3">
           Small, hosted, in real rooms. Your twin flags who's going that you'd get on with.
         </p>
+        <button
+          onClick={() => setLocation("/settings/events?from=/events")}
+          className="mb-8 inline-flex items-center rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-white/20 h-9 px-4 text-[13px] transition-colors"
+          data-testid="button-event-preferences"
+        >
+          Preferences
+        </button>
 
         {(!events || events.length === 0) ? (
           <div className="py-12" data-testid="events-empty-state">

@@ -3056,6 +3056,19 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Live count for the distance slider on the preferences screen.
+  app.get("/api/events/count", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const km = Math.max(1, Math.min(100, parseInt(String(req.query.distanceKm ?? "15"), 10) || 15));
+    try {
+      res.json({ count: await eventsFeed.countEventsWithinDistance(userId, km), distanceKm: km });
+    } catch (e) {
+      console.error("Events count error:", e);
+      res.status(500).json({ message: "Failed to count events" });
+    }
+  });
+
   app.patch("/api/event-preferences", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);

@@ -168,6 +168,23 @@ async function decorate(
   }));
 }
 
+// Live count for the distance slider on the preferences screen: published,
+// future events within `distanceKm`, ignoring every other preference.
+export async function countEventsWithinDistance(userId: string, distanceKm: number): Promise<number> {
+  const ctx = await buildContext(userId);
+  const rows = await db.select().from(events).where(eq(events.status, "published"));
+  let n = 0;
+  for (const e of rows) {
+    if (e.startsAt.getTime() <= ctx.now.getTime()) continue;
+    if (e.visibility === "invite") continue;
+    if (e.visibility === "group" && (e.groupId == null || !ctx.myGroupIds.has(e.groupId))) continue;
+    const loc = resolveEventLocation(e, ctx);
+    if (!loc) continue;
+    if (haversineKm(ctx.originLat, ctx.originLng, loc.lat, loc.lng) <= distanceKm) n += 1;
+  }
+  return n;
+}
+
 export async function getEventsFeed(userId: string): Promise<{ events: FeedEvent[]; moreThanShown: boolean }> {
   const prefs = await getOrCreatePreferences(userId);
   const ctx = await buildContext(userId);
