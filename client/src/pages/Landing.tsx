@@ -103,6 +103,88 @@ function photo(slot: string) {
   };
 }
 
+// The hero cycles through hero-primary + hero-1..hero-16 (couples-in-love set).
+// Missing files self-heal: a 404 image drops out of the rotation, so before the
+// files are added this degrades to the single static hero-primary.
+const HERO_SET = ["hero-primary", ...Array.from({ length: 16 }, (_, i) => `hero-${i + 1}`)];
+
+/** Crossfades through a list of photo slots. Mounts at most two <img> at a time.
+ *  Static (first slot) under prefers-reduced-motion. Never renders empty. */
+function RotatingPhoto({
+  slots,
+  ratio,
+  priority = false,
+  className = "",
+  intervalMs = 4600,
+}: {
+  slots: string[];
+  ratio: string;
+  priority?: boolean;
+  className?: string;
+  intervalMs?: number;
+}) {
+  const reduce = usePrefersReducedMotion();
+  const [live, setLive] = useState<string[]>(slots);
+  const [i, setI] = useState(0);
+  const [prev, setPrev] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (reduce || live.length < 2) return;
+    const id = window.setInterval(() => {
+      setPrev(i);
+      setI((n) => (n + 1) % live.length);
+      window.setTimeout(() => setPrev(null), 900);
+    }, intervalMs);
+    return () => window.clearInterval(id);
+  }, [reduce, live.length, intervalMs, i]);
+
+  const dropSlot = (slot: string) =>
+    setLive((cur) => {
+      const next = cur.filter((s) => s !== slot);
+      return next.length ? next : cur; // never empty
+    });
+
+  const idx = Math.min(i, live.length - 1);
+  const showIdxs = prev !== null && prev !== idx ? [prev, idx] : [idx];
+
+  return (
+    <figure
+      className={`relative overflow-hidden ${className}`}
+      style={{ aspectRatio: ratio, borderRadius: "20px" }}
+      data-photo-slot="hero-primary"
+    >
+      {showIdxs.map((n) => {
+        const slot = live[n];
+        const p = photo(slot);
+        return (
+          <img
+            key={slot}
+            src={p.src}
+            srcSet={p.srcSet}
+            sizes="(min-width: 1024px) 45vw, 100vw"
+            alt=""
+            loading={priority && n === 0 ? "eager" : "lazy"}
+            decoding="async"
+            onError={() => dropSlot(slot)}
+            className="absolute inset-0 h-full w-full object-cover transition-opacity duration-[900ms] ease-in-out"
+            style={{ opacity: n === idx ? 1 : 0, filter: "saturate(1.05)" }}
+          />
+        );
+      })}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{ background: "#FF6B4A", opacity: 0.07, mixBlendMode: "soft-light" }}
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{ borderRadius: "20px", boxShadow: "inset 0 0 0 1px rgba(255,255,255,.09)" }}
+      />
+    </figure>
+  );
+}
+
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
@@ -526,15 +608,7 @@ export default function Landing() {
 
             {/* mobile: primary image only, below the type */}
             <div className="lg:hidden mt-10">
-              <PhotoFrame
-                slot="hero-primary"
-                {...photo("hero-primary")}
-                alt="A couple in a close embrace, both smiling"
-                ratio="4/5"
-                treatment="warm"
-                priority
-                caption="MIRA & KABELO · RESONANCE 87 · MET IN LATE PRACTICE"
-              />
+              <RotatingPhoto slots={HERO_SET} ratio="4/5" priority />
             </div>
           </div>
 
@@ -550,14 +624,10 @@ export default function Landing() {
                   opacity: 0.1,
                 }}
               />
-              <PhotoFrame
-                slot="hero-primary"
-                {...photo("hero-primary")}
-                alt="A couple in a close embrace, both smiling"
+              <RotatingPhoto
+                slots={HERO_SET}
                 ratio="4/5"
-                treatment="warm"
                 priority
-                caption="MIRA & KABELO · RESONANCE 87 · MET IN LATE PRACTICE"
                 className="relative transition-transform duration-500 ease-out motion-safe:group-hover:scale-[1.015]"
               />
               <div

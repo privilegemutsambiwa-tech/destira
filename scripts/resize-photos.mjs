@@ -24,12 +24,15 @@ const RATIOS = {
   "closing": [16, 9],
 };
 
+// hero-1 … hero-N — the rotating hero set, all cropped to the 4:5 hero frame
+const heroRatio = (slot) => (/^hero-\d+$/.test(slot) ? [4, 5] : undefined);
+
 const files = (await readdir(srcDir)).filter((f) => /\.(jpe?g|png)$/i.test(f));
 await mkdir(photosDir, { recursive: true });
 
 for (const file of files) {
   const slot = file.replace(/\.(jpe?g|png)$/i, "");
-  const ratio = RATIOS[slot];
+  const ratio = RATIOS[slot] ?? heroRatio(slot);
   if (!ratio) {
     console.warn(`  ${slot}: no ratio mapping, skipped`);
     continue;
