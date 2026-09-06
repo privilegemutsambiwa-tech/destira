@@ -44,7 +44,7 @@ evidence-vs-catalogue test before shipping.
 
 | slot id | aspect | min width | caption | the shot |
 |---|---|---|---|---|
-| `hero-primary` | 4/5 | 960 | `MIRA & KABELO · RESONANCE 87 · MET IN LATE PRACTICE` | Two people at a small table, leaning in, one talking with their hands. Bar or café, Braamfontein/Melville. Documentary, available light, f/2. |
+| `hero-primary` | 4/5 | 960 | `MIRA & KABELO · RESONANCE 87 · MET IN LATE PRACTICE` | Two people at a small table, leaning in, one talking with their hands. Bar or café, Avondale/Milton Park (Harare). Documentary, available light, f/2. |
 | `hero-secondary` | 1/1 | 640 | `THURSDAY · THE LISTENING ROOM` | A dim listening room, two people side by side facing away from camera, records/turntable visible. |
 | `turn` | 16/9 | 960 | `NINETY SECONDS OF TWIN CONVERSATION, THEN AN ACTUAL EVENING` | Mid-laugh across a table, wine, phones face-down on the table and legibly face-down. `treatment="plain"` — no warm lift here. |
 | `group-late-practice` | 3/2 | 640 | — (card carries the title) | A band mid-rehearsal in a small practice room, instruments, low light, one player looking at another. |

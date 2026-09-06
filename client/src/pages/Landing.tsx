@@ -131,21 +131,6 @@ function SignupButton({
   );
 }
 
-/** Ghost-bordered secondary — always paired with SignupButton so returning
- *  users never hunt for log in. */
-function LoginButton({ className = "" }: { className?: string }) {
-  const [, setLocation] = useLocation();
-  return (
-    <button
-      onClick={() => setLocation("/login")}
-      className={`inline-flex items-center justify-center rounded-full border border-vf-line text-vf-text font-medium px-7 h-12 text-[15px] btn-press transition-colors hover:border-white/25 ${className}`}
-      data-testid="button-log-in"
-    >
-      Log in
-    </button>
-  );
-}
-
 /** Inline email capture — removes a page from the signup funnel by carrying the
  *  address straight into /signup as step one. */
 function EmailCapture({ className = "" }: { className?: string }) {
@@ -180,7 +165,7 @@ function EmailCapture({ className = "" }: { className?: string }) {
         className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-6 h-12 text-[14.5px] btn-press transition-colors hover:bg-[#FF8163] shrink-0"
         data-testid="button-hero-email-continue"
       >
-        Continue
+        Create your twin
       </button>
     </form>
   );
@@ -445,7 +430,7 @@ export default function Landing() {
           {/* LEFT — type column (unchanged copy) */}
           <div>
             <Reveal>
-              <Eyebrow>Johannesburg · Free to join</Eyebrow>
+              <Eyebrow>Harare &amp; Bulawayo · Free to join</Eyebrow>
             </Reveal>
             <Reveal delay={80}>
               <h1
@@ -457,26 +442,32 @@ export default function Landing() {
                   letterSpacing: "-0.025em",
                 }}
               >
-                You have not been unlucky.
+                Come and find
                 <br />
-                <em className="italic text-vf-ember">You have been swiping.</em>
+                <em className="italic text-vf-ember">your person.</em>
               </h1>
             </Reveal>
             <Reveal delay={160}>
               <p className="mt-7 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
-                Photographs cannot tell you how someone argues, what they want in three years, or
-                whether they will actually turn up. So we stopped asking you to guess.
+                If it feels like everybody else got the simple version of this, you are not
+                behind and you are not too late. VibeFlow is for people who actually want to be
+                found — and who would rather meet one person worth the evening than scroll past
+                four hundred who are not.
               </p>
             </Reveal>
             <Reveal delay={240}>
               <div className="mt-9">
                 <EmailCapture />
-                <div className="mt-3 flex flex-wrap gap-3">
-                  <SignupButton />
-                  <LoginButton />
-                </div>
                 <p className="mt-3 text-[13px] text-vf-faint">
-                  Free forever. One read a day. No swiping, ever.
+                  Free, forever. One real match a day. No swiping, ever.{" "}
+                  <span aria-hidden="true">·</span>{" "}
+                  <button
+                    onClick={() => setLocation("/login")}
+                    className="text-vf-muted hover:text-vf-text transition-colors underline underline-offset-2"
+                    data-testid="hero-log-in"
+                  >
+                    Already here? Log in
+                  </button>
                 </p>
               </div>
             </Reveal>
@@ -542,7 +533,55 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 3 · THE TURN ============ */}
+      {/* ============ 3 · BELONGING ============ */}
+      <section
+        className="px-6"
+        style={{ paddingBlock: "clamp(72px, 10vh, 128px)" }}
+        aria-labelledby="belonging-heading"
+        data-testid="section-belonging"
+      >
+        <div className="max-w-[720px] mx-auto text-center">
+          <Reveal>
+            <Eyebrow>You are not late</Eyebrow>
+          </Reveal>
+          <Reveal delay={80}>
+            <h2
+              id="belonging-heading"
+              className="font-serif font-normal text-vf-text mt-4"
+              style={{ fontSize: "clamp(28px, 3.6vw, 44px)", lineHeight: 1.1, letterSpacing: "-0.02em" }}
+            >
+              Everyone here is looking for the same thing you are.
+            </h2>
+          </Reveal>
+          <Reveal delay={160}>
+            <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted mx-auto max-w-[56ch]">
+              Nobody on VibeFlow is here to collect matches. There is one read a day, so there
+              is no point in it. What is left is a few thousand people in Harare and Bulawayo
+              who want something real and got tired of pretending otherwise.
+            </p>
+          </Reveal>
+          <Reveal delay={240}>
+            <div className="mt-10 flex flex-col sm:flex-row sm:divide-x divide-vf-line border-y border-vf-line">
+              {[
+                ["One match a day", "curated, not scrolled"],
+                ["Built for meeting", "every match points at a real evening"],
+                ["Free forever", "the daily read is never for sale"],
+              ].map(([label, sub]) => (
+                <div key={label} className="flex-1 py-5 px-4">
+                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-text">
+                    {label}
+                  </div>
+                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mt-1.5">
+                    {sub}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ============ 4 · THE TURN ============ */}
       <section
         id="how-it-works"
         className="px-6"
@@ -553,7 +592,7 @@ export default function Landing() {
         <div className="max-w-[1180px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-16 items-start">
           <div>
             <Reveal>
-              <Eyebrow>The difference</Eyebrow>
+              <Eyebrow>How it works</Eyebrow>
             </Reveal>
             <Reveal delay={80}>
               <h2
@@ -566,15 +605,16 @@ export default function Landing() {
             </Reveal>
             <Reveal delay={160}>
               <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
-                You talk to your twin — an AI that learns how you think, what you have decided about
-                your life, and what you will not compromise on. Then it talks to theirs. Two twins
-                have the conversation you would have had on a bad first date, in ninety seconds,
-                before either of you gives up an evening.
+                You talk to your twin — an AI that learns how you think, what you have already
+                decided about your life, and what you will not compromise on. Then it talks to
+                theirs.
               </p>
             </Reveal>
             <Reveal delay={240}>
               <p className="mt-4 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
-                You see what they said. Both sides. Including the parts that do not flatter you.
+                Two twins have the conversation you would have had on an awkward first date, in
+                ninety seconds, before either of you gives up an evening. Then you read what was
+                said. Both sides. Including the parts that do not flatter you.
               </p>
             </Reveal>
           </div>
@@ -595,7 +635,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 4 · THE READ ============ */}
+      {/* ============ 5 · THE READ ============ */}
       <section
         className="px-6"
         style={{ paddingBlock: "clamp(88px, 12vh, 160px)" }}
@@ -613,14 +653,15 @@ export default function Landing() {
                 className="font-serif font-normal text-vf-text mt-4"
                 style={{ fontSize: "clamp(32px, 4.4vw, 52px)", lineHeight: 1.05, letterSpacing: "-0.02em" }}
               >
-                One person a day. With the maths shown.
+                One person a day, with the reasons shown.
               </h2>
             </Reveal>
             <Reveal delay={160}>
               <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
-                A resonance read, and the four things it is built from — including the one you are
-                weakest on. We would rather tell you she moves slower than you do than sell you a
-                match we cannot defend.
+                Not a queue. Not a grid of faces to rank. One person, a resonance score, and the
+                four things it is built from — including the one you score worst on. We would
+                rather tell you she moves slower than you do than sell you a match we cannot
+                defend.
               </p>
             </Reveal>
           </div>
@@ -803,14 +844,14 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 7 · CLOSING CTA ============ */}
+      {/* ============ 8 · CLOSING CTA ============ */}
       <section
         className="relative px-6 flex items-center justify-center overflow-hidden"
         style={{ minHeight: "78vh" }}
         aria-labelledby="closing-heading"
         data-testid="section-closing"
       >
-        {/* full-bleed backdrop: two people walking away, lit street at night */}
+        {/* full-bleed backdrop: a night-street embrace */}
         <div className="absolute inset-0" aria-hidden="true" data-photo-slot="closing-fullbleed">
           <img
             src="/photos/closing.jpg"
@@ -837,40 +878,39 @@ export default function Landing() {
               className="font-serif font-normal text-vf-text"
               style={{ fontSize: "clamp(44px, 8vw, 104px)", lineHeight: 1.02, letterSpacing: "-0.025em" }}
             >
-              Stop auditioning.
+              Your person is already here.
             </h2>
           </Reveal>
           <Reveal delay={120}>
             <p className="mt-7 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted mx-auto max-w-[56ch]">
-              Free to join. Your twin asks four questions, then it starts talking to people near you.
-              No photos needed to begin.
+              Free to join, free to stay. Your twin asks four questions, then it starts talking
+              to people worth your evening. No photos needed to begin.
             </p>
           </Reveal>
           <Reveal delay={200}>
             <div className="mt-9 flex flex-col items-center gap-3">
               <EmailCapture className="w-full mx-auto sm:justify-center" />
-              <button
-                onClick={() => setLocation("/login")}
-                className="text-[13px] text-vf-muted hover:text-vf-text transition-colors"
-                data-testid="closing-log-in"
-              >
-                Already here? Log in
-              </button>
+              <p className="text-[13px] text-vf-faint">
+                Two minutes. Four questions. Nothing to lose.
+              </p>
             </div>
           </Reveal>
         </div>
       </section>
 
-      {/* ============ 8 · FOOTER ============ */}
+      {/* ============ 9 · FOOTER ============ */}
       <footer className="px-6 border-t border-vf-line" data-testid="landing-footer">
         <div className="max-w-[1180px] mx-auto py-14 flex flex-col md:flex-row gap-10 md:gap-16 md:items-start md:justify-between">
           <div>
             <div className="text-vf-text">
               <VibeFlowLockup orientation="horizontal" size={28} />
             </div>
-            <p className="mt-4 text-[13px] text-vf-muted">Made in Johannesburg.</p>
+            <p className="mt-4 text-[13px] text-vf-muted">Made in Harare.</p>
             <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint">
               Resonance over photographs
+            </p>
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint">
+              Starting in Zimbabwe · Africa next · then everywhere
             </p>
           </div>
 

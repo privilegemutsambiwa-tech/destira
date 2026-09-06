@@ -3181,7 +3181,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
           bio: "Local demo account for exploring VibeFlow.",
           age: 29,
           gender: "other",
-          location: "Johannesburg",
+          location: "Harare",
           personalityProfile: { openness: 82, conscientiousness: 74, extraversion: 61, agreeableness: 79, neuroticism: 33 },
           twinPersona: "I'm Demo's AI Twin. Demo is curious, direct, and here to see how the app feels from the inside.",
           onboardingCompleted: true,

@@ -65,6 +65,10 @@ export default function Signup() {
   const { step, email, name, age, city, answers } = progress;
   const patch = (p: Partial<Progress>) => setProgress((cur) => ({ ...cur, ...p }));
 
+  const [cityChoice, setCityChoice] = useState(() =>
+    city === "Harare" || city === "Bulawayo" ? city : city ? "other" : "",
+  );
+
   // Prefill email from ?email= on first mount (only if we don't already have one).
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("email");
@@ -261,9 +265,42 @@ export default function Signup() {
                 </div>
                 <div className="flex-1">
                   <label htmlFor="su-city" className={LABEL}>City</label>
-                  <input id="su-city" autoComplete="address-level2" value={city} onChange={(e) => patch({ city: e.target.value })} placeholder="Johannesburg" className={INPUT} data-testid="input-signup-city" />
+                  <select
+                    id="su-city"
+                    value={cityChoice}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCityChoice(v);
+                      patch({ city: v === "other" ? "" : v });
+                    }}
+                    className={INPUT}
+                    data-testid="select-signup-city"
+                  >
+                    <option value="" disabled>Pick one</option>
+                    <option value="Harare">Harare</option>
+                    <option value="Bulawayo">Bulawayo</option>
+                    <option value="other">Somewhere else</option>
+                  </select>
                 </div>
               </div>
+
+              {cityChoice === "other" && (
+                <div>
+                  <input
+                    autoComplete="address-level2"
+                    value={city}
+                    onChange={(e) => patch({ city: e.target.value })}
+                    placeholder="Your city"
+                    className={INPUT}
+                    data-testid="input-signup-city-other"
+                  />
+                  {city.trim() && (
+                    <p className="mt-2 text-[13px] text-vf-muted leading-[1.5]" data-testid="text-city-waitlist">
+                      We'll open your city when there are enough people there. You'll be first to know.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {error && <p className="text-[13px] text-vf-ember" role="alert" data-testid="text-signup-error">{error}</p>}
 
