@@ -6,7 +6,7 @@ import { VibeFlowLockup } from "@/components/brand/logo";
 import { PhotoFrame } from "@/components/brand/photo-frame";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
-import { photos as HERO_PHOTOS, type Photo } from "@/lib/photos";
+import { photos as HERO_PHOTOS, photosByName, type Photo } from "@/lib/photos";
 
 /* ------------------------------------------------------------------ *
  *  Landing — marketing page, route "/" for unauthenticated visitors.
@@ -1076,20 +1076,31 @@ export default function Landing() {
 
           <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-5">
             {[
-              ["Late Practice", "412 members · musicians with day jobs", "group-late-practice", "Musicians mid-rehearsal in a small room, one watching another play"],
-              ["Sunday Trail", "1,208 members · 6am starts, no excuses", "group-sunday-trail", "A line of people climbing a mountain ridge at first light, seen from behind"],
-              ["Table for Six", "330 members · long dinners, dating with intent", "group-table-for-six", "A long table shot from above — six people, shared dishes, hands reaching in"],
-            ].map(([name, meta, slot, alt], i) => (
-              <Reveal key={name} delay={i * 80}>
-                <div className="rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden">
-                  <PhotoFrame slot={slot} {...photo(slot)} alt={alt} ratio="3/2" treatment="warm" style={{ borderRadius: 0 }} />
-                  <div className="p-5">
-                    <div className="text-[16px] text-vf-text">{name}</div>
-                    <div className="text-[13px] text-vf-muted mt-1">{meta}</div>
+              ["Late Practice", "412 members · musicians with day jobs", "hero-1", "Two people close together in an everyday moment"],
+              ["Sunday Trail", "1,208 members · 6am starts, no excuses", "hero-2", "Two people close together in an everyday moment"],
+              ["Table for Six", "330 members · long dinners, dating with intent", "hero-7", "Two people close together in an everyday moment"],
+            ].map(([name, meta, slot, alt], i) => {
+              const p = photosByName[slot];
+              return (
+                <Reveal key={name} delay={i * 80}>
+                  <div className="rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden">
+                    <PhotoFrame
+                      slot={slot}
+                      src={p?.src}
+                      srcSet={p?.srcSet}
+                      alt={alt}
+                      ratio="3/2"
+                      treatment="warm"
+                      style={{ borderRadius: 0 }}
+                    />
+                    <div className="p-5">
+                      <div className="text-[16px] text-vf-text">{name}</div>
+                      <div className="text-[13px] text-vf-muted mt-1">{meta}</div>
+                    </div>
                   </div>
-                </div>
-              </Reveal>
-            ))}
+                </Reveal>
+              );
+            })}
           </div>
         </div>
       </section>
