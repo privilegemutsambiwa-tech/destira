@@ -21,7 +21,18 @@ import {
   type InviteRequest, type InsertInviteRequest
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
+import type { PhotoRole } from "@shared/schema";
 import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, lte } from "drizzle-orm";
+
+export class PhotoNotFoundError extends Error {
+  constructor() { super("Photo not found"); }
+}
+export class PhotoTooSmallError extends Error {
+  constructor(public role: string, public longEdge: number, public min: number) {
+    super(`This is ${longEdge}px on the long edge — ${role}s need at least ${min}px`);
+  }
+}
+const ROLE_MIN_LONG_EDGE: Record<string, number> = { cover: 1200, portrait: 800 };
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -98,9 +109,11 @@ export interface IStorage {
   sendDirectMessage(matchId: number, senderId: string, content: string): Promise<DirectMessage>;
 
   getUserPhotos(userId: string): Promise<UserPhoto[]>;
-  addUserPhoto(userId: string, photoUrl: string, orderIndex: number, isMain?: boolean): Promise<UserPhoto>;
-  deleteUserPhoto(id: number): Promise<void>;
+  addUserPhoto(userId: string, photoUrl: string, orderIndex: number, opts?: { isMain?: boolean; width?: number; height?: number }): Promise<UserPhoto>;
+  deleteUserPhoto(userId: string, id: number): Promise<void>;
   reorderUserPhotos(userId: string, photoIds: number[]): Promise<void>;
+  setPhotoRole(userId: string, photoId: number, role: PhotoRole): Promise<{ photoId: number; role: PhotoRole; displaced: { id: number; role: PhotoRole } | null }>;
+  setPhotoFocal(userId: string, photoId: number, target: "cover" | "portrait", x: number, y: number): Promise<UserPhoto>;
 
   addTwinMemory(userId: string, message: string, role: string, useForTraining?: boolean): Promise<TwinMemoryEntry>;
   getTwinMemory(userId: string, limit?: number): Promise<TwinMemoryEntry[]>;
@@ -809,13 +822,38 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(userPhotos.orderIndex));
   }
 
-  async addUserPhoto(userId: string, photoUrl: string, orderIndex: number, isMain: boolean = false): Promise<UserPhoto> {
-    const [photo] = await db.insert(userPhotos).values({ userId, photoUrl, orderIndex, isMainProfilePhoto: isMain }).returning();
+  async addUserPhoto(
+    userId: string,
+    photoUrl: string,
+    orderIndex: number,
+    opts: { isMain?: boolean; width?: number; height?: number } = {},
+  ): Promise<UserPhoto> {
+    const [photo] = await db
+      .insert(userPhotos)
+      .values({
+        userId,
+        photoUrl,
+        orderIndex,
+        isMainProfilePhoto: opts.isMain ?? false,
+        width: opts.width ?? null,
+        height: opts.height ?? null,
+      })
+      .returning();
     return photo;
   }
 
-  async deleteUserPhoto(id: number): Promise<void> {
-    await db.delete(userPhotos).where(eq(userPhotos.id, id));
+  async deleteUserPhoto(userId: string, id: number): Promise<void> {
+    await db.transaction(async (tx) => {
+      const [photo] = await tx
+        .select()
+        .from(userPhotos)
+        .where(and(eq(userPhotos.id, id), eq(userPhotos.userId, userId)));
+      if (!photo) return;
+      await tx.delete(userPhotos).where(eq(userPhotos.id, id));
+      if (photo.role === "cover") {
+        await tx.update(profiles).set({ coverPhotoUrl: null }).where(eq(profiles.userId, userId));
+      }
+    });
   }
 
   async reorderUserPhotos(userId: string, photoIds: number[]): Promise<void> {
@@ -824,6 +862,84 @@ export class DatabaseStorage implements IStorage {
         .set({ orderIndex: i })
         .where(and(eq(userPhotos.id, photoIds[i]), eq(userPhotos.userId, userId)));
     }
+  }
+
+  // One transaction: verify ownership, size-check for cover/portrait, demote the
+  // current holder of that role, promote the target, and mirror the result into
+  // profiles.coverPhotoUrl / user_photos.isMainProfilePhoto so Discover, Matches
+  // and every other consumer keep rendering. The partial unique indexes on
+  // user_photos are the backstop — demote must land before promote.
+  async setPhotoRole(
+    userId: string,
+    photoId: number,
+    role: PhotoRole,
+  ): Promise<{ photoId: number; role: PhotoRole; displaced: { id: number; role: PhotoRole } | null }> {
+    return db.transaction(async (tx) => {
+      const [photo] = await tx
+        .select()
+        .from(userPhotos)
+        .where(and(eq(userPhotos.id, photoId), eq(userPhotos.userId, userId)));
+      if (!photo) throw new PhotoNotFoundError();
+
+      const prevRole = photo.role as PhotoRole;
+      let displaced: { id: number; role: PhotoRole } | null = null;
+
+      if (role === "cover" || role === "portrait") {
+        const longEdge = Math.max(photo.width ?? 0, photo.height ?? 0);
+        const min = ROLE_MIN_LONG_EDGE[role];
+        if (longEdge > 0 && longEdge < min) throw new PhotoTooSmallError(role, longEdge, min);
+
+        const [current] = await tx
+          .select()
+          .from(userPhotos)
+          .where(and(eq(userPhotos.userId, userId), eq(userPhotos.role, role)));
+        if (current && current.id !== photoId) {
+          await tx.update(userPhotos).set({ role: "gallery" }).where(eq(userPhotos.id, current.id));
+          displaced = { id: current.id, role };
+        }
+      }
+
+      await tx.update(userPhotos).set({ role }).where(eq(userPhotos.id, photoId));
+
+      // mirror OUT of the roles we just left / into the roles we just took
+      if (role === "cover") {
+        await tx.update(profiles).set({ coverPhotoUrl: photo.photoUrl }).where(eq(profiles.userId, userId));
+      } else if (prevRole === "cover") {
+        await tx.update(profiles).set({ coverPhotoUrl: null }).where(eq(profiles.userId, userId));
+      }
+      if (role === "portrait") {
+        await tx
+          .update(userPhotos)
+          .set({ isMainProfilePhoto: false })
+          .where(and(eq(userPhotos.userId, userId), ne(userPhotos.id, photoId)));
+        await tx.update(userPhotos).set({ isMainProfilePhoto: true }).where(eq(userPhotos.id, photoId));
+      } else if (prevRole === "portrait") {
+        await tx.update(userPhotos).set({ isMainProfilePhoto: false }).where(eq(userPhotos.id, photoId));
+      }
+
+      return { photoId, role, displaced };
+    });
+  }
+
+  async setPhotoFocal(
+    userId: string,
+    photoId: number,
+    target: "cover" | "portrait",
+    x: number,
+    y: number,
+  ): Promise<UserPhoto> {
+    const clamp = (n: number) => Math.min(1, Math.max(0, n));
+    const patch =
+      target === "cover"
+        ? { coverFocalX: clamp(x), coverFocalY: clamp(y) }
+        : { portraitFocalX: clamp(x), portraitFocalY: clamp(y) };
+    const [row] = await db
+      .update(userPhotos)
+      .set(patch)
+      .where(and(eq(userPhotos.id, photoId), eq(userPhotos.userId, userId)))
+      .returning();
+    if (!row) throw new PhotoNotFoundError();
+    return row;
   }
 
   async addTwinMemory(userId: string, message: string, role: string, useForTraining: boolean = true): Promise<TwinMemoryEntry> {

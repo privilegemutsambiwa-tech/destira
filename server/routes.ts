@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage, PhotoNotFoundError, PhotoTooSmallError } from "./storage";
 import { setupAuth, registerAuthRoutes, authStorage, createSessionUser, hashPassword, verifyPassword } from "./replit_integrations/auth";
 import { z } from "zod";
 import { GoogleGenAI } from "@google/genai";
@@ -17,6 +17,7 @@ import * as eventsService from "./events";
 import * as eventsFeed from "./events-feed";
 import * as twinEventAlerts from "./services/twin-event-alerts";
 import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema } from "@shared/schema";
+import { updatePhotoRoleSchema, updatePhotoFocalSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
 
@@ -413,12 +414,55 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   app.post("/api/photos", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
-    const { photoUrl, orderIndex, isMainProfilePhoto } = req.body;
+    const { photoUrl, orderIndex, isMainProfilePhoto, width, height } = req.body ?? {};
+    if (typeof photoUrl !== "string" || !photoUrl) {
+      return res.status(400).json({ message: "photoUrl is required" });
+    }
     try {
-      const photo = await storage.addUserPhoto(userId, photoUrl, orderIndex || 0, isMainProfilePhoto);
+      const photo = await storage.addUserPhoto(userId, photoUrl, orderIndex || 0, {
+        isMain: !!isMainProfilePhoto,
+        width: Number.isFinite(width) ? Math.round(width) : undefined,
+        height: Number.isFinite(height) ? Math.round(height) : undefined,
+      });
       res.status(201).json(photo);
     } catch (e) {
       res.status(500).json({ message: "Failed to add photo" });
+    }
+  });
+
+  app.patch("/api/photos/:id/role", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const photoId = parseInt(req.params.id, 10);
+    if (Number.isNaN(photoId)) return res.status(400).json({ message: "Invalid photo id" });
+    const parsed = updatePhotoRoleSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid role", errors: parsed.error.flatten() });
+    try {
+      const result = await storage.setPhotoRole(userId, photoId, parsed.data.role);
+      const photos = await storage.getUserPhotos(userId);
+      res.json({ ...result, photos });
+    } catch (e) {
+      if (e instanceof PhotoNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof PhotoTooSmallError) return res.status(422).json({ message: e.message });
+      console.error("Set photo role error:", e);
+      res.status(500).json({ message: "Failed to update photo role" });
+    }
+  });
+
+  app.patch("/api/photos/:id/focal", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const photoId = parseInt(req.params.id, 10);
+    if (Number.isNaN(photoId)) return res.status(400).json({ message: "Invalid photo id" });
+    const parsed = updatePhotoFocalSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid focal point", errors: parsed.error.flatten() });
+    try {
+      const photo = await storage.setPhotoFocal(userId, photoId, parsed.data.target, parsed.data.x, parsed.data.y);
+      res.json(photo);
+    } catch (e) {
+      if (e instanceof PhotoNotFoundError) return res.status(404).json({ message: e.message });
+      console.error("Set photo focal error:", e);
+      res.status(500).json({ message: "Failed to update focal point" });
     }
   });
 
@@ -426,7 +470,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     try {
-      await storage.deleteUserPhoto(parseInt(req.params.id));
+      await storage.deleteUserPhoto(userId, parseInt(req.params.id));
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ message: "Failed to delete photo" });

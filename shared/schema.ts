@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar, decimal, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar, decimal, real, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
@@ -44,20 +44,62 @@ export const profiles = pgTable("profiles", {
   maxDistanceKm: integer("max_distance_km").default(100),
   ageMinPreference: integer("age_min_preference").default(18),
   ageMaxPreference: integer("age_max_preference").default(65),
+  prompts: jsonb("prompts"), // ProfilePrompt[] — see profilePromptsSchema
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [
   index("profiles_location_updated_at_idx").on(t.locationUpdatedAt),
   index("profiles_is_public_onboarding_idx").on(t.isPublic, t.onboardingCompleted),
 ]);
 
-export const userPhotos = pgTable("user_photos", {
-  id: serial("id").primaryKey(),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  photoUrl: text("photo_url").notNull(),
-  orderIndex: integer("order_index").notNull().default(0),
-  isMainProfilePhoto: boolean("is_main_profile_photo").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
+export const userPhotos = pgTable(
+  "user_photos",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id").notNull().references(() => users.id),
+    photoUrl: text("photo_url").notNull(),
+    orderIndex: integer("order_index").notNull().default(0),
+    isMainProfilePhoto: boolean("is_main_profile_photo").default(false),
+    createdAt: timestamp("created_at").defaultNow(),
+    // Redesign: explicit roles. Exactly one 'cover' and one 'portrait' per user
+    // (partial unique indexes below); everything else is 'gallery'. The cover is
+    // the wide "where you are" band; the portrait is the tight "who you are"
+    // print. Focal points are per-role because the same image crops differently
+    // in a 21:9 band vs a 4:5 frame.
+    role: text("role").notNull().default("gallery"), // 'cover' | 'portrait' | 'gallery'
+    coverFocalX: real("cover_focal_x").notNull().default(0.5),
+    coverFocalY: real("cover_focal_y").notNull().default(0.5),
+    portraitFocalX: real("portrait_focal_x").notNull().default(0.5),
+    portraitFocalY: real("portrait_focal_y").notNull().default(0.5),
+    width: integer("width"),
+    height: integer("height"),
+  },
+  (t) => [
+    uniqueIndex("user_photos_one_cover_idx").on(t.userId).where(sql`${t.role} = 'cover'`),
+    uniqueIndex("user_photos_one_portrait_idx").on(t.userId).where(sql`${t.role} = 'portrait'`),
+  ],
+);
+
+export const photoRoleEnum = z.enum(["cover", "portrait", "gallery"]);
+export const updatePhotoRoleSchema = z.object({ role: photoRoleEnum });
+export const updatePhotoFocalSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  target: z.enum(["cover", "portrait"]),
 });
+export type PhotoRole = z.infer<typeof photoRoleEnum>;
+
+// profiles.prompts — up to 3 short Q&A the twin can quote. UI picks the
+// question from a bank; stored free-form so the bank can change without a
+// migration.
+export const profilePromptsSchema = z
+  .array(
+    z.object({
+      q: z.string().trim().min(1).max(140),
+      a: z.string().trim().max(400),
+    }),
+  )
+  .max(3);
+export type ProfilePrompt = { q: string; a: string };
 
 export const matches = pgTable("matches", {
   id: serial("id").primaryKey(),
