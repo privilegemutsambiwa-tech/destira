@@ -407,14 +407,30 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div className="flex-1 min-w-0">
+        <button
+          onClick={() => setLocation(`/lounge/group/${groupId}/info`)}
+          className="w-9 h-9 rounded-full overflow-hidden shrink-0 flex items-center justify-center"
+          style={{ background: SURFACE2, border: `1px solid ${LINE}` }}
+          data-testid="img-group-avatar"
+        >
+          {group?.iconUrl ? (
+            <img src={group.iconUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <span style={{ ...SERIF, color: TEXT, fontSize: "15px" }}>{(group?.name || "G")[0].toUpperCase()}</span>
+          )}
+        </button>
+        <button
+          onClick={() => setLocation(`/lounge/group/${groupId}/info`)}
+          className="flex-1 min-w-0 text-left"
+          data-testid="button-open-group-header"
+        >
           <h2 className="truncate" style={{ ...SERIF, color: TEXT, fontSize: "18px" }} data-testid="text-group-name">
             {group?.name || "Group"}
           </h2>
           <p style={{ ...MONO, color: MUTED, marginTop: "2px" }}>
             {group?.memberCount || 0} members
           </p>
-        </div>
+        </button>
         <button
           onClick={() => setLocation(`/lounge/group/${groupId}/info`)}
           className="w-9 h-9 flex items-center justify-center btn-press rounded-full transition-colors"

@@ -13,7 +13,7 @@ import {
 import {
   ArrowLeft, Crown, Shield, Loader2, Users, Globe, Lock, UserPlus,
   Link2, Copy, Check, X, Trash2, Pencil, Image as ImageIcon, Star,
-  Search, BellOff, Bell, Settings, ChevronRight, Share2
+  Search, BellOff, Bell, Settings, ChevronRight, Share2, Camera
 } from "lucide-react";
 import {
   useGroup, useGroupMembers, useGroupMedia, useUpdateGroup,
@@ -299,9 +299,10 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
       });
       if (!res.ok) throw new Error();
       queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] });
-      toast({ title: "Icon updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      toast({ title: "Group picture updated" });
     } catch {
-      toast({ title: "Error", description: "Failed to upload icon.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to update the group picture.", variant: "destructive" });
     }
   };
 
@@ -378,8 +379,8 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
               className="absolute inset-0 bg-gradient-to-t from-vf-ink via-vf-ink/40 to-transparent"
               aria-hidden="true"
             />
-            <div className="absolute left-4 right-4 bottom-3">
-              <h2 style={{ ...SERIF, color: TEXT, fontSize: "26px", lineHeight: 1.1 }} data-testid="text-group-info-name">
+            <div className="absolute left-[104px] right-4 bottom-3">
+              <h2 style={{ ...SERIF, color: TEXT, fontSize: "24px", lineHeight: 1.1 }} data-testid="text-group-info-name">
                 {group?.name}
               </h2>
               <p style={{ ...MONO, color: MUTED, marginTop: "4px" }} data-testid="text-group-subtitle">
@@ -391,9 +392,32 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                 className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium"
                 style={{ background: "rgba(0,0,0,0.55)", color: TEXT }}
               >
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3 h-3" /> Cover
               </div>
             )}
+            {/* Group profile picture — overlaps the cover, editable by owner/admin */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); if (isAdmin) iconUploadRef.current?.click(); }}
+              className="absolute left-4 bottom-3 w-[84px] h-[84px] rounded-full overflow-hidden flex items-center justify-center"
+              style={{ background: SURFACE2, border: `3px solid ${INK}`, cursor: isAdmin ? "pointer" : "default" }}
+              data-testid="button-group-avatar"
+              aria-label={isAdmin ? "Change group picture" : "Group picture"}
+            >
+              {group?.iconUrl ? (
+                <img src={group.iconUrl} alt={group.name} className="w-full h-full object-cover" />
+              ) : (
+                <span style={{ ...SERIF, color: TEXT, fontSize: "30px" }}>{(group?.name || "G")[0].toUpperCase()}</span>
+              )}
+              {isAdmin && (
+                <span
+                  className="absolute bottom-0 right-0 w-6 h-6 rounded-full flex items-center justify-center"
+                  style={{ background: EMBER, border: `2px solid ${INK}` }}
+                >
+                  <Camera className="w-3 h-3" style={{ color: INK }} />
+                </span>
+              )}
+            </button>
           </div>
 
           {group?.categoryTags && group.categoryTags.length > 0 && (
