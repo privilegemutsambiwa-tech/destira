@@ -21,18 +21,24 @@ the commissioned/curated frames. Source originals: `client/public/photos/_src/`
 
 | slot id | source | photo page |
 |---|---|---|
-| `hero-primary` | Pexels, Andres Ayrton | https://www.pexels.com/photo/faceless-black-couple-holding-hands-while-having-date-at-table-6579002/ (alt: https://www.pexels.com/photo/photo-of-a-laughing-couple-sitting-in-a-cafe-16756653/) |
-| `hero-secondary` | Pexels | https://www.pexels.com/photo/man-and-woman-looking-at-vinyl-records-6827193/ |
-| `turn` | Pexels | https://www.pexels.com/photo/people-eating-and-dining-together-6954063/ |
+| `hero-primary` | Pexels, Andres Ayrton | https://www.pexels.com/photo/happy-african-american-couple-hugging-each-other-6578931/ |
+| `hero-secondary` | Pexels, Andres Ayrton | https://www.pexels.com/photo/faceless-black-couple-holding-hands-while-having-date-at-table-6579002/ |
+| `turn` | Pexels, Andres Ayrton | https://www.pexels.com/photo/african-american-couple-drinking-wine-at-table-6579021/ |
 | `group-late-practice` | Pexels, Jeff Vinluan | https://www.pexels.com/photo/group-of-musicians-in-a-rehearsal-space-8827042/ |
 | `group-sunday-trail` | Pexels | https://www.pexels.com/photo/hikers-ascending-mountain-ridge-at-sunrise-30867724/ |
 | `group-table-for-six` | Pexels, coco HACHE | https://www.pexels.com/photo/top-view-of-people-sitting-at-table-eating-12412203/ |
-| `closing` | Pexels, Tokuo Nobuhiro | https://www.pexels.com/photo/couple-walking-on-street-during-night-time-9676247/ |
+| `closing` | Pexels, Amine İspir | https://www.pexels.com/photo/couple-hugging-on-the-street-13639163/ |
 
-Known compromises to fix on the real pass: `group-sunday-trail` is hikers, not
-runners. `hero-primary` is a native 2:3 portrait (no upscale) centre-cropped to
-4:5. Vet all seven against the evidence-vs-catalogue test before shipping for
-real.
+Direction (2026-09-06): the hero pair, `turn` and `closing` now carry
+"people in love" energy — a Black couple across the hero + wine-date + a
+night-street embrace. The three Communities covers stay as *group* scenes
+(band / trail / table-of-six) — that section is about the rooms people meet
+through, not couples.
+
+Known compromises: `group-sunday-trail` is hikers, not runners. `closing`
+(13639163) is a tall portrait hard-cropped to a 16/9 full-bleed — the hug sits
+low; reshoot or recrop for the real pass. Vet all against the
+evidence-vs-catalogue test before shipping.
 
 ---
 

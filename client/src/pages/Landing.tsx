@@ -486,7 +486,7 @@ export default function Landing() {
               <PhotoFrame
                 slot="hero-primary"
                 {...photo("hero-primary")}
-                alt="A couple holding hands across a restaurant table on a date, faces out of frame"
+                alt="A couple in a close embrace, both smiling"
                 ratio="4/5"
                 treatment="warm"
                 priority
@@ -510,7 +510,7 @@ export default function Landing() {
               <PhotoFrame
                 slot="hero-primary"
                 {...photo("hero-primary")}
-                alt="A couple holding hands across a restaurant table on a date, faces out of frame"
+                alt="A couple in a close embrace, both smiling"
                 ratio="4/5"
                 treatment="warm"
                 priority
@@ -524,7 +524,7 @@ export default function Landing() {
                 <PhotoFrame
                   slot="hero-secondary"
                   {...photo("hero-secondary")}
-                  alt="Two people side by side flipping through a crate of records in a dim room"
+                  alt="A couple holding hands across a restaurant table on a date"
                   ratio="1/1"
                   treatment="warm"
                   caption="THURSDAY · THE LISTENING ROOM"
@@ -585,7 +585,7 @@ export default function Landing() {
               <PhotoFrame
                 slot="turn"
                 {...photo("turn")}
-                alt="Friends laughing across a candlelit table, wine poured, plates between them"
+                alt="A couple sharing a bottle of wine across a table, leaning in toward each other"
                 ratio="16/9"
                 treatment="plain"
                 caption="NINETY SECONDS OF TWIN CONVERSATION, THEN AN ACTUAL EVENING"
