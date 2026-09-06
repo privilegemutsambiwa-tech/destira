@@ -9,12 +9,13 @@
 import { db } from "./db";
 import {
   events, eventAttendees, profiles, groupMembers, blockedUsers, groups, suburbCentroids,
-  twinNotifications, twinAlertLog,
+  twinNotifications, twinAlertLog, places, eventPhotos, eventContactViews,
+  PRIVATE_RESIDENCE_MIN_ATTENDEES,
   type Event, type InsertEvent, type EventAttendee,
-  type HostEventInput,
+  type HostEventInput, type EventLocationTier, type Place, type EventPhoto,
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
-import { eq, and, ne, or, inArray, asc, desc, gte, lte, count, isNull } from "drizzle-orm";
+import { eq, and, ne, or, ilike, inArray, asc, desc, gte, lte, count, isNull } from "drizzle-orm";
 import { computeResonance } from "./resonance";
 
 export class EventNotFoundError extends Error {
@@ -34,8 +35,59 @@ export class HostRateLimitError extends Error {
 export class ModeratorOnlyError extends Error {
   constructor() { super("Only a moderator can review events"); }
 }
+export class PhotoLimitError extends Error {
+  constructor() { super("A place gets 6 photos, no more."); }
+}
+export class ContactNotReleasedError extends Error {
+  constructor(msg = "Contact details unlock the day before, once you're confirmed as going.") { super(msg); }
+}
 
 export const HOST_WEEKLY_LIMIT = 3;
+
+// ── v3: location tier (server-computed, never host-declared) ──
+export function computeLocationTier(input: {
+  placeVerified: boolean;
+  isPrivateAddress: boolean;
+}): EventLocationTier {
+  if (input.isPrivateAddress) return "private_residence";
+  if (input.placeVerified) return "venue_verified";
+  return "venue_public_unverified";
+}
+
+export interface EventViewerCtx {
+  isHost: boolean;
+  myStatus: string | null;
+  goingCount: number;
+}
+
+// The ONE place an event row is sanitised for a viewer. No event read path may
+// return a raw row.
+//   addressLine  — host always; a 'going' attendee only when the event is
+//                  "confirmed viable" (private homes: >= minAttendees going AND
+//                  an approved host video; everywhere else: always)
+//   contactPhone / contactWhatsapp — host only in any payload; everyone else
+//                  goes through GET /api/events/:id/contact (24h + going gate)
+//   hostVideoUrl / poster — only once the video is 'approved'
+export function serializeEvent<T extends Event>(row: T, ctx: EventViewerCtx) {
+  const isPrivate = row.locationTier === "private_residence";
+  const minNeeded = row.minAttendees ?? PRIVATE_RESIDENCE_MIN_ATTENDEES;
+  const confirmedViable = !isPrivate || (ctx.goingCount >= minNeeded && row.hostVideoStatus === "approved");
+  const addressVisible = ctx.isHost || (ctx.myStatus === "going" && confirmedViable);
+  const approved = row.hostVideoStatus === "approved";
+
+  return {
+    ...row,
+    addressLine: addressVisible ? row.addressLine : null,
+    addressWithheld: !addressVisible && !!row.addressLine,
+    contactPhone: ctx.isHost ? row.contactPhone : null,
+    contactWhatsapp: ctx.isHost ? row.contactWhatsapp : null,
+    contributionAmount: row.contributionAmount != null ? Number(row.contributionAmount) : null,
+    hostVideoUrl: approved ? row.hostVideoUrl : null,
+    hostVideoPosterUrl: approved ? row.hostVideoPosterUrl : null,
+  };
+}
+
+export type SerializedEvent = ReturnType<typeof serializeEvent>;
 
 // Comma-separated user ids in EVENT_MODERATOR_IDS may approve first events out
 // of the pending_review queue. Empty = nobody (events stay held).
@@ -169,11 +221,15 @@ export async function listEvents(
   ]);
   const myStatusByEvent = new Map(myRows.map((r) => [r.eventId, r.status as AttendeeStatus]));
 
-  return rows.map((event) => ({
-    ...event,
-    resonance: blocks.get(event.id) || { goingCount: 0, highReadCount: 0, notableAttendees: [] },
-    myStatus: myStatusByEvent.get(event.id) ?? null,
-  }));
+  return rows.map((event) => {
+    const resonance = blocks.get(event.id) || { goingCount: 0, highReadCount: 0, notableAttendees: [] };
+    const myStatus = myStatusByEvent.get(event.id) ?? null;
+    return {
+      ...serializeEvent(event, { isHost: event.hostUserId === viewerId, myStatus, goingCount: resonance.goingCount }),
+      resonance,
+      myStatus,
+    };
+  });
 }
 
 export async function getEventDetail(eventId: number, viewerId: string) {
@@ -190,11 +246,15 @@ export async function getEventDetail(eventId: number, viewerId: string) {
       .where(and(eq(twinAlertLog.eventId, eventId), eq(twinAlertLog.userId, viewerId))),
   ]);
 
+  const resonance = blocks.get(eventId) || { goingCount: 0, highReadCount: 0, notableAttendees: [] };
+  const myStatus = (myRow?.status as AttendeeStatus | undefined) ?? null;
+  const photos = await listEventPhotos(eventId);
   return {
-    ...event,
-    resonance: blocks.get(eventId) || { goingCount: 0, highReadCount: 0, notableAttendees: [] },
-    myStatus: (myRow?.status as AttendeeStatus | undefined) ?? null,
+    ...serializeEvent(event, { isHost: event.hostUserId === viewerId, myStatus, goingCount: resonance.goingCount }),
+    resonance,
+    myStatus,
     twinFlagged: !!flagRow,
+    photos,
   };
 }
 
@@ -229,9 +289,31 @@ export async function createHostedEvent(hostUserId: string, data: HostEventInput
     .from(events)
     .where(and(eq(events.createdByUserId, hostUserId), eq(events.status, "published")))
     .limit(1);
-  const status = prior ? "published" : "pending_review";
 
-  const centroid = await suburbCentroidFor(data.suburb, data.city);
+  // v3: resolve place, compute the tier (never trust the client), and pull
+  // venue name / address / suburb from a matched place.
+  let placeVerified = false;
+  let venueName = data.venueName || null;
+  let suburb = data.suburb;
+  let city = data.city;
+  let addressLine = (data.addressLine || "").trim() || null;
+  if (data.placeId != null) {
+    const [place] = await db.select().from(places).where(eq(places.id, data.placeId));
+    if (place) {
+      placeVerified = place.verifiedAt != null;
+      venueName = venueName || place.name;
+      suburb = place.suburb;
+      city = place.city;
+      addressLine = place.addressLine;
+    }
+  }
+  const locationTier = computeLocationTier({ placeVerified, isPrivateAddress: data.isPrivateAddress });
+  const minAttendees = locationTier === "private_residence" ? PRIVATE_RESIDENCE_MIN_ATTENDEES : null;
+  // A private home never goes straight to 'published' — it needs the media /
+  // ID / numbers checks (Events v3 Conversation Three) before it can run.
+  const status = locationTier === "private_residence" ? "pending_review" : prior ? "published" : "pending_review";
+
+  const centroid = await suburbCentroidFor(suburb, city);
 
   const [event] = await db
     .insert(events)
@@ -244,9 +326,9 @@ export async function createHostedEvent(hostUserId: string, data: HostEventInput
       kind: data.kind,
       vibes: data.vibes,
       placeType: data.placeType,
-      venueName: data.venueName || null,
-      suburb: data.suburb,
-      city: data.city,
+      venueName,
+      suburb,
+      city,
       lat: centroid?.lat ?? null,
       lng: centroid?.lng ?? null,
       startsAt: data.startsAt,
@@ -257,6 +339,16 @@ export async function createHostedEvent(hostUserId: string, data: HostEventInput
       accessibility: data.accessibility,
       visibility: data.visibility,
       groupId: data.groupId ?? null,
+      placeId: data.placeId ?? null,
+      addressLine,
+      locationTier,
+      minAttendees,
+      costModel: data.costModel,
+      contributionAmount: data.contributionAmount != null ? String(data.contributionAmount) : null,
+      contributionCurrency: "USD",
+      contributionNote: data.contributionNote || null,
+      contactPhone: data.contactPhone || null,
+      contactWhatsapp: data.contactWhatsapp || null,
     })
     .returning();
   return event;
@@ -268,7 +360,14 @@ export async function updateEvent(eventId: number, hostUserId: string, data: Par
   const [event] = await db.select().from(events).where(eq(events.id, eventId));
   if (!event) throw new EventNotFoundError();
   if (event.hostUserId !== hostUserId) throw new NotEventHostError();
-  const { status, cancelReason, cancelledAt, hostUserId: _h, createdByUserId: _c, ...safe } = data as any;
+  const {
+    status, cancelReason, cancelledAt, hostUserId: _h, createdByUserId: _c,
+    // v3 — server-owned, never patchable by a host edit
+    locationTier: _lt, minAttendees: _ma, infoScore: _is,
+    hostVideoUrl: _hv, hostVideoPosterUrl: _hp, hostVideoDurationSec: _hd,
+    hostVideoStatus: _hs, hostVideoRejectReason: _hr,
+    ...safe
+  } = data as any;
   const patch: Record<string, unknown> = { ...safe };
   if (typeof safe.suburb === "string" || typeof safe.city === "string") {
     const centroid = await suburbCentroidFor(
@@ -320,9 +419,9 @@ export async function cancelHostedEvent(
   return updated;
 }
 
-export interface HostedEventRow extends Event {
+export type HostedEventRow = SerializedEvent & {
   goingCount: number;
-}
+};
 
 // Everything the current user hosts or created, any status, soonest first.
 export async function listHostedByUser(userId: string): Promise<HostedEventRow[]> {
@@ -340,7 +439,13 @@ export async function listHostedByUser(userId: string): Promise<HostedEventRow[]
         .groupBy(eventAttendees.eventId)
     : [];
   const countById = new Map(counts.map((r) => [r.eventId, Number(r.c)]));
-  return rows.map((r) => ({ ...r, goingCount: countById.get(r.id) ?? 0 }));
+  return rows.map((r) => {
+    const goingCount = countById.get(r.id) ?? 0;
+    return {
+      ...serializeEvent(r, { isHost: true, myStatus: null, goingCount }),
+      goingCount,
+    };
+  });
 }
 
 function seatStatusFor(seatModel: string, goingCount: number, seatCount: number | null): AttendeeStatus {
@@ -468,6 +573,191 @@ async function waitlistPosition(tx: any, eventId: number, attendeeRowId: number)
     .orderBy(asc(eventAttendees.createdAt));
   const idx = waitlisted.findIndex((r: { id: number }) => r.id === attendeeRowId);
   return idx === -1 ? waitlisted.length : idx + 1;
+}
+
+// ── v3: places, venue photos, host video, contact release ──────────────
+
+export async function listPlaces(q?: string, limit = 12): Promise<Place[]> {
+  if (q && q.trim()) {
+    const like = `%${q.trim()}%`;
+    return db
+      .select()
+      .from(places)
+      .where(or(ilike(places.name, like), ilike(places.suburb, like), ilike(places.addressLine, like)))
+      .orderBy(asc(places.name))
+      .limit(limit);
+  }
+  return db.select().from(places).orderBy(asc(places.name)).limit(limit);
+}
+
+export async function listEventPhotos(eventId: number): Promise<EventPhoto[]> {
+  return db
+    .select()
+    .from(eventPhotos)
+    .where(eq(eventPhotos.eventId, eventId))
+    .orderBy(asc(eventPhotos.sortOrder), asc(eventPhotos.id));
+}
+
+async function requireHost(eventId: number, hostUserId: string): Promise<Event> {
+  const [event] = await db.select().from(events).where(eq(events.id, eventId));
+  if (!event) throw new EventNotFoundError();
+  if (event.hostUserId !== hostUserId) throw new NotEventHostError();
+  return event;
+}
+
+export async function addEventPhoto(
+  eventId: number,
+  hostUserId: string,
+  photo: { url: string; width?: number | null; height?: number | null; caption?: string | null },
+): Promise<EventPhoto> {
+  await requireHost(eventId, hostUserId);
+  const [{ c }] = await db.select({ c: count() }).from(eventPhotos).where(eq(eventPhotos.eventId, eventId));
+  if (Number(c) >= 6) throw new PhotoLimitError();
+  const [row] = await db
+    .insert(eventPhotos)
+    .values({
+      eventId,
+      url: photo.url,
+      width: photo.width ?? null,
+      height: photo.height ?? null,
+      caption: photo.caption ? photo.caption.slice(0, 80) : null,
+      sortOrder: Number(c),
+    })
+    .returning();
+  return row;
+}
+
+export async function deleteEventPhoto(eventId: number, photoId: number, hostUserId: string): Promise<void> {
+  await requireHost(eventId, hostUserId);
+  await db.delete(eventPhotos).where(and(eq(eventPhotos.id, photoId), eq(eventPhotos.eventId, eventId)));
+}
+
+// The host video is RECORDED IN-APP only — there is no file-upload path. The
+// client posts the recorded blob + a captured poster frame; we store both and
+// queue for review. No server transcode (no ffmpeg): the .webm is served as-is.
+export async function setHostVideo(
+  eventId: number,
+  hostUserId: string,
+  v: { url: string; posterUrl: string; durationSec: number },
+): Promise<Event> {
+  await requireHost(eventId, hostUserId);
+  const [updated] = await db
+    .update(events)
+    .set({
+      hostVideoUrl: v.url,
+      hostVideoPosterUrl: v.posterUrl,
+      hostVideoDurationSec: Math.round(v.durationSec),
+      hostVideoStatus: "processing",
+      hostVideoRejectReason: null,
+    })
+    .where(eq(events.id, eventId))
+    .returning();
+  return updated;
+}
+
+export async function reviewHostVideo(
+  eventId: number,
+  moderatorId: string,
+  decision: "approve" | "reject",
+  reason?: string,
+): Promise<Event> {
+  if (!isEventModerator(moderatorId)) throw new ModeratorOnlyError();
+  const [event] = await db.select().from(events).where(eq(events.id, eventId));
+  if (!event) throw new EventNotFoundError();
+  const approved = decision === "approve";
+  const [updated] = await db
+    .update(events)
+    .set({
+      hostVideoStatus: approved ? "approved" : "rejected",
+      hostVideoRejectReason: approved ? null : reason || "It didn't meet the guidelines",
+    })
+    .where(eq(events.id, eventId))
+    .returning();
+  await db.insert(twinNotifications).values({
+    userId: event.hostUserId,
+    type: approved ? "host_video_approved" : "host_video_rejected",
+    title: approved
+      ? `Your video for "${event.title}" is live`
+      : `Your video for "${event.title}" wasn't approved`,
+    body: approved
+      ? "It now shows on the event page."
+      : reason || "Record another one, or host with photos only.",
+  });
+  return updated;
+}
+
+// Released only to a 'going' attendee, and only within 24h before start (to 6h
+// after). Every access is logged. The host always sees their own numbers.
+export async function getEventContact(
+  eventId: number,
+  viewerId: string,
+): Promise<{ phone: string | null; whatsapp: string | null }> {
+  const [event] = await db.select().from(events).where(eq(events.id, eventId));
+  if (!event) throw new EventNotFoundError();
+  if (event.hostUserId === viewerId) {
+    return { phone: event.contactPhone, whatsapp: event.contactWhatsapp };
+  }
+  const [att] = await db
+    .select({ status: eventAttendees.status })
+    .from(eventAttendees)
+    .where(and(eq(eventAttendees.eventId, eventId), eq(eventAttendees.userId, viewerId)));
+  if (att?.status !== "going") throw new ContactNotReleasedError();
+  const now = Date.now();
+  const opensAt = event.startsAt.getTime() - 24 * 60 * 60 * 1000;
+  const closesAt = event.startsAt.getTime() + 6 * 60 * 60 * 1000;
+  if (now < opensAt || now > closesAt) throw new ContactNotReleasedError();
+  await db.insert(eventContactViews).values({ eventId, viewerUserId: viewerId });
+  return { phone: event.contactPhone, whatsapp: event.contactWhatsapp };
+}
+
+export async function listContactViews(
+  eventId: number,
+  hostUserId: string,
+): Promise<Array<{ firstName: string; viewedAt: Date | null }>> {
+  await requireHost(eventId, hostUserId);
+  const rows = await db
+    .select({ viewedAt: eventContactViews.viewedAt, name: profiles.displayName })
+    .from(eventContactViews)
+    .leftJoin(profiles, eq(profiles.userId, eventContactViews.viewerUserId))
+    .where(eq(eventContactViews.eventId, eventId))
+    .orderBy(desc(eventContactViews.viewedAt));
+  return rows.map((r) => ({ firstName: (r.name || "Someone").split(" ")[0], viewedAt: r.viewedAt }));
+}
+
+// Real Harare + Bulawayo venues — a host matching one of these gets the
+// frictionless (venue_verified) path. Idempotent.
+const REAL_PLACES: Array<Omit<Place, "id" | "createdAt" | "verifiedAt" | "verifiedBy"> & { verified: boolean }> = [
+  { name: "Corner Table", addressLine: "5 Aberdeen Rd, Avondale", suburb: "Avondale", city: "Harare", lat: "-17.796900", lng: "31.038900", verified: true },
+  { name: "The Reading Room", addressLine: "12 King George Rd, Avondale", suburb: "Avondale", city: "Harare", lat: "-17.798000", lng: "31.040000", verified: true },
+  { name: "Bottega Cafe", addressLine: "Sam Levy's Village, Borrowdale", suburb: "Borrowdale", city: "Harare", lat: "-17.750000", lng: "31.083300", verified: true },
+  { name: "Amanzi Restaurant", addressLine: "158 Enterprise Rd, Highlands", suburb: "Highlands", city: "Harare", lat: "-17.790000", lng: "31.090000", verified: true },
+  { name: "The Coffee Studio", addressLine: "Doon Estate, Msasa", suburb: "Msasa", city: "Harare", lat: "-17.840000", lng: "31.120000", verified: true },
+  { name: "Cafe Nush", addressLine: "Sam Levy's Village, Borrowdale", suburb: "Borrowdale", city: "Harare", lat: "-17.750500", lng: "31.083800", verified: true },
+  { name: "Alliance Francaise", addressLine: "328 Herbert Chitepo Ave, Milton Park", suburb: "Milton Park", city: "Harare", lat: "-17.820000", lng: "31.030000", verified: true },
+  { name: "Mannenberg Jazz Club", addressLine: "Fife Ave Shopping Centre", suburb: "Belgravia", city: "Harare", lat: "-17.810000", lng: "31.045000", verified: true },
+  { name: "Harare Sports Club", addressLine: "Josiah Tongogara Ave", suburb: "Belgravia", city: "Harare", lat: "-17.808000", lng: "31.047000", verified: true },
+  { name: "Book Cafe (Alliance)", addressLine: "Josiah Tongogara Ave", suburb: "Belgravia", city: "Harare", lat: "-17.809000", lng: "31.046000", verified: true },
+  { name: "The Bulawayo Club", addressLine: "Cnr 8th Ave & Fort St", suburb: "CBD", city: "Bulawayo", lat: "-20.150000", lng: "28.583000", verified: true },
+  { name: "Indaba Book Cafe", addressLine: "Cnr Joshua Nkomo & 12th Ave", suburb: "CBD", city: "Bulawayo", lat: "-20.152000", lng: "28.585000", verified: true },
+  { name: "The Cornerstone", addressLine: "Hillside Rd, Hillside", suburb: "Hillside", city: "Bulawayo", lat: "-20.170000", lng: "28.610000", verified: true },
+  { name: "Kelvin's Restaurant", addressLine: "Kumalo Shopping Centre", suburb: "Kumalo", city: "Bulawayo", lat: "-20.150000", lng: "28.600000", verified: true },
+];
+
+export async function seedPlaces(): Promise<void> {
+  const existing = await db.select({ id: places.id }).from(places).limit(1);
+  if (existing.length > 0) return;
+  const now = new Date();
+  await db.insert(places).values(
+    REAL_PLACES.map((p) => ({
+      name: p.name,
+      addressLine: p.addressLine,
+      suburb: p.suburb,
+      city: p.city,
+      lat: p.lat,
+      lng: p.lng,
+      verifiedAt: p.verified ? now : null,
+    })),
+  );
 }
 
 // Idempotent, mirrors storage.seedDemoData()'s "if any exist, skip" pattern.

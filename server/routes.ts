@@ -12,6 +12,7 @@ import crypto from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import sharp from "sharp";
 import type { TwinProfileStructured } from "@shared/schema";
 import * as eventsService from "./events";
 import * as eventsFeed from "./events-feed";
@@ -3321,6 +3322,172 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // ── Events v3: places, venue photos, host video, contact release ──
+
+  app.get("/api/places", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const q = typeof req.query.q === "string" ? req.query.q : undefined;
+    try {
+      res.json(await eventsService.listPlaces(q));
+    } catch (e) {
+      console.error("List places error:", e);
+      res.status(500).json({ message: "Failed to load places" });
+    }
+  });
+
+  // Venue photos. EXIF (incl. GPS) is stripped by re-encoding through sharp —
+  // sharp drops all metadata unless withMetadata() is called. The original file
+  // is deleted; only the 480/960/1600 webp variants are kept.
+  app.post("/api/events/:id/photos", upload.single("image"), async (req: any, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    if (!req.file) return res.status(400).json({ message: "No image file provided" });
+    const src = req.file.path as string;
+    try {
+      const base = (req.file.filename as string).replace(/\.[^.]+$/, "");
+      const meta = await sharp(src).rotate().metadata();
+      const longEdge = Math.max(meta.width ?? 0, meta.height ?? 0);
+      if (longEdge < 1000) {
+        fs.unlink(src, () => {});
+        return res.status(422).json({ message: `That image is ${longEdge}px on the long edge — venue photos need at least 1000px.` });
+      }
+      for (const w of [480, 960, 1600]) {
+        await sharp(src)
+          .rotate()
+          .resize({ width: w, withoutEnlargement: true })
+          .webp({ quality: 82 })
+          .toFile(path.join(UPLOAD_DIR, `${base}-${w}.webp`));
+      }
+      fs.unlink(src, () => {});
+      const caption = typeof req.body?.caption === "string" ? req.body.caption : null;
+      const photo = await eventsService.addEventPhoto(eventId, userId, {
+        url: `/uploads/${base}-1600.webp`,
+        width: meta.width ?? null,
+        height: meta.height ?? null,
+        caption,
+      });
+      res.status(201).json(photo);
+    } catch (e) {
+      fs.unlink(src, () => {});
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof eventsService.NotEventHostError) return res.status(403).json({ message: e.message });
+      if (e instanceof eventsService.PhotoLimitError) return res.status(422).json({ message: e.message });
+      console.error("Event photo error:", e);
+      res.status(500).json({ message: "Failed to add photo" });
+    }
+  });
+
+  app.delete("/api/events/:id/photos/:photoId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    const photoId = parseInt(req.params.photoId, 10);
+    if (Number.isNaN(eventId) || Number.isNaN(photoId)) return res.status(400).json({ message: "Invalid id" });
+    try {
+      await eventsService.deleteEventPhoto(eventId, photoId, userId);
+      res.json({ success: true });
+    } catch (e) {
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof eventsService.NotEventHostError) return res.status(403).json({ message: e.message });
+      console.error("Delete event photo error:", e);
+      res.status(500).json({ message: "Failed to remove photo" });
+    }
+  });
+
+  // Host video — RECORDED IN-APP ONLY. The client posts the recorded webm blob
+  // plus a captured poster frame and the measured duration. No file-picker path
+  // exists on the client; there is no server transcode (no ffmpeg).
+  app.post(
+    "/api/events/:id/host-video",
+    upload.fields([{ name: "video", maxCount: 1 }, { name: "poster", maxCount: 1 }]),
+    async (req: any, res) => {
+      const userId = getUserId(req);
+      if (!userId) return res.sendStatus(401);
+      const eventId = parseInt(req.params.id, 10);
+      if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+      const video = req.files?.video?.[0];
+      const poster = req.files?.poster?.[0];
+      if (!video) return res.status(400).json({ message: "No video provided" });
+      const durationSec = Number(req.body?.durationSec);
+      if (!Number.isFinite(durationSec) || durationSec < 10 || durationSec > 60) {
+        return res.status(422).json({ message: "The video needs to be between 10 and 60 seconds." });
+      }
+      try {
+        const updated = await eventsService.setHostVideo(eventId, userId, {
+          url: `/uploads/${video.filename}`,
+          posterUrl: poster ? `/uploads/${poster.filename}` : "",
+          durationSec,
+        });
+        res.status(201).json({ hostVideoStatus: updated.hostVideoStatus });
+      } catch (e) {
+        if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+        if (e instanceof eventsService.NotEventHostError) return res.status(403).json({ message: e.message });
+        console.error("Host video error:", e);
+        res.status(500).json({ message: "Failed to save video" });
+      }
+    },
+  );
+
+  app.post("/api/events/:id/host-video/review", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    const { decision, reason } = req.body ?? {};
+    if (decision !== "approve" && decision !== "reject") {
+      return res.status(400).json({ message: "decision must be 'approve' or 'reject'" });
+    }
+    try {
+      const updated = await eventsService.reviewHostVideo(
+        eventId,
+        userId,
+        decision,
+        typeof reason === "string" ? reason : undefined,
+      );
+      res.json({ hostVideoStatus: updated.hostVideoStatus });
+    } catch (e) {
+      if (e instanceof eventsService.ModeratorOnlyError) return res.status(403).json({ message: e.message });
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      console.error("Review host video error:", e);
+      res.status(500).json({ message: "Failed to review video" });
+    }
+  });
+
+  // Contact release — 'going' attendees only, 24h before start to 6h after,
+  // every access logged. The host always sees their own numbers.
+  app.get("/api/events/:id/contact", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    try {
+      res.json(await eventsService.getEventContact(eventId, userId));
+    } catch (e) {
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof eventsService.ContactNotReleasedError) return res.status(403).json({ message: e.message });
+      console.error("Event contact error:", e);
+      res.status(500).json({ message: "Failed to load contact" });
+    }
+  });
+
+  app.get("/api/events/:id/contact-views", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    try {
+      res.json(await eventsService.listContactViews(eventId, userId));
+    } catch (e) {
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof eventsService.NotEventHostError) return res.status(403).json({ message: e.message });
+      console.error("List contact views error:", e);
+      res.status(500).json({ message: "Failed to load contact views" });
+    }
+  });
+
   app.post("/api/demo/seed", async (req, res) => {
     try {
       await storage.seedDemoData();
@@ -3412,9 +3579,10 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
 
   try {
     await eventsService.seedSuburbCentroids();
+    await eventsService.seedPlaces();
     await eventsService.seedEvents();
     await eventsService.backfillSeedEventsV2();
-    console.log("Demo events + suburb centroids seeded.");
+    console.log("Demo events + suburb centroids + places seeded.");
   } catch (e) {
     console.error("Failed to seed events on startup:", e);
   }

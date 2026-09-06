@@ -541,6 +541,31 @@ export const EVENT_TIME_WINDOWS = ["morning", "afternoon", "evening", "late"] as
 export const EVENT_ACCESS_NEEDS = ["step-free", "seated", "quiet-space"] as const;
 export const EVENT_VISIBILITY = ["public", "group", "invite"] as const;
 
+// ── Events v3 — venue media, contribution, safety ──
+// Location tier is ALWAYS server-computed from placeId / address / the private
+// toggle — a host can never declare their own tier.
+export const EVENT_LOCATION_TIERS = ["venue_verified", "venue_public_unverified", "private_residence"] as const;
+export const EVENT_COST_MODELS = ["free_hosted", "contribute", "pay_own_way"] as const;
+export const HOST_VIDEO_STATUSES = ["none", "processing", "approved", "rejected"] as const;
+export const PRIVATE_RESIDENCE_MIN_ATTENDEES = 4;
+export const MAX_CONTRIBUTION = 200;
+
+// Real venues, seeded and admin-confirmed. A host matching one of these gets
+// the frictionless path (venue_verified) with no photo/video requirement.
+export const places = pgTable("places", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  addressLine: text("address_line").notNull(),
+  suburb: text("suburb").notNull(),
+  city: text("city").notNull(),
+  lat: decimal("lat", { precision: 9, scale: 6 }),
+  lng: decimal("lng", { precision: 9, scale: 6 }),
+  verifiedAt: timestamp("verified_at"),
+  verifiedBy: varchar("verified_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+
 export const events = pgTable("events", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").references(() => groups.id),
@@ -574,6 +599,46 @@ export const events = pgTable("events", {
   ageMax: integer("age_max"),
   createdByUserId: varchar("created_by_user_id").references(() => users.id), // null = seed/system
   visibility: text("visibility").notNull().default("public"), // public | group | invite
+  // ── v3 ──
+  locationTier: text("location_tier").notNull().default("venue_public_unverified"), // SERVER-computed, never client-set
+  placeId: integer("place_id").references(() => places.id),
+  addressLine: text("address_line"),        // full street address — disclosure-gated (see serializeEvent)
+  costModel: text("cost_model").notNull().default("free_hosted"),
+  contributionAmount: decimal("contribution_amount", { precision: 8, scale: 2 }),
+  contributionCurrency: text("contribution_currency").notNull().default("USD"),
+  contributionNote: text("contribution_note"),
+  contactPhone: text("contact_phone"),      // NEVER in any list/detail payload; released via /contact only
+  contactWhatsapp: text("contact_whatsapp"), // NEVER in any list/detail payload
+  hostVideoUrl: text("host_video_url"),
+  hostVideoPosterUrl: text("host_video_poster_url"),
+  hostVideoDurationSec: integer("host_video_duration_sec"),
+  hostVideoStatus: text("host_video_status").notNull().default("none"),
+  hostVideoRejectReason: text("host_video_reject_reason"),
+  minAttendees: integer("min_attendees"),    // forced to 4 for private_residence
+  infoScore: integer("info_score").notNull().default(0), // computed — Events v3 Conversation Two
+});
+
+// Up to 6 per event. EXIF is stripped server-side on upload (mandatory — a
+// host's home photo must not carry GPS). `url` is the 1600w webp; 480/960
+// variants live at the same path with the width swapped.
+export const eventPhotos = pgTable("event_photos", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => events.id),
+  url: text("url").notNull(),
+  caption: text("caption"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  width: integer("width"),
+  height: integer("height"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Audit: every time an attendee unlocks a host's contact number. The host sees
+// this list on their manage screen; it is never exposed to anyone else.
+export const eventContactViews = pgTable("event_contact_views", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => events.id),
+  viewerUserId: varchar("viewer_user_id").notNull().references(() => users.id),
+  viewedAt: timestamp("viewed_at").defaultNow(),
 });
 
 // One row per user. Created lazily on first /api/events/feed hit.
@@ -701,6 +766,9 @@ export const eventPlaceTypeEnum = z.enum(EVENT_PLACE_TYPES);
 export const eventTimeWindowEnum = z.enum(EVENT_TIME_WINDOWS);
 export const eventAccessEnum = z.enum(EVENT_ACCESS_NEEDS);
 export const eventVisibilityEnum = z.enum(EVENT_VISIBILITY);
+export const eventCostModelEnum = z.enum(EVENT_COST_MODELS);
+export const eventLocationTierEnum = z.enum(EVENT_LOCATION_TIERS);
+export const hostVideoStatusEnum = z.enum(HOST_VIDEO_STATUSES);
 
 // PATCH /api/event-preferences — every field optional; arrays validated against
 // the closed taxonomies; numeric bounds enforced.
@@ -759,6 +827,20 @@ export const hostEventSchema = z
     accessibility: z.array(eventAccessEnum).max(3).default([]),
     visibility: eventVisibilityEnum.default("public"),
     groupId: z.coerce.number().int().positive().nullable().optional(),
+    // ── v3 — server owns locationTier / minAttendees / infoScore / hostVideo* ──
+    placeId: z.coerce.number().int().positive().nullable().optional(),
+    addressLine: z.string().trim().max(300).optional().or(z.literal("")),
+    isPrivateAddress: z.boolean().default(false),
+    costModel: eventCostModelEnum.default("free_hosted"),
+    contributionAmount: z.coerce
+      .number()
+      .positive()
+      .max(MAX_CONTRIBUTION, `Contributions over $${MAX_CONTRIBUTION} aren't allowed on VibeFlow.`)
+      .nullable()
+      .optional(),
+    contributionNote: z.string().trim().max(200).optional().or(z.literal("")),
+    contactPhone: z.string().trim().max(40).optional().or(z.literal("")),
+    contactWhatsapp: z.string().trim().max(40).optional().or(z.literal("")),
   })
   .refine((d) => d.seatModel === "open" || (d.seatCount != null && d.seatCount > 0), {
     message: "Set how many seats",
@@ -771,6 +853,10 @@ export const hostEventSchema = z
   .refine((d) => d.startsAt.getTime() > Date.now(), {
     message: "Pick a date in the future",
     path: ["startsAt"],
+  })
+  .refine((d) => d.costModel !== "contribute" || (d.contributionAmount != null && d.contributionAmount > 0), {
+    message: "Set how much everyone chips in",
+    path: ["contributionAmount"],
   });
 
 // POST /api/events/:id/cancel — a reason attendees will see.
@@ -932,6 +1018,12 @@ export type EventSearchQuery = z.infer<typeof eventSearchQuerySchema>;
 export type HostEventInput = z.infer<typeof hostEventSchema>;
 export type CancelEventInput = z.infer<typeof cancelEventSchema>;
 export type TwinAlertLogEntry = typeof twinAlertLog.$inferSelect;
+export type Place = typeof places.$inferSelect;
+export type EventPhoto = typeof eventPhotos.$inferSelect;
+export type EventContactView = typeof eventContactViews.$inferSelect;
+export type EventLocationTier = z.infer<typeof eventLocationTierEnum>;
+export type EventCostModel = z.infer<typeof eventCostModelEnum>;
+export type HostVideoStatus = z.infer<typeof hostVideoStatusEnum>;
 export type SeatModel = z.infer<typeof seatModelEnum>;
 export type AttendeeStatus = z.infer<typeof attendeeStatusEnum>;
 

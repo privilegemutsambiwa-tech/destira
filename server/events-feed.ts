@@ -42,7 +42,7 @@ import {
   type UpdateEventPreferences,
 } from "@shared/schema";
 import { and, eq, ilike, inArray, or } from "drizzle-orm";
-import { buildResonanceBlocks } from "./events";
+import { buildResonanceBlocks, serializeEvent, type SerializedEvent } from "./events";
 import {
   scoreEventForUser,
   resolveEventLocation,
@@ -136,13 +136,13 @@ export async function buildContext(userId: string): Promise<FeedContext> {
 
 type ResonanceBlock = NonNullable<ReturnType<Awaited<ReturnType<typeof buildResonanceBlocks>>["get"]>>;
 
-export interface FeedEvent extends Event {
+export type FeedEvent = SerializedEvent & {
   distanceKm: number;
   fitScore: number;
   resonance: ResonanceBlock;
   myStatus: string | null;
   twinFlagged: boolean;
-}
+};
 
 const EMPTY_BLOCK: ResonanceBlock = { goingCount: 0, highReadCount: 0, notableAttendees: [] };
 
@@ -168,14 +168,22 @@ async function decorate(
   ]);
   const myStatusByEvent = new Map(myRows.map((r) => [r.eventId, r.status]));
   const flagged = new Set(flaggedRows.map((r) => r.eventId));
-  return scored.map((s) => ({
-    ...s.event,
-    distanceKm: Math.round(s.distanceKm * 10) / 10,
-    fitScore: s.score,
-    resonance: blocks.get(s.event.id) ?? EMPTY_BLOCK,
-    myStatus: myStatusByEvent.get(s.event.id) ?? null,
-    twinFlagged: flagged.has(s.event.id),
-  }));
+  return scored.map((s) => {
+    const resonance = blocks.get(s.event.id) ?? EMPTY_BLOCK;
+    const myStatus = myStatusByEvent.get(s.event.id) ?? null;
+    return {
+      ...serializeEvent(s.event, {
+        isHost: s.event.hostUserId === userId,
+        myStatus,
+        goingCount: resonance.goingCount,
+      }),
+      distanceKm: Math.round(s.distanceKm * 10) / 10,
+      fitScore: s.score,
+      resonance,
+      myStatus,
+      twinFlagged: flagged.has(s.event.id),
+    };
+  });
 }
 
 // Live count for the distance slider on the preferences screen: published,
