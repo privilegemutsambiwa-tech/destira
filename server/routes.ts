@@ -19,6 +19,12 @@ import * as eventsFeed from "./events-feed";
 import * as twinEventAlerts from "./services/twin-event-alerts";
 import * as onboarding from "./onboarding";
 import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema, reminderKindEnum } from "@shared/schema";
+import { LIMITS, type Tier } from "@shared/entitlements";
+
+const normTier = (t: unknown): Tier =>
+  t === "spark" || t === "flame" || t === "ember" || t === "plus" || t === "vip"
+    ? ((t === "plus" ? "flame" : t === "vip" ? "ember" : t) as Tier)
+    : "free";
 import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
@@ -573,11 +579,14 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (userBlockedTarget) return res.status(403).json({ message: "You have blocked this user" });
 
       const profile = await storage.getProfile(userId);
-      const tier = profile?.subscriptionTier ?? "free";
-      const likeLimit = tier === "free" ? 5 : tier === "plus" ? 50 : Infinity;
+      const tier = normTier(profile?.subscriptionTier);
+      const likeLimit = LIMITS[tier].dailyLikes ?? Infinity;
       const currentLikes = await storage.getDailyLikeCount(userId);
       if (currentLikes >= likeLimit) {
-        return res.status(403).json({ upgradeRequired: true, message: `Daily like limit reached (${likeLimit}/day on ${tier} tier)` });
+        return res.status(403).json({
+          upgradeRequired: true, feature: "daily_likes", currentTier: tier, requiredTier: "spark",
+          message: `That's your ${likeLimit} likes for today. Your next ones land at midnight.`,
+        });
       }
 
       const existing = await storage.getMatchBetweenUsers(userId, targetId);
@@ -1643,11 +1652,14 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (!group) return res.status(404).json({ message: "Group not found" });
 
       const userProfile = await storage.getProfile(userId);
-      const tier = userProfile?.subscriptionTier ?? "free";
-      const groupLimit = tier === "free" ? 2 : tier === "plus" ? 10 : Infinity;
+      const tier = normTier(userProfile?.subscriptionTier);
+      const groupLimit = LIMITS[tier].groupsMax ?? Infinity;
       const userMemberships = await db.select().from(groupMembers).where(eq(groupMembers.userId, userId));
       if (userMemberships.length >= groupLimit) {
-        return res.status(403).json({ upgradeRequired: true, message: `Group limit reached (${groupLimit} groups on ${tier} tier)` });
+        return res.status(403).json({
+          upgradeRequired: true, feature: "join_group", currentTier: tier, requiredTier: "spark",
+          message: `You're in ${groupLimit} groups — the most this plan allows. Leave one, or move up a tier.`,
+        });
       }
 
       if (group.privacyMode === "request-to-join") {
@@ -3158,13 +3170,16 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     try {
       const profile = await storage.getProfile(userId);
-      const tier = profile?.subscriptionTier ?? "free";
-      const limit = tier === "free" ? 5 : tier === "plus" ? 50 : Infinity;
+      const tier = normTier(profile?.subscriptionTier);
+      const limit = LIMITS[tier].dailyLikes ?? Infinity;
       const currentCount = await storage.getDailyLikeCount(userId);
       if (currentCount >= limit) {
-        return res.status(403).json({ upgradeRequired: true, message: `Daily like limit reached (${limit}/day on ${tier} tier)` });
+        return res.status(403).json({
+          upgradeRequired: true, feature: "daily_likes", currentTier: tier, requiredTier: "spark",
+          message: `That's your ${limit} likes for today. Your next ones land at midnight.`,
+        });
       }
-      res.json({ success: true, count: currentCount, limit });
+      res.json({ success: true, count: currentCount, limit: limit === Infinity ? null : limit });
     } catch (err) {
       res.status(500).json({ message: "Failed to check like limit" });
     }

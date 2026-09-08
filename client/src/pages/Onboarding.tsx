@@ -66,7 +66,7 @@ export default function Onboarding() {
   const finishAndLeave = async () => {
     try {
       await complete.mutateAsync({ groupNickname: nickname || undefined, isPublic });
-      setLocation("/discover");
+      setLocation("/plans?intro=1");
     } catch (e: any) {
       toast({ title: e?.message || "Couldn't finish", variant: "destructive" });
     }

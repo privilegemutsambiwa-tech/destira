@@ -409,11 +409,17 @@ export const storyViews = pgTable("story_views", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Tier rows (free / spark / flame / ember). `tier` is the key; the limits and
+// copy live in shared/entitlements.ts. `durationDays` / `weeklyEquivalent` /
+// `isBestValue` are legacy from the old duration model — kept nullable until a
+// cleanup migration, not read anywhere.
 export const plans = pgTable("plans", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  durationDays: integer("duration_days").notNull(),
-  priceUsd: decimal("price_usd", { precision: 10, scale: 2 }).notNull(),
+  tier: varchar("tier"), // one of shared/entitlements TIERS; unique in practice (4 seed rows)
+  priceCents: integer("price_cents"),
+  durationDays: integer("duration_days"),
+  priceUsd: decimal("price_usd", { precision: 10, scale: 2 }),
   weeklyEquivalent: decimal("weekly_equivalent", { precision: 10, scale: 2 }),
   isBestValue: boolean("is_best_value").default(false),
   features: text("features").array(),

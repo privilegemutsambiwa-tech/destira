@@ -5,6 +5,7 @@ import { ResonanceAxes } from "@/components/resonance-axes";
 import { Brain, X, Loader2, MapPin, Heart, Play, Plus, Crown, Check, ArrowRight } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
 import { useTwinReadiness, useDismissReminder } from "@/hooks/use-onboarding";
+import { LIMITS } from "@shared/entitlements";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -707,13 +708,13 @@ export default function Discover() {
               })}
 
               <button
-                onClick={() => setLocation("/billing")}
+                onClick={() => setLocation("/plans")}
                 className="text-left rounded-[20px] border border-dashed border-vf-gold/35 bg-vf-gold/5 p-4 flex flex-col justify-center gap-2 hover:bg-vf-gold/[0.08] transition-colors"
                 data-testid="card-upgrade-teaser"
               >
-                <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">ember</div>
+                <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">plans</div>
                 <div className="text-[14px] leading-relaxed text-vf-text">
-                  Free accounts get 5 likes a day. Go Plus or VIP for more room to explore.
+                  Free gives you {LIMITS.free.dailyLikes} reads a day. A paid step means more room, and you can see who asked to meet you.
                 </div>
                 <span className="inline-flex items-center gap-1.5 text-[13px] text-vf-gold mt-0.5">
                   See plans <ArrowRight className="w-3.5 h-3.5" />
@@ -753,19 +754,19 @@ export default function Discover() {
             className="w-full max-w-[480px] rounded-t-[24px] border border-vf-line bg-vf-surface p-8 pb-12"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-[60px] h-[60px] rounded-full bg-vf-gold/15 flex items-center justify-center mx-auto mb-4">
-              <Crown className="w-7 h-7 text-vf-gold" />
-            </div>
-            <h2 className="font-serif text-xl text-center mb-2 text-vf-text">You've reached your daily limit</h2>
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold text-center mb-3">that's today's reads</div>
+            <h2 className="font-serif font-normal text-xl text-center mb-2 text-vf-text">
+              {LIMITS.free.dailyLikes} a day on Free.
+            </h2>
             <p className="text-sm text-center mb-6 text-vf-muted">
-              Free accounts get 5 likes per day. Upgrade to VibeFlow Plus for 50 likes/day, or go VIP for unlimited.
+              Your next ones land at midnight. A paid step gives you more room and lets you see who asked to meet you.
             </p>
             <button
-              onClick={() => { setShowUpgradePrompt(false); setLocation("/billing"); }}
+              onClick={() => { setShowUpgradePrompt(false); setLocation("/plans"); }}
               className="w-full py-3.5 rounded-full text-sm font-semibold bg-vf-gold text-vf-ink mb-3 hover:bg-[#F3D890] transition-colors"
               data-testid="button-upgrade-prompt"
             >
-              Upgrade Now
+              See plans
             </button>
             <button
               onClick={() => setShowUpgradePrompt(false)}

@@ -9,6 +9,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
+import { PLAN_CARDS as SETTINGS_PLAN_CARDS } from "@shared/entitlements";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -641,16 +642,18 @@ function VerifyPanel({ onBack }: { onBack: () => void }) {
   );
 }
 
-const TIER_LABELS: Record<string, { label: string; details: string; price: string; cycle: string }> = {
-  free: { label: "Free", details: "5 likes/day · 2 groups", price: "$0", cycle: "No billing" },
-  plus: { label: "Plus", details: "50 likes/day · 10 groups · Priority matching", price: "$9.99", cycle: "Billed monthly" },
-  vip: { label: "VIP", details: "Unlimited likes · Unlimited groups · All features", price: "$19.99", cycle: "Billed monthly" },
-};
-
 function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any }) {
   const [, setLocation] = useLocation();
-  const tier = profile?.subscriptionTier ?? "free";
-  const tierInfo = TIER_LABELS[tier] ?? TIER_LABELS.free;
+  const raw = profile?.subscriptionTier ?? "free";
+  const tier: "free" | "spark" | "flame" | "ember" =
+    raw === "plus" ? "flame" : raw === "vip" ? "ember" : (["spark", "flame", "ember"].includes(raw) ? raw : "free");
+  const card = SETTINGS_PLAN_CARDS.find((c) => c.tier === tier) ?? SETTINGS_PLAN_CARDS[0];
+  const tierInfo = {
+    label: card.name,
+    price: card.priceCents === 0 ? "$0" : `$${(card.priceCents / 100).toFixed(2)}`,
+    cycle: card.priceCents === 0 ? "No billing" : "Billed monthly, USD",
+    details: card.gets.slice(0, 3).join(" · "),
+  };
 
   return (
     <Panel title="Manage Billing" onBack={onBack}>
@@ -670,7 +673,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
 
       {tier === "free" && (
         <div style={{ padding: "0 16px 16px" }}>
-          <GradientButton label="Upgrade to VibeFlow Plus" onClick={() => setLocation("/billing")} testId="button-upgrade-billing" />
+          <GradientButton label="See plans" onClick={() => setLocation("/plans")} testId="button-upgrade-billing" />
         </div>
       )}
 
@@ -1245,7 +1248,7 @@ export default function Settings() {
 
         <div style={SECTION_HEADER_STYLE}>Subscription</div>
         <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
-          <ChevronRow icon={Crown} label="Upgrade Plan" sublabel="Get VIP access" onClick={() => setLocation("/billing")} testId="row-upgrade" />
+          <ChevronRow icon={Crown} label="Plans" sublabel="See what each plan gets you" onClick={() => setLocation("/plans")} testId="row-upgrade" />
           <ChevronRow icon={CreditCard} label="Manage Billing" sublabel="View plan, cancel subscription" onClick={() => setActivePanel("billing")} testId="row-billing" />
         </div>
 

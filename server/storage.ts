@@ -1134,12 +1134,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async seedDemoData(): Promise<void> {
-    const existingPlans = await db.select().from(plans).limit(1);
-    if (existingPlans.length === 0) {
+    // Tier plans. Reseed if the table is empty OR still holds the old
+    // duration-based rows (no `tier`) — the stale $54 "6 Months" row must not
+    // survive.
+    const existingPlans = await db.select().from(plans);
+    const isOldShape = existingPlans.length > 0 && existingPlans.every((p) => p.tier == null);
+    if (existingPlans.length === 0 || isOldShape) {
+      if (isOldShape) await db.delete(plans);
       await db.insert(plans).values([
-        { name: "1 Week", durationDays: 7, priceUsd: "4.99", weeklyEquivalent: "4.99", isBestValue: false, features: ["See who likes you", "Unlimited likes", "1 Super Match/week"] },
-        { name: "1 Month", durationDays: 30, priceUsd: "19.99", weeklyEquivalent: "4.99", isBestValue: false, features: ["See who likes you", "Unlimited likes", "5 Super Matches/month", "Read receipts", "Priority in Discover"] },
-        { name: "6 Months", durationDays: 180, priceUsd: "54.00", weeklyEquivalent: "2.25", isBestValue: true, features: ["See who likes you", "Unlimited likes", "Unlimited Super Matches", "Read receipts", "Priority in Discover", "Profile boost/month", "AI Twin premium features"] },
+        { name: "Free", tier: "free", priceCents: 0, isBestValue: false },
+        { name: "Spark", tier: "spark", priceCents: 499, isBestValue: false },
+        { name: "Flame", tier: "flame", priceCents: 999, isBestValue: true },
+        { name: "Ember", tier: "ember", priceCents: 1999, isBestValue: false },
       ]);
     }
 

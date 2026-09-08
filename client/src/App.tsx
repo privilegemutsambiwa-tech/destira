@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -26,8 +26,7 @@ import HostEvent from "@/pages/HostEvent";
 import PhotoManager from "@/pages/PhotoManager";
 import DirectChat from "@/pages/DirectChat";
 import TwinChat from "@/pages/TwinChat";
-import Billing from "@/pages/Billing";
-import Upgrade from "@/pages/Upgrade";
+import Plans from "@/pages/Plans";
 import GroupChatPage from "@/pages/GroupChat";
 import GroupInfoPage from "@/pages/GroupInfo";
 import GroupSettings from "@/pages/GroupSettings";
@@ -149,12 +148,11 @@ function Router() {
       <Route path="/twin-chat">
         <ProtectedRoute component={TwinChat} />
       </Route>
-      <Route path="/billing">
-        <ProtectedRoute component={Billing} />
+      <Route path="/plans">
+        <ProtectedRoute component={Plans} />
       </Route>
-      <Route path="/upgrade">
-        <ProtectedRoute component={Upgrade} />
-      </Route>
+      <Route path="/billing"><Redirect to="/plans" /></Route>
+      <Route path="/upgrade"><Redirect to="/plans" /></Route>
       <Route path="/settings">
         <ProtectedRoute component={Settings} />
       </Route>
