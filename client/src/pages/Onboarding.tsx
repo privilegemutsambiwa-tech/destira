@@ -1,307 +1,384 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { useGenerateTwin, useCreateProfile } from "@/hooks/use-profiles";
-import { useCheckNickname } from "@/hooks/use-interactions";
-import { Loader2, ArrowRight, Shield, Eye, EyeOff, Check, X, AtSign } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useCheckNickname } from "@/hooks/use-interactions";
+import {
+  useOnboarding,
+  useSaveOnboardingAnswer,
+  useCompleteOnboarding,
+  type OnboardingQuestion,
+} from "@/hooks/use-onboarding";
+import { useToast } from "@/hooks/use-toast";
 
-const QUESTIONS = [
-  "What are the top 3 values you live by? (e.g., honesty, adventure, family)",
-  "Describe your ideal Sunday. What are you doing, who are you with, and how does it feel?",
-  "How do you handle conflict in relationships? Give an example if you can.",
-  "What's a life goal you're actively working towards right now?",
-  "What does emotional intimacy mean to you?",
-  "What's a deal-breaker for you in a relationship?",
-  "How do you show love and appreciation to people you care about?",
-  "What's something surprising about you that most people don't know?",
-  "Describe the kind of partner energy you're looking for (e.g., calm, adventurous, intellectual).",
-  "What would you want your partner to say about you after a year together?",
-];
+const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
+const INPUT =
+  "w-full rounded-[12px] border border-vf-line bg-white/5 px-3.5 h-11 text-[15px] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60 transition-colors";
 
-const TOTAL_STEPS = QUESTIONS.length + 1;
-const NICKNAME_STEP = QUESTIONS.length;
+type Step = "nickname" | "deal" | number; // number = question index
+
+export default function Onboarding() {
+  const [, setLocation] = useLocation();
+  const { logout } = useAuth();
+  const { toast } = useToast();
+  const { data, isLoading } = useOnboarding();
+  const saveAnswer = useSaveOnboardingAnswer();
+  const complete = useCompleteOnboarding();
+
+  const questions: OnboardingQuestion[] = data?.questions ?? [];
+  const [step, setStep] = useState<Step>("nickname");
+  const [nickname, setNickname] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
+  // local edits keyed by question id
+  const [text, setText] = useState<Record<number, string>>({});
+  const [choice, setChoice] = useState<Record<number, string>>({});
+  const [seeded, setSeeded] = useState(false);
+
+  // Seed local state from the server once, and jump to where the user left off.
+  useEffect(() => {
+    if (seeded || !data) return;
+    setNickname(data.nickname || "");
+    const t: Record<number, string> = {};
+    const c: Record<number, string> = {};
+    data.questions.forEach((q) => {
+      if (q.answerText) t[q.id] = q.answerText;
+      if (q.selectedOptions?.[0]) c[q.id] = q.selectedOptions[0];
+    });
+    setText(t);
+    setChoice(c);
+    if (!data.nickname) setStep("nickname");
+    else if (data.readiness.answeredCount === 0) setStep("deal");
+    else {
+      const firstUnanswered = data.questions.findIndex((q) => !q.answered);
+      setStep(firstUnanswered === -1 ? data.questions.length - 1 : firstUnanswered);
+    }
+    setSeeded(true);
+  }, [data, seeded]);
+
+  const answeredCount = useMemo(
+    () =>
+      questions.filter(
+        (q) => (text[q.id]?.trim().length ?? 0) > 0 || (choice[q.id]?.length ?? 0) > 0 || q.answered,
+      ).length,
+    [questions, text, choice],
+  );
+
+  const finishAndLeave = async () => {
+    try {
+      await complete.mutateAsync({ groupNickname: nickname || undefined, isPublic });
+      setLocation("/discover");
+    } catch (e: any) {
+      toast({ title: e?.message || "Couldn't finish", variant: "destructive" });
+    }
+  };
+
+  const saveCurrent = async (q: OnboardingQuestion): Promise<boolean> => {
+    const t = text[q.id]?.trim();
+    const c = choice[q.id];
+    if (!t && !c) return true; // nothing to save, treat as skip
+    try {
+      await saveAnswer.mutateAsync(
+        q.answerType === "multiple_choice"
+          ? { questionId: q.id, selectedOptions: c ? [c] : [] }
+          : { questionId: q.id, answerText: t },
+      );
+      return true;
+    } catch (e: any) {
+      toast({ title: e?.message || "Couldn't save that", variant: "destructive" });
+      return false;
+    }
+  };
+
+  if (isLoading || !data) {
+    return (
+      <div className="min-h-screen bg-vf-ink flex items-center justify-center">
+        <Loader2 className="w-7 h-7 animate-spin text-vf-ember" />
+      </div>
+    );
+  }
+
+  // ── NICKNAME ─────────────────────────────────────────────────────────
+  if (step === "nickname") {
+    return (
+      <Shell>
+        <NicknameStep
+          value={nickname}
+          onChange={setNickname}
+          onNext={() => setStep(data.readiness.answeredCount === 0 ? "deal" : 0)}
+          onExit={() => logout()}
+        />
+      </Shell>
+    );
+  }
+
+  // ── THE DEAL ─────────────────────────────────────────────────────────
+  if (step === "deal") {
+    return (
+      <Shell>
+        <div className="rounded-[24px] border border-vf-line bg-vf-surface p-7 sm:p-9">
+          <div className={EYEBROW}>Before you start</div>
+          <h1
+            className="font-serif font-normal text-vf-text mt-3"
+            style={{ fontSize: "30px", lineHeight: 1.15, letterSpacing: "-0.01em" }}
+          >
+            Your twin only knows what you tell it.
+          </h1>
+          <p className="text-[15px] text-vf-muted leading-[1.65] mt-4 max-w-[46ch]">
+            Ten questions, about six minutes. You can skip any of them and answer later — but a
+            twin with two answers will guess, and you'll feel it in who you're shown.
+          </p>
+
+          <label className="flex items-center justify-between gap-4 mt-6 py-3 border-t border-vf-line">
+            <span className="text-[14px] text-vf-soft">
+              Show my profile to others
+              <span className="block text-[12px] text-vf-faint mt-0.5">
+                Off means people can't find you in Discover yet.
+              </span>
+            </span>
+            <Toggle on={isPublic} onChange={setIsPublic} />
+          </label>
+
+          <div className="flex flex-col gap-3 mt-7">
+            <button
+              onClick={() => setStep(0)}
+              className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[#FF8163]"
+              data-testid="button-answer-now"
+            >
+              Answer them now
+            </button>
+            <button
+              onClick={finishAndLeave}
+              disabled={complete.isPending}
+              className="text-[13px] text-vf-muted hover:text-vf-text transition-colors disabled:opacity-50"
+              data-testid="button-skip-for-now"
+            >
+              {complete.isPending ? "One moment…" : "Skip for now"}
+            </button>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ── QUESTIONS ────────────────────────────────────────────────────────
+  const idx = step as number;
+  const q = questions[idx];
+  if (!q) {
+    setLocation("/discover");
+    return null;
+  }
+  const isLast = idx === questions.length - 1;
+  const pct = Math.round((answeredCount / (questions.length || 10)) * 100);
+  const busy = saveAnswer.isPending || complete.isPending;
+
+  const goNext = async () => {
+    const ok = await saveCurrent(q);
+    if (!ok) return;
+    if (isLast) return finishAndLeave();
+    setStep(idx + 1);
+  };
+  const skipOne = () => {
+    if (isLast) return finishAndLeave();
+    setStep(idx + 1);
+  };
+
+  return (
+    <Shell>
+      <div className="mb-6 flex items-center justify-between">
+        <div className={EYEBROW}>
+          Question {idx + 1} of {questions.length}
+        </div>
+        <button
+          onClick={finishAndLeave}
+          disabled={busy}
+          className="text-[12.5px] text-vf-muted hover:text-vf-text transition-colors disabled:opacity-50"
+          data-testid="button-finish-later"
+        >
+          Finish later
+        </button>
+      </div>
+      <div className="h-1 rounded-full bg-white/10 overflow-hidden mb-8">
+        <div className="h-full bg-vf-ember transition-[width] duration-500" style={{ width: `${pct}%` }} />
+      </div>
+
+      <div className="rounded-[24px] border border-vf-line bg-vf-surface p-7 sm:p-9">
+        <h1
+          className="font-serif font-normal text-vf-text"
+          style={{ fontSize: "24px", lineHeight: 1.25, letterSpacing: "-0.01em" }}
+          data-testid="text-question"
+        >
+          {q.text}
+        </h1>
+
+        {q.answerType === "multiple_choice" && q.options ? (
+          <div className="flex flex-col gap-2.5 mt-7">
+            {q.options.map((opt) => {
+              const on = choice[q.id] === opt;
+              return (
+                <button
+                  key={opt}
+                  onClick={() => setChoice((c) => ({ ...c, [q.id]: on ? "" : opt }))}
+                  className={`text-left rounded-[12px] border px-4 py-3 text-[14.5px] transition-colors ${
+                    on
+                      ? "border-vf-ember/60 bg-vf-ember/[0.08] text-vf-text"
+                      : "border-vf-line text-vf-muted hover:text-vf-text hover:border-white/20"
+                  }`}
+                  data-testid={`option-${opt}`}
+                >
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <textarea
+            value={text[q.id] ?? ""}
+            onChange={(e) => setText((t) => ({ ...t, [q.id]: e.target.value }))}
+            placeholder="In your own words…"
+            className="mt-7 w-full min-h-[140px] bg-transparent border-0 border-b-2 border-vf-line focus:border-vf-ember rounded-none outline-none text-[16px] leading-[1.6] text-vf-text placeholder:text-vf-faint resize-none px-0"
+            autoFocus
+            data-testid="input-answer"
+          />
+        )}
+
+        <div className="flex items-center justify-between mt-8">
+          <button
+            onClick={skipOne}
+            disabled={busy}
+            className="text-[13px] text-vf-muted hover:text-vf-text transition-colors disabled:opacity-50"
+            data-testid="button-skip-one"
+          >
+            Skip this one
+          </button>
+          <button
+            onClick={goNext}
+            disabled={busy}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-11 px-7 text-[14px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-50"
+            data-testid="button-next"
+          >
+            {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+            {isLast ? "Finish" : "Next"}
+          </button>
+        </div>
+      </div>
+    </Shell>
+  );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-vf-ink text-vf-text flex items-center justify-center px-6 py-16">
+      <div className="w-full max-w-[520px]">{children}</div>
+    </div>
+  );
+}
+
+function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!on)}
+      aria-pressed={on}
+      className={`w-[44px] h-[26px] rounded-full shrink-0 flex items-center p-[3px] transition-colors ${
+        on ? "bg-vf-ember justify-end" : "bg-white/[0.14] justify-start"
+      }`}
+      data-testid="toggle-public"
+    >
+      <span className="block w-[20px] h-[20px] rounded-full" style={{ background: on ? "#0C0910" : "#CFC7DA" }} />
+    </button>
+  );
+}
 
 function NicknameStep({
   value,
   onChange,
   onNext,
-  onBack,
+  onExit,
 }: {
   value: string;
   onChange: (v: string) => void;
   onNext: () => void;
-  onBack: () => void;
+  onExit: () => void;
 }) {
-  const { data: nicknameCheck, isFetching } = useCheckNickname(value);
+  const { data: check, isFetching } = useCheckNickname(value);
   const [touched, setTouched] = useState(false);
-
-  const isValidFormat = /^[a-zA-Z0-9_]{3,20}$/.test(value);
-  const isAvailable = nicknameCheck?.available === true;
-  const showError = touched && value.length > 0 && !isValidFormat;
-  const showTaken = touched && isValidFormat && !isFetching && !isAvailable;
-  const showOk = isValidFormat && !isFetching && isAvailable;
+  const validFormat = /^[a-zA-Z0-9_]{3,20}$/.test(value);
+  const available = check?.available === true;
+  const showError = touched && value.length > 0 && !validFormat;
+  const showTaken = touched && validFormat && !isFetching && !available;
+  const ok = validFormat && !isFetching && available;
 
   return (
-    <div className="rounded-[22px] p-8 md:p-12 border border-vf-line bg-vf-surface">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-vf-ember">
-          <AtSign className="w-5 h-5 text-vf-ink" />
-        </div>
-        <h2 className="font-serif font-normal text-2xl md:text-3xl leading-tight text-vf-text" data-testid="text-nickname-title">
-          Choose your Group Nickname
-        </h2>
-      </div>
-      <p className="text-vf-muted mb-8 text-base">
-        This is how you'll appear in Lounge groups. It's unique, short, and stays with you.
+    <div className="rounded-[24px] border border-vf-line bg-vf-surface p-7 sm:p-9">
+      <div className={EYEBROW}>Your name in the Lounge</div>
+      <h1
+        className="font-serif font-normal text-vf-text mt-3"
+        style={{ fontSize: "28px", lineHeight: 1.2, letterSpacing: "-0.01em" }}
+      >
+        Pick a nickname.
+      </h1>
+      <p className="text-[14px] text-vf-muted leading-[1.6] mt-3">
+        It's how you show up in group chats. Short, unique, and it stays with you.
       </p>
 
-      <div className="relative mb-2">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-vf-faint">@</span>
-        <Input
+      <div className="relative mt-6">
+        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-vf-faint text-[15px]">@</span>
+        <input
           value={value}
-          onChange={(e) => { onChange(e.target.value.replace(/[^a-zA-Z0-9_]/g, "")); setTouched(true); }}
-          placeholder="cool_nickname"
-          className="pl-8 text-lg h-12 bg-vf-ink border-vf-line text-vf-text"
-          style={{ letterSpacing: "0.02em" }}
+          onChange={(e) => {
+            onChange(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""));
+            setTouched(true);
+          }}
+          placeholder="nickname"
           maxLength={20}
           autoFocus
+          className={`${INPUT} pl-8`}
           data-testid="input-nickname"
         />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+        <span className="absolute right-3.5 top-1/2 -translate-y-1/2">
           {isFetching && <Loader2 className="w-4 h-4 animate-spin text-vf-faint" />}
-          {!isFetching && showOk && <Check className="w-4 h-4" style={{ color: "#22C55E" }} />}
-          {!isFetching && showTaken && <X className="w-4 h-4 text-vf-ember" />}
-        </div>
+        </span>
       </div>
       <p
-        className={`text-xs mb-2 ${
-          showError || showTaken ? "text-vf-ember" : showOk ? "" : "text-vf-faint"
-        }`}
-        style={showOk ? { color: "#22C55E" } : undefined}
+        className={`text-[12px] mt-2 ${showError || showTaken ? "text-vf-ember" : "text-vf-faint"}`}
+        role={showError || showTaken ? "alert" : undefined}
       >
-        {showError ? "3-20 characters. Letters, numbers, and underscores only." :
-          showTaken ? "This nickname is already taken." :
-          showOk ? "Looks great! This nickname is available." :
-          "3-20 characters. Letters, numbers, and underscores only."}
+        {showError
+          ? "3–20 characters: letters, numbers and underscores."
+          : showTaken
+            ? "That one's taken."
+            : ok
+              ? "Available."
+              : "3–20 characters: letters, numbers and underscores."}
       </p>
 
-      {showTaken && Array.isArray(nicknameCheck?.suggestions) && nicknameCheck.suggestions.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 mb-8" data-testid="nickname-suggestions">
-          <span className="text-xs text-vf-faint">Try:</span>
-          {nicknameCheck.suggestions.map((s: string) => (
+      {showTaken && Array.isArray(check?.suggestions) && check!.suggestions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <span className="text-[12px] text-vf-faint">Try</span>
+          {check!.suggestions.map((s: string) => (
             <button
               key={s}
-              type="button"
               onClick={() => { onChange(s); setTouched(true); }}
-              className="text-xs px-3 py-1 rounded-full border border-vf-line text-vf-text hover:border-white/25 btn-press transition-colors"
-              data-testid={`nickname-suggestion-${s}`}
+              className="text-[12px] px-3 h-8 rounded-full border border-vf-line text-vf-text hover:border-white/25 transition-colors"
             >
               @{s}
             </button>
           ))}
         </div>
       )}
-      {!(showTaken && Array.isArray(nicknameCheck?.suggestions) && nicknameCheck.suggestions.length > 0) && (
-        <div className="mb-8" />
-      )}
 
-      <div className="flex justify-between items-center">
-        <Button variant="ghost" onClick={onBack} className="text-vf-faint hover:text-vf-text" data-testid="button-back-nickname">
-          Back
-        </Button>
-        <Button
-          size="lg"
+      <div className="flex items-center justify-between mt-8">
+        <button onClick={onExit} className="text-[13px] text-vf-muted hover:text-vf-text transition-colors" data-testid="button-exit">
+          Exit
+        </button>
+        <button
           onClick={onNext}
-          disabled={!showOk}
-          className="rounded-full px-8 h-12 text-base font-semibold btn-press bg-vf-ember text-vf-ink hover:bg-[#FF8163] disabled:opacity-40"
-          data-testid="button-next-nickname"
+          disabled={!ok}
+          className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold h-11 px-7 text-[14px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-40"
+          data-testid="button-nickname-next"
         >
-          Create My AI Twin
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-export default function Onboarding() {
-  const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [nickname, setNickname] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [privacyMode, setPrivacyMode] = useState(false);
-  const [, setLocation] = useLocation();
-  const { user, logout } = useAuth();
-
-  const generateTwin = useGenerateTwin();
-  const createProfile = useCreateProfile();
-
-  const handleNext = () => {
-    if (step < QUESTIONS.length - 1) {
-      setStep(step + 1);
-    } else if (step === QUESTIONS.length - 1) {
-      setStep(NICKNAME_STEP);
-    }
-  };
-
-  // There's no question before the first one, so "Back" here means leaving
-  // onboarding entirely. "/" always redirects a logged-in user straight back
-  // into onboarding (see App.tsx's AuthenticatedHome), so the only way to
-  // actually land on the public page is to log out first.
-  const handleBack = () => {
-    if (step > 0) {
-      setStep(step - 1);
-    } else {
-      logout();
-    }
-  };
-
-  const handleComplete = async () => {
-    setIsGenerating(true);
-    try {
-      const twinRes = await generateTwin.mutateAsync(Object.values(answers));
-
-      await createProfile.mutateAsync({
-        displayName: user?.firstName || "User",
-        bio: answers[7] || answers[3] || "New to VibeFlow",
-        personalityProfile: answers,
-        twinPersona: twinRes.twinPersona,
-        onboardingCompleted: true,
-        isPublic: !privacyMode,
-        groupNickname: nickname || undefined,
-      });
-
-      setLocation("/discover");
-    } catch (error) {
-      console.error("Onboarding failed:", error);
-      setIsGenerating(false);
-    }
-  };
-
-  const isNicknameStep = step === NICKNAME_STEP;
-  const progressPct = Math.round(((step + 1) / TOTAL_STEPS) * 100);
-
-  return (
-    <div className="min-h-screen bg-vf-ink flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-vf-mint/[0.06] rounded-full blur-[100px]" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-vf-ember/[0.06] rounded-full blur-[100px]" />
-      </div>
-
-      <div className="w-full max-w-2xl">
-        <div className="mb-8">
-          <div className="flex justify-between items-center text-sm font-medium text-vf-muted mb-4">
-            <span>Soul-Mapping in progress</span>
-            <span className="font-mono">{progressPct}%</span>
-          </div>
-          <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-            <motion.div
-              className="h-full bg-vf-mint"
-              initial={{ width: 0 }}
-              animate={{ width: `${progressPct}%` }}
-              transition={{ duration: 0.5 }}
-            />
-          </div>
-          <div className="flex justify-between items-center mt-4">
-            <span className="text-xs text-vf-faint">
-              {isNicknameStep ? "Final step" : `Question ${step + 1} of ${QUESTIONS.length}`}
-            </span>
-            <button
-              onClick={() => setPrivacyMode(!privacyMode)}
-              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-white/25 transition-colors"
-              data-testid="button-privacy-toggle"
-            >
-              {privacyMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              <Shield className="w-3.5 h-3.5" />
-              {privacyMode ? "Private Mode ON" : "Public Profile"}
-            </button>
-          </div>
-        </div>
-
-        <div className="relative min-h-[400px]">
-          <AnimatePresence mode="wait">
-            {!isGenerating ? (
-              isNicknameStep ? (
-                <motion.div
-                  key="nickname"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <NicknameStep
-                    value={nickname}
-                    onChange={setNickname}
-                    onNext={handleComplete}
-                    onBack={handleBack}
-                  />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key={step}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                  className="rounded-[22px] p-8 md:p-12 border border-vf-line bg-vf-surface"
-                >
-                  <h2 className="font-serif font-normal text-2xl md:text-3xl mb-8 leading-tight text-vf-text" data-testid="text-question">
-                    {QUESTIONS[step]}
-                  </h2>
-                  <Textarea
-                    value={answers[step] || ""}
-                    onChange={(e) => setAnswers({ ...answers, [step]: e.target.value })}
-                    placeholder="Type your answer honestly..."
-                    className="min-h-[150px] text-lg bg-transparent border-0 border-b-2 border-vf-line rounded-none focus-visible:ring-0 focus-visible:border-vf-ember px-0 resize-none text-vf-text placeholder:text-vf-faint mb-8"
-                    autoFocus
-                    data-testid="input-answer"
-                  />
-
-                  <div className="flex justify-between">
-                    <Button
-                      variant="ghost"
-                      onClick={handleBack}
-                      className="text-vf-faint hover:text-vf-text"
-                      data-testid="button-back"
-                    >
-                      {step === 0 ? "Exit" : "Back"}
-                    </Button>
-                    <Button
-                      size="lg"
-                      onClick={handleNext}
-                      disabled={!answers[step]?.trim()}
-                      className="rounded-full px-8 h-12 text-base font-semibold btn-press bg-vf-ember text-vf-ink hover:bg-[#FF8163] disabled:opacity-40"
-                      data-testid="button-next"
-                    >
-                      {step === QUESTIONS.length - 1 ? "Continue" : "Next Question"}
-                      <ArrowRight className="ml-2 w-4 h-4" />
-                    </Button>
-                  </div>
-                </motion.div>
-              )
-            ) : (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex flex-col items-center justify-center text-center h-full pt-12"
-              >
-                <div className="relative mb-8">
-                  <div className="absolute inset-0 bg-vf-mint/20 blur-xl rounded-full animate-pulse" />
-                  <div className="relative p-6 rounded-[22px] border border-vf-line bg-vf-surface">
-                    <Loader2 className="w-12 h-12 text-vf-mint animate-spin" />
-                  </div>
-                </div>
-                <h2 className="font-serif font-normal text-3xl mb-4 text-vf-text" data-testid="text-generating">Initializing AI Twin</h2>
-                <p className="text-lg text-vf-muted max-w-md mx-auto">
-                  We are analyzing your responses to create a digital persona that truly represents you. This takes just a moment.
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+          Continue
+        </button>
       </div>
     </div>
   );

@@ -7,16 +7,9 @@ import { useAuth } from "@/hooks/use-auth";
 const INPUT =
   "w-full rounded-[12px] border border-vf-line bg-white/5 px-3.5 h-11 text-sm text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow";
 const LABEL = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-1.5 block";
-const TEXTAREA = `${INPUT} h-auto py-3 resize-none leading-[1.5]`;
 
-// A four-question subset of the full onboarding — enough to make the twin
-// usable; the rest is answered in the app.
-const TWIN_QUESTIONS = [
-  "What are the top 3 values you live by?",
-  "Describe your ideal Sunday — what are you doing, and who with?",
-  "How do you handle conflict in a relationship? An example if you can.",
-  "What is a deal-breaker for you?",
-];
+// Signup collects the account + the basics only. The soul-mapping questions —
+// DB-driven, skippable, resumable — happen at /onboarding straight after.
 
 const STORE_KEY = "vf_signup_progress";
 
@@ -26,17 +19,15 @@ type Progress = {
   name: string;
   age: string;
   city: string;
-  answers: string[];
 };
 
-const BLANK: Progress = { step: 1, email: "", name: "", age: "", city: "", answers: ["", "", "", ""] };
+const BLANK: Progress = { step: 1, email: "", name: "", age: "", city: "" };
 
 function loadProgress(): Progress {
   try {
     const raw = sessionStorage.getItem(STORE_KEY);
     if (!raw) return BLANK;
-    const p = JSON.parse(raw);
-    return { ...BLANK, ...p, answers: Array.isArray(p.answers) ? [...BLANK.answers].map((a, i) => p.answers[i] ?? a) : BLANK.answers };
+    return { ...BLANK, ...JSON.parse(raw) };
   } catch {
     return BLANK;
   }
@@ -62,7 +53,7 @@ export default function Signup() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const { step, email, name, age, city, answers } = progress;
+  const { step, email, name, age, city } = progress;
   const patch = (p: Partial<Progress>) => setProgress((cur) => ({ ...cur, ...p }));
 
   const [cityChoice, setCityChoice] = useState(() =>
@@ -143,7 +134,7 @@ export default function Signup() {
     setBusy(true);
     try {
       await patchProfile({ displayName: name.trim(), age: ageNum, location: city.trim() });
-      patch({ step: 3 });
+      done(); // -> "/" -> AuthenticatedHome sends them into /onboarding
     } catch {
       setError("Could not save that. Try again.");
     } finally {
@@ -151,23 +142,7 @@ export default function Signup() {
     }
   };
 
-  const submitStep3 = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (answers.some((a) => a.trim().length < 3)) return setError("A short answer to each, please.");
-    setBusy(true);
-    try {
-      const personalityProfile = Object.fromEntries(answers.map((a, i) => [i, a.trim()]));
-      await patchProfile({ personalityProfile, onboardingCompleted: true });
-      done();
-    } catch {
-      setError("Could not save your answers. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const heading = step === 1 ? "Make your twin" : step === 2 ? "The basics" : "Four questions";
+  const heading = step === 1 ? "Create your account" : "The basics";
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-vf-ink text-vf-text py-16">
@@ -178,7 +153,7 @@ export default function Signup() {
 
         <div className="rounded-[24px] border border-vf-line bg-vf-surface p-7 sm:p-8">
           <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-            Step {step} of 3
+            Step {step} of 2
           </div>
           <h1
             className="font-serif font-normal text-vf-text mt-2"
@@ -312,39 +287,6 @@ export default function Signup() {
               >
                 {busy && <Loader2 className="w-4 h-4 animate-spin" />}
                 Continue
-              </button>
-            </form>
-          )}
-
-          {step === 3 && (
-            <form onSubmit={submitStep3} className="mt-7 flex flex-col gap-5">
-              <p className="text-[13px] text-vf-muted -mt-2">
-                Your twin uses these to start talking. You can change them any time.
-              </p>
-              {TWIN_QUESTIONS.map((q, i) => (
-                <div key={i}>
-                  <label htmlFor={`su-q${i}`} className="text-[13px] text-vf-soft mb-2 block">{q}</label>
-                  <textarea
-                    id={`su-q${i}`}
-                    rows={2}
-                    value={answers[i]}
-                    onChange={(e) => patch({ answers: answers.map((a, j) => (j === i ? e.target.value : a)) })}
-                    className={TEXTAREA}
-                    data-testid={`input-signup-q${i}`}
-                  />
-                </div>
-              ))}
-
-              {error && <p className="text-[13px] text-vf-ember" role="alert" data-testid="text-signup-error">{error}</p>}
-
-              <button
-                type="submit"
-                disabled={busy}
-                className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-50"
-                data-testid="button-signup-finish"
-              >
-                {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-                {busy ? "Saving…" : "Meet your twin"}
               </button>
             </form>
           )}

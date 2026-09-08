@@ -17,7 +17,8 @@ import type { TwinProfileStructured } from "@shared/schema";
 import * as eventsService from "./events";
 import * as eventsFeed from "./events-feed";
 import * as twinEventAlerts from "./services/twin-event-alerts";
-import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema } from "@shared/schema";
+import * as onboarding from "./onboarding";
+import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema, reminderKindEnum } from "@shared/schema";
 import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
@@ -1270,6 +1271,126 @@ Only include structured_updates fields if the conversation clearly reveals them.
       res.json({ questions: allQuestions, answeredIds, totalAnswered: answered.length, total: allQuestions.length });
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch questions" });
+    }
+  });
+
+  // ── Onboarding: DB-driven, skippable, resumable ──
+
+  app.get("/api/onboarding", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const [questions, readiness, profile] = await Promise.all([
+        onboarding.getOnboardingQuestions(userId),
+        onboarding.getTwinReadiness(userId),
+        storage.getProfile(userId),
+      ]);
+      res.json({ questions, readiness, nickname: profile?.groupNickname ?? "" });
+    } catch (e) {
+      console.error("Onboarding load error:", e);
+      res.status(500).json({ message: "Failed to load onboarding" });
+    }
+  });
+
+  app.post("/api/onboarding/answer", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const questionId = Number(req.body?.questionId);
+    if (!Number.isInteger(questionId)) return res.status(400).json({ message: "questionId required" });
+    const answerText = typeof req.body?.answerText === "string" ? req.body.answerText.trim() : undefined;
+    const selectedOptions = Array.isArray(req.body?.selectedOptions)
+      ? req.body.selectedOptions.filter((s: unknown) => typeof s === "string")
+      : undefined;
+    if (!answerText && !selectedOptions?.length) {
+      return res.status(400).json({ message: "An answer is required" });
+    }
+    try {
+      await onboarding.saveOnboardingAnswer(userId, questionId, {
+        answerText,
+        selectedOptions,
+        isPrivate: !!req.body?.isPrivate,
+      });
+      storage.upsertTwinProfileStructured(userId, {}).catch(() => {});
+      res.json(await onboarding.getTwinReadiness(userId));
+    } catch (e: any) {
+      if (e?.message === "Not an onboarding question") return res.status(400).json({ message: e.message });
+      console.error("Onboarding answer error:", e);
+      res.status(500).json({ message: "Failed to save answer" });
+    }
+  });
+
+  // Leaving onboarding by ANY route flips onboardingCompleted so nobody is
+  // trapped. Generates the twin only once the answer floor is met.
+  app.post("/api/onboarding/complete", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const nick = typeof req.body?.groupNickname === "string" ? req.body.groupNickname.trim() : undefined;
+    const isPublic = typeof req.body?.isPublic === "boolean" ? req.body.isPublic : true;
+    try {
+      if (nick && /^[a-zA-Z0-9_]{3,20}$/.test(nick)) {
+        const taken = await storage.isGroupNicknameTakenByOther(nick, userId);
+        if (taken) return res.status(409).json({ message: "This nickname is already taken" });
+      }
+      await onboarding.completeOnboarding(userId, nick, isPublic);
+      const readiness = await onboarding.getTwinReadiness(userId);
+
+      if (readiness.twinReady) {
+        const profile = await storage.getProfile(userId);
+        if (profile && !profile.twinPersona) {
+          const qs = await onboarding.getOnboardingQuestions(userId);
+          const answers = qs
+            .filter((q) => q.answered)
+            .map((q) => ({ q: q.text, a: q.answerText || (q.selectedOptions || []).join(", ") }));
+          ai.models
+            .generateContent({
+              model: "gemini-2.0-flash-001",
+              contents: [{ role: "user", parts: [{ text: JSON.stringify(answers) }] }],
+              config: {
+                systemInstruction:
+                  `You are an expert personality profiler for a dating app called VibeFlow. From the user's answers, write a warm first-person AI Twin persona ("I'm [name]'s AI Twin."). Cover values, interests, communication style, what they look for in a partner, and personality. 2-3 paragraphs.`,
+                maxOutputTokens: 8192,
+              },
+            })
+            .then((r) => storage.updateProfile(userId, { twinPersona: r.text || "" }))
+            .then(() => {
+              const map = Object.fromEntries(answers.map((x, i) => [i, x.a]));
+              return seedOnboardingIntoTwinMemory(userId, map as Record<string, string>);
+            })
+            .catch((err) => console.error("Twin gen on complete failed:", err));
+        }
+      }
+      res.json(readiness);
+    } catch (e) {
+      console.error("Onboarding complete error:", e);
+      res.status(500).json({ message: "Failed to finish onboarding" });
+    }
+  });
+
+  app.get("/api/twin/readiness", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const [readiness, dismissed] = await Promise.all([
+        onboarding.getTwinReadiness(userId),
+        onboarding.isReminderDismissed(userId, "discover_readiness_strip"),
+      ]);
+      res.json({ ...readiness, discoverStripDismissed: dismissed });
+    } catch (e) {
+      console.error("Readiness error:", e);
+      res.status(500).json({ message: "Failed to load readiness" });
+    }
+  });
+
+  app.post("/api/reminders/:kind/dismiss", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const parsed = reminderKindEnum.safeParse(req.params.kind);
+    if (!parsed.success) return res.status(400).json({ message: "Unknown reminder" });
+    try {
+      await onboarding.dismissReminder(userId, parsed.data);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to dismiss" });
     }
   });
 

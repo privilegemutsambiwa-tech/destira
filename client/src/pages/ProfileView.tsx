@@ -5,6 +5,7 @@ import { LayoutShell } from "@/components/layout-shell";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 import { useProfile, usePhotos, usePublicAnswers, useProfileGroups } from "@/hooks/use-profiles";
+import { useTwinReadiness } from "@/hooks/use-onboarding";
 import {
   useOutgoingLikes,
   useIncomingLikes,
@@ -41,6 +42,7 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
   const { data: groups = [] } = useProfileGroups(userId);
   const { data: outgoing } = useOutgoingLikes();
   const { data: incoming } = useIncomingLikes();
+  const { data: myReadiness } = useTwinReadiness();
   const startInterview = useStartInterview();
   const unmatch = useUnmatch();
 
@@ -347,6 +349,15 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
           Ember reads the rest.
         </button>
       </div>
+      {myReadiness && myReadiness.pct < 50 && (
+        <div className="mt-2.5 text-[12px] text-vf-mint/80 leading-[1.5]">
+          Your own twin has {myReadiness.answeredCount === 1 ? "one answer" : `${myReadiness.answeredCount} answers`} so far —{" "}
+          <button onClick={() => setLocation("/onboarding")} className="underline underline-offset-2 hover:text-vf-text transition-colors">
+            sharpen it
+          </button>
+          .
+        </div>
+      )}
     </div>
   ) : null;
 

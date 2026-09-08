@@ -522,6 +522,28 @@ export const dailyLikeCounts = pgTable("daily_like_counts", {
   count: integer("count").notNull().default(0),
 });
 
+// One row per (user, reminder kind). The in-app twin-readiness nudges are
+// dismissible but time-boxed and per-user (not per-device) — `dismissedUntil`
+// is set ~7 days out and the reminder returns after that.
+export const reminderDismissals = pgTable("reminder_dismissals", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  kind: text("kind").notNull(), // 'discover_readiness_strip'
+  dismissedUntil: timestamp("dismissed_until").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => [
+  uniqueIndex("reminder_dismissals_user_kind_idx").on(t.userId, t.kind),
+]);
+
+export const REMINDER_KINDS = ["discover_readiness_strip"] as const;
+export const reminderKindEnum = z.enum(REMINDER_KINDS);
+
+// The minimum answered soul-mapping questions below which the twin is NOT
+// generated and the twin layer shows as "not yet ready" rather than guessing.
+export const MIN_TWIN_ANSWERS = 3;
+
+export type ReminderDismissal = typeof reminderDismissals.$inferSelect;
+
 // Small, hosted, in-person events attached to a group (or platform-hosted when
 // groupId is null). seatModel drives allocation:
 //   'open'    - unlimited, seatCount ignored

@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { useIncomingLikes, useProfileCompletion } from "@/hooks/use-interactions";
+import { useIncomingLikes } from "@/hooks/use-interactions";
+import { useTwinReadiness } from "@/hooks/use-onboarding";
 import {
   Heart,
   MessageCircle,
@@ -22,7 +23,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
   const { data: likesData } = useIncomingLikes();
-  const { data: completion } = useProfileCompletion();
+  const { data: readiness } = useTwinReadiness();
 
   if (!user) {
     return <>{children}</>;
@@ -39,11 +40,12 @@ export function LayoutShell({ children }: LayoutShellProps) {
     { href: "/profile", icon: User, label: "Profile", badge: 0 },
   ];
 
-  const score = completion?.score ?? 0;
-  const nextTask = completion?.tasks?.find((t: any) => !t.completed);
-  const readinessCopy = nextTask
-    ? `${nextTask.label} — ${nextTask.benefit}`
-    : "Your twin profile is fully set up.";
+  const score = readiness?.pct ?? 0;
+  const remaining = readiness ? readiness.totalCount - readiness.answeredCount : 0;
+  const readinessCopy =
+    remaining <= 0
+      ? "Every question answered — your twin has the full picture."
+      : `Answer ${remaining === 1 ? "one more" : `${remaining} more`} — your twin gets sharper.`;
 
   return (
     <div className="min-h-screen bg-vf-ink">
@@ -110,7 +112,15 @@ export function LayoutShell({ children }: LayoutShellProps) {
               <div className="h-1 rounded-full bg-white/10 my-2.5 overflow-hidden">
                 <div className="h-full bg-vf-mint" style={{ width: `${score}%` }} />
               </div>
-              <div className="text-[12px] text-vf-muted leading-snug">{readinessCopy}</div>
+              {remaining > 0 ? (
+                <Link href="/onboarding">
+                  <a className="text-[12px] text-vf-mint hover:text-vf-text leading-snug transition-colors" data-testid="link-readiness-next">
+                    {readinessCopy}
+                  </a>
+                </Link>
+              ) : (
+                <div className="text-[12px] text-vf-muted leading-snug">{readinessCopy}</div>
+              )}
             </div>
 
             <div className="border-t border-vf-line pt-3.5">

@@ -4,6 +4,7 @@ import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 import { Brain, X, Loader2, MapPin, Heart, Play, Plus, Crown, Check, ArrowRight } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
+import { useTwinReadiness, useDismissReminder } from "@/hooks/use-onboarding";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -224,6 +225,40 @@ function ScopePill({ active, onToggle }: { active: boolean; onToggle: () => void
   );
 }
 
+function ReadinessStrip() {
+  const { data: r } = useTwinReadiness();
+  const dismiss = useDismissReminder();
+  const [, navigate] = useLocation();
+  if (!r || r.discoverStripDismissed || r.pct >= 50) return null;
+  return (
+    <div
+      className="mb-5 rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-start justify-between gap-3"
+      data-testid="strip-readiness"
+    >
+      <p className="text-[13px] text-vf-muted leading-[1.55]">
+        Your twin is answering interviews with {r.answeredCount === 1 ? "one answer" : `${r.answeredCount} answers`} to work
+        from.{" "}
+        <button
+          onClick={() => navigate("/onboarding")}
+          className="text-vf-mint hover:text-vf-text underline underline-offset-2 transition-colors"
+          data-testid="link-readiness-strip"
+        >
+          Answer a few more
+        </button>
+        .
+      </p>
+      <button
+        onClick={() => dismiss.mutate("discover_readiness_strip")}
+        className="text-vf-faint hover:text-vf-text transition-colors shrink-0 -mr-1 -mt-0.5"
+        aria-label="Dismiss"
+        data-testid="button-dismiss-readiness"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
 export default function Discover() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [filter, setFilter] = useState<FilterChip>(getInitialFilter);
@@ -436,6 +471,8 @@ export default function Discover() {
             <ScopePill active={filter === "nearby"} onToggle={() => { setFilter(filter === "nearby" ? "all" : "nearby"); setCurrentIdx(0); }} />
           </div>
         </div>
+
+        <ReadinessStrip />
 
         <StoriesCarousel />
 
