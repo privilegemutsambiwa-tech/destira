@@ -24,7 +24,7 @@ export default function Plans() {
       <div className="max-w-5xl mx-auto px-5 sm:px-8 py-6">
         <div className="flex items-center justify-between">
           <button onClick={() => setLocation("/")} className="text-vf-text" data-testid="link-home">
-            <VibeFlowLockup orientation="horizontal" size={26} />
+            <VibeFlowLockup orientation="horizontal" size={28} />
           </button>
           <button
             onClick={close}
