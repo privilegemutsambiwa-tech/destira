@@ -65,7 +65,7 @@ export function useSaveOnboardingAnswer() {
 export function useCompleteOnboarding() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input?: { groupNickname?: string; isPublic?: boolean }) => {
+    mutationFn: async (input?: { groupNickname?: string; isPublic?: boolean; timezone?: string }) => {
       const res = await fetch("/api/onboarding/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

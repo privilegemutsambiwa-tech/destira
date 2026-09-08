@@ -6,6 +6,7 @@ import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 import { useProfile, usePhotos, usePublicAnswers, useProfileGroups } from "@/hooks/use-profiles";
 import { useTwinReadiness } from "@/hooks/use-onboarding";
+import { useGate } from "@/hooks/use-gate";
 import {
   useOutgoingLikes,
   useIncomingLikes,
@@ -43,6 +44,7 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
   const { data: outgoing } = useOutgoingLikes();
   const { data: incoming } = useIncomingLikes();
   const { data: myReadiness } = useTwinReadiness();
+  const { data: transcriptGate } = useGate("read_transcript");
   const startInterview = useStartInterview();
   const unmatch = useUnmatch();
 
@@ -343,20 +345,35 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
         />
         <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint">When your twins talked</span>
       </div>
-      <div className="mt-4 flex flex-col gap-3.5">
-        {transcript.lines.map((l, i) => (
-          <div key={i}>
-            <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">{l.who === "hers" ? "Hers" : "Yours"}</div>
-            <p className="text-[14px] text-vf-soft" style={{ lineHeight: 1.55 }}>{l.text}</p>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 pt-3.5 border-t border-vf-mint/15 text-[12.5px] text-vf-muted">
-        <span className="font-serif text-vf-text">Two</span> of <span className="font-serif text-vf-text">{transcript.total}</span> lines.{" "}
-        <button onClick={() => setLocation("/plans")} className="text-vf-gold hover:text-[#F3D890] transition-colors">
-          Ember reads the rest.
-        </button>
-      </div>
+      {(() => {
+        const full = transcriptGate?.ok === true;
+        const shown = full ? transcript.lines : transcript.lines.slice(0, 2);
+        return (
+          <>
+            <div className="mt-4 flex flex-col gap-3.5">
+              {shown.map((l, i) => (
+                <div key={i}>
+                  <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">{l.who === "hers" ? "Hers" : "Yours"}</div>
+                  <p className="text-[14px] text-vf-soft" style={{ lineHeight: 1.55 }}>{l.text}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 pt-3.5 border-t border-vf-mint/15 text-[12.5px] text-vf-muted">
+              {full ? (
+                <>All <span className="font-serif text-vf-text">{transcript.total}</span> lines.</>
+              ) : (
+                <>
+                  <span className="font-serif text-vf-text">Two</span> of{" "}
+                  <span className="font-serif text-vf-text">{transcript.total}</span> lines.{" "}
+                  <button onClick={() => setLocation("/plans")} className="text-vf-gold hover:text-[#F3D890] transition-colors">
+                    Flame reads the rest.
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        );
+      })()}
       {myReadiness && myReadiness.pct < 50 && (
         <div className="mt-2.5 text-[12px] text-vf-mint/80 leading-[1.5]">
           Your own twin has {myReadiness.answeredCount === 1 ? "one answer" : `${myReadiness.answeredCount} answers`} so far —{" "}

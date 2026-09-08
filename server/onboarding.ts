@@ -116,12 +116,14 @@ export async function completeOnboarding(
   userId: string,
   groupNickname?: string,
   isPublic?: boolean,
+  timezone?: string,
 ): Promise<void> {
   const patch: Record<string, unknown> = { onboardingCompleted: true };
   if (groupNickname && /^[a-zA-Z0-9_]{3,20}$/.test(groupNickname)) {
     patch.groupNickname = groupNickname;
   }
   if (typeof isPublic === "boolean") patch.isPublic = isPublic;
+  if (typeof timezone === "string" && timezone.length > 1 && timezone.length < 64) patch.timezone = timezone;
   const readiness = await getTwinReadiness(userId);
   patch.twinQuestionsAnswered = readiness.answeredCount;
   const [existing] = await db.select().from(profiles).where(eq(profiles.userId, userId));

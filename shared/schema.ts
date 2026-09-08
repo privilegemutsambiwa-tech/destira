@@ -44,6 +44,7 @@ export const profiles = pgTable("profiles", {
   maxDistanceKm: integer("max_distance_km").default(100),
   ageMinPreference: integer("age_min_preference").default(18),
   ageMaxPreference: integer("age_max_preference").default(65),
+  timezone: text("timezone"), // IANA tz captured client-side; used for honest "resets at midnight" copy
   prompts: jsonb("prompts"), // ProfilePrompt[] — see profilePromptsSchema
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [
@@ -437,7 +438,11 @@ export const storyViews = pgTable("story_views", {
 export const plans = pgTable("plans", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  tier: varchar("tier"), // one of shared/entitlements TIERS; unique in practice (4 seed rows)
+  // one of shared/entitlements TIERS. Not a DB unique constraint — the 4-row
+  // startup seed is the sole writer and guarantees distinctness; adding the
+  // constraint to the populated table needs an interactive drizzle-kit truncate
+  // prompt for no real safety gain.
+  tier: varchar("tier"),
   priceCents: integer("price_cents"),
   durationDays: integer("duration_days"),
   priceUsd: decimal("price_usd", { precision: 10, scale: 2 }),

@@ -10,7 +10,7 @@
 // they're back on Flame+.
 
 import { db } from "./db";
-import { subscriptions, profiles, interviews, groupMembers, dailyLikeCounts } from "@shared/schema";
+import { subscriptions, profiles, interviews, groupMembers, groups, groupMessages, dailyLikeCounts } from "@shared/schema";
 import { and, eq, gte, count } from "drizzle-orm";
 import { LIMITS, tierRank, FEATURE_MIN_TIER, type Tier, type Feature } from "@shared/entitlements";
 
@@ -43,11 +43,27 @@ export async function getEffectiveTier(userId: string): Promise<Tier> {
   return sub ? "free" : coerceTier(p?.tier);
 }
 
-/** Local midnight tonight, ISO — "your next likes land at …". Server TZ. */
-export function nextMidnightISO(): string {
-  const d = new Date();
-  d.setHours(24, 0, 0, 0);
-  return d.toISOString();
+/** The instant of the next local midnight in `tz` (IANA), as an ISO string.
+ *  Falls back to server time when tz is missing or invalid. */
+export function nextMidnightISO(tz?: string | null): string {
+  const now = new Date();
+  let wall = now;
+  try {
+    if (tz) wall = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+  } catch {
+    wall = now;
+  }
+  const msIntoDay =
+    wall.getHours() * 3_600_000 +
+    wall.getMinutes() * 60_000 +
+    wall.getSeconds() * 1_000 +
+    wall.getMilliseconds();
+  return new Date(now.getTime() + (86_400_000 - msIntoDay)).toISOString();
+}
+
+async function userTimezone(userId: string): Promise<string | null> {
+  const [p] = await db.select({ tz: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));
+  return p?.tz ?? null;
 }
 
 export interface GateResult {
@@ -81,14 +97,27 @@ async function usage(userId: string, feature: Feature): Promise<number> {
         .from(groupMembers)
         .where(eq(groupMembers.userId, userId))
         .then((r) => Number(r[0]?.n ?? 0));
+    case "create_group":
+      return db
+        .select({ n: count() })
+        .from(groups)
+        .where(eq(groups.ownerId, userId))
+        .then((r) => Number(r[0]?.n ?? 0));
+    case "lounge_post":
+      return db
+        .select({ n: count() })
+        .from(groupMessages)
+        .where(and(eq(groupMessages.userId, userId), gte(groupMessages.createdAt, new Date(new Date().setHours(0, 0, 0, 0)))))
+        .then((r) => Number(r[0]?.n ?? 0));
     default:
       return 0;
   }
 }
 
-// Boolean features (see_who_asked, read_transcript full, host_event, create_group)
-// gate on tier rank. Metered features (likes, interviews, group membership) gate
-// on a count vs the tier limit.
+// Pure booleans (see_who_asked, full read_transcript, host_event) gate on tier.
+// create_group is a "can, up to N" — a boolean floor AND a count cap (Flame = 3).
+// The rest (likes, interviews, group membership, lounge posts) are metered on a
+// count vs the tier limit.
 export async function checkGate(
   userId: string,
   feature: Feature,
@@ -96,12 +125,12 @@ export async function checkGate(
 ): Promise<GateResult> {
   const tier = await getEffectiveTier(userId);
   const limits = LIMITS[tier];
+  const dailyReset = feature === "daily_likes" || feature === "lounge_post";
 
   const boolMap: Partial<Record<Feature, boolean>> = {
     see_who_asked: limits.seeWhoAsked,
     read_transcript: limits.transcriptLines == null,
     host_event: limits.canHostEvent,
-    create_group: limits.groupsCreatedMax > 0,
   };
   if (feature in boolMap) {
     const allowed = boolMap[feature]!;
@@ -114,6 +143,29 @@ export async function checkGate(
           requiredTier: FEATURE_MIN_TIER[feature],
           message: upgradeMessage(feature, FEATURE_MIN_TIER[feature]),
         };
+  }
+
+  if (feature === "create_group") {
+    const cap = limits.groupsCreatedMax; // 0 / 0 / 3 / 999
+    if (cap <= 0) {
+      return {
+        ok: false,
+        tier,
+        limit: 0,
+        requiredTier: FEATURE_MIN_TIER.create_group,
+        message: upgradeMessage("create_group", FEATURE_MIN_TIER.create_group),
+      };
+    }
+    const owned = opts.countOverride ?? (await usage(userId, "create_group"));
+    if (owned < cap) return { ok: true, tier, limit: cap, used: owned };
+    return {
+      ok: false,
+      tier,
+      limit: cap,
+      used: owned,
+      requiredTier: nextTierUp(tier),
+      message: `You've created ${cap} groups — that's the ${tier[0].toUpperCase() + tier.slice(1)} limit. Ember lifts it.`,
+    };
   }
 
   const limit =
@@ -136,9 +188,9 @@ export async function checkGate(
     tier,
     limit,
     used,
-    resetAt: feature === "daily_likes" || feature === "lounge_post" ? nextMidnightISO() : undefined,
+    resetAt: dailyReset ? nextMidnightISO(await userTimezone(userId)) : undefined,
     requiredTier: nextTierUp(tier),
-    message: meteredMessage(feature, limit, feature === "daily_likes" || feature === "lounge_post"),
+    message: meteredMessage(feature, limit, dailyReset),
   };
 }
 

@@ -1,5 +1,25 @@
+import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type InsertProfile } from "@shared/schema";
+
+// Records the viewer's IANA timezone once, so limit-reset copy ("resets at
+// midnight") is honest to their actual clock. No-op once set.
+export function useCaptureTimezone() {
+  const { data: profile } = useProfile();
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current || !profile || (profile as any).timezone) return;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!tz) return;
+    done.current = true;
+    fetch("/api/profile/timezone", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ timezone: tz }),
+    }).catch(() => {});
+  }, [profile]);
+}
 
 export function useProfile(userId?: string) {
   const url = userId ? `/api/profiles/${userId}` : "/api/profiles/me";

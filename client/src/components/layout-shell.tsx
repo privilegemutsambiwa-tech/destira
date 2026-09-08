@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useIncomingLikes } from "@/hooks/use-interactions";
 import { useTwinReadiness } from "@/hooks/use-onboarding";
+import { useCaptureTimezone } from "@/hooks/use-profiles";
 import {
   Heart,
   MessageCircle,
@@ -24,6 +25,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const [location] = useLocation();
   const { data: likesData } = useIncomingLikes();
   const { data: readiness } = useTwinReadiness();
+  useCaptureTimezone();
 
   if (!user) {
     return <>{children}</>;

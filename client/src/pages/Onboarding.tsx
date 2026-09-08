@@ -65,7 +65,11 @@ export default function Onboarding() {
 
   const finishAndLeave = async () => {
     try {
-      await complete.mutateAsync({ groupNickname: nickname || undefined, isPublic });
+      await complete.mutateAsync({
+        groupNickname: nickname || undefined,
+        isPublic,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
       setLocation("/plans?intro=1");
     } catch (e: any) {
       toast({ title: e?.message || "Couldn't finish", variant: "destructive" });

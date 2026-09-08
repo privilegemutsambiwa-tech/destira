@@ -1325,12 +1325,13 @@ Only include structured_updates fields if the conversation clearly reveals them.
     if (!userId) return res.sendStatus(401);
     const nick = typeof req.body?.groupNickname === "string" ? req.body.groupNickname.trim() : undefined;
     const isPublic = typeof req.body?.isPublic === "boolean" ? req.body.isPublic : true;
+    const timezone = typeof req.body?.timezone === "string" ? req.body.timezone : undefined;
     try {
       if (nick && /^[a-zA-Z0-9_]{3,20}$/.test(nick)) {
         const taken = await storage.isGroupNicknameTakenByOther(nick, userId);
         if (taken) return res.status(409).json({ message: "This nickname is already taken" });
       }
-      await onboarding.completeOnboarding(userId, nick, isPublic);
+      await onboarding.completeOnboarding(userId, nick, isPublic, timezone);
       const readiness = await onboarding.getTwinReadiness(userId);
 
       if (readiness.twinReady) {
@@ -1375,6 +1376,21 @@ Only include structured_updates fields if the conversation clearly reveals them.
       res.json(g);
     } catch (e) {
       res.status(400).json({ message: "Unknown feature" });
+    }
+  });
+
+  // Set once, client-side, so "your likes reset at midnight" is true for the
+  // user's actual clock. No-op if already set to the same value.
+  app.post("/api/profile/timezone", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const tz = typeof req.body?.timezone === "string" ? req.body.timezone : "";
+    if (tz.length < 2 || tz.length > 64) return res.status(400).json({ message: "bad tz" });
+    try {
+      await storage.updateProfile(userId, { timezone: tz } as any);
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ message: "Failed to save timezone" });
     }
   });
 
@@ -1884,6 +1900,10 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (group?.postingPermission === "admins_only" && member.role === "member") {
         return res.status(403).json({ message: "Only admins can post in this group" });
       }
+
+      // Free-tier Lounge posting is metered per day (an admin/owner posting the
+      // event details is not — they're managing, not chatting).
+      if (member.role === "member" && (await gate.denyIfGated(res, userId, "lounge_post"))) return;
 
       if ((contentType === "image" || contentType === "video") && group?.mediaPermission === "admin_only" && member.role === "member") {
         return res.status(403).json({ message: "Only admins can post media in this group" });
