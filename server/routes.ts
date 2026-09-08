@@ -2208,9 +2208,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   });
 
   app.get("/api/groups/:id/messages", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
     const groupId = parseInt(req.params.id);
     try {
-      const msgs = await storage.getGroupMessages(groupId);
+      // Members only, and only what was sent after they joined.
+      const msgs = await storage.getVisibleGroupMessages(groupId, userId);
       res.json(msgs);
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch messages" });
@@ -2473,7 +2476,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     try {
       const member = await storage.getGroupMember(groupId, userId);
       if (!member) return res.status(403).json({ message: "Not a member" });
-      const msgs = await storage.getGroupMessages(groupId, 500);
+      const msgs = await storage.getGroupMessages(groupId, 500, member.joinedAt ?? undefined);
       const results = msgs.filter(m =>
         !m.deletedForEveryone && !m.isDeletedByAdmin &&
         m.content.toLowerCase().includes(query)
@@ -2653,7 +2656,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     const groupId = parseInt(req.params.id);
     try {
-      const msgs = await storage.getGroupMessages(groupId, 200);
+      // Members only, and only messages from after they joined.
+      const msgs = await storage.getVisibleGroupMessages(groupId, userId, 200);
       const msgIds = msgs.map(m => m.id);
       const reactions = msgIds.length > 0 ? await storage.getReactionsForMessages(msgIds) : [];
       const reactionsByMsg: Record<number, any[]> = {};
@@ -3062,7 +3066,10 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         const isMember = Boolean(myMember);
         const myRole = myMember?.role;
         const isMuted = myMember?.isMuted ?? false;
-        const msgs = await storage.getGroupMessages(g.id, 1);
+        // Only members get a message preview, and only from after they joined.
+        const msgs = myMember
+          ? await storage.getGroupMessages(g.id, 1, myMember.joinedAt ?? undefined)
+          : [];
         const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
         return {
           ...g,

@@ -80,7 +80,8 @@ export interface IStorage {
   isGroupMember(groupId: number, userId: string): Promise<boolean>;
   updateGroupMemberRole(groupId: number, userId: string, role: string): Promise<GroupMember>;
   removeGroupMember(groupId: number, userId: string): Promise<void>;
-  getGroupMessages(groupId: number, limit?: number): Promise<GroupMessage[]>;
+  getGroupMessages(groupId: number, limit?: number, since?: Date): Promise<GroupMessage[]>;
+  getVisibleGroupMessages(groupId: number, userId: string, limit?: number): Promise<GroupMessage[]>;
   getGroupMessage(messageId: number): Promise<GroupMessage | undefined>;
   sendGroupMessage(groupId: number, userId: string, nickname: string, content: string, opts?: { contentType?: string; mediaUrl?: string; replyToMessageId?: number }): Promise<GroupMessage>;
   deleteGroupMessage(messageId: number): Promise<GroupMessage>;
@@ -615,11 +616,23 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
-  async getGroupMessages(groupId: number, limit: number = 50): Promise<GroupMessage[]> {
+  async getGroupMessages(groupId: number, limit: number = 50, since?: Date): Promise<GroupMessage[]> {
+    const where = since
+      ? and(eq(groupMessages.groupId, groupId), gte(groupMessages.createdAt, since))
+      : eq(groupMessages.groupId, groupId);
     return db.select().from(groupMessages)
-      .where(eq(groupMessages.groupId, groupId))
+      .where(where)
       .orderBy(asc(groupMessages.createdAt))
       .limit(limit);
+  }
+
+  // What a given user is allowed to see: nothing unless they're a member, and
+  // only messages sent at or after they joined. History from before their join
+  // (or from a spell when they'd left) stays hidden.
+  async getVisibleGroupMessages(groupId: number, userId: string, limit: number = 50): Promise<GroupMessage[]> {
+    const member = await this.getGroupMember(groupId, userId);
+    if (!member) return [];
+    return this.getGroupMessages(groupId, limit, member.joinedAt ?? undefined);
   }
 
   async getGroupMessage(messageId: number): Promise<GroupMessage | undefined> {
