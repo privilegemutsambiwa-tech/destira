@@ -49,6 +49,8 @@ function InterestRow({
   photoUrl,
   score,
   right,
+  onOpen,
+  hoverLabel,
   testId,
 }: {
   name: string;
@@ -56,15 +58,16 @@ function InterestRow({
   photoUrl?: string | null;
   score: number | null;
   right: React.ReactNode;
+  /** When set, the avatar + name/score area becomes a target that opens the profile. */
+  onOpen?: () => void;
+  /** Replaces the mono right-hand label on row hover (You asked tab). */
+  hoverLabel?: string;
   testId?: string;
 }) {
-  return (
-    <div
-      className="flex items-center gap-3 py-3.5 border-b border-vf-line last:border-b-0"
-      data-testid={testId}
-    >
+  const identity = (
+    <>
       <Avatar name={name} photoUrl={photoUrl} />
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 text-left">
         <p className="text-[15px] text-vf-text truncate">
           {name}
           {age ? <span className="text-vf-muted">, {age}</span> : null}
@@ -78,7 +81,40 @@ function InterestRow({
           </p>
         )}
       </div>
-      <div className="flex items-center gap-2 shrink-0">{right}</div>
+    </>
+  );
+
+  return (
+    <div
+      className={`group flex items-center gap-3 border-b border-vf-line last:border-b-0 min-h-[72px] py-3 transition-colors ${
+        onOpen ? "rounded-[14px] px-3 -mx-3 hover:bg-white/[0.035] focus-within:bg-white/[0.035]" : ""
+      }`}
+      data-testid={testId}
+    >
+      {onOpen ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex flex-1 min-w-0 items-center gap-3 focus:outline-none rounded-[10px] focus-visible:ring-1 focus-visible:ring-vf-line"
+          data-testid={testId ? `${testId}-open` : undefined}
+        >
+          {identity}
+        </button>
+      ) : (
+        <div className="flex flex-1 min-w-0 items-center gap-3">{identity}</div>
+      )}
+      <div className="flex items-center gap-2 shrink-0">
+        {hoverLabel ? (
+          <>
+            <span className="group-hover:hidden">{right}</span>
+            <span className="hidden group-hover:inline font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-text">
+              {hoverLabel}
+            </span>
+          </>
+        ) : (
+          right
+        )}
+      </div>
     </div>
   );
 }
@@ -86,9 +122,9 @@ function InterestRow({
 function MeetButton({ onClick, pending }: { onClick: () => void; pending?: boolean }) {
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
       disabled={pending}
-      className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 h-9 text-[13px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-40"
+      className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 min-h-[44px] text-[13px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-40"
       data-testid="button-meet"
     >
       {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Meet"}
@@ -99,9 +135,9 @@ function MeetButton({ onClick, pending }: { onClick: () => void; pending?: boole
 function PassButton({ onClick, pending }: { onClick: () => void; pending?: boolean }) {
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
       disabled={pending}
-      className="text-[13px] font-medium text-vf-muted hover:text-vf-text px-2 h-9 transition-colors disabled:opacity-40"
+      className="text-[13px] font-medium text-vf-muted hover:text-vf-text px-2 min-h-[44px] transition-colors disabled:opacity-40"
       data-testid="button-pass"
     >
       Pass
@@ -232,6 +268,7 @@ export default function Matches() {
                 age={like.profile?.age}
                 photoUrl={like.profile?.coverPhotoUrl || like.profile?.photoUrl}
                 score={resonanceScore(like.profile?.personalityProfile)}
+                onOpen={like.fromUserId ? () => setLocation(`/u/${like.fromUserId}`) : undefined}
                 testId={`row-like-${like.matchId}`}
                 right={
                   <>
@@ -276,6 +313,7 @@ export default function Matches() {
                   : ask.status === "pending"
                     ? { label: "Waiting", action: null }
                     : { label: "Passed", action: null };
+              const her = ask.profile?.gender === "Female";
               return (
                 <InterestRow
                   key={`ask-${ask.matchId}`}
@@ -283,12 +321,14 @@ export default function Matches() {
                   age={ask.profile?.age}
                   photoUrl={ask.profile?.coverPhotoUrl || ask.profile?.photoUrl}
                   score={resonanceScore(ask.profile?.personalityProfile)}
+                  onOpen={ask.toUserId ? () => setLocation(`/u/${ask.toUserId}`) : undefined}
+                  hoverLabel={status.action ? undefined : her ? "Her profile →" : "Their profile →"}
                   testId={`row-ask-${ask.matchId}`}
                   right={
                     status.action ? (
                       <button
-                        onClick={status.action}
-                        className="text-[13px] font-medium text-vf-mint hover:text-vf-text px-2 h-9 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); status.action!(); }}
+                        className="text-[13px] font-medium text-vf-mint hover:text-vf-text px-2 min-h-[44px] transition-colors"
                         data-testid="button-open-chat"
                       >
                         {status.label} →
