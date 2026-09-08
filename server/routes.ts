@@ -381,9 +381,38 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   });
 
   app.get("/api/profiles/:userId", async (req, res) => {
+    const viewerId = getUserId(req);
+    if (!viewerId) return res.sendStatus(401);
     const profile = await storage.getProfileWithUser(req.params.userId);
     if (!profile) return res.status(404).json({ message: "Profile not found" });
     res.json(profile);
+  });
+
+  // Public, non-empty text answers from another user's soul-mapping — used on
+  // the /u/:userId profile view. Private answers are never returned.
+  app.get("/api/profiles/:userId/answers", async (req, res) => {
+    const viewerId = getUserId(req);
+    if (!viewerId) return res.sendStatus(401);
+    try {
+      res.json(await storage.getPublicAnswers(req.params.userId));
+    } catch (e) {
+      console.error("Public answers error:", e);
+      res.status(500).json({ message: "Failed to load answers" });
+    }
+  });
+
+  // The groups another user is in, each flagged with whether the viewer is also
+  // a member (for the JOIN / YOU'RE IN IT state). Private groups the viewer
+  // isn't in are omitted.
+  app.get("/api/profiles/:userId/groups", async (req, res) => {
+    const viewerId = getUserId(req);
+    if (!viewerId) return res.sendStatus(401);
+    try {
+      res.json(await storage.getGroupsForUser(req.params.userId, viewerId));
+    } catch (e) {
+      console.error("Profile groups error:", e);
+      res.status(500).json({ message: "Failed to load groups" });
+    }
   });
 
   app.post("/api/location/update", async (req, res) => {

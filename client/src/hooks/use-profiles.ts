@@ -84,6 +84,45 @@ export function useProfileWeek() {
   });
 }
 
+/** Another user's photos. `[]` when their profile is private (server-enforced). */
+export function usePhotos(userId?: string) {
+  return useQuery<any[]>({
+    queryKey: ["/api/photos", userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const res = await fetch(`/api/photos/${userId}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
+
+/** Another user's public soul-mapping text answers (for /u/:userId). */
+export function usePublicAnswers(userId?: string) {
+  return useQuery<Array<{ question: string; answer: string }>>({
+    queryKey: ["/api/profiles", userId, "answers"],
+    enabled: !!userId,
+    queryFn: async () => {
+      const res = await fetch(`/api/profiles/${userId}/answers`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
+
+/** The groups another user is in, each flagged with whether you're also in it. */
+export function useProfileGroups(userId?: string) {
+  return useQuery<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean }>>({
+    queryKey: ["/api/profiles", userId, "groups"],
+    enabled: !!userId,
+    queryFn: async () => {
+      const res = await fetch(`/api/profiles/${userId}/groups`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
+
 export function useGenerateTwin() {
   return useMutation({
     mutationFn: async (answers: any) => {

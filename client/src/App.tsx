@@ -13,6 +13,7 @@ import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import Onboarding from "@/pages/Onboarding";
 import Profile from "@/pages/Profile";
+import ProfileView from "@/pages/ProfileView";
 import Matches from "@/pages/Matches";
 import Discover from "@/pages/Discover";
 import Interviews from "@/pages/Interviews";
@@ -99,6 +100,9 @@ function Router() {
       </Route>
       <Route path="/profile">
         <ProtectedRoute component={Profile} />
+      </Route>
+      <Route path="/u/:userId">
+        {(params) => <ProtectedRoute component={ProfileView} params={params} />}
       </Route>
       <Route path="/photos">
         <ProtectedRoute component={PhotoManager} />

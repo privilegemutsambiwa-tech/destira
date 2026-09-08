@@ -48,6 +48,8 @@ export interface IStorage {
   updateProfile(userId: string, updates: Partial<InsertProfile>): Promise<Profile>;
   getDiscoverableProfiles(excludeUserId: string, filter?: string, userLat?: number, userLng?: number): Promise<any[]>;
   getProfileWithUser(userId: string): Promise<any>;
+  getPublicAnswers(userId: string, limit?: number): Promise<Array<{ question: string; answer: string }>>;
+  getGroupsForUser(targetUserId: string, viewerUserId: string): Promise<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean }>>;
 
   createMatch(user1Id: string, user2Id: string): Promise<Match>;
   getMatches(userId: string): Promise<Match[]>;
@@ -411,11 +413,21 @@ export class DatabaseStorage implements IStorage {
         userId: profiles.userId,
         displayName: profiles.displayName,
         bio: profiles.bio,
+        aboutMe: profiles.aboutMe,
         age: profiles.age,
         gender: profiles.gender,
         location: profiles.location,
+        locationName: profiles.locationName,
+        locationLat: profiles.locationLat,
+        locationLng: profiles.locationLng,
+        showDistance: profiles.showDistance,
         personalityProfile: profiles.personalityProfile,
         twinPersona: profiles.twinPersona,
+        prompts: profiles.prompts,
+        coverPhotoUrl: profiles.coverPhotoUrl,
+        isVerified: profiles.isVerified,
+        verificationStatus: profiles.verificationStatus,
+        subscriptionTier: profiles.subscriptionTier,
         onboardingCompleted: profiles.onboardingCompleted,
         isPublic: profiles.isPublic,
         createdAt: profiles.createdAt,
@@ -430,6 +442,40 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(users, eq(profiles.userId, users.id))
       .where(eq(profiles.userId, userId));
     return result;
+  }
+
+  async getPublicAnswers(userId: string, limit = 5): Promise<Array<{ question: string; answer: string }>> {
+    const rows = await db
+      .select({ question: questions.text, answer: userAnswers.answerText, answeredAt: userAnswers.answeredAt })
+      .from(userAnswers)
+      .innerJoin(questions, eq(userAnswers.questionId, questions.id))
+      .where(and(eq(userAnswers.userId, userId), eq(userAnswers.isPrivate, false)))
+      .orderBy(desc(userAnswers.answeredAt));
+    return rows
+      .filter((r) => typeof r.answer === "string" && r.answer.trim().length > 0)
+      .slice(0, limit)
+      .map((r) => ({ question: r.question, answer: (r.answer as string).trim() }));
+  }
+
+  async getGroupsForUser(
+    targetUserId: string,
+    viewerUserId: string,
+  ): Promise<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean }>> {
+    const theirRows = await db
+      .select({ id: groups.id, name: groups.name, iconUrl: groups.iconUrl, privacyMode: groups.privacyMode })
+      .from(groupMembers)
+      .innerJoin(groups, eq(groupMembers.groupId, groups.id))
+      .where(eq(groupMembers.userId, targetUserId));
+    if (theirRows.length === 0) return [];
+    const mine = await db
+      .select({ groupId: groupMembers.groupId })
+      .from(groupMembers)
+      .where(eq(groupMembers.userId, viewerUserId));
+    const mineSet = new Set(mine.map((m) => m.groupId));
+    return theirRows
+      // don't expose private groups the viewer isn't in
+      .filter((g) => g.privacyMode !== "private" || mineSet.has(g.id))
+      .map((g) => ({ id: g.id, name: g.name, iconUrl: g.iconUrl, viewerIsMember: mineSet.has(g.id) }));
   }
 
   async createMatch(user1Id: string, user2Id: string): Promise<Match> {
