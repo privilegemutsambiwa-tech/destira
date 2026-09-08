@@ -129,6 +129,7 @@ export async function checkGate(
 
   const boolMap: Partial<Record<Feature, boolean>> = {
     see_who_asked: limits.seeWhoAsked,
+    proximity_identity: limits.seeWhoAsked, // same gate: Spark+ sees the person behind an alert
     read_transcript: limits.transcriptLines == null,
     host_event: limits.canHostEvent,
   };

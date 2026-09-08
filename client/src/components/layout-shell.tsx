@@ -13,7 +13,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { LocationPermissionModal } from "./location-permission-modal";
-import { ProximityNotificationBanner } from "./proximity-notification-banner";
+import { ProximityAlerts } from "./proximity-alerts";
 import { VibeFlowLockup } from "./brand/logo";
 
 interface LayoutShellProps {
@@ -52,7 +52,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
   return (
     <div className="min-h-screen bg-vf-ink">
       <LocationPermissionModal />
-      <ProximityNotificationBanner />
+      <ProximityAlerts />
 
       {/* Mobile header — logo centered */}
       <header className="sticky top-0 z-50 md:hidden flex items-center justify-center h-14 px-4 bg-vf-ink border-b border-vf-line">

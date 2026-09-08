@@ -91,6 +91,7 @@ export const FEATURES = [
   "join_group",
   "create_group",
   "host_event",
+  "proximity_identity", // see WHO a "someone's here" alert is about, and act on it
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -104,6 +105,7 @@ export const FEATURE_MIN_TIER: Record<Feature, Tier> = {
   join_group: "free",
   create_group: "flame",
   host_event: "flame",
+  proximity_identity: "spark",
 };
 
 // ── Display metadata — the ONLY place plan copy lives ──

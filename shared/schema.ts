@@ -42,6 +42,13 @@ export const profiles = pgTable("profiles", {
   locationUpdatedAt: timestamp("location_updated_at"),
   showDistance: boolean("show_distance").default(true),
   maxDistanceKm: integer("max_distance_km").default(100),
+  // ── Twin Proximity Alerts (default OFF; only the latest ping is kept) ──
+  currentPlaceId: integer("current_place_id"),
+  proximityMode: text("proximity_mode").notNull().default("off"), // off | campus_work | everywhere
+  proximityFloor: text("proximity_floor").notNull().default("sometimes"), // sometimes | strong | rare
+  proximityQuietStart: integer("proximity_quiet_start").notNull().default(21), // recipient-local hour
+  proximityQuietEnd: integer("proximity_quiet_end").notNull().default(8),
+  proximityPausedUntil: timestamp("proximity_paused_until"),
   ageMinPreference: integer("age_min_preference").default(18),
   ageMaxPreference: integer("age_max_preference").default(65),
   timezone: text("timezone"), // IANA tz captured client-side; used for honest "resets at midnight" copy
@@ -567,7 +574,7 @@ export const reminderDismissals = pgTable("reminder_dismissals", {
   uniqueIndex("reminder_dismissals_user_kind_idx").on(t.userId, t.kind),
 ]);
 
-export const REMINDER_KINDS = ["discover_readiness_strip"] as const;
+export const REMINDER_KINDS = ["discover_readiness_strip", "proximity_upsell"] as const;
 export const reminderKindEnum = z.enum(REMINDER_KINDS);
 
 // The minimum answered soul-mapping questions below which the twin is NOT
@@ -606,6 +613,10 @@ export const MAX_CONTRIBUTION = 200;
 
 // Real venues, seeded and admin-confirmed. A host matching one of these gets
 // the frictionless path (venue_verified) with no photo/video requirement.
+export const PLACE_TYPES = ["campus", "office", "mall", "transit", "cafe", "street", "venue"] as const;
+export const placeTypeEnum = z.enum(PLACE_TYPES);
+export type PlaceType = (typeof PLACE_TYPES)[number];
+
 export const places = pgTable("places", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -614,6 +625,11 @@ export const places = pgTable("places", {
   city: text("city").notNull(),
   lat: decimal("lat", { precision: 9, scale: 6 }),
   lng: decimal("lng", { precision: 9, scale: 6 }),
+  // Proximity: what kind of place this is (drives alert phrasing) and the
+  // "same place" tolerance in metres. Venue-seeded rows default to 'venue'.
+  placeType: text("place_type").notNull().default("venue"),
+  radiusM: integer("radius_m").notNull().default(120),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id), // user-declared "I'm at…" places
   verifiedAt: timestamp("verified_at"),
   verifiedBy: varchar("verified_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
@@ -736,6 +752,68 @@ export const twinAlertLog = pgTable("twin_alert_log", {
 }, (table) => [
   uniqueIndex("twin_alert_log_user_event_idx").on(table.userId, table.eventId),
 ]);
+
+// ── Twin Proximity Alerts ──────────────────────────────────────────────
+// twin_alert_log is event-bound (NOT NULL eventId, unique on user+event), so
+// proximity gets its own ledger. This IS the rate limiter — no localStorage.
+
+export const proximityAlerts = pgTable("proximity_alerts", {
+  id: varchar("id").primaryKey(), // pa_xxxx
+  recipientId: varchar("recipient_id").notNull().references(() => users.id),
+  subjectId: varchar("subject_id").references(() => users.id), // dedupe/rate-limit only; NEVER in a free payload; nulled after 90d
+  placeId: integer("place_id").notNull().references(() => places.id),
+  placeType: text("place_type").notNull(),
+  distanceBucket: text("distance_bucket").notNull(), // same_place | few_hundred_m | this_campus | this_area
+  tierAtSend: text("tier_at_send").notNull(),
+  identityReleased: boolean("identity_released").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  seenAt: timestamp("seen_at"),
+  dismissedAt: timestamp("dismissed_at"),
+  expiresAt: timestamp("expires_at").notNull(), // createdAt + 24h
+}, (t) => [
+  uniqueIndex("proximity_alerts_pair_place_idx").on(t.recipientId, t.subjectId, t.placeId),
+  index("proximity_alerts_recipient_sent_idx").on(t.recipientId, t.createdAt),
+]);
+
+// "Invisible at this place" — checked in the candidate query, effective on the
+// next evaluation (seconds), not the next poll.
+export const placeInvisibility = pgTable("place_invisibility", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  placeId: integer("place_id").notNull().references(() => places.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [
+  uniqueIndex("place_invisibility_user_place_idx").on(t.userId, t.placeId),
+]);
+
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow(),
+  lastSeenAt: timestamp("last_seen_at").defaultNow(),
+});
+
+export const DISTANCE_BUCKETS = ["same_place", "few_hundred_m", "this_campus", "this_area"] as const;
+export const proximityModeEnum = z.enum(["off", "campus_work", "everywhere"]);
+export const proximityFloorEnum = z.enum(["sometimes", "strong", "rare"]);
+export const updateProximitySettingsSchema = z.object({
+  proximityMode: proximityModeEnum,
+  proximityFloor: proximityFloorEnum,
+  proximityQuietStart: z.number().int().min(0).max(23),
+  proximityQuietEnd: z.number().int().min(0).max(23),
+}).partial();
+export const locationReportSchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+});
+
+export type ProximityAlert = typeof proximityAlerts.$inferSelect;
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type UpdateProximitySettings = z.infer<typeof updateProximitySettingsSchema>;
 
 // One row per (event, user). The unique index is load-bearing: POST
 // /api/events/:id/attend must be safe to call twice in a race (double-tap,

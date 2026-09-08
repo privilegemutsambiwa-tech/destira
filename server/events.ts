@@ -726,7 +726,10 @@ export async function listContactViews(
 
 // Real Harare + Bulawayo venues — a host matching one of these gets the
 // frictionless (venue_verified) path. Idempotent.
-const REAL_PLACES: Array<Omit<Place, "id" | "createdAt" | "verifiedAt" | "verifiedBy"> & { verified: boolean }> = [
+const REAL_PLACES: Array<{
+  name: string; addressLine: string; suburb: string; city: string;
+  lat: string; lng: string; verified: boolean;
+}> = [
   { name: "Corner Table", addressLine: "5 Aberdeen Rd, Avondale", suburb: "Avondale", city: "Harare", lat: "-17.796900", lng: "31.038900", verified: true },
   { name: "The Reading Room", addressLine: "12 King George Rd, Avondale", suburb: "Avondale", city: "Harare", lat: "-17.798000", lng: "31.040000", verified: true },
   { name: "Bottega Cafe", addressLine: "Sam Levy's Village, Borrowdale", suburb: "Borrowdale", city: "Harare", lat: "-17.750000", lng: "31.083300", verified: true },
@@ -756,6 +759,53 @@ export async function seedPlaces(): Promise<void> {
       lat: p.lat,
       lng: p.lng,
       verifiedAt: p.verified ? now : null,
+    })),
+  );
+}
+
+// Proximity gazetteer: campuses, malls, office parks, transit ranks. Curated on
+// purpose — "someone at UZ" is only uncanny if it's a real named place, not a
+// reverse-geocoded road. Grows via user-declared "I'm at…" places. Idempotent
+// via a sentinel row.
+const PROXIMITY_PLACES: Array<{
+  name: string; addressLine: string; suburb: string; city: string;
+  lat: string; lng: string; placeType: string; radiusM: number;
+}> = [
+  { name: "University of Zimbabwe", addressLine: "630 Churchill Ave, Mount Pleasant", suburb: "Mount Pleasant", city: "Harare", lat: "-17.784200", lng: "31.052900", placeType: "campus", radiusM: 400 },
+  { name: "Harare Institute of Technology", addressLine: "Ganges Rd, Belvedere", suburb: "Belvedere", city: "Harare", lat: "-17.848000", lng: "31.010000", placeType: "campus", radiusM: 300 },
+  { name: "Africa University", addressLine: "Old Mutare Rd", suburb: "Mutare", city: "Mutare", lat: "-18.878000", lng: "32.640000", placeType: "campus", radiusM: 400 },
+  { name: "National University of Science & Technology", addressLine: "Cnr Gwanda Rd & Cecil Ave", suburb: "Ascot", city: "Bulawayo", lat: "-20.176000", lng: "28.635000", placeType: "campus", radiusM: 400 },
+  { name: "Midlands State University", addressLine: "Senga Rd", suburb: "Senga", city: "Gweru", lat: "-19.520000", lng: "29.830000", placeType: "campus", radiusM: 400 },
+  { name: "Sam Levy's Village", addressLine: "Borrowdale Rd", suburb: "Borrowdale", city: "Harare", lat: "-17.749800", lng: "31.083500", placeType: "mall", radiusM: 150 },
+  { name: "Westgate Shopping Centre", addressLine: "Bulawayo Rd", suburb: "Westgate", city: "Harare", lat: "-17.777000", lng: "30.973000", placeType: "mall", radiusM: 150 },
+  { name: "Eastgate Mall", addressLine: "Robert Mugabe Rd", suburb: "CBD", city: "Harare", lat: "-17.829000", lng: "31.052000", placeType: "mall", radiusM: 120 },
+  { name: "Joina City", addressLine: "Cnr Jason Moyo Ave & Julius Nyerere Way", suburb: "CBD", city: "Harare", lat: "-17.831000", lng: "31.047000", placeType: "mall", radiusM: 100 },
+  { name: "Avondale Shopping Centre", addressLine: "King George Rd", suburb: "Avondale", city: "Harare", lat: "-17.797500", lng: "31.038500", placeType: "mall", radiusM: 120 },
+  { name: "Arundel Village", addressLine: "Quorn Ave", suburb: "Mount Pleasant", city: "Harare", lat: "-17.773000", lng: "31.058000", placeType: "mall", radiusM: 120 },
+  { name: "Bradfield Shopping Centre", addressLine: "Percy Ibbotson Ave", suburb: "Bradfield", city: "Bulawayo", lat: "-20.170000", lng: "28.600000", placeType: "mall", radiusM: 120 },
+  { name: "Msasa Industrial Park", addressLine: "Mutare Rd", suburb: "Msasa", city: "Harare", lat: "-17.845000", lng: "31.115000", placeType: "office", radiusM: 200 },
+  { name: "Newlands Office Park", addressLine: "Enterprise Rd", suburb: "Newlands", city: "Harare", lat: "-17.796000", lng: "31.075000", placeType: "office", radiusM: 120 },
+  { name: "Eastgate / Rezende St taxi rank", addressLine: "Rezende St", suburb: "CBD", city: "Harare", lat: "-17.830500", lng: "31.051000", placeType: "transit", radiusM: 80 },
+  { name: "Fourth Street Bus Terminus", addressLine: "Fourth St", suburb: "CBD", city: "Harare", lat: "-17.826000", lng: "31.049000", placeType: "transit", radiusM: 100 },
+  { name: "Mbare Musika", addressLine: "Chaminuka Rd", suburb: "Mbare", city: "Harare", lat: "-17.855000", lng: "31.033000", placeType: "transit", radiusM: 150 },
+  { name: "Renkini Bus Terminus", addressLine: "6th Ave Extension", suburb: "CBD", city: "Bulawayo", lat: "-20.163000", lng: "28.585000", placeType: "transit", radiusM: 120 },
+];
+
+export async function seedProximityPlaces(): Promise<void> {
+  const [sentinel] = await db.select({ id: places.id }).from(places).where(eq(places.name, "University of Zimbabwe")).limit(1);
+  if (sentinel) return;
+  const now = new Date();
+  await db.insert(places).values(
+    PROXIMITY_PLACES.map((p) => ({
+      name: p.name,
+      addressLine: p.addressLine,
+      suburb: p.suburb,
+      city: p.city,
+      lat: p.lat,
+      lng: p.lng,
+      placeType: p.placeType,
+      radiusM: p.radiusM,
+      verifiedAt: now,
     })),
   );
 }

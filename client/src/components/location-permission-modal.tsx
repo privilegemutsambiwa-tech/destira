@@ -1,17 +1,20 @@
 import { useState } from "react";
-import { MapPin, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useGeolocation } from "@/hooks/use-geolocation";
+import { usePushSubscribe } from "@/hooks/use-push";
 
 const STORAGE_KEY = "location_permission_asked";
 
 export function LocationPermissionModal() {
   const [visible, setVisible] = useState(() => !localStorage.getItem(STORAGE_KEY));
   const { enable } = useGeolocation();
+  const { subscribe } = usePushSubscribe();
 
   if (!visible) return null;
 
   const handleEnable = () => {
     enable();
+    subscribe().catch(() => {});
     setVisible(false);
   };
 
@@ -22,50 +25,48 @@ export function LocationPermissionModal() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
     >
-      <div
-        className="w-full max-w-sm rounded-2xl p-6 relative"
-        style={{ background: "#1A1A24", border: "1px solid #2E2E42", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
-      >
+      <div className="w-full max-w-sm rounded-2xl p-6 relative bg-vf-surface2 border border-vf-line shadow-[0_16px_48px_rgba(0,0,0,0.55)]">
         <button
           onClick={handleDismiss}
-          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full"
-          style={{ background: "#242433", color: "#9090A8" }}
+          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-vf-faint hover:text-vf-text transition-colors"
           data-testid="button-location-dismiss"
         >
           <X className="w-4 h-4" />
         </button>
 
-        <div
-          className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
-          style={{ background: "rgba(124,58,237,0.15)" }}
-        >
-          <MapPin className="w-7 h-7" style={{ color: "#7C3AED" }} />
+        <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-mint mb-3 flex items-center gap-2">
+          <span
+            className="w-2 h-2 rounded-full bg-vf-mint animate-[vf-pulse_2.6s_ease-in-out_infinite] motion-reduce:animate-none"
+            style={{ boxShadow: "0 0 10px var(--vf-mint)" }}
+          />
+          your twin
         </div>
 
-        <h3 className="font-bold text-white mb-1" style={{ fontSize: "18px" }}>Enable Location</h3>
-        <p className="text-sm mb-6" style={{ color: "#9090A8", lineHeight: "1.5" }}>
-          See who's nearby right now and get notified when someone interesting is close.
+        <h3 className="font-serif text-[22px] leading-tight text-vf-text mb-2">
+          Let your twin notice when someone worth knowing is at the same place
+        </h3>
+        <p className="text-[13.5px] text-vf-muted mb-5 leading-relaxed">
+          Only while the app is open, and only for named places — a campus, a mall, an office park.
+          Never a map, never a direction, never a trail. You can pause it or go invisible anywhere,
+          any time.
         </p>
 
         <button
           onClick={handleEnable}
-          className="w-full h-12 rounded-xl font-semibold text-white mb-3"
-          style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", border: "none", fontSize: "15px" }}
+          className="w-full h-11 rounded-xl font-medium text-vf-ink bg-vf-ember mb-2.5 text-[14px]"
           data-testid="button-location-enable"
         >
-          Enable Location
+          Turn it on
         </button>
-
         <button
           onClick={handleDismiss}
-          className="w-full text-sm font-medium"
-          style={{ color: "#9090A8", background: "none", border: "none" }}
+          className="w-full text-[13px] font-medium text-vf-faint hover:text-vf-text transition-colors"
           data-testid="button-location-later"
         >
-          Maybe Later
+          Not now
         </button>
       </div>
     </div>

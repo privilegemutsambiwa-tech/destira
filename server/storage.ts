@@ -194,8 +194,6 @@ export interface IStorage {
   createPlan(data: { name: string; durationDays: number; priceUsd: string; weeklyEquivalent?: string; isBestValue?: boolean; features?: string[]; stripePriceId?: string }): Promise<Plan>;
   updatePlan(id: number, updates: Partial<Plan>): Promise<Plan>;
 
-  updateLocation(userId: string, lat: number, lng: number, locationName: string): Promise<Profile>;
-  checkNearby(userId: string, lat: number, lng: number, radiusKm?: number): Promise<{ locationName: string; count: number; users: any[] }[]>;
 
   updateGroupMemberMute(groupId: number, userId: string, isMuted: boolean): Promise<GroupMember>;
   isGroupNicknameTaken(nickname: string): Promise<boolean>;
@@ -338,73 +336,6 @@ export class DatabaseStorage implements IStorage {
       .filter((row): row is NonNullable<typeof row> => row !== null);
   }
 
-  async updateLocation(userId: string, lat: number, lng: number, locationName: string): Promise<Profile> {
-    const [updated] = await db.update(profiles)
-      .set({ locationLat: String(lat), locationLng: String(lng), locationName, locationUpdatedAt: new Date() })
-      .where(eq(profiles.userId, userId))
-      .returning();
-    return updated;
-  }
-
-  async checkNearby(userId: string, lat: number, lng: number, radiusKm: number = 1): Promise<{ locationName: string; count: number; users: any[] }[]> {
-    const requester = await db
-      .select({ gender: profiles.gender })
-      .from(profiles)
-      .where(eq(profiles.userId, userId))
-      .then(rows => rows[0]);
-
-    const all = await db
-      .select({
-        userId: profiles.userId,
-        displayName: profiles.displayName,
-        gender: profiles.gender,
-        locationLat: profiles.locationLat,
-        locationLng: profiles.locationLng,
-        locationName: profiles.locationName,
-        locationUpdatedAt: profiles.locationUpdatedAt,
-        showDistance: profiles.showDistance,
-      })
-      .from(profiles)
-      .where(
-        and(
-          ne(profiles.userId, userId),
-          eq(profiles.isPublic, true),
-          eq(profiles.onboardingCompleted, true)
-        )
-      );
-
-    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-    const requesterGender = requester?.gender?.toLowerCase();
-
-    function isCompatible(otherGender: string | null | undefined): boolean {
-      if (!requesterGender || !otherGender) return true;
-      const other = otherGender.toLowerCase();
-      return requesterGender !== other;
-    }
-
-    const groupedMap = new Map<string, any[]>();
-    for (const p of all) {
-      if (!p.locationLat || !p.locationLng) continue;
-      if (!p.locationUpdatedAt || p.locationUpdatedAt < thirtyMinutesAgo) continue;
-      if (p.showDistance === false) continue;
-      if (!isCompatible(p.gender)) continue;
-      const pLat = parseFloat(String(p.locationLat));
-      const pLng = parseFloat(String(p.locationLng));
-      const dist = haversineKm(lat, lng, pLat, pLng);
-      if (dist <= radiusKm) {
-        const key = p.locationName || "Unknown";
-        if (!groupedMap.has(key)) groupedMap.set(key, []);
-        const { locationLat: _la, locationLng: _lo, ...safeFields } = p;
-        groupedMap.get(key)!.push({ ...safeFields, distanceKm: dist });
-      }
-    }
-
-    return Array.from(groupedMap.entries()).map(([locationName, users]) => ({
-      locationName,
-      count: users.length,
-      users,
-    }));
-  }
 
   async getProfileWithUser(userId: string): Promise<any> {
     const [result] = await db

@@ -27,6 +27,7 @@ const TEXT = "#F5F0EA";      // vf-text
 const EMBER = "#FF6B4A";     // human / primary action
 const MINT = "#8FE3C7";      // AI-twin layer — and toggle tracks, per the global rule
 const INK = "#0C0910";       // knob on a mint track, text on an ember fill
+const GOLD = "#E9C46A";      // Ember premium / upsell only
 
 const SERIF: React.CSSProperties = { fontFamily: '"Instrument Serif", serif', fontWeight: 400 };
 const MONO_EYEBROW: React.CSSProperties = {
@@ -178,7 +179,7 @@ function SliderInput({ label, value, min, max, onChange, unit = "" }: {
 
 type PanelKey =
   | "change-email" | "change-password"
-  | "twin-tone" | "location" | "age-range" | "block-list"
+  | "twin-tone" | "location" | "age-range" | "block-list" | "proximity"
   | "data-privacy" | "verify" | "billing" | "help" | "contact"
   | "terms" | "privacy-policy" | "clear-memory" | null;
 
@@ -304,10 +305,10 @@ function LocationPanel({ onBack, profile }: { onBack: () => void; profile: any }
       async (pos) => {
         try {
           const { latitude, longitude } = pos.coords;
-          const res = await apiRequest("POST", "/api/location/update", { lat: latitude, lng: longitude, locationName: "Current Location" });
+          const res = await apiRequest("POST", "/api/location/report", { lat: latitude, lng: longitude });
           const data = await res.json();
-          setCurrentLocation(data.locationName || "Location updated");
-          toast({ title: "Location updated" });
+          setCurrentLocation(data.place?.name || "No named place here");
+          toast({ title: data.place?.name ? `You're at ${data.place.name}` : "Location updated" });
         } catch {
           toast({ title: "Failed to update location", variant: "destructive" });
         } finally {
@@ -347,6 +348,211 @@ function LocationPanel({ onBack, profile }: { onBack: () => void; profile: any }
       <div style={{ padding: "16px" }}>
         <GradientButton label="Save Preferences" onClick={() => saveMutation.mutate()} testId="button-save-location" />
       </div>
+    </Panel>
+  );
+}
+
+function ChoiceRow({ label, options, value, onChange, testId }: {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  testId?: string;
+}) {
+  return (
+    <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}` }} data-testid={testId}>
+      <p style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "10px" }}>{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((o) => {
+          const active = o.value === value;
+          return (
+            <button
+              key={o.value}
+              onClick={() => onChange(o.value)}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg btn-press"
+              style={{
+                background: active ? "rgba(143,227,199,0.14)" : ELEVATED,
+                border: `1px solid ${active ? "rgba(143,227,199,0.4)" : BORDER}`,
+                color: active ? MINT : TEXT,
+              }}
+              data-testid={testId ? `${testId}-${o.value}` : undefined}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ProximityPanel({ onBack, profile }: { onBack: () => void; profile: any }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery<any>({ queryKey: ["/api/proximity/settings"] });
+
+  const patch = useMutation({
+    mutationFn: (body: any) => apiRequest("PATCH", "/api/proximity/settings", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/proximity/settings"] }),
+    onError: () => toast({ title: "Failed to save", variant: "destructive" }),
+  });
+  const pause = useMutation({
+    mutationFn: (hours: number | null) =>
+      hours == null
+        ? apiRequest("DELETE", "/api/proximity/pause")
+        : apiRequest("POST", "/api/proximity/pause", { hours }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/proximity/settings"] }),
+  });
+  const hideHere = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/proximity/invisible", {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/proximity/settings"] });
+      toast({ title: "You're invisible here" });
+    },
+    onError: () => toast({ title: "No named place to hide at", variant: "destructive" }),
+  });
+  const unhide = useMutation({
+    mutationFn: (placeId: number) => apiRequest("DELETE", `/api/proximity/invisible/${placeId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/proximity/settings"] }),
+  });
+
+  const paused = data?.pausedUntil && new Date(data.pausedUntil).getTime() > Date.now();
+
+  return (
+    <Panel title="Proximity Alerts" onBack={onBack}>
+      <p className="text-xs px-4 pt-4 pb-1" style={{ color: MUTED, lineHeight: 1.6 }}>
+        Your twin can tell you when someone well inside what you're looking for is at the same named
+        place — a campus, a mall, an office park. Never a map, never a direction, never a trail. It only
+        works while the app is open, and only if you're verified. It's the same the other way: if you
+        show up in someone's alert, they show up in yours.
+      </p>
+
+      {!isLoading && !data?.isVerified && (
+        <p className="text-xs mx-4 mt-2 px-3 py-2 rounded-lg" style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: GOLD }}>
+          Proximity alerts need a verified profile on both sides. Verify yours to switch this on.
+        </p>
+      )}
+
+      <div style={{ background: CARD, margin: "12px 16px 0", borderRadius: "16px", overflow: "hidden" }}>
+        <ChoiceRow
+          label="Where alerts can fire"
+          value={data?.mode ?? "off"}
+          onChange={(v) => patch.mutate({ proximityMode: v })}
+          options={[
+            { value: "off", label: "Off" },
+            { value: "campus_work", label: "Campus & work" },
+            { value: "everywhere", label: "Everywhere" },
+          ]}
+          testId="proximity-mode"
+        />
+        <ChoiceRow
+          label="How strong the match has to be"
+          value={data?.floor ?? "sometimes"}
+          onChange={(v) => patch.mutate({ proximityFloor: v })}
+          options={[
+            { value: "rare", label: "Only the rare ones" },
+            { value: "sometimes", label: "Sometimes" },
+            { value: "strong", label: "Strong matches" },
+          ]}
+          testId="proximity-floor"
+        />
+        <div style={{ padding: "14px 16px" }}>
+          <p style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "10px" }}>Quiet hours</p>
+          <div className="flex items-center gap-2 text-sm" style={{ color: TEXT }}>
+            <span style={{ color: MUTED }}>From</span>
+            <select
+              value={data?.quietStart ?? 21}
+              onChange={(e) => patch.mutate({ proximityQuietStart: Number(e.target.value) })}
+              className="px-2 py-1 rounded-lg text-sm"
+              style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: TEXT }}
+              data-testid="proximity-quiet-start"
+            >
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
+              ))}
+            </select>
+            <span style={{ color: MUTED }}>to</span>
+            <select
+              value={data?.quietEnd ?? 8}
+              onChange={(e) => patch.mutate({ proximityQuietEnd: Number(e.target.value) })}
+              className="px-2 py-1 rounded-lg text-sm"
+              style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: TEXT }}
+              data-testid="proximity-quiet-end"
+            >
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
+              ))}
+            </select>
+          </div>
+          <p className="text-xs mt-2" style={{ color: FAINT }}>In your local time.</p>
+        </div>
+      </div>
+
+      <div style={{ background: CARD, margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden" }}>
+        <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}` }}>
+          <p style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "4px" }}>Right now</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm" style={{ color: TEXT }}>
+              {data?.currentPlace ? data.currentPlace.name : "Not at a named place"}
+            </p>
+            {data?.currentPlace && (
+              <button
+                onClick={() => hideHere.mutate()}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg btn-press"
+                style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: TEXT }}
+                data-testid="proximity-hide-here"
+              >
+                Be invisible here
+              </button>
+            )}
+          </div>
+        </div>
+        <div style={{ padding: "14px 16px" }}>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm" style={{ color: TEXT }}>
+              {paused
+                ? `Paused until ${new Date(data.pausedUntil).toLocaleString()}`
+                : "Alerts are live"}
+            </p>
+            <button
+              onClick={() => pause.mutate(paused ? null : 8)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg btn-press"
+              style={{ background: paused ? EMBER : ELEVATED, border: `1px solid ${BORDER}`, color: paused ? INK : TEXT }}
+              data-testid="proximity-pause"
+            >
+              {paused ? "Resume now" : "Pause for 8 hours"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {Array.isArray(data?.invisibleAt) && data.invisibleAt.length > 0 && (
+        <>
+          <div style={SECTION_HEADER_STYLE}>Invisible at</div>
+          <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+            {data.invisibleAt.map((pl: any, i: number) => (
+              <div
+                key={pl.id}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "12px 16px",
+                  borderBottom: i < data.invisibleAt.length - 1 ? `1px solid ${BORDER}` : "none",
+                }}
+              >
+                <span className="text-sm" style={{ color: TEXT }}>{pl.name}</span>
+                <button
+                  onClick={() => unhide.mutate(pl.id)}
+                  className="text-xs font-semibold px-3 py-1"
+                  style={{ color: EMBER, border: `1px solid rgba(255,107,74,0.4)`, borderRadius: "8px" }}
+                  data-testid={`proximity-unhide-${pl.id}`}
+                >
+                  Show again
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </Panel>
   );
 }
@@ -437,7 +643,7 @@ const COLLECTED_DATA_ITEMS = [
   "AI Twin memory — facts, summaries, and conversation history",
   "Match history and interaction data",
   "Group membership and activity",
-  "Device location (when shared) for proximity features",
+  "Approximate location, only while the app is open and only if you turn on proximity alerts — kept as a single latest point, resolved to a named place, and erased after 30 minutes. No trail, no map, no direction.",
   "Usage data for app improvement (no personal identifiers)",
   "Support ticket content",
 ];
@@ -1147,6 +1353,19 @@ export default function Settings() {
     }
   }, [profile?.showDistance]);
 
+  useEffect(() => {
+    let requested: string | null = null;
+    try {
+      requested = sessionStorage.getItem("open_settings_panel");
+      if (requested) sessionStorage.removeItem("open_settings_panel");
+    } catch {
+      /* ignore */
+    }
+    if (requested === "proximity" || (typeof window !== "undefined" && window.location.hash === "#proximity")) {
+      setActivePanel("proximity");
+    }
+  }, []);
+
   const handleTogglePublic = async () => {
     if (!profile) return;
     try {
@@ -1185,6 +1404,7 @@ export default function Settings() {
   if (activePanel === "change-password") return <ChangePasswordPanel onBack={() => setActivePanel(null)} />;
   if (activePanel === "twin-tone") return <TwinTonePanel onBack={() => setActivePanel(null)} profile={profile} />;
   if (activePanel === "location") return <LocationPanel onBack={() => setActivePanel(null)} profile={profile} />;
+  if (activePanel === "proximity") return <ProximityPanel onBack={() => { setActivePanel(null); if (window.location.hash) history.replaceState(null, "", window.location.pathname); }} profile={profile} />;
   if (activePanel === "age-range") return <AgeRangePanel onBack={() => setActivePanel(null)} profile={profile} />;
   if (activePanel === "block-list") return <BlockListPanel onBack={() => setActivePanel(null)} />;
   if (activePanel === "data-privacy") return <DataPrivacyPanel onBack={() => setActivePanel(null)} />;
@@ -1227,6 +1447,7 @@ export default function Settings() {
           <ToggleRow icon={Compass} label="Discoverable" value={discoverable} onChange={(v) => { setDiscoverable(v); saveNotif("discoverable", v); }} testId="toggle-discoverable" />
           <ToggleRow icon={MapPin} label="Show Distance" value={showDistance} onChange={handleToggleShowDistance} testId="toggle-show-distance" />
           <ChevronRow icon={MapPin} label="Location Preferences" sublabel={`Within ${profile?.maxDistanceKm ?? 100} km`} onClick={() => setActivePanel("location")} testId="row-location" />
+          <ChevronRow icon={Zap} label="Proximity Alerts" sublabel="When someone worth knowing is at the same place" onClick={() => setActivePanel("proximity")} testId="row-proximity" />
           <ChevronRow icon={Sliders} label="Age Range" sublabel={`${profile?.ageMinPreference ?? 18}–${profile?.ageMaxPreference ?? 65} years`} onClick={() => setActivePanel("age-range")} testId="row-age-range" />
           <ChevronRow icon={CalendarDays} label="Event Preferences" sublabel="What shows up in your Events feed" onClick={() => setLocation("/settings/events?from=/settings")} testId="row-event-preferences" />
         </div>
