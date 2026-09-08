@@ -4,12 +4,13 @@ import {
   ArrowLeft, User, Brain, Compass, Shield, Bell, Wrench, Crown, HelpCircle,
   AlertTriangle, ChevronRight, LogOut, Trash2, PauseCircle, Eye, EyeOff,
   Volume2, MapPin, MessageSquare, Zap, Check, Lock, Mail, Sliders, FileText,
-  ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays
+  ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
 import { PLAN_CARDS as SETTINGS_PLAN_CARDS } from "@shared/entitlements";
+import { useCancelSubscription } from "@/hooks/use-payments";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -644,6 +645,8 @@ function VerifyPanel({ onBack }: { onBack: () => void }) {
 
 function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any }) {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const cancelSub = useCancelSubscription();
   const raw = profile?.subscriptionTier ?? "free";
   const tier: "free" | "spark" | "flame" | "ember" =
     raw === "plus" ? "flame" : raw === "vip" ? "ember" : (["spark", "flame", "ember"].includes(raw) ? raw : "free");
@@ -696,14 +699,29 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
           )}
         </div>
         {tier !== "free" && (
-          <div style={{ ...ROW_STYLE, borderBottom: "none" }} data-testid="row-cancel-plan">
-            <CreditCard className="w-5 h-5 mr-3" style={{ color: MUTED }} />
+          <button
+            style={{ ...ROW_STYLE, borderBottom: "none", width: "100%", textAlign: "left", background: "transparent", border: "none" }}
+            data-testid="row-cancel-plan"
+            disabled={cancelSub.isPending}
+            onClick={() => {
+              if (!window.confirm(`Cancel ${tierInfo.label}? You keep it until the paid period ends, then you're on Free.`)) return;
+              cancelSub.mutate(undefined, {
+                onSuccess: (r) =>
+                  toast({
+                    title: "Cancelled",
+                    description: r.endsAt
+                      ? `You're on ${tierInfo.label} until ${new Date(r.endsAt).toLocaleDateString()}, then Free.`
+                      : "You're back on Free.",
+                  }),
+              });
+            }}
+          >
             <div className="flex-1">
-              <p className="text-sm font-medium text-white">Cancel Subscription</p>
-              <p className="text-xs" style={{ color: MUTED }}>Manage via Stripe Customer Portal</p>
+              <p className="text-sm font-medium text-white">Cancel subscription</p>
+              <p className="text-xs" style={{ color: MUTED }}>Keeps working until the period ends. No exit fee.</p>
             </div>
-            <ChevronRight className="w-4 h-4" style={{ color: MUTED }} />
-          </div>
+            {cancelSub.isPending ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: MUTED }} /> : <ChevronRight className="w-4 h-4" style={{ color: MUTED }} />}
+          </button>
         )}
       </div>
 

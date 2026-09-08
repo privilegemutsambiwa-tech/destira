@@ -277,8 +277,11 @@ export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   stripeSubscriptionId: varchar("stripe_subscription_id"),
+  provider: text("provider").default("mock"),
+  providerReference: varchar("provider_reference"),
   tier: text("tier").notNull(),
-  status: text("status").notNull().default("active"),
+  status: text("status").notNull().default("active"), // active | cancelled | expired
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false),
   currentPeriodStart: timestamp("current_period_start"),
   currentPeriodEnd: timestamp("current_period_end"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -289,12 +292,30 @@ export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   subscriptionId: integer("subscription_id").references(() => subscriptions.id),
-  amount: integer("amount").notNull(),
+  tier: varchar("tier"),                 // plan bought — server-resolved, never client amount
+  amount: integer("amount").notNull(),   // integer cents, server-resolved
   currency: varchar("currency", { length: 3 }).notNull().default("usd"),
-  status: text("status").notNull().default("pending"),
+  status: text("status").notNull().default("pending"), // pending | paid | failed | cancelled | expired
+  provider: text("provider").notNull().default("mock"), // mock | paynow_ecocash | paynow_card | stripe
+  providerReference: varchar("provider_reference"),
+  phoneNumberMasked: varchar("phone_number_masked"),    // "07•• ••• 1234" — never the full number, anywhere
+  idempotencyKey: varchar("idempotency_key").unique(),
+  pollUrl: text("poll_url"),
+  rawStatus: text("raw_status"),
+  failureReason: text("failure_reason"),
+  lastPolledAt: timestamp("last_polled_at"),
   stripeChargeId: varchar("stripe_charge_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+export const PAYMENT_METHODS = ["ecocash", "ecocash_card", "card"] as const;
+export const paymentMethodEnum = z.enum(PAYMENT_METHODS);
+export const initiatePaymentSchema = z.object({
+  tier: z.enum(["spark", "flame", "ember"]),
+  method: paymentMethodEnum,
+  phone: z.string().trim().max(20).optional(),
+});
+export type InitiatePaymentInput = z.infer<typeof initiatePaymentSchema>;
 
 export const entitlements = pgTable("entitlements", {
   id: serial("id").primaryKey(),

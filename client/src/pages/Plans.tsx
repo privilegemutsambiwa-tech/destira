@@ -1,5 +1,4 @@
 import { useLocation, useSearch } from "wouter";
-import { useToast } from "@/hooks/use-toast";
 import { useSubscription } from "@/hooks/use-interactions";
 import { VibeFlowLockup } from "@/components/brand/logo";
 import { PLAN_CARDS, priceLabel, tierRank, type PlanCard } from "@shared/entitlements";
@@ -9,7 +8,6 @@ const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-fai
 export default function Plans() {
   const [, setLocation] = useLocation();
   const search = useSearch();
-  const { toast } = useToast();
   const { data: sub } = useSubscription();
   const currentTier = (sub?.tier as string) || "free";
   const intro = new URLSearchParams(search).get("intro") === "1";
@@ -18,11 +16,7 @@ export default function Plans() {
 
   const choose = (card: PlanCard) => {
     if (card.tier === "free") return close();
-    // Phase 4 wires this to the EcoCash / card method step.
-    toast({
-      title: "Payment is coming",
-      description: "EcoCash and card checkout land in the next update. Your plan will activate straight away.",
-    });
+    setLocation(`/plans/pay?tier=${card.tier}`);
   };
 
   return (

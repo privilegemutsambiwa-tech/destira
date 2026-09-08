@@ -27,6 +27,7 @@ import PhotoManager from "@/pages/PhotoManager";
 import DirectChat from "@/pages/DirectChat";
 import TwinChat from "@/pages/TwinChat";
 import Plans from "@/pages/Plans";
+import PlansPay from "@/pages/PlansPay";
 import GroupChatPage from "@/pages/GroupChat";
 import GroupInfoPage from "@/pages/GroupInfo";
 import GroupSettings from "@/pages/GroupSettings";
@@ -150,6 +151,12 @@ function Router() {
       </Route>
       <Route path="/plans">
         <ProtectedRoute component={Plans} />
+      </Route>
+      <Route path="/plans/pay">
+        <ProtectedRoute component={PlansPay} />
+      </Route>
+      <Route path="/plans/pay/return">
+        <ProtectedRoute component={PlansPay} />
       </Route>
       <Route path="/billing"><Redirect to="/plans" /></Route>
       <Route path="/upgrade"><Redirect to="/plans" /></Route>

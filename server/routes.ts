@@ -18,7 +18,8 @@ import * as eventsService from "./events";
 import * as eventsFeed from "./events-feed";
 import * as twinEventAlerts from "./services/twin-event-alerts";
 import * as onboarding from "./onboarding";
-import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema, reminderKindEnum } from "@shared/schema";
+import * as payments from "./payments";
+import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema, reminderKindEnum, initiatePaymentSchema } from "@shared/schema";
 import * as gate from "./gate";
 import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
@@ -2334,9 +2335,84 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     try {
       const sub = await storage.getSubscription(userId);
-      res.json(sub || { tier: "free", status: "active" });
+      const tier = await gate.getEffectiveTier(userId);
+      res.json(sub ? { ...sub, tier } : { tier, status: "active" });
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch subscription" });
+    }
+  });
+
+  // ── Payments (EcoCash via Paynow first; card via Paynow/Stripe) ──
+  // The client sends a plan tier, NEVER an amount. The server resolves the
+  // price, initiates, and only a poll/webhook confirmation activates the plan.
+
+  app.post("/api/payments/initiate", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const parsed = initiatePaymentSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid payment request" });
+    const { tier, method, phone } = parsed.data;
+    if (method === "ecocash" && !/^0?7\d{8}$/.test((phone || "").replace(/\D/g, ""))) {
+      return res.status(400).json({ message: "Enter the EcoCash number as 07XX XXX XXX." });
+    }
+    try {
+      const email = (req as any).user?.claims?.email || (await storage.getProfile(userId))?.displayName;
+      const result = await payments.initiatePayment(userId, tier, method, phone, typeof email === "string" ? email : undefined);
+      res.json(result);
+    } catch (e: any) {
+      console.error("Payment initiate error:", e);
+      res.status(502).json({ message: e?.message?.includes("not configured") ? "Payments aren't switched on yet." : "Couldn't reach the payment gateway. Try again." });
+    }
+  });
+
+  app.get("/api/payments/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+    try {
+      const row = await payments.refreshPayment(id);
+      if (!row || row.userId !== userId) return res.status(404).json({ message: "Not found" });
+      res.json({
+        id: row.id,
+        status: row.status,
+        tier: row.tier,
+        amount: row.amount,
+        provider: row.provider,
+        phoneNumberMasked: row.phoneNumberMasked,
+        failureReason: row.failureReason,
+        rawStatus: row.rawStatus,
+      });
+    } catch (e) {
+      console.error("Payment status error:", e);
+      res.status(500).json({ message: "Couldn't check that payment" });
+    }
+  });
+
+  // Paynow posts application/x-www-form-urlencoded to our resulturl. This — not
+  // the client — is what activates a plan.
+  app.post("/api/payments/webhook/paynow", async (req, res) => {
+    try {
+      const parsed = payments.webhookProvider().handleWebhook((req.body || {}) as Record<string, string>);
+      if (!parsed) return res.status(400).send("bad signature");
+      if (parsed.status === "paid") {
+        await payments.activateFromPayment(Number(parsed.reference));
+      }
+      res.status(200).send("ok");
+    } catch (e) {
+      console.error("Paynow webhook error:", e);
+      res.status(200).send("ok"); // never make the gateway retry-storm us
+    }
+  });
+
+  app.delete("/api/subscription", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const { endsAt } = await payments.cancelSubscription(userId);
+      res.json({ cancelled: true, endsAt });
+    } catch (e) {
+      res.status(500).json({ message: "Couldn't cancel" });
     }
   });
 
