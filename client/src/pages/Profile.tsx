@@ -128,7 +128,7 @@ function YourEventsCard() {
                   )}
                 </div>
                 <div className="text-[11.5px] text-vf-faint mt-0.5">
-                  {new Date(e.startsAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} Â· {e.goingCount} going
+                  {new Date(e.startsAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {e.goingCount} going
                 </div>
               </button>
             );
@@ -268,7 +268,7 @@ export default function Profile() {
     profile.age ? String(profile.age) : null,
     profile.location || null,
     "here with intent",
-  ].filter(Boolean).join(" Â· ");
+  ].filter(Boolean).join(" · ");
 
   const openBio = () => { setBioValue(bio); setBioOpen(true); };
   const saveBio = async () => {
@@ -281,7 +281,7 @@ export default function Profile() {
       toast({ title: "Couldn't save", variant: "destructive" });
     }
   };
-  // Â§D: drafts a starting point INTO the editor. Never auto-saves, never
+  // §D: drafts a starting point INTO the editor. Never auto-saves, never
   // overwrites â€” only offered while the editor is empty.
   const draftBio = async () => {
     setBioDrafting(true);
@@ -397,7 +397,7 @@ export default function Profile() {
                 {profile.displayName || user?.firstName}
               </h1>
               <p className="text-[14px] text-vf-muted mt-1" data-testid="text-meta-line">
-                {metaLine}{profile.isVerified ? " Â· verified" : ""}
+                {metaLine}{profile.isVerified ? " · verified" : ""}
               </p>
               <div className="mt-3 flex items-center gap-4 justify-center sm:justify-start flex-wrap">
                 <button
@@ -633,7 +633,7 @@ export default function Profile() {
                 <div className="min-w-0">
                   <h2 className="font-serif font-normal text-2xl text-vf-text leading-none">Your twin</h2>
                   <p className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mt-1.5">
-                    learning Â· {twinWords.toLocaleString()} words of you so far
+                    learning · {twinWords.toLocaleString()} words of you so far
                   </p>
                 </div>
               </div>
@@ -700,7 +700,7 @@ export default function Profile() {
             >
               {emberActive ? (
                 <>
-                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">Ember Â· active</div>
+                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">Ember · active</div>
                   <p className="text-[13.5px] text-vf-muted mt-2 leading-[1.55]">
                     Four twin conversations a night, full transcripts, first pick at dinners.
                   </p>
@@ -710,7 +710,7 @@ export default function Profile() {
                 </>
               ) : (
                 <>
-                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">Ember Â· $9.99 / month</div>
+                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">Ember · $9.99 / month</div>
                   <p className="font-serif font-normal text-2xl text-vf-text mt-2 leading-[1.2]">
                     Four twin conversations a night. Full transcripts. First pick at dinners.
                   </p>

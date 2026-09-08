@@ -22,7 +22,7 @@ import {
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import type { PhotoRole } from "@shared/schema";
-import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lte } from "drizzle-orm";
+import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lte, inArray } from "drizzle-orm";
 
 export class PhotoNotFoundError extends Error {
   constructor() { super("Photo not found"); }
@@ -33,6 +33,54 @@ export class PhotoTooSmallError extends Error {
   }
 }
 const ROLE_MIN_LONG_EDGE: Record<string, number> = { cover: 1200, portrait: 800 };
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Move `photo` into `role`, inside an open transaction: demote whoever currently
+// holds that role, set the new role, and mirror the result into
+// profiles.coverPhotoUrl / user_photos.isMainProfilePhoto so Discover, Matches
+// and the rest keep rendering. No size check here — callers that represent an
+// explicit user choice (setPhotoRole) do that first; auto-assignment on first
+// upload skips it so a small photo still beats a blank card.
+async function applyPhotoRoleTx(
+  tx: Tx,
+  userId: string,
+  photo: UserPhoto,
+  role: PhotoRole,
+): Promise<{ displaced: { id: number; role: PhotoRole } | null }> {
+  const prevRole = photo.role as PhotoRole;
+  let displaced: { id: number; role: PhotoRole } | null = null;
+
+  if (role === "cover" || role === "portrait") {
+    const [current] = await tx
+      .select()
+      .from(userPhotos)
+      .where(and(eq(userPhotos.userId, userId), eq(userPhotos.role, role)));
+    if (current && current.id !== photo.id) {
+      await tx.update(userPhotos).set({ role: "gallery" }).where(eq(userPhotos.id, current.id));
+      displaced = { id: current.id, role };
+    }
+  }
+
+  await tx.update(userPhotos).set({ role }).where(eq(userPhotos.id, photo.id));
+
+  if (role === "cover") {
+    await tx.update(profiles).set({ coverPhotoUrl: photo.photoUrl }).where(eq(profiles.userId, userId));
+  } else if (prevRole === "cover") {
+    await tx.update(profiles).set({ coverPhotoUrl: null }).where(eq(profiles.userId, userId));
+  }
+  if (role === "portrait") {
+    await tx
+      .update(userPhotos)
+      .set({ isMainProfilePhoto: false })
+      .where(and(eq(userPhotos.userId, userId), ne(userPhotos.id, photo.id)));
+    await tx.update(userPhotos).set({ isMainProfilePhoto: true }).where(eq(userPhotos.id, photo.id));
+  } else if (prevRole === "portrait") {
+    await tx.update(userPhotos).set({ isMainProfilePhoto: false }).where(eq(userPhotos.id, photo.id));
+  }
+
+  return { displaced };
+}
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -247,6 +295,44 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  // The photo a card / avatar should show, resolved so a missing role can never
+  // blank it out: role 'cover' -> role 'portrait' -> lowest orderIndex ->
+  // whatever coverPhotoUrl already held -> users.profileImageUrl.
+  //
+  // user_photos is only consulted for PUBLIC profiles — a private profile keeps
+  // exactly the coverPhotoUrl column it already had, so its hidden gallery is
+  // never exposed through this path.
+  private async resolveProfilePhotos(
+    entries: Array<{ userId: string; isPublic: boolean | null; coverPhotoUrl: string | null; profileImageUrl: string | null }>,
+  ): Promise<Map<string, string | null>> {
+    const out = new Map<string, string | null>();
+    const publicIds = entries.filter((e) => e.isPublic).map((e) => e.userId);
+    const rows = publicIds.length
+      ? await db
+          .select({
+            userId: userPhotos.userId,
+            role: userPhotos.role,
+            photoUrl: userPhotos.photoUrl,
+          })
+          .from(userPhotos)
+          .where(inArray(userPhotos.userId, publicIds))
+          .orderBy(asc(userPhotos.orderIndex))
+      : [];
+    const byUser = new Map<string, typeof rows>();
+    for (const r of rows) {
+      if (!byUser.has(r.userId)) byUser.set(r.userId, []);
+      byUser.get(r.userId)!.push(r);
+    }
+    for (const e of entries) {
+      const photos = byUser.get(e.userId) ?? [];
+      const cover = photos.find((p) => p.role === "cover")?.photoUrl;
+      const portrait = photos.find((p) => p.role === "portrait")?.photoUrl;
+      const firstByOrder = photos[0]?.photoUrl; // rows already ordered by orderIndex asc
+      out.set(e.userId, cover ?? portrait ?? firstByOrder ?? e.coverPhotoUrl ?? e.profileImageUrl ?? null);
+    }
+    return out;
+  }
+
   async getDiscoverableProfiles(excludeUserId: string, filter?: string, userLat?: number, userLng?: number): Promise<any[]> {
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
 
@@ -300,6 +386,7 @@ export class DatabaseStorage implements IStorage {
         locationName: profiles.locationName,
         locationUpdatedAt: profiles.locationUpdatedAt,
         showDistance: profiles.showDistance,
+        coverPhotoUrl: profiles.coverPhotoUrl,
         user: {
           id: users.id,
           firstName: users.firstName,
@@ -312,7 +399,7 @@ export class DatabaseStorage implements IStorage {
       .where(filterCondition)
       .orderBy(orderBy);
 
-    return rows
+    const shaped = rows
       .filter(row => !excludedIds.has(row.userId))
       .filter(row => {
         if (ageMin !== null && row.age !== null && row.age < ageMin) return false;
@@ -335,6 +422,18 @@ export class DatabaseStorage implements IStorage {
         return { ...rest, distanceKm, isNearbyNow: isNearby };
       })
       .filter((row): row is NonNullable<typeof row> => row !== null);
+
+    // Resolve the card photo from user_photos so a missing 'cover' role no
+    // longer blanks the card. Every row here is already isPublic === true.
+    const resolved = await this.resolveProfilePhotos(
+      shaped.map((r) => ({
+        userId: r.userId,
+        isPublic: r.isPublic,
+        coverPhotoUrl: r.coverPhotoUrl ?? null,
+        profileImageUrl: r.user?.profileImageUrl ?? null,
+      })),
+    );
+    return shaped.map((r) => ({ ...r, coverPhotoUrl: resolved.get(r.userId) ?? r.coverPhotoUrl ?? null }));
   }
 
 
@@ -373,7 +472,19 @@ export class DatabaseStorage implements IStorage {
       .from(profiles)
       .innerJoin(users, eq(profiles.userId, users.id))
       .where(eq(profiles.userId, userId));
-    return result;
+    if (!result) return result;
+    // Resolve the avatar the same way Discover does, so Matches / interview
+    // threads don't fall back to a monogram when the 'cover' role is unset.
+    // Private profiles keep their existing coverPhotoUrl untouched.
+    const resolved = await this.resolveProfilePhotos([
+      {
+        userId: result.userId,
+        isPublic: result.isPublic,
+        coverPhotoUrl: result.coverPhotoUrl ?? null,
+        profileImageUrl: result.user?.profileImageUrl ?? null,
+      },
+    ]);
+    return { ...result, coverPhotoUrl: resolved.get(result.userId) ?? result.coverPhotoUrl ?? null };
   }
 
   async getPublicAnswers(userId: string, limit = 5): Promise<Array<{ question: string; answer: string }>> {
@@ -820,18 +931,38 @@ export class DatabaseStorage implements IStorage {
     orderIndex: number,
     opts: { isMain?: boolean; width?: number; height?: number } = {},
   ): Promise<UserPhoto> {
-    const [photo] = await db
-      .insert(userPhotos)
-      .values({
-        userId,
-        photoUrl,
-        orderIndex,
-        isMainProfilePhoto: opts.isMain ?? false,
-        width: opts.width ?? null,
-        height: opts.height ?? null,
-      })
-      .returning();
-    return photo;
+    return db.transaction(async (tx) => {
+      const [photo] = await tx
+        .insert(userPhotos)
+        .values({
+          userId,
+          photoUrl,
+          orderIndex,
+          isMainProfilePhoto: opts.isMain ?? false,
+          width: opts.width ?? null,
+          height: opts.height ?? null,
+        })
+        .returning();
+
+      // First upload auto-fills the empty roles so the uploader shows up in
+      // Discover / Matches without ever opening the role picker.
+      const held = await tx
+        .select({ role: userPhotos.role })
+        .from(userPhotos)
+        .where(eq(userPhotos.userId, userId));
+      const hasCover = held.some((r) => r.role === "cover");
+      const hasPortrait = held.some((r) => r.role === "portrait");
+
+      let current = photo;
+      if (!hasCover) {
+        await applyPhotoRoleTx(tx, userId, current, "cover");
+        current = { ...current, role: "cover" };
+      } else if (!hasPortrait) {
+        await applyPhotoRoleTx(tx, userId, current, "portrait");
+        current = { ...current, role: "portrait", isMainProfilePhoto: true };
+      }
+      return current;
+    });
   }
 
   async deleteUserPhoto(userId: string, id: number): Promise<void> {
@@ -842,8 +973,23 @@ export class DatabaseStorage implements IStorage {
         .where(and(eq(userPhotos.id, id), eq(userPhotos.userId, userId)));
       if (!photo) return;
       await tx.delete(userPhotos).where(eq(userPhotos.id, id));
+
+      // Deleting the cover shouldn't silently drop the user out of Discover:
+      // promote the next gallery photo (lowest orderIndex) into the role. If the
+      // only thing left is the portrait, don't cannibalise it — just null the
+      // mirror and let the read-side resolver fall back to the portrait.
       if (photo.role === "cover") {
-        await tx.update(profiles).set({ coverPhotoUrl: null }).where(eq(profiles.userId, userId));
+        const [next] = await tx
+          .select()
+          .from(userPhotos)
+          .where(and(eq(userPhotos.userId, userId), eq(userPhotos.role, "gallery")))
+          .orderBy(asc(userPhotos.orderIndex))
+          .limit(1);
+        if (next) {
+          await applyPhotoRoleTx(tx, userId, next, "cover");
+        } else {
+          await tx.update(profiles).set({ coverPhotoUrl: null }).where(eq(profiles.userId, userId));
+        }
       }
     });
   }
@@ -856,11 +1002,9 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // One transaction: verify ownership, size-check for cover/portrait, demote the
-  // current holder of that role, promote the target, and mirror the result into
-  // profiles.coverPhotoUrl / user_photos.isMainProfilePhoto so Discover, Matches
-  // and every other consumer keep rendering. The partial unique indexes on
-  // user_photos are the backstop — demote must land before promote.
+  // One transaction: verify ownership, size-check for cover/portrait, then hand
+  // off to applyPhotoRoleTx for the demote / promote / mirror. The partial
+  // unique indexes on user_photos are the backstop — demote must land first.
   async setPhotoRole(
     userId: string,
     photoId: number,
@@ -873,42 +1017,13 @@ export class DatabaseStorage implements IStorage {
         .where(and(eq(userPhotos.id, photoId), eq(userPhotos.userId, userId)));
       if (!photo) throw new PhotoNotFoundError();
 
-      const prevRole = photo.role as PhotoRole;
-      let displaced: { id: number; role: PhotoRole } | null = null;
-
       if (role === "cover" || role === "portrait") {
         const longEdge = Math.max(photo.width ?? 0, photo.height ?? 0);
         const min = ROLE_MIN_LONG_EDGE[role];
         if (longEdge > 0 && longEdge < min) throw new PhotoTooSmallError(role, longEdge, min);
-
-        const [current] = await tx
-          .select()
-          .from(userPhotos)
-          .where(and(eq(userPhotos.userId, userId), eq(userPhotos.role, role)));
-        if (current && current.id !== photoId) {
-          await tx.update(userPhotos).set({ role: "gallery" }).where(eq(userPhotos.id, current.id));
-          displaced = { id: current.id, role };
-        }
       }
 
-      await tx.update(userPhotos).set({ role }).where(eq(userPhotos.id, photoId));
-
-      // mirror OUT of the roles we just left / into the roles we just took
-      if (role === "cover") {
-        await tx.update(profiles).set({ coverPhotoUrl: photo.photoUrl }).where(eq(profiles.userId, userId));
-      } else if (prevRole === "cover") {
-        await tx.update(profiles).set({ coverPhotoUrl: null }).where(eq(profiles.userId, userId));
-      }
-      if (role === "portrait") {
-        await tx
-          .update(userPhotos)
-          .set({ isMainProfilePhoto: false })
-          .where(and(eq(userPhotos.userId, userId), ne(userPhotos.id, photoId)));
-        await tx.update(userPhotos).set({ isMainProfilePhoto: true }).where(eq(userPhotos.id, photoId));
-      } else if (prevRole === "portrait") {
-        await tx.update(userPhotos).set({ isMainProfilePhoto: false }).where(eq(userPhotos.id, photoId));
-      }
-
+      const { displaced } = await applyPhotoRoleTx(tx, userId, photo, role);
       return { photoId, role, displaced };
     });
   }

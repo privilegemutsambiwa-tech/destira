@@ -25,7 +25,7 @@ function formatDistance(km: number): string {
 // Demo-seeded profiles carry real Big-Five trait scores (openness,
 // conscientiousness, ...); profiles onboarded through the app carry free-text
 // soul-mapping answers instead (see Onboarding.tsx). There's no backend
-// compatibility scoring yet (docs/redesign-handoff.md Â§4.2 is deferred), so
+// compatibility scoring yet (docs/redesign-handoff.md §4.2 is deferred), so
 // the resonance dial only renders when a profile actually has numeric trait
 // data â€” no invented numbers for the common case.
 function getResonance(personalityProfile: unknown): { score: number; axes: { label: string; value: number }[] } | null {
@@ -341,7 +341,7 @@ export default function Discover() {
         <div className="max-w-lg mx-auto">
           <div className="mb-6">
             <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2">
-              {weekday} Â· no read yet
+              {weekday} · no read yet
             </div>
             <h1 className="font-serif font-normal text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-[-0.02em] text-vf-text">
               Discover
@@ -462,7 +462,7 @@ export default function Discover() {
         <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
           <div>
             <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2">
-              {weekday} Â· one read ready
+              {weekday} · one read ready
             </div>
             <h1 className="font-serif font-normal text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-[-0.02em] text-vf-text">
               Discover
@@ -572,7 +572,7 @@ export default function Discover() {
                     <MapPin className="w-3.5 h-3.5 shrink-0" />
                     <span data-testid="text-profile-location">
                       {currentProfile.locationName || currentProfile.location}
-                      {currentProfile.showDistance !== false && distanceKm !== null ? ` Â· ${formatDistance(distanceKm)}` : ""}
+                      {currentProfile.showDistance !== false && distanceKm !== null ? ` · ${formatDistance(distanceKm)}` : ""}
                     </span>
                   </div>
                 )}

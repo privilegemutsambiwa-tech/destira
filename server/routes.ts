@@ -3228,12 +3228,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       await storage.deleteExpiredStories();
       const activeStories = await storage.getActiveStories();
       const enriched = await Promise.all(activeStories.map(async (s: any) => {
-        const profile = await storage.getProfileByUserId(s.userId);
+        const profile = await storage.getProfileWithUser(s.userId);
         const media = await storage.getStoryMedia(s.id);
         return {
           ...s,
           displayName: profile?.displayName || "User",
-          photoUrl: profile?.coverPhotoUrl || profile?.photoUrl || "",
+          photoUrl: profile?.coverPhotoUrl || profile?.user?.profileImageUrl || "",
           media,
           likeCount: 0,
           viewCount: 0,
