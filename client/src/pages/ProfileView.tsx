@@ -105,7 +105,15 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
   const openTwin = () =>
     startInterview.mutate(userId, {
       onSuccess: (iv: any) => { if (iv?.id) setLocation(`/interviews/${iv.id}/chat`); },
-      onError: () => toast({ title: "Couldn't start that", variant: "destructive" }),
+      onError: (err: any) => {
+        const msg = String(err?.message || "");
+        if (msg.includes("upgradeRequired") || msg.toLowerCase().includes("week")) {
+          toast({ title: "That's this week's interviews", description: "More room on the next plan." });
+          setLocation("/plans");
+        } else {
+          toast({ title: "Couldn't start that", variant: "destructive" });
+        }
+      },
     });
 
   const withdraw = () => {
@@ -345,7 +353,7 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
       </div>
       <div className="mt-4 pt-3.5 border-t border-vf-mint/15 text-[12.5px] text-vf-muted">
         <span className="font-serif text-vf-text">Two</span> of <span className="font-serif text-vf-text">{transcript.total}</span> lines.{" "}
-        <button onClick={() => setLocation("/upgrade")} className="text-vf-gold hover:text-[#F3D890] transition-colors">
+        <button onClick={() => setLocation("/plans")} className="text-vf-gold hover:text-[#F3D890] transition-colors">
           Ember reads the rest.
         </button>
       </div>

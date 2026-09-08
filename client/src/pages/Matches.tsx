@@ -261,23 +261,42 @@ export default function Matches() {
           />
         ) : (
           <div data-testid="list-waiting">
-            {likes.map((like: any) => (
-              <InterestRow
-                key={`like-${like.matchId}`}
-                name={like.profile?.displayName || "Someone"}
-                age={like.profile?.age}
-                photoUrl={like.profile?.coverPhotoUrl || like.profile?.photoUrl}
-                score={resonanceScore(like.profile?.personalityProfile)}
-                onOpen={like.fromUserId ? () => setLocation(`/u/${like.fromUserId}`) : undefined}
-                testId={`row-like-${like.matchId}`}
-                right={
-                  <>
-                    <PassButton onClick={() => passLike(like.matchId)} pending={respondToMatch.isPending} />
-                    <MeetButton onClick={() => acceptLike(like.matchId)} pending={likeBack.isPending} />
-                  </>
-                }
-              />
-            ))}
+            {incoming?.seeWhoAsked === false && likes.some((l: any) => l.masked) ? (
+              <div className="rounded-[16px] border border-vf-line bg-vf-surface2 p-5 mb-3" data-testid="masked-asks">
+                <p className="text-[15px] text-vf-text">
+                  <span className="font-serif text-[22px] align-baseline">{likes.length}</span>{" "}
+                  {likes.length === 1 ? "person has" : "people have"} asked to meet you.
+                </p>
+                <p className="text-[13px] text-vf-muted mt-1.5 leading-[1.5]">
+                  Spark shows you who — names, photos, the whole profile — so you can decide.
+                </p>
+                <button
+                  onClick={() => setLocation("/plans")}
+                  className="mt-3 inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[#FF8163]"
+                  data-testid="button-see-who-asked"
+                >
+                  See plans
+                </button>
+              </div>
+            ) : (
+              likes.map((like: any) => (
+                <InterestRow
+                  key={`like-${like.matchId}`}
+                  name={like.profile?.displayName || "Someone"}
+                  age={like.profile?.age}
+                  photoUrl={like.profile?.coverPhotoUrl || like.profile?.photoUrl}
+                  score={resonanceScore(like.profile?.personalityProfile)}
+                  onOpen={like.fromUserId ? () => setLocation(`/u/${like.fromUserId}`) : undefined}
+                  testId={`row-like-${like.matchId}`}
+                  right={
+                    <>
+                      <PassButton onClick={() => passLike(like.matchId)} pending={respondToMatch.isPending} />
+                      <MeetButton onClick={() => acceptLike(like.matchId)} pending={likeBack.isPending} />
+                    </>
+                  }
+                />
+              ))
+            )}
             {pendingRequests.map((req: any) => (
               <InterestRow
                 key={`req-${req.id}`}

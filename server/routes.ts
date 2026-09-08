@@ -19,12 +19,7 @@ import * as eventsFeed from "./events-feed";
 import * as twinEventAlerts from "./services/twin-event-alerts";
 import * as onboarding from "./onboarding";
 import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema, reminderKindEnum } from "@shared/schema";
-import { LIMITS, type Tier } from "@shared/entitlements";
-
-const normTier = (t: unknown): Tier =>
-  t === "spark" || t === "flame" || t === "ember" || t === "plus" || t === "vip"
-    ? ((t === "plus" ? "flame" : t === "vip" ? "ember" : t) as Tier)
-    : "free";
+import * as gate from "./gate";
 import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
@@ -578,16 +573,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const userBlockedTarget = await storage.isBlocked(userId, targetId);
       if (userBlockedTarget) return res.status(403).json({ message: "You have blocked this user" });
 
-      const profile = await storage.getProfile(userId);
-      const tier = normTier(profile?.subscriptionTier);
-      const likeLimit = LIMITS[tier].dailyLikes ?? Infinity;
       const currentLikes = await storage.getDailyLikeCount(userId);
-      if (currentLikes >= likeLimit) {
-        return res.status(403).json({
-          upgradeRequired: true, feature: "daily_likes", currentTier: tier, requiredTier: "spark",
-          message: `That's your ${likeLimit} likes for today. Your next ones land at midnight.`,
-        });
-      }
+      const g = await gate.checkGate(userId, "daily_likes", { countOverride: currentLikes });
+      if (!g.ok) return res.status(403).json(gate.gateBody(g, "daily_likes"));
 
       const existing = await storage.getMatchBetweenUsers(userId, targetId);
       if (existing) {
@@ -661,6 +649,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     const { targetId } = req.body;
+    if (await gate.denyIfGated(res, userId, "start_interview")) return;
     try {
       const interview = await storage.createInterview(userId, targetId);
       res.status(201).json(interview);
@@ -1375,6 +1364,19 @@ Only include structured_updates fields if the conversation clearly reveals them.
     }
   });
 
+  // What one gated feature looks like for the caller right now — powers the
+  // client useGate() hook and the <Gated> block.
+  app.get("/api/gate/:feature", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const g = await gate.checkGate(userId, req.params.feature as any);
+      res.json(g);
+    } catch (e) {
+      res.status(400).json({ message: "Unknown feature" });
+    }
+  });
+
   app.get("/api/twin/readiness", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -1572,6 +1574,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   app.post("/api/groups", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
+    if (await gate.denyIfGated(res, userId, "create_group")) return;
     const { name, description, type, iconUrl, categoryTags, privacyMode, mediaEnabled, stickersEnabled, postingPermission, inviteDirectJoinEnabled } = req.body;
     try {
       const group = await storage.createGroupFull({
@@ -1651,15 +1654,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const group = await storage.getGroup(groupId);
       if (!group) return res.status(404).json({ message: "Group not found" });
 
-      const userProfile = await storage.getProfile(userId);
-      const tier = normTier(userProfile?.subscriptionTier);
-      const groupLimit = LIMITS[tier].groupsMax ?? Infinity;
-      const userMemberships = await db.select().from(groupMembers).where(eq(groupMembers.userId, userId));
-      if (userMemberships.length >= groupLimit) {
-        return res.status(403).json({
-          upgradeRequired: true, feature: "join_group", currentTier: tier, requiredTier: "spark",
-          message: `You're in ${groupLimit} groups — the most this plan allows. Leave one, or move up a tier.`,
-        });
+      const gj = await gate.checkGate(userId, "join_group");
+      if (!gj.ok) {
+        return res.status(403).json(gate.gateBody(gj, "join_group"));
       }
 
       if (group.privacyMode === "request-to-join") {
@@ -1674,7 +1671,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const adjectives = ["Curious", "Dreamy", "Bold", "Gentle", "Witty", "Bright", "Calm", "Warm"];
       const nouns = ["Phoenix", "River", "Cloud", "Star", "Wave", "Spark", "Moon", "Breeze"];
       const fallbackNickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
-      const nickname = userProfile?.groupNickname || fallbackNickname;
+      const joinerProfile = await storage.getProfile(userId);
+      const nickname = joinerProfile?.groupNickname || fallbackNickname;
       const member = await storage.joinGroup(groupId, userId, nickname);
       res.json(member);
     } catch (e) {
@@ -2558,17 +2556,23 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     try {
+      const canSee = (await gate.checkGate(userId, "see_who_asked")).ok;
       const userMatches = await storage.getMatchesWithProfiles(userId);
-      const likes = userMatches
-        .filter((m: any) => m.status === "pending" && !m.isRequester)
-        .map((m: any) => ({
+      const pending = userMatches.filter((m: any) => m.status === "pending" && !m.isRequester);
+
+      // Below Spark you get the COUNT, not the people — no names, no photos, no
+      // userId (so the row can't be opened). Never a fake blur.
+      const likes = pending.map((m: any) => {
+        if (!canSee) return { matchId: m.id, createdAt: m.createdAt, masked: true, profile: null, fromUserId: null };
+        return {
           matchId: m.id,
           fromUserId: m.isRequester ? m.user2Id : m.user1Id,
           profile: m.otherProfile ? { ...m.otherProfile, blurred: false } : null,
           createdAt: m.createdAt,
-        }));
+        };
+      });
 
-      res.json({ likes, totalCount: likes.length });
+      res.json({ likes, totalCount: pending.length, seeWhoAsked: canSee });
     } catch (e) {
       console.error("Likes incoming error:", e);
       res.status(500).json({ message: "Failed to fetch incoming likes" });
@@ -3169,17 +3173,10 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     try {
-      const profile = await storage.getProfile(userId);
-      const tier = normTier(profile?.subscriptionTier);
-      const limit = LIMITS[tier].dailyLikes ?? Infinity;
       const currentCount = await storage.getDailyLikeCount(userId);
-      if (currentCount >= limit) {
-        return res.status(403).json({
-          upgradeRequired: true, feature: "daily_likes", currentTier: tier, requiredTier: "spark",
-          message: `That's your ${limit} likes for today. Your next ones land at midnight.`,
-        });
-      }
-      res.json({ success: true, count: currentCount, limit: limit === Infinity ? null : limit });
+      const g = await gate.checkGate(userId, "daily_likes", { countOverride: currentCount });
+      if (!g.ok) return res.status(403).json(gate.gateBody(g, "daily_likes"));
+      res.json({ success: true, count: currentCount, limit: g.limit });
     } catch (err) {
       res.status(500).json({ message: "Failed to check like limit" });
     }
@@ -3355,6 +3352,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   app.post("/api/events", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
+    if (await gate.denyIfGated(res, userId, "host_event")) return;
     const parsed = hostEventSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid event data", errors: parsed.error.flatten() });
