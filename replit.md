@@ -3,16 +3,22 @@
 ## Overview
 VibeFlow is a personality-first dating platform that uses AI Twins to facilitate meaningful connections. Instead of swiping on photos, users complete a "Soul-Mapping" questionnaire, which generates an AI Twin persona that represents them in conversations with potential matches.
 
-## Design System (Dark Mode)
-Always-dark UI. No light/dark toggle. Key tokens:
-- **Background**: #0F0F14 | **Card surface**: #1A1A24 | **Elevated**: #242433 | **Border**: #2E2E42
-- **Text primary**: #FFFFFF | **Text muted**: #9090A8
-- **Gradient accent**: linear-gradient(135deg, #7C3AED, #EC4899)
-- **Card radius**: 20px | **Button radius**: 14px | **Pill/tag radius**: 100px
-- **Font**: Inter (Google Fonts), 700 -0.5px letter-spacing for headings
-- **Card shadow**: 0 8px 32px rgba(0,0,0,0.4) | **Button glow**: 0 4px 20px rgba(124,58,237,0.4)
-- **Bottom nav**: 64px tall, #0F0F14 bg, top border #2E2E42, 2px gradient underline active indicator
-- **Story rings**: animated conic-gradient border via `.story-ring-active` CSS class
+## Design System — SEE `docs/redesign-handoff.md` (canonical)
+
+The redesigned dark editorial system is the source of truth. The purple/Inter
+system described below is **legacy** and being removed screen by screen; do not
+build to it.
+
+Current tokens (`tailwind.config.ts` → `theme.extend.colors.vf`):
+- ink `#0C0910` · surface `#14101C` · surface2 `#161220` · line `rgba(255,255,255,.09)`
+- text `#F5F0EA` · muted `#A79FB4` · faint `#7E7690`
+- ember `#FF6B4A` (the only primary accent) · mint `#8FE3C7` (AI-twin layer ONLY) · gold `#E9C46A` (Ember-tier only)
+- Instrument Serif 400 for headlines and every number · DM Sans body · DM Mono `.16em` uppercase labels
+- Label-led, not icon-led. No emoji. No purple `#7C3AED`. No Inter.
+
+### Legacy (being retired)
+- ~~Background #0F0F14 · Card #1A1A24 · Border #2E2E42 · Inter · linear-gradient(135deg,#7C3AED,#EC4899)~~
+- **Story rings**: animated conic-gradient border via `.story-ring-active` CSS class (still in use)
 
 ## Architecture
 - **Frontend**: React + Vite + TypeScript, wouter routing, TanStack Query, shadcn/ui, Tailwind CSS, Framer Motion
@@ -32,7 +38,7 @@ Always-dark UI. No light/dark toggle. Key tokens:
 7. **Serendipity Lounge** - Interest-based group chats with admin roles, privacy modes, invite links, join requests, moderation
 8. **Profile** - Photo management, public/private toggle, AI-generated summaries, subscription badge
 9. **Chat with Own Twin** - Self-reflection conversations with memory persistence
-10. **Billing** - Stripe-powered subscription tiers (Free/Plus/VIP) with dark redesigned 3-tier pricing page at /billing
+10. **Plans / Billing** - Tiered subscriptions (Free / Spark $4.99 / Flame $9.99 / Ember $19.99), single source of truth in `shared/entitlements.ts`. Canonical pricing screen is `/plans` (redesigned); `/billing` and `/upgrade` redirect there. Payment via Paynow (EcoCash wallet + EcoCash Visa) first, Stripe (card) second — see `server/payments/`. NOTE: `Billing.tsx` / `Upgrade.tsx` are still the legacy purple pages until Phase 2 lands.
 11. **Settings** - Full settings system with inline sub-panels: Twin Tone, Location Preferences (slider), Age Range (slider), Block List (backend), Data & Privacy (export + delete), Profile Verification selfie flow, Manage Billing, Help Center FAQ, Contact Us form, Terms of Service, Privacy Policy, Clear Twin Memory (2-step confirm), Delete Account (type DELETE)
 
 ## Project Structure
@@ -114,14 +120,10 @@ shared/
 - 5 demo users with complete profiles and AI Twin personas are seeded on startup
 - 5 interest-based groups are created automatically
 
-## Design System: "Romantic Modern"
-- Semantic CSS tokens: `gradient-bg`, `bg-accent`, `bg-card`, `bg-muted`, `text-foreground`, `text-muted-foreground`
-- Micro-interactions: `btn-press` (button scale on active), `card-lift` (hover elevation), `hover-elevate`
-- CompatibilityRing: animated SVG component with gradient fill
-- AvatarStack: stacked member avatars (max 4 + overflow indicator)
-- Hero images stored in `attached_assets/images/`, served via `@assets` alias
-- Dark mode support via semantic tokens (no hardcoded colors)
-- Border radius: `rounded-md` consistently (not rounded-3xl/2xl)
+## Design System: "Romantic Modern" (RETIRED — do not use)
+Superseded by the redesigned editorial system (`docs/redesign-handoff.md`).
+Retained here only so old references in components are recognisable while they're
+migrated. `btn-press` is the one micro-interaction still in use.
 
 ## Image Upload Pipeline
 - Multer-based upload: POST /api/uploads/image (5MB limit, JPEG/PNG/WebP/GIF)
