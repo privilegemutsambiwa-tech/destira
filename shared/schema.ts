@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar, decimal, real, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar, decimal, real, date, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
@@ -16,6 +16,10 @@ export const profiles = pgTable("profiles", {
   bio: text("bio"),
   age: integer("age"),
   gender: text("gender"),
+  genderSelfDescribe: text("gender_self_describe"),
+  dateOfBirth: date("date_of_birth"), // the 18+ gate; `age` is derived for display
+  seekingGenders: text("seeking_genders").array(), // who they want to meet (multi)
+  datingIntent: text("dating_intent"), // relationship | see | friends-first | unsure
   location: text("location"),
   personalityProfile: jsonb("personality_profile"),
   twinPersona: text("twin_persona"),

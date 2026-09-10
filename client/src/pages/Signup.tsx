@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { VibeFlowLockup } from "@/components/brand/logo";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
+import { ageFromDob, MIN_AGE } from "@shared/essentials";
 
 const INPUT =
   "w-full rounded-[12px] border border-vf-line bg-white/5 px-3.5 h-11 text-sm text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow";
@@ -18,11 +19,11 @@ type Progress = {
   step: number;
   email: string;
   name: string;
-  age: string;
+  dob: string; // yyyy-mm-dd
   city: string;
 };
 
-const BLANK: Progress = { step: 1, email: "", name: "", age: "", city: "" };
+const BLANK: Progress = { step: 1, email: "", name: "", dob: "", city: "" };
 
 function loadProgress(): Progress {
   try {
@@ -54,7 +55,7 @@ export default function Signup() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const { step, email, name, age, city } = progress;
+  const { step, email, name, dob, city } = progress;
   const patch = (p: Partial<Progress>) => setProgress((cur) => ({ ...cur, ...p }));
 
   const [cityChoice, setCityChoice] = useState(() =>
@@ -129,15 +130,19 @@ export default function Signup() {
     e.preventDefault();
     setError(null);
     if (!name.trim()) return setError("Add your first name.");
-    const ageNum = Number(age);
-    if (!Number.isInteger(ageNum) || ageNum < 18 || ageNum > 120) return setError("Enter a valid age (18+).");
+    const age = ageFromDob(dob);
+    if (age == null) return setError("Enter your date of birth.");
+    if (age < MIN_AGE) return setError("You need to be 18 or older to use VibeFlow.");
     if (!city.trim()) return setError("Add your city.");
     setBusy(true);
     try {
-      await patchProfile({ displayName: name.trim(), age: ageNum, location: city.trim() });
-      done(); // -> "/" -> AuthenticatedHome sends them into /onboarding
-    } catch {
-      setError("Could not save that. Try again.");
+      // The server re-checks 18+ from dateOfBirth and derives `age`; if it's
+      // under 18 it 422s and no profile is written.
+      await patchProfile({ displayName: name.trim(), dateOfBirth: dob, location: city.trim() });
+      done(); // -> "/" -> AuthenticatedHome sends them into /essentials
+    } catch (err) {
+      const msg = err instanceof Error ? err.message.replace(/^\d+:\s*/, "") : "";
+      setError(msg.includes("18") ? "You need to be 18 or older to use VibeFlow." : "Could not save that. Try again.");
     } finally {
       setBusy(false);
     }
@@ -233,11 +238,20 @@ export default function Signup() {
                 <label htmlFor="su-name" className={LABEL}>First name</label>
                 <input id="su-name" autoComplete="given-name" value={name} onChange={(e) => patch({ name: e.target.value })} className={INPUT} data-testid="input-signup-name" />
               </div>
+              <div>
+                <label htmlFor="su-dob" className={LABEL}>Date of birth</label>
+                <input
+                  id="su-dob"
+                  type="date"
+                  value={dob}
+                  max={new Date(Date.now() - MIN_AGE * 365.25 * 864e5).toISOString().slice(0, 10)}
+                  onChange={(e) => patch({ dob: e.target.value })}
+                  className={INPUT}
+                  data-testid="input-signup-dob"
+                />
+                <p className="mt-1.5 text-[12px] text-vf-faint">You must be 18 or older. Only your age is shown.</p>
+              </div>
               <div className="flex gap-3">
-                <div className="w-24">
-                  <label htmlFor="su-age" className={LABEL}>Age</label>
-                  <input id="su-age" inputMode="numeric" value={age} onChange={(e) => patch({ age: e.target.value.replace(/\D/g, "").slice(0, 3) })} className={INPUT} data-testid="input-signup-age" />
-                </div>
                 <div className="flex-1">
                   <label htmlFor="su-city" className={LABEL}>City</label>
                   <select

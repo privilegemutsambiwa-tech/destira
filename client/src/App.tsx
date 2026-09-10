@@ -27,6 +27,7 @@ import PhotoManager from "@/pages/PhotoManager";
 import DirectChat from "@/pages/DirectChat";
 import TwinChat from "@/pages/TwinChat";
 import TwinDisclosure from "@/pages/TwinDisclosure";
+import Essentials from "@/pages/Essentials";
 import Plans from "@/pages/Plans";
 import PlansPay from "@/pages/PlansPay";
 import GroupChatPage from "@/pages/GroupChat";
@@ -64,7 +65,10 @@ function AuthenticatedHome() {
 
   useEffect(() => {
     if (!isLoading) {
-      if (!profile || !profile.onboardingCompleted) {
+      if (!profile || !profile.gender) {
+        // Matching essentials come first — before the soul-mapping questions.
+        setLocation("/essentials");
+      } else if (!profile.onboardingCompleted) {
         setLocation("/onboarding");
       } else {
         setLocation("/discover");
@@ -96,6 +100,9 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
 
+      <Route path="/essentials">
+        <ProtectedRoute component={Essentials} />
+      </Route>
       <Route path="/onboarding">
         <ProtectedRoute component={Onboarding} />
       </Route>

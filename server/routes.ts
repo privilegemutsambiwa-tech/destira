@@ -21,12 +21,13 @@ import * as onboarding from "./onboarding";
 import * as payments from "./payments";
 import * as proximity from "./services/twin-proximity-alerts";
 import * as push from "./push";
-import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema, reminderKindEnum, initiatePaymentSchema, locationReportSchema, updateProximitySettingsSchema, proximityAlerts, placeInvisibility, pushSubscriptions, places } from "@shared/schema";
+import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema, reminderKindEnum, initiatePaymentSchema, locationReportSchema, updateProximitySettingsSchema, proximityAlerts, placeInvisibility, pushSubscriptions, places, suburbCentroids } from "@shared/schema";
 import * as gate from "./gate";
 import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
 import * as disclosure from "./disclosure";
+import { ageFromDob, MIN_AGE } from "@shared/essentials";
 import {
   normalizeDisclosure,
   disclosureRefusal,
@@ -298,6 +299,14 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   app.post("/api/profiles", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
+    // Age gate: if a date of birth is supplied, it must be 18+, and we derive
+    // `age` from it so a client can't send a mismatched value.
+    if (typeof req.body?.dateOfBirth === "string" && req.body.dateOfBirth) {
+      const derived = ageFromDob(req.body.dateOfBirth);
+      if (derived == null) return res.status(400).json({ message: "Enter a valid date of birth." });
+      if (derived < MIN_AGE) return res.status(422).json({ message: "You need to be 18 or older to use VibeFlow." });
+      req.body.age = derived;
+    }
     try {
       const existing = await storage.getProfile(userId);
       const isCompletingOnboarding = req.body.onboardingCompleted && req.body.personalityProfile;
@@ -356,6 +365,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (req.params.userId !== userId) return res.sendStatus(403);
     try {
       const { subscriptionTier: _s, ...safeUpdate } = req.body;
+      if (typeof safeUpdate.dateOfBirth === "string" && safeUpdate.dateOfBirth) {
+        const derived = ageFromDob(safeUpdate.dateOfBirth);
+        if (derived == null) return res.status(400).json({ message: "Enter a valid date of birth." });
+        if (derived < MIN_AGE) return res.status(422).json({ message: "You need to be 18 or older." });
+        safeUpdate.age = derived;
+      }
       if (safeUpdate.groupNickname) {
         const nick = safeUpdate.groupNickname.trim();
         if (!/^[a-zA-Z0-9_]{3,20}$/.test(nick)) {
@@ -4107,6 +4122,42 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
       console.error("List attendees error:", e);
       res.status(500).json({ message: "Failed to fetch attendees" });
+    }
+  });
+
+  // Suburb typeahead + reverse lookup for the signup essentials "area" screen.
+  app.get("/api/geo/suburbs", async (req, res) => {
+    const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : "";
+    const lat = req.query.lat != null ? Number(req.query.lat) : null;
+    const lng = req.query.lng != null ? Number(req.query.lng) : null;
+    try {
+      const rows = await db
+        .select({ suburb: suburbCentroids.suburb, city: suburbCentroids.city, lat: suburbCentroids.lat, lng: suburbCentroids.lng })
+        .from(suburbCentroids);
+      const shaped = rows.map((r) => ({
+        suburb: r.suburb,
+        city: r.city,
+        label: `${r.suburb}, ${r.city}`,
+        lat: r.lat != null ? Number(r.lat) : null,
+        lng: r.lng != null ? Number(r.lng) : null,
+      }));
+      if (lat != null && lng != null && !Number.isNaN(lat) && !Number.isNaN(lng)) {
+        const km = (a: number, b: number, c: number, d: number) => {
+          const R = 6371, dLat = ((c - a) * Math.PI) / 180, dLng = ((d - b) * Math.PI) / 180;
+          const s = Math.sin(dLat / 2) ** 2 + Math.cos((a * Math.PI) / 180) * Math.cos((c * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+          return 2 * R * Math.asin(Math.sqrt(s));
+        };
+        const nearest = shaped
+          .filter((s) => s.lat != null && s.lng != null)
+          .sort((x, y) => km(lat, lng, x.lat!, x.lng!) - km(lat, lng, y.lat!, y.lng!))
+          .slice(0, 1);
+        return res.json(nearest);
+      }
+      const list = q ? shaped.filter((s) => s.label.toLowerCase().includes(q)) : shaped;
+      res.json(list.slice(0, 12));
+    } catch (e) {
+      console.error("Suburb lookup error:", e);
+      res.status(500).json({ message: "Failed to load suburbs" });
     }
   });
 
