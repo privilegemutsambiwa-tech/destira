@@ -2,7 +2,7 @@ import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { AlertTriangle } from "lucide-react";
-import { VibeFlowLockup } from "@/components/brand/logo";
+import { DestiraLockup } from "@/components/brand/logo";
 import { PhotoFrame } from "@/components/brand/photo-frame";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
@@ -204,7 +204,7 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Vision order: Zimbabwe → the rest of Africa → the world. VibeFlow is not a
+// Vision order: Zimbabwe → the rest of Africa → the world. Destira is not a
 // Zimbabwe-only product; it starts there.
 const PLACES = [
   "Harare",
@@ -475,7 +475,7 @@ export default function Landing() {
   // gets the same title/OG tags without a new dep + provider.)
   useEffect(() => {
     const prevTitle = document.title;
-    document.title = "VibeFlow — resonance over photographs";
+    document.title = "Destira — resonance over photographs";
     const created: HTMLMetaElement[] = [];
     const setMeta = (attr: "name" | "property", key: string, content: string) => {
       let el = document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`);
@@ -490,9 +490,11 @@ export default function Landing() {
     const desc =
       "Photographs cannot tell you how someone argues, what they want in three years, or whether they will actually turn up. So we stopped asking you to guess.";
     setMeta("name", "description", desc);
-    setMeta("property", "og:title", "VibeFlow — resonance over photographs");
+    setMeta("property", "og:title", "Destira — resonance over photographs");
     setMeta("property", "og:description", desc);
-    setMeta("property", "og:image", "/brand/og.png");
+    // TODO: a proper 1200×630 share card. The 512 icon is a placeholder that at
+    // least resolves (there was no og.png).
+    setMeta("property", "og:image", "/brand/destira-icon-512.png");
     return () => {
       document.title = prevTitle;
       created.forEach((m) => m.remove());
@@ -535,7 +537,7 @@ export default function Landing() {
       >
         <div className="max-w-[1180px] mx-auto flex items-center justify-between px-6 h-16">
           <a href="/" className="flex items-center" data-testid="link-logo">
-            <VibeFlowLockup orientation="horizontal" size={28} />
+            <DestiraLockup orientation="horizontal" size={28} />
           </a>
           <div className="flex items-center gap-4 sm:gap-6">
             <a
@@ -595,7 +597,7 @@ export default function Landing() {
             <Reveal delay={160}>
               <p className="mt-7 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
                 If it feels like everybody else got the simple version of this, you are not
-                behind and you are not too late. VibeFlow is a place to actually meet people,
+                behind and you are not too late. Destira is a place to actually meet people,
                 wherever you are — your AI twin does the first awkward part, and the rest is a
                 home worth spending time in: groups, events, and a feed that is about the people.
               </p>
@@ -688,7 +690,7 @@ export default function Landing() {
           </Reveal>
           <Reveal delay={160}>
             <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted mx-auto max-w-[56ch]">
-              Nobody on VibeFlow is here to collect matches and disappear. It is built for
+              Nobody on Destira is here to collect matches and disappear. It is built for
               meeting — groups you actually show up to, events on real evenings, and people who
               got tired of pretending they weren't looking. It started in Harare. It opens in a
               new city most months.
@@ -1229,7 +1231,7 @@ export default function Landing() {
         <div className="max-w-[1180px] mx-auto py-14 flex flex-col md:flex-row gap-10 md:gap-16 md:items-start md:justify-between">
           <div>
             <div className="text-vf-text">
-              <VibeFlowLockup orientation="horizontal" size={28} />
+              <DestiraLockup orientation="horizontal" size={28} />
             </div>
             <p className="mt-4 text-[13px] text-vf-muted">Made in Harare.</p>
             <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint">

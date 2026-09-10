@@ -1,6 +1,6 @@
-# Running VibeFlow locally (off Replit)
+# Running Destira locally (off Replit)
 
-VibeFlow was built for Replit (Replit Auth, Replit-managed Postgres, the Replit
+Destira was built for Replit (Replit Auth, Replit-managed Postgres, the Replit
 Stripe connector, a Vertex AI service account). This setup removes those
 platform dependencies so it boots on a plain machine with just Node.
 

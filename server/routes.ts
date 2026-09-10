@@ -127,7 +127,7 @@ export async function registerRoutes(
         model: "gemini-2.0-flash-001",
         contents: [{ role: "user", parts: [{ text: JSON.stringify(answers) }] }],
         config: {
-          systemInstruction: `You are an expert personality profiler for a dating app called VibeFlow. Based on the user's answers to soul-mapping questions, create a rich, warm, first-person AI Twin persona description. Write in first person as "I'm [the user]'s AI Twin." Include key values, interests, communication style, what they look for in a partner, and personality traits. Keep it to 2-3 paragraphs.`,
+          systemInstruction: `You are an expert personality profiler for a dating app called Destira. Based on the user's answers to soul-mapping questions, create a rich, warm, first-person AI Twin persona description. Write in first person as "I'm [the user]'s AI Twin." Include key values, interests, communication style, what they look for in a partner, and personality traits. Keep it to 2-3 paragraphs.`,
           maxOutputTokens: 8192,
         },
       });
@@ -305,7 +305,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (typeof req.body?.dateOfBirth === "string" && req.body.dateOfBirth) {
       const derived = ageFromDob(req.body.dateOfBirth);
       if (derived == null) return res.status(400).json({ message: "Enter a valid date of birth." });
-      if (derived < MIN_AGE) return res.status(422).json({ message: "You need to be 18 or older to use VibeFlow." });
+      if (derived < MIN_AGE) return res.status(422).json({ message: "You need to be 18 or older to use Destira." });
       req.body.age = derived;
     }
     try {
@@ -1178,7 +1178,7 @@ CONTEXT: The user has answered ${progressTowardHundred} out of 100 personality q
 Every 2-3 exchanges, naturally weave in ONE personality/relationship question as part of the conversation flow. Never ask them as a list or label them. Make them feel like a natural follow-up thought, e.g. "That reminds me — I've been curious..." or "Speaking of that, what's..." or "Quick thought...". Pick whichever fits the conversation context best. Occasionally (every 10+ exchanges) you may gently mention that chatting helps train your Twin memory.${bankSection}`;
     }
 
-    return `You are the user's personal AI Twin on VibeFlow, a dating app. You chat like a real friend on WhatsApp - warm, concise, and human.
+    return `You are the user's personal AI Twin on Destira, a dating app. You chat like a real friend on WhatsApp - warm, concise, and human.
 
 CONVERSATION RULES (CRITICAL):
 - Keep responses SHORT: 1-3 sentences max per message. Never write paragraphs.
@@ -1240,7 +1240,7 @@ ${PRIVACY_GUARDRAIL}`;
 
     const boundaries = disclosure.forbiddenTopicsSection(settings, directive, firstName);
 
-    return `You are the AI Twin of ${targetProfile.displayName} on VibeFlow. Someone is interviewing you to learn about ${targetProfile.displayName}'s personality before deciding to connect.
+    return `You are the AI Twin of ${targetProfile.displayName} on Destira. Someone is interviewing you to learn about ${targetProfile.displayName}'s personality before deciding to connect.
 
 CONVERSATION RULES (CRITICAL):
 - Chat like a real person: 1-3 sentences per response. No monologues.
@@ -1714,7 +1714,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         model: "gemini-1.5-pro-001",
         contents: [{ role: "user", parts: [{ text: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName, structured: structured || {}, answers: answers.slice(0, 20).map(a => a.answerText) }) }] }],
         config: {
-          systemInstruction: `Generate an attractive, emotionally intelligent, and dating-appropriate "About Me" section (2-3 paragraphs) for a VibeFlow user. Base this solely on the provided profile data and question answers. Highlight their positive traits, interests, and what they seek in a partner. Ensure it is engaging and encourages connection. Strictly adhere to the privacy guardrail. Do not include any PII, exact locations, or sensitive information.\n\n${PRIVACY_GUARDRAIL}`,
+          systemInstruction: `Generate an attractive, emotionally intelligent, and dating-appropriate "About Me" section (2-3 paragraphs) for a Destira user. Base this solely on the provided profile data and question answers. Highlight their positive traits, interests, and what they seek in a partner. Ensure it is engaging and encourages connection. Strictly adhere to the privacy guardrail. Do not include any PII, exact locations, or sensitive information.\n\n${PRIVACY_GUARDRAIL}`,
           maxOutputTokens: 8192,
         },
       });
@@ -1741,7 +1741,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         model: "gemini-1.5-pro-001",
         contents: [{ role: "user", parts: [{ text: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName, structured: structured || {} }) }] }],
         config: {
-          systemInstruction: `Generate a concise (2-4 lines) and elegant AI summary for a VibeFlow user's profile. This summary should capture their core personality, key values, and relationship style, designed to entice potential matches. Base it solely on the provided structured profile. Strictly adhere to the privacy guardrail. Do not include any PII or sensitive content.\n\n${PRIVACY_GUARDRAIL}`,
+          systemInstruction: `Generate a concise (2-4 lines) and elegant AI summary for a Destira user's profile. This summary should capture their core personality, key values, and relationship style, designed to entice potential matches. Base it solely on the provided structured profile. Strictly adhere to the privacy guardrail. Do not include any PII or sensitive content.\n\n${PRIVACY_GUARDRAIL}`,
           maxOutputTokens: 8192,
         },
       });
@@ -1855,7 +1855,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
               contents: [{ role: "user", parts: [{ text: JSON.stringify(answers) }] }],
               config: {
                 systemInstruction:
-                  `You are an expert personality profiler for a dating app called VibeFlow. From the user's answers, write a warm first-person AI Twin persona ("I'm [name]'s AI Twin."). Cover values, interests, communication style, what they look for in a partner, and personality. 2-3 paragraphs.`,
+                  `You are an expert personality profiler for a dating app called Destira. From the user's answers, write a warm first-person AI Twin persona ("I'm [name]'s AI Twin."). Cover values, interests, communication style, what they look for in a partner, and personality. 2-3 paragraphs.`,
                 maxOutputTokens: 8192,
               },
             })
@@ -3710,7 +3710,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const profile = await storage.getProfile(userId);
       const matches = await storage.getMatches(userId);
       const twinMemory = await storage.getTwinMemory(userId, 200);
-      res.setHeader("Content-Disposition", "attachment; filename=vibeflow-data.json");
+      res.setHeader("Content-Disposition", "attachment; filename=destira-data.json");
       res.setHeader("Content-Type", "application/json");
       res.json({ profile, matches, twinMemory, exportedAt: new Date().toISOString() });
     } catch (err) {
@@ -4399,7 +4399,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         await storage.createProfile({
           userId: devUser.id,
           displayName: "Demo",
-          bio: "Local demo account for exploring VibeFlow.",
+          bio: "Local demo account for exploring Destira.",
           age: 29,
           gender: "other",
           location: "Harare",

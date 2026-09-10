@@ -992,7 +992,7 @@ export const hostEventSchema = z
     contributionAmount: z.coerce
       .number()
       .positive()
-      .max(MAX_CONTRIBUTION, `Contributions over $${MAX_CONTRIBUTION} aren't allowed on VibeFlow.`)
+      .max(MAX_CONTRIBUTION, `Contributions over $${MAX_CONTRIBUTION} aren't allowed on Destira.`)
       .nullable()
       .optional(),
     contributionNote: z.string().trim().max(200).optional().or(z.literal("")),

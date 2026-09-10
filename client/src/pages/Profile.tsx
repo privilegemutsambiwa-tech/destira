@@ -247,7 +247,7 @@ export default function Profile() {
     return (
       <LayoutShell>
         <div className="text-center mt-20">
-          <h2 className="font-serif text-2xl text-vf-text">Welcome to VibeFlow!</h2>
+          <h2 className="font-serif text-2xl text-vf-text">Welcome to Destira!</h2>
           <p className="mt-2 mb-6 text-vf-muted">Complete your Soul-Mapping to get started.</p>
           <button
             onClick={() => setLocation("/onboarding")}

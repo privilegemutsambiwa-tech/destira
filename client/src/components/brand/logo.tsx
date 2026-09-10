@@ -31,7 +31,7 @@ function strokeForSize(size: number): number {
 
 export type MarkVariant = "colour" | "mono" | "tile";
 
-interface VibeFlowMarkProps {
+interface DestiraMarkProps {
   /** Rendered width in px. Height follows the artwork ratio. */
   size: number;
   /** colour = ember+mint+cream · mono = currentColor throughout · tile = lens on an ember square (use <28px). */
@@ -41,19 +41,19 @@ interface VibeFlowMarkProps {
   className?: string;
 }
 
-export function VibeFlowMark({ size, variant = "colour", decorative = false, className }: VibeFlowMarkProps) {
+export function DestiraMark({ size, variant = "colour", decorative = false, className }: DestiraMarkProps) {
   const clipId = useId();
 
   if (import.meta.env.DEV && variant === "colour" && size < 28) {
     throw new Error(
-      `VibeFlowMark: the two-ring colour mark stops resolving below 28px (got ${size}px). ` +
+      `DestiraMark: the two-ring colour mark stops resolving below 28px (got ${size}px). ` +
         `Use variant="tile" for small sizes.`,
     );
   }
 
   const a11y = decorative
     ? ({ "aria-hidden": true } as const)
-    : ({ role: "img", "aria-label": "VibeFlow" } as const);
+    : ({ role: "img", "aria-label": "Destira" } as const);
 
   if (variant === "tile") {
     return (
@@ -110,13 +110,13 @@ export function VibeFlowMark({ size, variant = "colour", decorative = false, cla
   );
 }
 
-interface VibeFlowWordmarkProps {
+interface DestiraWordmarkProps {
   /** Font size in px. */
   size: number;
   className?: string;
 }
 
-export function VibeFlowWordmark({ size, className }: VibeFlowWordmarkProps) {
+export function DestiraWordmark({ size, className }: DestiraWordmarkProps) {
   return (
     <span
       className={className}
@@ -129,12 +129,12 @@ export function VibeFlowWordmark({ size, className }: VibeFlowWordmarkProps) {
         textTransform: "lowercase",
       }}
     >
-      vibeflow
+      destira
     </span>
   );
 }
 
-interface VibeFlowLockupProps {
+interface DestiraLockupProps {
   orientation?: "horizontal" | "stacked";
   /** Mark width in px; the wordmark scales from it. */
   size: number;
@@ -142,7 +142,7 @@ interface VibeFlowLockupProps {
   className?: string;
 }
 
-export function VibeFlowLockup({ orientation = "horizontal", size, variant = "colour", className }: VibeFlowLockupProps) {
+export function DestiraLockup({ orientation = "horizontal", size, variant = "colour", className }: DestiraLockupProps) {
   const gap = size * LOCKUP_GAP[orientation];
   const wordSize = size * WORDMARK_RATIO[orientation];
 
@@ -150,7 +150,7 @@ export function VibeFlowLockup({ orientation = "horizontal", size, variant = "co
     <span
       className={className}
       role="img"
-      aria-label="VibeFlow"
+      aria-label="Destira"
       style={{
         display: "inline-flex",
         flexDirection: orientation === "horizontal" ? "row" : "column",
@@ -158,8 +158,8 @@ export function VibeFlowLockup({ orientation = "horizontal", size, variant = "co
         gap,
       }}
     >
-      <VibeFlowMark size={size} variant={variant} decorative />
-      <VibeFlowWordmark size={wordSize} />
+      <DestiraMark size={size} variant={variant} decorative />
+      <DestiraWordmark size={wordSize} />
     </span>
   );
 }

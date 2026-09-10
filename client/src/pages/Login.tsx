@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
-import { VibeFlowLockup } from "@/components/brand/logo";
+import { DestiraLockup } from "@/components/brand/logo";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -55,7 +55,7 @@ export default function Login() {
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-vf-ink text-vf-text">
       <div className="w-full max-w-[460px]">
         <div className="flex justify-center mb-8 text-vf-text">
-          <VibeFlowLockup orientation="horizontal" size={30} />
+          <DestiraLockup orientation="horizontal" size={30} />
         </div>
 
         <div className="rounded-[24px] border border-vf-line bg-vf-surface p-7 sm:p-8">

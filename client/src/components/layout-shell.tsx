@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { LocationPermissionModal } from "./location-permission-modal";
 import { ProximityAlerts } from "./proximity-alerts";
-import { VibeFlowLockup } from "./brand/logo";
+import { DestiraLockup } from "./brand/logo";
 
 interface LayoutShellProps {
   children: React.ReactNode;
@@ -58,7 +58,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
       <header className="sticky top-0 z-50 md:hidden flex items-center justify-center h-14 px-4 bg-vf-ink border-b border-vf-line">
         <Link href="/">
           <div className="flex items-center cursor-pointer text-vf-text" data-testid="link-logo-mobile">
-            <VibeFlowLockup orientation="horizontal" size={28} />
+            <DestiraLockup orientation="horizontal" size={28} />
           </div>
         </Link>
       </header>
@@ -68,7 +68,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
         <aside className="hidden md:flex flex-col w-[216px] shrink-0 sticky top-0 h-screen p-[18px] gap-[26px] border-r border-vf-line">
           <Link href="/">
             <div className="flex items-center gap-2.5 cursor-pointer px-2 text-vf-text" data-testid="link-logo-desktop">
-              <VibeFlowLockup orientation="horizontal" size={30} />
+              <DestiraLockup orientation="horizontal" size={30} />
               <span
                 className="w-[7px] h-[7px] rounded-full bg-vf-mint animate-[vf-pulse_2.6s_ease-in-out_infinite] shrink-0"
                 style={{ boxShadow: "0 0 10px var(--vf-mint)" }}

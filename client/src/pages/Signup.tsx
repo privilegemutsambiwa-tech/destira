@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
-import { VibeFlowLockup } from "@/components/brand/logo";
+import { DestiraLockup } from "@/components/brand/logo";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
 import { ageFromDob, MIN_AGE } from "@shared/essentials";
@@ -132,7 +132,7 @@ export default function Signup() {
     if (!name.trim()) return setError("Add your first name.");
     const age = ageFromDob(dob);
     if (age == null) return setError("Enter your date of birth.");
-    if (age < MIN_AGE) return setError("You need to be 18 or older to use VibeFlow.");
+    if (age < MIN_AGE) return setError("You need to be 18 or older to use Destira.");
     if (!city.trim()) return setError("Add your city.");
     setBusy(true);
     try {
@@ -142,7 +142,7 @@ export default function Signup() {
       done(); // -> "/" -> AuthenticatedHome sends them into /essentials
     } catch (err) {
       const msg = err instanceof Error ? err.message.replace(/^\d+:\s*/, "") : "";
-      setError(msg.includes("18") ? "You need to be 18 or older to use VibeFlow." : "Could not save that. Try again.");
+      setError(msg.includes("18") ? "You need to be 18 or older to use Destira." : "Could not save that. Try again.");
     } finally {
       setBusy(false);
     }
@@ -154,7 +154,7 @@ export default function Signup() {
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-vf-ink text-vf-text py-16">
       <div className="w-full max-w-[460px]">
         <div className="flex justify-center mb-8 text-vf-text">
-          <VibeFlowLockup orientation="horizontal" size={30} />
+          <DestiraLockup orientation="horizontal" size={30} />
         </div>
 
         <div className="rounded-[24px] border border-vf-line bg-vf-surface p-7 sm:p-8">

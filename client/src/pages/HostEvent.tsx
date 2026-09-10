@@ -98,7 +98,7 @@ const inputCls =
 
 function contributionLine(amount: string): string {
   const n = Number(amount);
-  return `CONTRIBUTION · $${Number.isFinite(n) ? n : 0} · SETTLED IN PERSON ON THE DAY · VIBEFLOW NEVER HANDLES IT`;
+  return `CONTRIBUTION · $${Number.isFinite(n) ? n : 0} · SETTLED IN PERSON ON THE DAY · DESTIRA NEVER HANDLES IT`;
 }
 
 export default function HostEvent() {
@@ -182,7 +182,7 @@ export default function HostEvent() {
       if (d.costModel === "contribute") {
         const n = Number(d.contributionAmount);
         if (!n || n <= 0) return "Set how much everyone chips in.";
-        if (n > 200) return "Contributions over $200 aren't allowed on VibeFlow.";
+        if (n > 200) return "Contributions over $200 aren't allowed on Destira.";
       }
       return null;
     }

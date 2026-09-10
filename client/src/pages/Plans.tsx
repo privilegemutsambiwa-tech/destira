@@ -1,7 +1,7 @@
 import { useLocation, useSearch } from "wouter";
 import { X } from "lucide-react";
 import { useSubscription } from "@/hooks/use-interactions";
-import { VibeFlowLockup } from "@/components/brand/logo";
+import { DestiraLockup } from "@/components/brand/logo";
 import {
   PLAN_CARDS,
   priceLabel,
@@ -42,7 +42,7 @@ export default function Plans() {
       <div className="max-w-5xl mx-auto px-5 sm:px-8 py-6">
         <div className="flex items-center justify-between">
           <button onClick={() => setLocation("/")} className="text-vf-text" data-testid="link-home">
-            <VibeFlowLockup orientation="horizontal" size={28} />
+            <DestiraLockup orientation="horizontal" size={28} />
           </button>
           <button
             onClick={close}

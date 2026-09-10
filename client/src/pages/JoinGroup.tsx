@@ -129,7 +129,7 @@ export default function JoinGroup({ params }: { params?: { token?: string } }) {
         {status === "error" && errorMsg === "login_required" && (
           <>
             <LogIn className="w-12 h-12 mx-auto mb-4" style={{ color: "#7C3AED" }} />
-            <p className="text-white font-bold text-xl mb-1">Join with VibeFlow</p>
+            <p className="text-white font-bold text-xl mb-1">Join with Destira</p>
             <p className="text-sm mb-4" style={{ color: "#9090A8" }}>Log in or sign up to join this group.</p>
             <a
               href={`/api/login?returnTo=${encodeURIComponent(`/join/${rawParam}`)}`}

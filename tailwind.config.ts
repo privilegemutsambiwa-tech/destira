@@ -82,10 +82,15 @@ export default {
           busy: "rgb(239 68 68)",
           offline: "rgb(156 163 175)",
         },
-        // VibeFlow redesign tokens (docs/redesign-handoff.md §1). Semantic,
+        // Destira redesign tokens (docs/redesign-handoff.md §1). Semantic,
         // not decorative — mint is the AI-twin layer and ONLY the AI-twin
         // layer; gold is Ember (premium) only. See the handoff before using
         // any of these outside their documented role.
+        //
+        // The `vf` prefix (and `--vf-*` CSS vars, `vf-*` classes) is historical
+        // — from the pre-rename "VibeFlow" name. Kept deliberately: renaming it
+        // touches hundreds of class names with zero user-visible benefit and a
+        // real chance of silently dropping a colour.
         vf: {
           ink: "#0C0910", // page ground
           surface: "#14101C", // primary card

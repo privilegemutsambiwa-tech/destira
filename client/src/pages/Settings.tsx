@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
-import { PLAN_CARDS as SETTINGS_PLAN_CARDS } from "@shared/entitlements";
+import { PLAN_CARDS as SETTINGS_PLAN_CARDS, LIMITS as SETTINGS_LIMITS } from "@shared/entitlements";
 import { useCancelSubscription } from "@/hooks/use-payments";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -671,7 +671,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "vibeflow-data.json";
+      a.download = "destira-data.json";
       a.click();
       URL.revokeObjectURL(url);
       toast({ title: "Data exported" });
@@ -895,7 +895,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
           ) : (
             <div>
               <div className="flex justify-between items-center py-1.5">
-                <p className="text-sm text-white">VibeFlow {tierInfo.label}</p>
+                <p className="text-sm text-white">Destira {tierInfo.label}</p>
                 <p className="text-sm font-semibold text-white">{tierInfo.price}</p>
               </div>
               <div className="flex justify-between items-center py-1.5">
@@ -933,7 +933,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
       </div>
 
       <p className="text-xs px-4 pt-4 pb-2 text-center" style={{ color: MUTED }}>
-        Questions? Email <span style={{ color: EMBER }}>support@vibeflow.app</span>
+        Questions? Email <span style={{ color: EMBER }}>support@destira.app</span>
       </p>
     </Panel>
   );
@@ -944,8 +944,8 @@ function HelpPanel({ onBack }: { onBack: () => void }) {
   const faqs = [
     { q: "How does my AI Twin work?", a: "Your AI Twin is built from your onboarding answers and ongoing interview questions. It learns your personality, communication style, and preferences to represent you authentically." },
     { q: "Who can see my profile?", a: "Only users you've set visibility for can see your full profile. You can toggle Public Profile on or off in Settings → Privacy." },
-    { q: "How do matches work?", a: "VibeFlow's AI compares personality profiles and sends you curated match suggestions. You can like, super-like, or pass on each suggestion." },
-    { q: "What is VibeFlow Plus?", a: "VibeFlow Plus gives you 50 likes/day (vs 5), up to 10 groups (vs 2), priority matching, and other premium perks." },
+    { q: "How do matches work?", a: "Your twin talks to other people's twins. When a conversation resonates, you get a curated read — with the transcript and a resonance score — and you decide whether to ask to meet. You can like or pass." },
+    { q: "What do the paid plans give me?", a: `Free is ${SETTINGS_LIMITS.free.dailyLikes} likes a day and the two-line transcript. Spark ($${(SETTINGS_LIMITS.spark.priceCents / 100).toFixed(2)}) shows you who asked to meet you and raises likes to ${SETTINGS_LIMITS.spark.dailyLikes} a day. Flame ($${(SETTINGS_LIMITS.flame.priceCents / 100).toFixed(2)}) opens the full transcript and lets you host events. Ember ($${(SETTINGS_LIMITS.ember.priceCents / 100).toFixed(2)}) removes the ceilings entirely. See Plans for the full breakdown.` },
     { q: "How do I delete my account?", a: "Go to Settings → Danger Zone → Delete Account, then type DELETE to confirm permanent deletion of all your data." },
     { q: "Is my data shared with third parties?", a: "We never sell your personal data. AI processing uses Google Vertex AI under strict data agreements. See our Privacy Policy for full details." },
   ];
@@ -1224,21 +1224,21 @@ function TermsPanel({ onBack }: { onBack: () => void }) {
     <Panel title="Terms of Service" onBack={onBack}>
       <div style={{ padding: "16px", color: MUTED, fontSize: "13px", lineHeight: "1.8" }}>
         <p className="text-white font-semibold mb-2">Last updated: March 2026</p>
-        <p className="mb-4">Welcome to VibeFlow. By using our service, you agree to these Terms of Service.</p>
+        <p className="mb-4">Welcome to Destira. By using our service, you agree to these Terms of Service.</p>
         <p className="text-white font-semibold mb-1">1. Eligibility</p>
-        <p className="mb-4">You must be at least 18 years old to use VibeFlow. By registering, you confirm you meet this requirement.</p>
+        <p className="mb-4">You must be at least 18 years old to use Destira. By registering, you confirm you meet this requirement.</p>
         <p className="text-white font-semibold mb-1">2. Acceptable Use</p>
         <p className="mb-4">You agree not to harass, impersonate, or harm other users. Automated access, scraping, or abuse of our AI features is prohibited.</p>
         <p className="text-white font-semibold mb-1">3. Content</p>
-        <p className="mb-4">You retain ownership of content you post but grant VibeFlow a license to display it within the platform.</p>
+        <p className="mb-4">You retain ownership of content you post but grant Destira a license to display it within the platform.</p>
         <p className="text-white font-semibold mb-1">4. Subscriptions</p>
         <p className="mb-4">Paid subscriptions auto-renew. Cancel anytime through your billing settings. Refunds are handled per our refund policy.</p>
         <p className="text-white font-semibold mb-1">5. Termination</p>
-        <p className="mb-4">VibeFlow may suspend or terminate accounts that violate these Terms, engage in fraudulent activity, or otherwise abuse the platform at our sole discretion.</p>
+        <p className="mb-4">Destira may suspend or terminate accounts that violate these Terms, engage in fraudulent activity, or otherwise abuse the platform at our sole discretion.</p>
         <p className="text-white font-semibold mb-1">6. Limitation of Liability</p>
-        <p className="mb-4">VibeFlow is provided as-is. We are not responsible for outcomes of matches or interactions between users.</p>
+        <p className="mb-4">Destira is provided as-is. We are not responsible for outcomes of matches or interactions between users.</p>
         <p className="text-white font-semibold mb-1">7. Contact</p>
-        <p>For questions, use the Contact Us page within the app or email support@vibeflow.app.</p>
+        <p>For questions, use the Contact Us page within the app or email support@destira.app.</p>
       </div>
     </Panel>
   );
@@ -1249,7 +1249,7 @@ function PrivacyPolicyPanel({ onBack }: { onBack: () => void }) {
     <Panel title="Privacy Policy" onBack={onBack}>
       <div style={{ padding: "16px", color: MUTED, fontSize: "13px", lineHeight: "1.8" }}>
         <p className="text-white font-semibold mb-2">Last updated: March 2026</p>
-        <p className="mb-4">VibeFlow is committed to protecting your privacy.</p>
+        <p className="mb-4">Destira is committed to protecting your privacy.</p>
         <p className="text-white font-semibold mb-1">Data We Collect</p>
         <p className="mb-4">We collect your name, email, profile data, location (if permitted), and conversation data to power AI features.</p>
         <p className="text-white font-semibold mb-1">How We Use Data</p>

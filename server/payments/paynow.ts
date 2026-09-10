@@ -75,7 +75,7 @@ export class PaynowProvider implements PaymentProvider {
       id: this.id_,
       reference: input.reference,
       amount,
-      additionalinfo: "VibeFlow subscription",
+      additionalinfo: "Destira subscription",
       returnurl: this.returnUrl,
       resulturl: this.resultUrl,
       authemail: input.authEmail || "",

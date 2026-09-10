@@ -49,7 +49,7 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <img src="/brand/logo.png" alt="VibeFlow" className="w-16 h-16 rounded-md object-cover animate-pulse" />
+        <img src="/brand/logo.png" alt="Destira" className="w-16 h-16 rounded-md object-cover animate-pulse" />
       </div>
     );
   }
@@ -78,7 +78,7 @@ function AuthenticatedHome() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <img src="/brand/logo.png" alt="VibeFlow" className="w-16 h-16 rounded-md object-cover animate-pulse" />
+      <img src="/brand/logo.png" alt="Destira" className="w-16 h-16 rounded-md object-cover animate-pulse" />
     </div>
   );
 }
@@ -89,7 +89,7 @@ function Router() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <img src="/brand/logo.png" alt="VibeFlow" className="w-16 h-16 rounded-md object-cover animate-pulse" />
+        <img src="/brand/logo.png" alt="Destira" className="w-16 h-16 rounded-md object-cover animate-pulse" />
       </div>
     );
   }

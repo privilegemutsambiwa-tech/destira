@@ -13,3 +13,4 @@ debug.log
 
 # photo originals — only the generated variants are committed
 client/public/photos/_src/
+.localdb.corrupt-*/

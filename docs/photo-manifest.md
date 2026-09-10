@@ -55,7 +55,7 @@ evidence-vs-catalogue test before shipping.
 ## OG image — `client/public/brand/og.png`
 
 Referenced from the head meta in `Landing.tsx` (`og:image`). Expected **1200 × 630 px**.
-Use the `hero-primary` photo, warm treatment, with the VibeFlow lockup
+Use the `hero-primary` photo, warm treatment, with the Destira lockup
 bottom-left and *"Resonance over photographs."* set in Instrument Serif.
 
 ## Notes / deviations

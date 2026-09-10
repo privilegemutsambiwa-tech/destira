@@ -525,7 +525,7 @@ export default function Discover() {
             <p className="text-sm text-vf-muted">
               {filter === "nearby"
                 ? "Widen the scope to see everyone, or check back when people are near you."
-                : "Complete your onboarding first, then check back as more people join VibeFlow."}
+                : "Complete your onboarding first, then check back as more people join Destira."}
             </p>
             {filter !== "all" && (
               <button

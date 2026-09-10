@@ -6,14 +6,19 @@ import { LIMITS } from '@shared/entitlements';
 // Prices come from shared/entitlements.ts so they never drift from the app.
 
 const PAID = [
-  { tier: 'spark', name: 'VibeFlow Spark', description: 'See who asked to meet you, plus more room to explore.' },
-  { tier: 'flame', name: 'VibeFlow Flame', description: 'The full twin-to-twin transcript every time, and host your own events.' },
-  { tier: 'ember', name: 'VibeFlow Ember', description: 'Nothing counts down — unlimited likes, interviews, groups and events.' },
+  { tier: 'spark', name: 'Destira Spark', description: 'See who asked to meet you, plus more room to explore.' },
+  { tier: 'flame', name: 'Destira Flame', description: 'The full twin-to-twin transcript every time, and host your own events.' },
+  { tier: 'ember', name: 'Destira Ember', description: 'Nothing counts down — unlimited likes, interviews, groups and events.' },
 ] as const;
+
+// The metadata tag stays `vibeflow` (historical): it's the key existing Stripe
+// products are already filed under, and changing it orphans them. Rename here
+// only when doing a deliberate Stripe migration.
+const STRIPE_APP_TAG = "vibeflow";
 
 async function seedProducts() {
   const stripe = await getUncachableStripeClient();
-  const existing = await stripe.products.search({ query: "metadata['app']:'vibeflow'" });
+  const existing = await stripe.products.search({ query: `metadata['app']:'${STRIPE_APP_TAG}'` });
   const byTier = new Map(existing.data.map((p) => [p.metadata?.tier, p]));
 
   for (const plan of PAID) {
@@ -24,7 +29,7 @@ async function seedProducts() {
       product = await stripe.products.create({
         name: plan.name,
         description: plan.description,
-        metadata: { app: 'vibeflow', tier: plan.tier },
+        metadata: { app: STRIPE_APP_TAG, tier: plan.tier },
       });
       console.log(`Created product ${plan.name} (${product.id})`);
     }
@@ -44,7 +49,7 @@ async function seedProducts() {
       unit_amount: amount,
       currency: 'usd',
       recurring: { interval: 'month' },
-      metadata: { app: 'vibeflow', tier: plan.tier },
+      metadata: { app: STRIPE_APP_TAG, tier: plan.tier },
     });
     console.log(`  ${plan.name}: new price ${price.id} $${amount / 100}/month`);
   }

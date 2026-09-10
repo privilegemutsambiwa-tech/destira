@@ -247,7 +247,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
     try {
       const linkRes = await createInvite.mutateAsync();
       const inviteUrl = makeInviteUrl(linkRes.token);
-      const shareData = { title: group?.name || "Group", text: `Join "${group?.name}" on VibeFlow`, url: inviteUrl };
+      const shareData = { title: group?.name || "Group", text: `Join "${group?.name}" on Destira`, url: inviteUrl };
       if (navigator.share) {
         await navigator.share(shareData).catch(() => {
           setShareLink(inviteUrl);

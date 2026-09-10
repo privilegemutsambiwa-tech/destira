@@ -1,7 +1,7 @@
-# VibeFlow - AI-Powered Dating App
+# Destira - AI-Powered Dating App
 
 ## Overview
-VibeFlow is a personality-first dating platform that uses AI Twins to facilitate meaningful connections. Instead of swiping on photos, users complete a "Soul-Mapping" questionnaire, which generates an AI Twin persona that represents them in conversations with potential matches.
+Destira is a personality-first dating platform that uses AI Twins to facilitate meaningful connections. Instead of swiping on photos, users complete a "Soul-Mapping" questionnaire, which generates an AI Twin persona that represents them in conversations with potential matches.
 
 ## Design System — SEE `docs/redesign-handoff.md` (canonical)
 
@@ -133,7 +133,7 @@ migrated. `btn-press` is the one micro-interaction still in use.
 - Privacy: GET /api/photos/:userId requires auth; private profiles return empty array for other users
 
 ## Recent Changes (Feb 22, 2026)
-- **Logo Rebranding**: VibeFlow logo in `/public/brand/logo.png`, red heart variant instructions in `/docs/logo-edit.md`, favicon updated
+- **Brand mark**: the two-ring "Overlap" device — ember ring (human) over mint ring (AI twin), lens lit where they cross. Components in `client/src/components/brand/logo.tsx` (`DestiraMark` / `DestiraWordmark` / `DestiraLockup`); assets in `client/public/brand/destira-*`. The mark is unchanged from the VibeFlow era — only the name and filenames changed.
 - **Romantic Theme**: Red-tinted CSS color tokens, romantic couple stock images in `attached_assets/images/`
 - **Global Navigation**: Back/Forward arrows added to layout-shell header (mobile + desktop)
 - **Instagram Stories**: Full stories system with 24-hour expiry, story viewer (tap navigation, auto-advance, like, comment with owner-only visibility), stories carousel on Discover page. DB: stories, storyMedia, storyLikes, storyComments, storyViews tables. API: /api/stories/feed (enriched), /api/stories CRUD, view/like/comment endpoints

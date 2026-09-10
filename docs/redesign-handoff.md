@@ -1,6 +1,6 @@
-# VibeFlow redesign — integration handoff
+# Destira redesign — integration handoff
 
-Target repo: the existing VibeFlow app (React + TypeScript, wouter, Tailwind + shadcn/ui,
+Target repo: the existing Destira app (React + TypeScript, wouter, Tailwind + shadcn/ui,
 Express/Drizzle backend). The redesign lives in `redesign-reference.html` in this folder —
 open it in a browser to see it rendered (it's a Claude Design Canvas prototype: static
 values only, not app code to copy in).
@@ -21,7 +21,7 @@ concepts that are already implied by your data model.
 
 ## 0. The one-paragraph brief
 
-> We are reskinning VibeFlow. The design direction: an editorial, warm-dark dating app
+> We are reskinning Destira. The design direction: an editorial, warm-dark dating app
 > organised around one idea — *your AI twin does the first date's worth of talking before
 > you do*. Not a swipe app. One candidate "read" per day, shown as a resonance score with
 > honest sub-axes (including unflattering ones), plus an excerpt of the actual conversation

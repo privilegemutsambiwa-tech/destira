@@ -2,7 +2,7 @@
 
 ## Creating the Red Heart Variant
 
-The original VibeFlow logo is stored at `/public/brand/logo.png`.
+The original Destira logo is stored at `/public/brand/logo.png`.
 To create the red-heart variant (`/public/brand/logo-redheart.png`):
 
 ### Using an Online Editor (e.g., Photopea.com)

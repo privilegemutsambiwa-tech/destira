@@ -98,7 +98,7 @@ export default function PlansPay() {
           className="mt-6 h-11 px-6 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press hover:bg-[#FF8163] transition-colors"
           data-testid="button-into-app"
         >
-          Into VibeFlow
+          Into Destira
         </button>
       </Shell>
     );
