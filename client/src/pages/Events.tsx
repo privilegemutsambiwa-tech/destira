@@ -15,6 +15,7 @@ import {
 import { useGroups } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useGate } from "@/hooks/use-gate";
+import { usePaywall } from "@/hooks/use-paywall";
 import { EVENT_KINDS, EVENT_PLACE_TYPES } from "@shared/schema";
 import { Loader2, Search, X } from "lucide-react";
 
@@ -135,6 +136,7 @@ export default function Events() {
   const { user } = useAuth();
   const { data: groups } = useGroups();
   const { data: hostGate } = useGate("host_event");
+  const paywall = usePaywall();
   const attend = useAttendEvent();
   const cancel = useCancelAttendance();
 
@@ -265,11 +267,11 @@ export default function Events() {
             Preferences
           </button>
           <button
-            onClick={() => setLocation(hostGate?.ok === false ? "/plans" : "/events/host")}
+            onClick={() => paywall.guard("host_event", () => setLocation("/events/host"))}
             className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[#FF8163]"
             data-testid="button-host-event"
           >
-            {hostGate?.ok === false ? "Host an event · Flame" : "Host an event"}
+            {hostGate?.ok === false ? `Host an event · ${hostGate.requiredTierName || "Flame"}` : "Host an event"}
           </button>
         </div>
 
@@ -432,6 +434,7 @@ export default function Events() {
           </div>
         )}
       </div>
+      {paywall.sheet}
     </LayoutShell>
   );
 }

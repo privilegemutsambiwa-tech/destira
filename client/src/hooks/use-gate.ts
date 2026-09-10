@@ -9,6 +9,11 @@ export interface GateState {
   resetAt?: string;
   requiredTier?: string;
   message?: string;
+  /** contextual copy, composed server-side from the same map (shared/entitlements gateCopy) */
+  action?: string;
+  line?: string;
+  requiredTierName?: string;
+  requiredPrice?: string;
 }
 
 // Whether the current user can use a gated feature right now. Cheap, cached,

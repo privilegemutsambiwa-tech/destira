@@ -6,6 +6,7 @@ import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft,
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
 import { useTwinReadiness, useDismissReminder } from "@/hooks/use-onboarding";
 import { LIMITS } from "@shared/entitlements";
+import { usePaywall } from "@/hooks/use-paywall";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -427,7 +428,7 @@ export default function Discover() {
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
   const [viewingCardStory, setViewingCardStory] = useState<{ stories: any[]; displayName: string; photoUrl: string; userId: string } | null>(null);
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const paywall = usePaywall();
   const [confirm, setConfirm] = useState<"block" | "report" | null>(null);
   const [reportReason, setReportReason] = useState("");
   const { data: rawProfiles, isLoading } = useDiscoverProfiles(filter, userLat, userLng);
@@ -598,21 +599,19 @@ export default function Discover() {
     }
   };
 
-  const handleLike = async () => {
+  // Refuse before attempting when the daily cap is already reached — the sheet
+  // says the number, the reset time, and the next tier. The server still
+  // enforces on /api/likes.
+  const handleLike = () => paywall.guard("daily_likes", doLike);
+
+  const doLike = async () => {
     try {
-      const limitRes = await fetch("/api/likes", {
+      await fetch("/api/likes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
         credentials: "include",
       });
-      if (limitRes.status === 403) {
-        const limitData = await limitRes.json();
-        if (limitData?.upgradeRequired === true) {
-          setShowUpgradePrompt(true);
-          return;
-        }
-      }
     } catch {
       // non-critical, continue with like
     }
@@ -628,7 +627,7 @@ export default function Discover() {
         toast({ title: "Already Connected", description: "You already have a match request with this person." });
         handleNext();
       } else if (err instanceof Error && err.message?.includes("upgradeRequired")) {
-        setShowUpgradePrompt(true);
+        paywall.guard("daily_likes", () => {});
       } else {
         toast({ title: "Could not like", description: "Something went wrong. Please try again.", variant: "destructive" });
       }
@@ -1020,40 +1019,7 @@ export default function Discover() {
         </div>
       )}
 
-      {showUpgradePrompt && (
-        <div
-          className="fixed inset-0 flex items-end justify-center z-[100]"
-          style={{ background: "rgba(8,6,11,.82)", backdropFilter: "blur(14px)" }}
-          onClick={() => setShowUpgradePrompt(false)}
-        >
-          <div
-            className="w-full max-w-[480px] rounded-t-[24px] border border-vf-line bg-vf-surface p-8 pb-12"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold text-center mb-3">that's today's reads</div>
-            <h2 className="font-serif font-normal text-xl text-center mb-2 text-vf-text">
-              {LIMITS.free.dailyLikes} a day on Free.
-            </h2>
-            <p className="text-sm text-center mb-6 text-vf-muted">
-              Your next ones land at midnight. A paid step gives you more room and lets you see who asked to meet you.
-            </p>
-            <button
-              onClick={() => { setShowUpgradePrompt(false); setLocation("/plans"); }}
-              className="w-full py-3.5 rounded-full text-sm font-semibold bg-vf-gold text-vf-ink mb-3 hover:bg-[#F3D890] transition-colors"
-              data-testid="button-upgrade-prompt"
-            >
-              See plans
-            </button>
-            <button
-              onClick={() => setShowUpgradePrompt(false)}
-              className="w-full py-3 text-sm font-medium text-vf-faint hover:text-vf-text"
-              data-testid="button-dismiss-upgrade"
-            >
-              Maybe later
-            </button>
-          </div>
-        </div>
-      )}
+      {paywall.sheet}
     </LayoutShell>
   );
 }

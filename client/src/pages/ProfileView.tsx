@@ -7,6 +7,7 @@ import { ResonanceAxes } from "@/components/resonance-axes";
 import { useProfile, usePhotos, usePublicAnswers, useProfileGroups } from "@/hooks/use-profiles";
 import { useTwinReadiness } from "@/hooks/use-onboarding";
 import { useGate } from "@/hooks/use-gate";
+import { usePaywall } from "@/hooks/use-paywall";
 import {
   useOutgoingLikes,
   useIncomingLikes,
@@ -45,6 +46,7 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
   const { data: incoming } = useIncomingLikes();
   const { data: myReadiness } = useTwinReadiness();
   const { data: transcriptGate } = useGate("read_transcript");
+  const paywall = usePaywall();
   const startInterview = useStartInterview();
   const unmatch = useUnmatch();
 
@@ -105,18 +107,19 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
   const bioText = profile.aboutMe || profile.bio || "";
 
   const openTwin = () =>
-    startInterview.mutate(userId, {
-      onSuccess: (iv: any) => { if (iv?.id) setLocation(`/interviews/${iv.id}/chat`); },
-      onError: (err: any) => {
-        const msg = String(err?.message || "");
-        if (msg.includes("upgradeRequired") || msg.toLowerCase().includes("week")) {
-          toast({ title: "That's this week's interviews", description: "More room on the next plan." });
-          setLocation("/plans");
-        } else {
-          toast({ title: "Couldn't start that", variant: "destructive" });
-        }
-      },
-    });
+    paywall.guard("start_interview", () =>
+      startInterview.mutate(userId, {
+        onSuccess: (iv: any) => { if (iv?.id) setLocation(`/interviews/${iv.id}/chat`); },
+        onError: (err: any) => {
+          const msg = String(err?.message || "");
+          if (msg.includes("upgradeRequired") || msg.toLowerCase().includes("week")) {
+            paywall.guard("start_interview", () => {});
+          } else {
+            toast({ title: "Couldn't start that", variant: "destructive" });
+          }
+        },
+      }),
+    );
 
   const withdraw = () => {
     if (!match) return;
@@ -365,8 +368,12 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
                 <>
                   <span className="font-serif text-vf-text">Two</span> of{" "}
                   <span className="font-serif text-vf-text">{transcript.total}</span> lines.{" "}
-                  <button onClick={() => setLocation("/plans")} className="text-vf-gold hover:text-[#F3D890] transition-colors">
-                    Flame reads the rest.
+                  <button
+                    onClick={() => paywall.guard("read_transcript", () => {})}
+                    className="text-vf-ember hover:text-[#FF8163] transition-colors"
+                    data-testid="link-read-transcript"
+                  >
+                    {transcriptGate?.requiredTierName || "Flame"} reads the rest.
                   </button>
                 </>
               )}
@@ -440,6 +447,7 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
           {RoomsCard}
         </div>
       </div>
+      {paywall.sheet}
     </LayoutShell>
   );
 }

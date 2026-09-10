@@ -271,7 +271,7 @@ export default function Matches() {
                   Spark shows you who — names, photos, the whole profile — so you can decide.
                 </p>
                 <button
-                  onClick={() => setLocation("/plans")}
+                  onClick={() => setLocation("/plans?feature=see_who_asked")}
                   className="mt-3 inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[#FF8163]"
                   data-testid="button-see-who-asked"
                 >

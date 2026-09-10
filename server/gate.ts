@@ -12,7 +12,17 @@
 import { db } from "./db";
 import { subscriptions, profiles, interviews, groupMembers, groups, groupMessages, dailyLikeCounts } from "@shared/schema";
 import { and, eq, gte, count } from "drizzle-orm";
-import { LIMITS, tierRank, FEATURE_MIN_TIER, type Tier, type Feature } from "@shared/entitlements";
+import { LIMITS, tierRank, FEATURE_MIN_TIER, gateCopy, type Tier, type Feature } from "@shared/entitlements";
+
+/** "at midnight" / "at 6:00 PM" from an ISO instant — mirrors the client's
+ *  resetLabel so the 403 body and the sheet agree. */
+export function resetLabelFromISO(iso?: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  if (d.getHours() === 0) return "at midnight";
+  return `at ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+}
 
 function coerceTier(t: unknown): Tier {
   if (t === "spark" || t === "flame" || t === "ember" || t === "free") return t;
@@ -142,7 +152,7 @@ export async function checkGate(
           tier,
           limit: null,
           requiredTier: FEATURE_MIN_TIER[feature],
-          message: upgradeMessage(feature, FEATURE_MIN_TIER[feature]),
+          message: gateCopy(feature, { tier }).line,
         };
   }
 
@@ -154,7 +164,7 @@ export async function checkGate(
         tier,
         limit: 0,
         requiredTier: FEATURE_MIN_TIER.create_group,
-        message: upgradeMessage("create_group", FEATURE_MIN_TIER.create_group),
+        message: gateCopy("create_group", { tier }).line,
       };
     }
     const owned = opts.countOverride ?? (await usage(userId, "create_group"));
@@ -165,7 +175,7 @@ export async function checkGate(
       limit: cap,
       used: owned,
       requiredTier: nextTierUp(tier),
-      message: `You've created ${cap} groups — that's the ${tier[0].toUpperCase() + tier.slice(1)} limit. Ember lifts it.`,
+      message: `You've created ${cap} groups — that's the ${TIER_LABEL(tier)} limit. ${TIER_LABEL(nextTierUp(tier))} lifts it.`,
     };
   }
 
@@ -184,15 +194,20 @@ export async function checkGate(
   const used = opts.countOverride ?? (await usage(userId, feature));
   if (used < limit) return { ok: true, tier, limit, used };
 
+  const resetAt = dailyReset ? nextMidnightISO(await userTimezone(userId)) : undefined;
   return {
     ok: false,
     tier,
     limit,
     used,
-    resetAt: dailyReset ? nextMidnightISO(await userTimezone(userId)) : undefined,
+    resetAt,
     requiredTier: nextTierUp(tier),
-    message: meteredMessage(feature, limit, dailyReset),
+    message: gateCopy(feature, { tier, limit, used, resetLabel: resetLabelFromISO(resetAt) }).line,
   };
+}
+
+function TIER_LABEL(t: Tier): string {
+  return t[0].toUpperCase() + t.slice(1);
 }
 
 function nextTierUp(t: Tier): Tier {
@@ -200,48 +215,27 @@ function nextTierUp(t: Tier): Tier {
   return order[Math.min(order.indexOf(t) + 1, order.length - 1)];
 }
 
-function upgradeMessage(feature: Feature, req: Tier): string {
-  const name = req[0].toUpperCase() + req.slice(1);
-  switch (feature) {
-    case "see_who_asked":
-      return `${name} shows you who asked to meet you, not just that someone did.`;
-    case "read_transcript":
-      return `${name} opens the whole conversation your twins had.`;
-    case "host_event":
-      return `Hosting events is a ${name} thing.`;
-    case "create_group":
-      return `Creating groups starts on ${name}.`;
-    default:
-      return `That's a ${name} feature.`;
-  }
-}
-function meteredMessage(feature: Feature, limit: number, resets: boolean): string {
-  const when = resets ? " Your next ones land at midnight." : "";
-  switch (feature) {
-    case "daily_likes":
-      return `That's your ${limit} likes for today.${when}`;
-    case "start_interview":
-      return `You've started ${limit} twin interviews this week. More room on the next tier.`;
-    case "join_group":
-      return `You're in ${limit} groups — the most this plan allows. Leave one, or move up a tier.`;
-    case "lounge_post":
-      return `That's your ${limit} Lounge ${limit === 1 ? "post" : "posts"} for today.${when}`;
-    default:
-      return "You've hit this plan's limit here.";
-  }
-}
-
 // The consistent, machine-readable 403 body. Extends the shape Discover already
 // expects ({ upgradeRequired, message }).
 export function gateBody(g: GateResult, feature: Feature) {
+  const copy = gateCopy(feature, {
+    tier: g.tier,
+    limit: g.limit,
+    used: g.used,
+    resetLabel: resetLabelFromISO(g.resetAt),
+  });
   return {
     upgradeRequired: true,
     feature,
+    action: copy.action,
     currentTier: g.tier,
-    requiredTier: g.requiredTier ?? "spark",
-    message: g.message ?? "Upgrade to keep going.",
+    requiredTier: g.requiredTier ?? copy.requiredTier,
+    requiredTierName: copy.requiredTierName,
+    requiredPrice: copy.requiredPrice,
+    message: g.message ?? copy.line,
     ...(g.resetAt ? { resetAt: g.resetAt } : {}),
     ...(g.limit != null ? { limit: g.limit } : {}),
+    ...(g.used != null ? { used: g.used } : {}),
   };
 }
 

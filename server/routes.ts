@@ -23,6 +23,7 @@ import * as proximity from "./services/twin-proximity-alerts";
 import * as push from "./push";
 import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema, reminderKindEnum, initiatePaymentSchema, locationReportSchema, updateProximitySettingsSchema, proximityAlerts, placeInvisibility, pushSubscriptions, places, suburbCentroids } from "@shared/schema";
 import * as gate from "./gate";
+import { gateCopy } from "@shared/entitlements";
 import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
@@ -1879,8 +1880,17 @@ Only include structured_updates fields if the conversation clearly reveals them.
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     try {
-      const g = await gate.checkGate(userId, req.params.feature as any);
-      res.json(g);
+      const feature = req.params.feature as any;
+      const g = await gate.checkGate(userId, feature);
+      // Carry the composed refusal copy so the client sheet / <Gated> card and
+      // the server 403 body all render the same strings.
+      const copy = gateCopy(feature, {
+        tier: g.tier,
+        limit: g.limit,
+        used: g.used,
+        resetLabel: gate.resetLabelFromISO(g.resetAt),
+      });
+      res.json({ ...g, action: copy.action, line: copy.line, requiredTierName: copy.requiredTierName, requiredPrice: copy.requiredPrice });
     } catch (e) {
       res.status(400).json({ message: "Unknown feature" });
     }

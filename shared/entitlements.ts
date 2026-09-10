@@ -169,3 +169,140 @@ export function priceLabel(cents: number): string {
 export function limitLabel(n: number | null): string {
   return n == null ? "Unlimited" : String(n);
 }
+
+// ── ONE source for what a locked feature says, in context ──
+//
+// Every gate refusal — the moment-of-tap sheet, the inline <Gated> card, and
+// the server 403 body — renders from gateCopy(). Tier names and prices come
+// from LIMITS / PLAN_CARDS so the wording can't drift from the ladder. Never
+// says "upgrade", "unlock", or "you're missing out"; always states what you
+// CAN still do where there's an answer.
+
+const TIER_NAME: Record<Tier, string> = Object.fromEntries(
+  PLAN_CARDS.map((c) => [c.tier, c.name]),
+) as Record<Tier, string>;
+
+/** Lowest tier whose numeric limit for `key` beats `fromTier`'s (or is unlimited). */
+function nextTierForLimit(fromTier: Tier, key: keyof TierLimits): Tier {
+  const cur = LIMITS[fromTier][key] as number | null;
+  for (const t of TIERS) {
+    if (tierRank(t) <= tierRank(fromTier)) continue;
+    const v = LIMITS[t][key] as number | null;
+    if (v == null || (typeof cur === "number" && typeof v === "number" && v > cur)) return t;
+  }
+  return "ember";
+}
+
+const LIMIT_KEY: Partial<Record<Feature, keyof TierLimits>> = {
+  daily_likes: "dailyLikes",
+  start_interview: "weeklyInterviews",
+  lounge_post: "loungePostsPerDay",
+  join_group: "groupsMax",
+};
+
+const ACTION: Record<Feature, string> = {
+  daily_likes: "Sending more likes",
+  start_interview: "Starting another interview",
+  read_transcript: "Reading the full transcript",
+  see_who_asked: "Seeing who asked to meet you",
+  lounge_post: "Posting in the Lounge",
+  join_group: "Joining another group",
+  create_group: "Creating a group",
+  host_event: "Hosting an event",
+  proximity_identity: "Opening a nearby profile",
+};
+
+export interface GateCopy {
+  /** Title-case phrase for the mono eyebrow / sheet heading. */
+  action: string;
+  /** The full sentence(s), composed. Same string everywhere. */
+  line: string;
+  /** Cheapest tier that clears this gate. */
+  requiredTier: Tier;
+  requiredTierName: string;
+  requiredPrice: string;
+  kind: "tier" | "limit";
+}
+
+export interface GateCopyState {
+  tier?: string;
+  limit?: number | null;
+  used?: number | null;
+  /** e.g. "at midnight" / "at 6:00 PM" — server-computed, from resetLabel(). */
+  resetLabel?: string | null;
+}
+
+export function gateCopy(feature: Feature, s: GateCopyState = {}): GateCopy {
+  const curTier = coerceKnownTier(s.tier);
+  const limitKey = LIMIT_KEY[feature];
+  const isLimit = !!limitKey && feature !== "create_group";
+
+  if (isLimit && limitKey) {
+    const limit = s.limit ?? (LIMITS[curTier][limitKey] as number | null) ?? 0;
+    const nextTier = nextTierForLimit(curTier, limitKey);
+    const nextVal = LIMITS[nextTier][limitKey] as number | null;
+    const nextName = TIER_NAME[nextTier];
+
+    const noun =
+      feature === "daily_likes" ? "likes"
+      : feature === "start_interview" ? "interviews"
+      : feature === "lounge_post" ? "Lounge posts"
+      : "groups";
+    const per =
+      feature === "daily_likes" || feature === "lounge_post" ? "today"
+      : feature === "start_interview" ? "this week"
+      : "";
+
+    let line: string;
+    if (feature === "join_group") {
+      line = `You're in ${limit} groups, the most on ${TIER_NAME[curTier]}. ${nextName} takes you to ${nextVal ?? "no limit"}.`;
+    } else {
+      const head =
+        limit === 1
+          ? `One ${noun.replace(/s$/, "")} a ${per === "today" ? "day" : "week"} on ${TIER_NAME[curTier]}.`
+          : `That's your ${limit} ${noun} for ${per}.`;
+      const reset = s.resetLabel ? ` Your next ones land ${s.resetLabel}.` : "";
+      const more =
+        nextVal == null
+          ? ` ${nextName} lifts the ceiling.`
+          : ` ${nextName} gives you ${nextVal}${per === "today" ? " a day" : per === "this week" ? " a week" : ""}.`;
+      line = `${head}${reset}${more}`;
+    }
+    return {
+      action: ACTION[feature],
+      line,
+      requiredTier: nextTier,
+      requiredTierName: nextName,
+      requiredPrice: priceLabel(LIMITS[nextTier].priceCents),
+      kind: "limit",
+    };
+  }
+
+  // tier gate
+  const req = FEATURE_MIN_TIER[feature];
+  const reqName = TIER_NAME[req];
+  const price = priceLabel(LIMITS[req].priceCents);
+  const priced = LIMITS[req].priceCents > 0 ? `, ${price} a month` : "";
+  const curName = TIER_NAME[curTier];
+
+  const LINES: Partial<Record<Feature, string>> = {
+    host_event: `You can't host events on ${curName}. ${reqName} opens it up${priced}. You can still go to anything you're invited to.`,
+    read_transcript: `Transcripts stop at two lines on ${curName}. ${reqName} opens the whole conversation your twins had${priced}.`,
+    see_who_asked: `You can see that someone asked, but not who. ${reqName} shows you the names and profiles${priced}.`,
+    create_group: `Creating groups starts on ${reqName}${priced}. You can still join up to ${LIMITS[curTier].groupsMax ?? "several"} on ${curName}.`,
+    proximity_identity: `Your twin can tell you someone's nearby, but opening their profile needs ${reqName}${priced}.`,
+  };
+
+  return {
+    action: ACTION[feature],
+    line: LINES[feature] ?? `That's a ${reqName} feature${priced}.`,
+    requiredTier: req,
+    requiredTierName: reqName,
+    requiredPrice: price,
+    kind: "tier",
+  };
+}
+
+function coerceKnownTier(t?: string): Tier {
+  return t === "spark" || t === "flame" || t === "ember" ? t : "free";
+}
