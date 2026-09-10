@@ -160,7 +160,7 @@ export interface IStorage {
   sendDirectMessage(matchId: number, senderId: string, content: string): Promise<DirectMessage>;
 
   getUserPhotos(userId: string): Promise<UserPhoto[]>;
-  addUserPhoto(userId: string, photoUrl: string, orderIndex: number, opts?: { isMain?: boolean; width?: number; height?: number }): Promise<UserPhoto>;
+  addUserPhoto(userId: string, photoUrl: string, orderIndex: number, opts?: { isMain?: boolean; width?: number; height?: number; variants?: { w800?: string; w1600?: string } }): Promise<UserPhoto>;
   deleteUserPhoto(userId: string, id: number): Promise<void>;
   reorderUserPhotos(userId: string, photoIds: number[]): Promise<void>;
   setPhotoRole(userId: string, photoId: number, role: PhotoRole): Promise<{ photoId: number; role: PhotoRole; displaced: { id: number; role: PhotoRole } | null }>;
@@ -373,11 +373,14 @@ export class DatabaseStorage implements IStorage {
         userId: profiles.userId,
         displayName: profiles.displayName,
         bio: profiles.bio,
+        aboutMe: profiles.aboutMe,
         age: profiles.age,
         gender: profiles.gender,
         location: profiles.location,
         personalityProfile: profiles.personalityProfile,
         twinPersona: profiles.twinPersona,
+        prompts: profiles.prompts,
+        isVerified: profiles.isVerified,
         onboardingCompleted: profiles.onboardingCompleted,
         isPublic: profiles.isPublic,
         createdAt: profiles.createdAt,
@@ -423,17 +426,117 @@ export class DatabaseStorage implements IStorage {
       })
       .filter((row): row is NonNullable<typeof row> => row !== null);
 
-    // Resolve the card photo from user_photos so a missing 'cover' role no
-    // longer blanks the card. Every row here is already isPublic === true.
-    const resolved = await this.resolveProfilePhotos(
-      shaped.map((r) => ({
-        userId: r.userId,
-        isPublic: r.isPublic,
-        coverPhotoUrl: r.coverPhotoUrl ?? null,
-        profileImageUrl: r.user?.profileImageUrl ?? null,
-      })),
-    );
-    return shaped.map((r) => ({ ...r, coverPhotoUrl: resolved.get(r.userId) ?? r.coverPhotoUrl ?? null }));
+    // Attach everything the card is allowed to show. Every row here is already
+    // isPublic === true + onboardingCompleted === true; the batched fetches
+    // below each re-check isPublic / isPrivate so nothing the viewer isn't
+    // permitted to see reaches the JSON.
+    const ids = shaped.map((r) => r.userId);
+    const [galleries, answersByUser, interestsByUser] = await Promise.all([
+      this.getPublicGalleries(ids),
+      this.getPublicAnswersForUsers(ids, 3),
+      this.getInterestsForUsers(ids),
+    ]);
+    return shaped.map((r) => {
+      const photos = galleries.get(r.userId) ?? [];
+      const lead =
+        photos.find((p) => p.role === "cover") ?? photos.find((p) => p.role === "portrait") ?? photos[0];
+      return {
+        ...r,
+        coverPhotoUrl: lead?.w1600 ?? lead?.url ?? r.coverPhotoUrl ?? r.user?.profileImageUrl ?? null,
+        photos,
+        answers: answersByUser.get(r.userId) ?? [],
+        interests: interestsByUser.get(r.userId) ?? [],
+      };
+    });
+  }
+
+  // Full ordered photo arrays for the Discover gallery — cover, then portrait,
+  // then gallery by orderIndex — for PUBLIC profiles only (private -> absent).
+  async getPublicGalleries(userIds: string[]): Promise<
+    Map<string, Array<{
+      url: string; w800: string | null; w1600: string | null;
+      role: string; orderIndex: number; width: number | null; height: number | null;
+      focalX: number; focalY: number;
+    }>>
+  > {
+    const out = new Map<string, any[]>();
+    if (userIds.length === 0) return out as any;
+    const pubRows = await db
+      .select({ userId: profiles.userId })
+      .from(profiles)
+      .where(and(inArray(profiles.userId, userIds), eq(profiles.isPublic, true)));
+    const pub = pubRows.map((r) => r.userId);
+    if (pub.length === 0) return out as any;
+    const rows = await db.select().from(userPhotos).where(inArray(userPhotos.userId, pub));
+    const rank = (role: string) => (role === "cover" ? 0 : role === "portrait" ? 1 : 2);
+    for (const uid of pub) {
+      const mine = rows
+        .filter((r) => r.userId === uid)
+        .sort((a, b) => rank(a.role) - rank(b.role) || a.orderIndex - b.orderIndex)
+        .map((r) => {
+          const v = (r.variants ?? {}) as { w800?: string; w1600?: string };
+          const isCover = r.role === "cover";
+          return {
+            url: r.photoUrl,
+            w800: v.w800 ?? null,
+            w1600: v.w1600 ?? null,
+            role: r.role,
+            orderIndex: r.orderIndex,
+            width: r.width ?? null,
+            height: r.height ?? null,
+            focalX: isCover ? r.coverFocalX : r.portraitFocalX,
+            focalY: isCover ? r.coverFocalY : r.portraitFocalY,
+          };
+        });
+      out.set(uid, mine);
+    }
+    return out as any;
+  }
+
+  // Public soul-mapping answers (isPrivate = false), newest first, capped per
+  // user. Batched for the Discover feed.
+  async getPublicAnswersForUsers(
+    userIds: string[],
+    perUser = 3,
+  ): Promise<Map<string, Array<{ question: string; answer: string }>>> {
+    const out = new Map<string, Array<{ question: string; answer: string }>>();
+    if (userIds.length === 0) return out;
+    const rows = await db
+      .select({
+        userId: userAnswers.userId,
+        question: questions.text,
+        answer: userAnswers.answerText,
+      })
+      .from(userAnswers)
+      .innerJoin(questions, eq(userAnswers.questionId, questions.id))
+      .where(and(inArray(userAnswers.userId, userIds), eq(userAnswers.isPrivate, false)))
+      .orderBy(desc(userAnswers.answeredAt));
+    for (const r of rows) {
+      if (typeof r.answer !== "string" || !r.answer.trim()) continue;
+      const list = out.get(r.userId) ?? [];
+      if (list.length >= perUser) continue;
+      list.push({ question: r.question, answer: r.answer.trim() });
+      out.set(r.userId, list);
+    }
+    return out;
+  }
+
+  // Interest tags from the structured twin profile. No privacy flag of their
+  // own — gated by the profile being public, which the caller guarantees.
+  async getInterestsForUsers(userIds: string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
+    if (userIds.length === 0) return out;
+    const rows = await db
+      .select({ userId: twinProfilesStructured.userId, interests: twinProfilesStructured.interests })
+      .from(twinProfilesStructured)
+      .where(inArray(twinProfilesStructured.userId, userIds));
+    for (const r of rows) {
+      const list = (r.interests ?? []).filter(
+        (s): s is string => typeof s === "string" && s.trim().length > 0,
+      );
+      if (list.length) out.set(r.userId, list.slice(0, 8));
+    }
+    return out;
   }
 
 
@@ -929,7 +1032,7 @@ export class DatabaseStorage implements IStorage {
     userId: string,
     photoUrl: string,
     orderIndex: number,
-    opts: { isMain?: boolean; width?: number; height?: number } = {},
+    opts: { isMain?: boolean; width?: number; height?: number; variants?: { w800?: string; w1600?: string } } = {},
   ): Promise<UserPhoto> {
     return db.transaction(async (tx) => {
       const [photo] = await tx
@@ -941,6 +1044,7 @@ export class DatabaseStorage implements IStorage {
           isMainProfilePhoto: opts.isMain ?? false,
           width: opts.width ?? null,
           height: opts.height ?? null,
+          variants: opts.variants ?? null,
         })
         .returning();
 

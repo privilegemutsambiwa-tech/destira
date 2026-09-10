@@ -2,7 +2,7 @@
 import { LayoutShell } from "@/components/layout-shell";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
-import { Brain, X, Loader2, MapPin, Heart, Plus, Crown, Check, ArrowRight } from "lucide-react";
+import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
 import { useTwinReadiness, useDismissReminder } from "@/hooks/use-onboarding";
 import { LIMITS } from "@shared/entitlements";
@@ -39,6 +39,131 @@ function getResonance(personalityProfile: unknown): { score: number; axes: { lab
     .slice(0, 4)
     .map(([label, value]) => ({ label: label.charAt(0).toUpperCase() + label.slice(1), value }));
   return { score, axes };
+}
+
+type GalleryPhoto = {
+  url: string;
+  w800: string | null;
+  w1600: string | null;
+  role: string;
+  focalX: number;
+  focalY: number;
+};
+
+// The photo pane as a stepped gallery. Mirrors StoryViewer's vocabulary —
+// segment ticks up top, tap the left/right third, arrow keys, hover chevrons on
+// desktop. Stepping never advances the profile; it only moves within this card.
+function CardGallery({ photos, initial }: { photos: GalleryPhoto[]; initial: string }) {
+  const [idx, setIdx] = useState(0);
+  const count = photos.length;
+
+  useEffect(() => {
+    setIdx(0);
+  }, [photos]);
+
+  const go = useCallback(
+    (dir: 1 | -1) => setIdx((i) => (count ? (i + dir + count) % count : 0)),
+    [count],
+  );
+
+  useEffect(() => {
+    if (count < 2) return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
+      if (e.key === "ArrowLeft") go(-1);
+      else if (e.key === "ArrowRight") go(1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [count, go]);
+
+  // preload the next photo only
+  useEffect(() => {
+    if (count < 2) return;
+    const next = photos[(idx + 1) % count];
+    const img = new Image();
+    img.src = next.w800 ?? next.url;
+  }, [idx, count, photos]);
+
+  if (count === 0) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-vf-surface2">
+        <span className="font-serif text-white/25" style={{ fontSize: "96px" }}>
+          {initial}
+        </span>
+      </div>
+    );
+  }
+
+  const p = photos[idx];
+  return (
+    <div className="absolute inset-0 group">
+      <img
+        key={p.url}
+        src={p.w800 ?? p.url}
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{ objectPosition: `${(p.focalX ?? 0.5) * 100}% ${(p.focalY ?? 0.5) * 100}%` }}
+      />
+
+      {count > 1 && (
+        <>
+          <div className="absolute top-2 inset-x-2 z-20 flex gap-1" aria-hidden="true">
+            {photos.map((_, i) => (
+              <div
+                key={i}
+                className="flex-1 h-[3px] rounded-full overflow-hidden"
+                style={{ background: "rgba(255,255,255,0.28)" }}
+              >
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: i <= idx ? "100%" : "0%", background: "rgba(255,255,255,0.95)" }}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* tap zones — start below the story-ring / badge band */}
+          <button
+            type="button"
+            onClick={() => go(-1)}
+            aria-label="Previous photo"
+            className="absolute left-0 top-14 bottom-0 w-1/3 z-10 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => go(1)}
+            aria-label="Next photo"
+            className="absolute right-0 top-14 bottom-0 w-1/3 z-10 focus:outline-none"
+          />
+
+          <button
+            type="button"
+            onClick={() => go(-1)}
+            aria-label="Previous photo"
+            className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)" }}
+          >
+            <ChevronLeft className="w-5 h-5 text-white" />
+          </button>
+          <button
+            type="button"
+            onClick={() => go(1)}
+            aria-label="Next photo"
+            className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)" }}
+          >
+            <ChevronRight className="w-5 h-5 text-white" />
+          </button>
+
+          <span className="absolute bottom-3 right-3 z-20 font-mono text-[10px] tracking-[0.16em] text-white/70">
+            {idx + 1}/{count}
+          </span>
+        </>
+      )}
+    </div>
+  );
 }
 
 function StoriesCarousel() {
@@ -267,6 +392,8 @@ export default function Discover() {
   const [userLng, setUserLng] = useState<number | null>(null);
   const [viewingCardStory, setViewingCardStory] = useState<{ stories: any[]; displayName: string; photoUrl: string; userId: string } | null>(null);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [confirm, setConfirm] = useState<"block" | "report" | null>(null);
+  const [reportReason, setReportReason] = useState("");
   const { data: rawProfiles, isLoading } = useDiscoverProfiles(filter, userLat, userLng);
   const { data: feedStories } = useFeedStories();
   const startInterview = useStartInterview();
@@ -409,6 +536,32 @@ export default function Discover() {
 
   const handlePass = () => handleNext();
 
+  const doBlock = async () => {
+    if (!currentProfile?.userId) return;
+    setConfirm(null);
+    try {
+      await apiRequest("POST", `/api/users/block/${currentProfile.userId}`, {});
+      toast({ title: "Blocked", description: "They won't appear in your feed anymore." });
+      handleNext();
+    } catch {
+      toast({ title: "Could not block", variant: "destructive" });
+    }
+  };
+
+  const doReport = async () => {
+    if (!currentProfile?.userId) return;
+    const reason = reportReason.trim();
+    setConfirm(null);
+    setReportReason("");
+    try {
+      await apiRequest("POST", `/api/users/${currentProfile.userId}/report`, { reason });
+      toast({ title: "Report sent", description: "Our team will review it. They're now blocked too." });
+      handleNext();
+    } catch {
+      toast({ title: "Could not send report", variant: "destructive" });
+    }
+  };
+
   const handleLike = async () => {
     try {
       const limitRes = await fetch("/api/likes", {
@@ -446,11 +599,18 @@ export default function Discover() {
     }
   };
 
-  // Free-text soul-mapping answers (real onboarded users) fall back to a
-  // couple of quoted excerpts instead of fake numeric axes â€” see getResonance().
-  const textAnswers = !resonance && currentProfile.personalityProfile && typeof currentProfile.personalityProfile === "object"
-    ? Object.values(currentProfile.personalityProfile as Record<string, unknown>).filter((v): v is string => typeof v === "string" && v.trim().length > 0).slice(0, 2)
+  // Everything the payload is allowed to carry for this person (server gates it
+  // to public profiles + non-private answers).
+  const galleryPhotos: GalleryPhoto[] = Array.isArray(currentProfile.photos) && currentProfile.photos.length > 0
+    ? currentProfile.photos
+    : currentProfile.coverPhotoUrl
+      ? [{ url: currentProfile.coverPhotoUrl, w800: null, w1600: null, role: "cover", focalX: 0.5, focalY: 0.5 }]
+      : [];
+  const answers: { question: string; answer: string }[] = Array.isArray(currentProfile.answers)
+    ? currentProfile.answers.slice(0, 2)
     : [];
+  const interests: string[] = Array.isArray(currentProfile.interests) ? currentProfile.interests.slice(0, 6) : [];
+  const aboutText: string = currentProfile.aboutMe || currentProfile.bio || "";
 
   const upcoming = profiles.length > 1
     ? [1, 2].map((offset) => profiles[(currentIdx + offset) % profiles.length]).filter((p, i, arr) => arr.findIndex((x) => x.userId === p.userId) === i && p.userId !== currentProfile.userId)
@@ -489,19 +649,7 @@ export default function Discover() {
           >
             {/* Photo pane */}
             <div className="relative min-h-[320px] md:min-h-[440px]">
-              {currentProfile.coverPhotoUrl ? (
-                <img
-                  src={currentProfile.coverPhotoUrl}
-                  alt={currentProfile.displayName}
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center bg-vf-surface2">
-                  <span className="font-serif text-white/25" style={{ fontSize: "96px" }}>
-                    {currentProfile.displayName?.[0] || "?"}
-                  </span>
-                </div>
-              )}
+              <CardGallery photos={galleryPhotos} initial={currentProfile.displayName?.[0] || "?"} />
 
               <div
                 className="absolute inset-x-0 bottom-0 pointer-events-none bg-gradient-to-t from-vf-ink to-transparent"
@@ -561,10 +709,10 @@ export default function Discover() {
                     <span
                       title="Verified"
                       data-testid="badge-verified"
-                      className="inline-flex items-center justify-center rounded-full shrink-0"
-                      style={{ width: 22, height: 22, background: "#3B82F6" }}
+                      className="inline-flex items-center justify-center rounded-full shrink-0 border border-white/25"
+                      style={{ width: 22, height: 22, background: "rgba(255,255,255,0.16)", backdropFilter: "blur(6px)" }}
                     >
-                      <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                      <Check className="w-3 h-3" strokeWidth={3} style={{ color: "#F5F0EA" }} />
                     </span>
                   )}
                 </h2>
@@ -581,9 +729,9 @@ export default function Discover() {
               </div>
             </div>
 
-            {/* Resonance pane */}
+            {/* Read pane — the twin's read AND their own voice, not one or the other */}
             <div className="p-6 md:p-8 flex flex-col gap-5 min-w-0">
-              {resonance ? (
+              {resonance && (
                 <>
                   <div className="flex items-center gap-5 flex-wrap">
                     <ResonanceDial score={resonance.score} />
@@ -591,31 +739,72 @@ export default function Discover() {
                       <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted">
                         resonance read
                       </div>
-                      {currentProfile.bio && (
-                        <p className="text-[15px] leading-relaxed text-vf-text mt-1.5 max-w-[330px]">{currentProfile.bio}</p>
+                      {aboutText && (
+                        <p className="text-[15px] leading-relaxed text-vf-text mt-1.5 max-w-[330px]">{aboutText}</p>
                       )}
                     </div>
                   </div>
                   <ResonanceAxes axes={resonance.axes} />
                 </>
-              ) : (
+              )}
+
+              {answers.length > 0 ? (
                 <div>
                   <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted mb-2">
                     in their words
                   </div>
-                  {textAnswers.length > 0 ? (
-                    <div className="flex flex-col gap-3">
-                      {textAnswers.map((answer, i) => (
-                        <p key={i} className="text-[15px] leading-relaxed text-vf-text">"{answer}"</p>
-                      ))}
+                  <div className="flex flex-col">
+                    {answers.map((a, i) => (
+                      <div
+                        key={i}
+                        className={`py-3 ${i > 0 ? "border-t border-vf-line" : ""}`}
+                        data-testid={`profile-answer-${i}`}
+                      >
+                        <div className="text-[13.5px] text-[#7E7690] mb-1">{a.question}</div>
+                        <p className="text-[16px] leading-[1.6] text-vf-text">{a.answer}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                !resonance && (
+                  <div>
+                    <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted mb-2">
+                      in their words
                     </div>
-                  ) : currentProfile.bio ? (
-                    <p className="text-[15px] leading-relaxed text-vf-text">{currentProfile.bio}</p>
-                  ) : (
-                    <p className="text-[15px] leading-relaxed text-vf-muted">No soul-mapping answers shared yet.</p>
-                  )}
+                    {aboutText ? (
+                      <p className="text-[15px] leading-relaxed text-vf-text">{aboutText}</p>
+                    ) : (
+                      <p className="text-[15px] leading-relaxed text-vf-muted">Nothing shared yet.</p>
+                    )}
+                  </div>
+                )
+              )}
+
+              {resonance && answers.length > 0 && aboutText && (
+                <p className="text-[15px] leading-relaxed text-vf-muted">{aboutText}</p>
+              )}
+
+              {interests.length > 0 && (
+                <div className="flex flex-wrap gap-2" data-testid="profile-interests">
+                  {interests.map((tag) => (
+                    <span
+                      key={tag}
+                      className="border border-vf-line rounded-full px-[15px] py-2 text-[13px] text-vf-muted"
+                    >
+                      {tag}
+                    </span>
+                  ))}
                 </div>
               )}
+
+              <button
+                onClick={() => setLocation(`/u/${currentProfile.userId}`)}
+                className="self-start inline-flex items-center gap-1.5 text-[13px] text-vf-text hover:text-vf-ember transition-colors"
+                data-testid="link-full-profile"
+              >
+                Full profile <ArrowRight className="w-3.5 h-3.5" />
+              </button>
 
               <div className="flex gap-2.5 flex-wrap mt-auto pt-2">
                 <button
@@ -653,22 +842,22 @@ export default function Discover() {
           <p className="text-xs text-vf-faint">
             {(currentIdx % profiles.length) + 1} of {profiles.length} profiles
           </p>
-          <button
-            onClick={async () => {
-              if (!currentProfile?.userId) return;
-              try {
-                await apiRequest("POST", `/api/users/block/${currentProfile.userId}`, {});
-                handleNext();
-                toast({ title: "User blocked", description: "They won't appear in your feed anymore." });
-              } catch {
-                toast({ title: "Could not block user", variant: "destructive" });
-              }
-            }}
-            className="text-xs text-vf-faint underline hover:text-vf-text"
-            data-testid="button-block-user"
-          >
-            Block / Report
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setConfirm("block")}
+              className="text-xs text-vf-faint hover:text-vf-text transition-colors"
+              data-testid="button-block-user"
+            >
+              Block
+            </button>
+            <button
+              onClick={() => setConfirm("report")}
+              className="text-xs text-vf-faint hover:text-vf-text transition-colors inline-flex items-center gap-1"
+              data-testid="button-report-user"
+            >
+              <Flag className="w-3 h-3" /> Report
+            </button>
+          </div>
         </div>
 
         {upcoming.length > 0 && (
@@ -744,6 +933,54 @@ export default function Discover() {
             }
           }}
         />
+      )}
+
+      {confirm && (
+        <div
+          className="fixed inset-0 flex items-center justify-center z-[100] p-4"
+          style={{ background: "rgba(8,6,11,.82)", backdropFilter: "blur(14px)" }}
+          onClick={() => { setConfirm(null); setReportReason(""); }}
+        >
+          <div
+            className="w-full max-w-[400px] rounded-[20px] border border-vf-line bg-vf-surface p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="font-serif font-normal text-[20px] text-vf-text mb-1.5">
+              {confirm === "block" ? `Block ${currentProfile.displayName || "this person"}?` : `Report ${currentProfile.displayName || "this person"}?`}
+            </h2>
+            <p className="text-[13.5px] leading-relaxed text-vf-muted mb-4">
+              {confirm === "block"
+                ? "They won't see you in Discover and you won't see them. You can undo this in Settings."
+                : "This sends a record to our team for review. It also blocks them."}
+            </p>
+            {confirm === "report" && (
+              <textarea
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                placeholder="What's going on? (optional)"
+                rows={3}
+                className="w-full mb-4 rounded-[12px] bg-vf-surface2 border border-vf-line p-3 text-[14px] text-vf-text placeholder:text-vf-faint resize-none outline-none focus:border-white/25"
+                data-testid="input-report-reason"
+              />
+            )}
+            <div className="flex gap-2.5">
+              <button
+                onClick={() => { setConfirm(null); setReportReason(""); }}
+                className="flex-1 h-11 rounded-full border border-white/14 text-[14px] text-vf-muted hover:text-vf-text transition-colors"
+                data-testid="button-confirm-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirm === "block" ? doBlock : doReport}
+                className="flex-1 h-11 rounded-full text-[14px] font-semibold bg-vf-ember text-vf-ink hover:bg-[#FF8163] transition-colors"
+                data-testid="button-confirm-action"
+              >
+                {confirm === "block" ? "Block" : "Send report"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showUpgradePrompt && (

@@ -80,6 +80,10 @@ export const userPhotos = pgTable(
     portraitFocalY: real("portrait_focal_y").notNull().default(0.5),
     width: integer("width"),
     height: integer("height"),
+    // { w800, w1600 } webp derivatives written on upload (server/routes POST
+    // /api/uploads/image). Null for photos uploaded before the pipeline / not
+    // yet backfilled — consumers fall back to photoUrl.
+    variants: jsonb("variants").$type<{ w800?: string; w1600?: string }>(),
   },
   (t) => [
     uniqueIndex("user_photos_one_cover_idx").on(t.userId).where(sql`${t.role} = 'cover'`),

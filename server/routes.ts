@@ -779,12 +779,37 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
 
   app.use("/uploads", (await import("express")).default.static(UPLOAD_DIR));
 
-  app.post("/api/uploads/image", upload.single("image"), (req: any, res) => {
+  app.post("/api/uploads/image", upload.single("image"), async (req: any, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     if (!req.file) return res.status(400).json({ message: "No image file provided" });
-    const url = `/uploads/${req.file.filename}`;
-    res.json({ url, filename: req.file.filename });
+
+    const filename: string = req.file.filename;
+    const url = `/uploads/${filename}`;
+    const abs = path.join(UPLOAD_DIR, filename);
+    const base = filename.replace(/\.[^.]+$/, "");
+    let variants: { w800?: string; w1600?: string } | undefined;
+
+    // Strip EXIF (incl. GPS) from the stored original and generate the webp
+    // derivatives Discover / profile galleries actually render. sharp drops all
+    // metadata unless withMetadata() is called. Best-effort: on any failure the
+    // untouched original still serves.
+    try {
+      const buf = await fs.promises.readFile(abs);
+      const cleaned = await sharp(buf).rotate().toBuffer();
+      await fs.promises.writeFile(abs, cleaned);
+
+      const mk = async (w: number, q: number) => {
+        const name = `${base}.w${w}.webp`;
+        await sharp(buf).rotate().resize({ width: w, withoutEnlargement: true }).webp({ quality: q }).toFile(path.join(UPLOAD_DIR, name));
+        return `/uploads/${name}`;
+      };
+      variants = { w800: await mk(800, 78), w1600: await mk(1600, 80) };
+    } catch (e) {
+      console.error("[uploads] variant generation failed:", e);
+    }
+
+    res.json({ url, filename, variants });
   });
 
   app.get("/api/photos/:userId", async (req, res) => {
@@ -808,15 +833,23 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   app.post("/api/photos", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
-    const { photoUrl, orderIndex, isMainProfilePhoto, width, height } = req.body ?? {};
+    const { photoUrl, orderIndex, isMainProfilePhoto, width, height, variants } = req.body ?? {};
     if (typeof photoUrl !== "string" || !photoUrl) {
       return res.status(400).json({ message: "photoUrl is required" });
     }
+    const safeVariants =
+      variants && typeof variants === "object"
+        ? {
+            ...(typeof variants.w800 === "string" ? { w800: variants.w800 } : {}),
+            ...(typeof variants.w1600 === "string" ? { w1600: variants.w1600 } : {}),
+          }
+        : undefined;
     try {
       const photo = await storage.addUserPhoto(userId, photoUrl, orderIndex || 0, {
         isMain: !!isMainProfilePhoto,
         width: Number.isFinite(width) ? Math.round(width) : undefined,
         height: Number.isFinite(height) ? Math.round(height) : undefined,
+        variants: safeVariants && Object.keys(safeVariants).length ? safeVariants : undefined,
       });
       res.status(201).json(photo);
     } catch (e) {
@@ -3412,6 +3445,24 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ message: "Failed to unblock user" });
+    }
+  });
+
+  // Report is distinct from block: it files a record for review. It also blocks
+  // — you shouldn't keep seeing someone you've reported — but the reverse isn't
+  // true, so they're separate controls in the UI.
+  app.post("/api/users/:targetUserId/report", async (req, res) => {
+    const reporterId = getUserId(req);
+    if (!reporterId) return res.sendStatus(401);
+    const { targetUserId } = req.params;
+    if (targetUserId === reporterId) return res.status(400).json({ message: "You can't report yourself" });
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, 1000) : "";
+    try {
+      await storage.createAuditLog(reporterId, "user_reported", { targetUserId, reason });
+      await storage.blockUser(reporterId, targetUserId).catch(() => {});
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to submit report" });
     }
   });
 
