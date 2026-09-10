@@ -53,6 +53,11 @@ export const profiles = pgTable("profiles", {
   ageMaxPreference: integer("age_max_preference").default(65),
   timezone: text("timezone"), // IANA tz captured client-side; used for honest "resets at midnight" copy
   prompts: jsonb("prompts"), // ProfilePrompt[] — see profilePromptsSchema
+  // What the twin may disclose in an interview. { categoryKey: 'open'|'acknowledge'|'closed' }.
+  // Missing/absent => 'closed'. See shared/disclosure.ts.
+  disclosureSettings: jsonb("disclosure_settings").$type<Record<string, string>>(),
+  // Free-text user directive to the twin — instructions, NOT data. Never quoted back.
+  disclosureDirective: text("disclosure_directive"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [
   index("profiles_location_updated_at_idx").on(t.locationUpdatedAt),
@@ -361,6 +366,14 @@ export const twinMemoryFacts = pgTable("twin_memory_facts", {
   factText: text("fact_text").notNull(),
   source: text("source").default("chat"),
   sourceMessageIds: integer("source_message_ids").array(),
+  // Disclosure categories this fact touches (shared/disclosure.ts keys). Empty
+  // array = classified as touching none. NULL = not yet classified.
+  sensitivity: text("sensitivity").array(),
+  // Has this fact been through sensitivity classification? false/default = no,
+  // so it is withheld from interviews until the backfill or the extractor
+  // classifies it. Interview filtering then re-checks the user's current
+  // per-category settings against `sensitivity`.
+  disclosable: boolean("disclosable").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
   expiresAt: timestamp("expires_at"),
 });
@@ -391,6 +404,10 @@ export const userAnswers = pgTable("user_answers", {
   selectedOptions: jsonb("selected_options"),
   ratingValue: integer("rating_value"),
   isPrivate: boolean("is_private").default(false),
+  // Disclosure categories this answer touches (shared/disclosure.ts keys). NULL
+  // = unclassified; interview filtering treats that as withheld unless the
+  // question is on the known-safe onboarding map.
+  sensitivity: text("sensitivity").array(),
   answeredAt: timestamp("answered_at").defaultNow(),
 });
 
@@ -578,7 +595,7 @@ export const reminderDismissals = pgTable("reminder_dismissals", {
   uniqueIndex("reminder_dismissals_user_kind_idx").on(t.userId, t.kind),
 ]);
 
-export const REMINDER_KINDS = ["discover_readiness_strip", "proximity_upsell"] as const;
+export const REMINDER_KINDS = ["discover_readiness_strip", "proximity_upsell", "twin_disclosure_intro", "twin_disclosure_interview"] as const;
 export const reminderKindEnum = z.enum(REMINDER_KINDS);
 
 // The minimum answered soul-mapping questions below which the twin is NOT

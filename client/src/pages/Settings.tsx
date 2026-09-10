@@ -1436,7 +1436,7 @@ export default function Settings() {
         <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ChevronRow icon={Brain} label="Interview AI Twin" onClick={() => setLocation("/twin-chat?from=/settings")} testId="row-twin-chat" />
           <ChevronRow icon={Volume2} label="Customize Twin Tone" sublabel="Style, verbosity, formality" onClick={() => setActivePanel("twin-tone")} testId="row-twin-tone" />
-          <ChevronRow icon={Shield} label="What your twin may discuss" sublabel="Topics it can and can't raise" onClick={() => setLocation("/twin-chat?from=/settings")} testId="row-twin-boundaries" />
+          <ChevronRow icon={Shield} label="What your twin may discuss" sublabel="Per-topic: open, vague, or off — plus your own note" onClick={() => setLocation("/twin-disclosure")} testId="row-twin-boundaries" />
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Discovery</div>

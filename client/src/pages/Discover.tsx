@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { StoryViewer, OwnStoryViewer, AddStoryButton } from "@/components/story-viewer";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import type { User } from "@shared/models/auth";
 
@@ -385,6 +385,42 @@ function ReadinessStrip() {
   );
 }
 
+function DisclosureIntroStrip() {
+  const [, navigate] = useLocation();
+  const qc = useQueryClient();
+  const { data } = useQuery<{ dismissed: boolean }>({
+    queryKey: ["/api/reminders", "twin_disclosure_intro"],
+    queryFn: async () => {
+      const res = await fetch("/api/reminders/twin_disclosure_intro", { credentials: "include" });
+      if (!res.ok) return { dismissed: true };
+      return res.json();
+    },
+  });
+  if (!data || data.dismissed) return null;
+  const dismiss = async () => {
+    await fetch("/api/reminders/twin_disclosure_intro/dismiss", { method: "POST", credentials: "include" });
+    qc.invalidateQueries({ queryKey: ["/api/reminders", "twin_disclosure_intro"] });
+  };
+  return (
+    <div className="mb-5 rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-start justify-between gap-3" data-testid="strip-disclosure-intro">
+      <p className="text-[13px] text-vf-muted leading-[1.55]">
+        Your twin talks to people who are deciding about you. You choose what it may say —{" "}
+        <button
+          onClick={() => { dismiss(); navigate("/twin-disclosure"); }}
+          className="text-vf-ember hover:text-vf-text underline underline-offset-2 transition-colors"
+          data-testid="link-disclosure-intro"
+        >
+          set the boundaries
+        </button>
+        .
+      </p>
+      <button onClick={dismiss} className="text-vf-faint hover:text-vf-text transition-colors shrink-0 -mr-1 -mt-0.5" aria-label="Dismiss" data-testid="button-dismiss-disclosure-intro">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
 export default function Discover() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [filter, setFilter] = useState<FilterChip>(getInitialFilter);
@@ -634,6 +670,7 @@ export default function Discover() {
         </div>
 
         <ReadinessStrip />
+        <DisclosureIntroStrip />
 
         <StoriesCarousel />
 

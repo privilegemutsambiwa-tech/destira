@@ -26,6 +26,7 @@ import HostEvent from "@/pages/HostEvent";
 import PhotoManager from "@/pages/PhotoManager";
 import DirectChat from "@/pages/DirectChat";
 import TwinChat from "@/pages/TwinChat";
+import TwinDisclosure from "@/pages/TwinDisclosure";
 import Plans from "@/pages/Plans";
 import PlansPay from "@/pages/PlansPay";
 import GroupChatPage from "@/pages/GroupChat";
@@ -148,6 +149,9 @@ function Router() {
       </Route>
       <Route path="/twin-chat">
         <ProtectedRoute component={TwinChat} />
+      </Route>
+      <Route path="/twin-disclosure">
+        <ProtectedRoute component={TwinDisclosure} />
       </Route>
       <Route path="/plans">
         <ProtectedRoute component={Plans} />

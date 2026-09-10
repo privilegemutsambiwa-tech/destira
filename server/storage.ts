@@ -200,7 +200,7 @@ export interface IStorage {
   getTwinProfileStructured(userId: string): Promise<TwinProfileStructured | undefined>;
   upsertTwinProfileStructured(userId: string, data: Partial<TwinProfileStructured>): Promise<TwinProfileStructured>;
 
-  addTwinMemoryFact(userId: string, factText: string, source?: string): Promise<TwinMemoryFact>;
+  addTwinMemoryFact(userId: string, factText: string, source?: string, opts?: { sensitivity?: string[]; classified?: boolean }): Promise<TwinMemoryFact>;
   getTwinMemoryFacts(userId: string, limit?: number): Promise<TwinMemoryFact[]>;
   clearExpiredMemoryFacts(): Promise<void>;
 
@@ -1474,9 +1474,20 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async addTwinMemoryFact(userId: string, factText: string, source?: string): Promise<TwinMemoryFact> {
+  async addTwinMemoryFact(
+    userId: string,
+    factText: string,
+    source?: string,
+    opts?: { sensitivity?: string[]; classified?: boolean },
+  ): Promise<TwinMemoryFact> {
     const [fact] = await db.insert(twinMemoryFacts)
-      .values({ userId, factText, source: source || "chat" })
+      .values({
+        userId,
+        factText,
+        source: source || "chat",
+        sensitivity: opts?.sensitivity ?? null,
+        disclosable: opts?.classified ?? false,
+      })
       .returning();
     return fact;
   }

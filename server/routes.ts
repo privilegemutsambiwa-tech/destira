@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage, PhotoNotFoundError, PhotoTooSmallError } from "./storage";
 import { setupAuth, registerAuthRoutes, authStorage, createSessionUser, hashPassword, verifyPassword } from "./replit_integrations/auth";
 import { z } from "zod";
-import { GoogleGenAI } from "@google/genai";
+import { ai } from "./ai";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
 import { sql, eq, and, gt, lt, gte, desc, isNull, isNotNull, inArray } from "drizzle-orm";
@@ -26,6 +26,14 @@ import * as gate from "./gate";
 import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
+import * as disclosure from "./disclosure";
+import {
+  normalizeDisclosure,
+  disclosureRefusal,
+  DISCLOSURE_CATEGORY_KEYS,
+  DISCLOSURE_STATES,
+  DIRECTIVE_MAX,
+} from "@shared/disclosure";
 
 const aiRateLimits = new Map<string, number[]>();
 function checkAIRateLimit(userId: string, maxPerMinute: number = 10): boolean {
@@ -69,12 +77,6 @@ const upload = multer({
       cb(new Error("Only JPEG, PNG, WebP, and GIF images are allowed"));
     }
   },
-});
-
-const ai = new GoogleGenAI({
-  vertexai: true,
-  project: "gen-lang-client-0303273462",
-  location: "us-central1",
 });
 
 export async function registerRoutes(
@@ -241,11 +243,21 @@ export async function registerRoutes(
         "What would you want your partner to say about you after a year?",
       ];
 
+      const obFacts: string[] = [];
       for (let i = 0; i < 10; i++) {
         const answer = personalityProfile[String(i)];
         if (answer && typeof answer === "string" && answer.trim()) {
           const question = ONBOARDING_QUESTIONS[i] || `Onboarding question ${i + 1}`;
-          await storage.addTwinMemoryFact(userId, `${question} → ${answer.trim()}`, "onboarding");
+          obFacts.push(`${question} → ${answer.trim()}`);
+        }
+      }
+      if (obFacts.length) {
+        const obCats = await disclosure.classifySensitivity(obFacts);
+        for (let i = 0; i < obFacts.length; i++) {
+          await storage.addTwinMemoryFact(userId, obFacts[i], "onboarding", {
+            sensitivity: obCats[i] ?? undefined,
+            classified: obCats[i] != null,
+          });
         }
       }
 
@@ -1018,6 +1030,22 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     try {
       const interview = await storage.createInterview(userId, targetId);
       res.status(201).json(interview);
+      // First time this user's twin is interviewed by anyone -> a one-time
+      // nudge to review what it may disclose. Not a modal; lands in the inbox.
+      (async () => {
+        try {
+          const prior = (await storage.getInterviews(targetId)).filter((iv) => iv.targetId === targetId);
+          if (prior.length <= 1 && !(await onboarding.isReminderDismissed(targetId, "twin_disclosure_interview"))) {
+            await storage.createNotification(
+              targetId,
+              "disclosure",
+              "Someone's meeting your twin",
+              "Your twin is being interviewed for the first time. Set what it may share about you.",
+            );
+            await onboarding.dismissReminder(targetId, "twin_disclosure_interview");
+          }
+        } catch {}
+      })();
     } catch (e) {
       console.error("Interview start error:", e);
       res.status(500).json({ message: "Failed to start interview" });
@@ -1156,32 +1184,45 @@ ${PRIVACY_GUARDRAIL}`;
 
   async function buildInterviewSystemPrompt(targetProfile: any): Promise<string> {
     const targetStructured = await storage.getTwinProfileStructured(targetProfile.userId);
-    const targetFacts = await storage.getTwinMemoryFacts(targetProfile.userId, 10);
+    const targetFacts = await storage.getTwinMemoryFacts(targetProfile.userId, 20);
+
+    const settings = normalizeDisclosure(targetProfile.disclosureSettings);
+    const directive = targetProfile.disclosureDirective as string | null;
+    const firstName = (targetProfile.displayName || "they").split(/\s+/)[0];
+
+    // Layer 1: a fact only appears if it's classified and none of its
+    // categories are closed. Unclassified facts (including everything predating
+    // this) are withheld.
+    const visibleFacts = disclosure.filterFactsForInterview(targetFacts, settings);
 
     let structuredSection = "";
     if (targetStructured) {
+      const withheld = disclosure.withheldStructuredFields(settings);
       const fields: string[] = [];
-      if (targetStructured.topValues?.length) fields.push(`Core Values: ${targetStructured.topValues.join(", ")}`);
-      if (targetStructured.relationshipGoals) fields.push(`Relationship Goals: ${targetStructured.relationshipGoals}`);
-      if (targetStructured.humorStyle) fields.push(`Humor Style: ${targetStructured.humorStyle}`);
-      if (targetStructured.communicationStyle) fields.push(`Communication Style: ${targetStructured.communicationStyle}`);
-      if (targetStructured.interests?.length) fields.push(`Interests: ${targetStructured.interests.join(", ")}`);
-      if (targetStructured.lifestylePatterns?.length) fields.push(`Lifestyle: ${targetStructured.lifestylePatterns.join(", ")}`);
-      if (targetStructured.desiredPartnerTraits?.length) fields.push(`Desired Partner Traits: ${targetStructured.desiredPartnerTraits.join(", ")}`);
+      if (!withheld.has("topValues") && targetStructured.topValues?.length) fields.push(`Core Values: ${targetStructured.topValues.join(", ")}`);
+      if (!withheld.has("relationshipGoals") && targetStructured.relationshipGoals) fields.push(`Relationship Goals: ${targetStructured.relationshipGoals}`);
+      if (!withheld.has("humorStyle") && targetStructured.humorStyle) fields.push(`Humor Style: ${targetStructured.humorStyle}`);
+      if (!withheld.has("communicationStyle") && targetStructured.communicationStyle) fields.push(`Communication Style: ${targetStructured.communicationStyle}`);
+      if (!withheld.has("interests") && targetStructured.interests?.length) fields.push(`Interests: ${targetStructured.interests.join(", ")}`);
+      if (!withheld.has("lifestylePatterns") && targetStructured.lifestylePatterns?.length) fields.push(`Lifestyle: ${targetStructured.lifestylePatterns.join(", ")}`);
+      if (!withheld.has("desiredPartnerTraits") && targetStructured.desiredPartnerTraits?.length) fields.push(`Desired Partner Traits: ${targetStructured.desiredPartnerTraits.join(", ")}`);
       if (fields.length > 0) structuredSection = `\n\nUser's Structured Profile:\n${fields.join("\n")}`;
     }
 
     let factsSection = "";
-    if (targetFacts.length > 0) {
-      const publicFacts = targetFacts.filter(f => f.source !== "private");
-      if (publicFacts.length > 0) {
-        factsSection = `\n\nRelevant Memory Facts:\n${publicFacts.map(f => `- ${f.factText}`).join("\n")}`;
-      }
+    if (visibleFacts.length > 0) {
+      factsSection = `\n\nRelevant Memory Facts:\n${visibleFacts.map(f => `- ${f.factText}`).join("\n")}`;
     }
 
-    const locationLine = targetProfile.locationName
-      ? `\n\nLocation: ${targetProfile.locationName}`
-      : "";
+    // City is fine; suburb/building only if precise_location is open.
+    const locationLine =
+      targetProfile.locationName && settings.precise_location === "open"
+        ? `\n\nLocation: ${targetProfile.locationName}`
+        : targetProfile.location
+          ? `\n\nGeneral area: ${String(targetProfile.location).split(",").pop()?.trim() || targetProfile.location}`
+          : "";
+
+    const boundaries = disclosure.forbiddenTopicsSection(settings, directive, firstName);
 
     return `You are the AI Twin of ${targetProfile.displayName} on VibeFlow. Someone is interviewing you to learn about ${targetProfile.displayName}'s personality before deciding to connect.
 
@@ -1189,12 +1230,43 @@ CONVERSATION RULES (CRITICAL):
 - Chat like a real person: 1-3 sentences per response. No monologues.
 - Represent ${targetProfile.displayName}'s personality warmly and authentically.
 - Only share what's in the profile data below - don't invent details.
-- PRIVACY: Never reveal phone numbers, addresses, exact coordinates, or explicit personal details.
-- If asked something private, naturally redirect: "I'd rather share that kind of thing in person 😊"
 
 ${targetProfile.twinPersona || "You are friendly, open, and genuine."}${locationLine}${structuredSection}${factsSection}
+${boundaries}
 
 ${PRIVACY_GUARDRAIL}`;
+  }
+
+  // Layer 3: scrub the generated reply, then (only when the question probes a
+  // closed topic or a free-text directive is set) run the LLM judge. A leak is
+  // replaced with the refusal line, never sent.
+  async function finalizeInterviewReply(
+    raw: string,
+    targetProfile: any,
+    userMessage: string,
+  ): Promise<string> {
+    const settings = normalizeDisclosure(targetProfile.disclosureSettings);
+    const directive = targetProfile.disclosureDirective as string | null;
+    const firstName = (targetProfile.displayName || "").split(/\s+/)[0];
+    const refusal = disclosureRefusal(firstName);
+
+    // Scrub precise-location strings only — the city itself is fine to say.
+    // locationName is the resolved suburb/place; from `location` take just the
+    // leading suburb part when it's "Suburb, City".
+    const locBits: string[] = [];
+    if (targetProfile.locationName) locBits.push(String(targetProfile.locationName));
+    if (typeof targetProfile.location === "string" && targetProfile.location.includes(",")) {
+      locBits.push(targetProfile.location.split(",")[0]);
+    }
+    const { text, blocked } = disclosure.scrubReply(raw, { locationStrings: locBits });
+    let out = text;
+    if (blocked && out.replace(/[^a-z]/gi, "").length < 15) out = refusal;
+
+    if (disclosure.needsJudge(userMessage, settings, directive)) {
+      const leak = await disclosure.judgeReply(out, settings, directive);
+      if (leak) out = refusal;
+    }
+    return out.trim() || refusal;
   }
 
   async function extractMemoryAfterChat(userId: string, recentMessages: { role: string; content: string }[]): Promise<void> {
@@ -1223,8 +1295,14 @@ Only include structured_updates fields if the conversation clearly reveals them.
         await storage.upsertTwinMemorySummary(userId, result.summary);
       }
       if (result.facts && result.facts.length > 0) {
-        for (const fact of result.facts.slice(0, 5)) {
-          await storage.addTwinMemoryFact(userId, fact, "chat");
+        const facts: string[] = result.facts.slice(0, 5).filter((f: unknown) => typeof f === "string" && f.trim());
+        const cats = await disclosure.classifySensitivity(facts);
+        for (let i = 0; i < facts.length; i++) {
+          const sensitivity = cats[i]; // string[] on success, null on classifier failure
+          await storage.addTwinMemoryFact(userId, facts[i], "chat", {
+            sensitivity: sensitivity ?? undefined,
+            classified: sensitivity != null,
+          });
         }
       }
       if (result.structured_updates) {
@@ -1313,7 +1391,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
           }
         }
 
-        fullResponse = detectPII(fullResponse);
+        fullResponse = await finalizeInterviewReply(fullResponse, targetProfile, message);
         history.push({ role: "assistant", content: fullResponse });
         await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
 
@@ -1335,7 +1413,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         });
 
         let aiResponse = completion.text || "I'd love to tell you more about that in person!";
-        aiResponse = detectPII(aiResponse);
+        aiResponse = await finalizeInterviewReply(aiResponse, targetProfile, message);
         history.push({ role: "assistant", content: aiResponse });
         await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
         res.json({ response: aiResponse });
@@ -1557,6 +1635,56 @@ Only include structured_updates fields if the conversation clearly reveals them.
     }
   });
 
+  // What the twin may disclose in an interview.
+  app.get("/api/twin/disclosure", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const profile = await storage.getProfile(userId);
+      res.json({
+        settings: normalizeDisclosure(profile?.disclosureSettings),
+        directive: profile?.disclosureDirective ?? "",
+      });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to load disclosure settings" });
+    }
+  });
+
+  app.put("/api/twin/disclosure", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const body = req.body ?? {};
+    const patch: Record<string, unknown> = {};
+
+    if (body.settings && typeof body.settings === "object") {
+      const clean: Record<string, string> = {};
+      for (const k of DISCLOSURE_CATEGORY_KEYS) {
+        const v = body.settings[k];
+        // Only the three real states; anything else falls back to closed. The
+        // hard-coded-never list is not represented here and can't be turned on.
+        clean[k] = (DISCLOSURE_STATES as readonly string[]).includes(v) ? v : "closed";
+      }
+      patch.disclosureSettings = clean;
+    }
+    if (typeof body.directive === "string") {
+      if (body.directive.length > DIRECTIVE_MAX) {
+        return res.status(400).json({ message: `Keep it under ${DIRECTIVE_MAX} characters.` });
+      }
+      patch.disclosureDirective = body.directive.trim() || null;
+    }
+    if (Object.keys(patch).length === 0) return res.status(400).json({ message: "Nothing to update" });
+
+    try {
+      const updated = await storage.updateProfile(userId, patch as any);
+      res.json({
+        settings: normalizeDisclosure(updated.disclosureSettings),
+        directive: updated.disclosureDirective ?? "",
+      });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to save disclosure settings" });
+    }
+  });
+
   app.post("/api/ai/profile/generate-about-me", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -1770,6 +1898,18 @@ Only include structured_updates fields if the conversation clearly reveals them.
     } catch (e) {
       console.error("Readiness error:", e);
       res.status(500).json({ message: "Failed to load readiness" });
+    }
+  });
+
+  app.get("/api/reminders/:kind", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const parsed = reminderKindEnum.safeParse(req.params.kind);
+    if (!parsed.success) return res.status(400).json({ message: "Unknown reminder" });
+    try {
+      res.json({ dismissed: await onboarding.isReminderDismissed(userId, parsed.data) });
+    } catch (e) {
+      res.status(500).json({ message: "Failed" });
     }
   });
 

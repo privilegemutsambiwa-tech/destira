@@ -14,7 +14,8 @@
     "check:feed": "tsx scripts/assert-feed-sort.ts",
     "check:twin-alerts": "tsx scripts/assert-twin-alerts.ts",
     "check:proximity": "tsx scripts/assert-proximity-alerts.ts",
-    "check:proximity-payload": "tsx --env-file=.env scripts/verify-proximity-free-payload.ts"
+    "check:proximity-payload": "tsx --env-file=.env scripts/verify-proximity-free-payload.ts",
+    "check:disclosure": "tsx scripts/assert-disclosure.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
