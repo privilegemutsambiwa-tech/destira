@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { VibeFlowLockup } from "@/components/brand/logo";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
 
 const INPUT =
@@ -191,9 +192,8 @@ export default function Signup() {
 
               <div>
                 <label htmlFor="su-password" className={LABEL}>Password</label>
-                <input
+                <PasswordInput
                   id="su-password"
-                  type="password"
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

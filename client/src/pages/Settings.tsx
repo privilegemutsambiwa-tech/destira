@@ -7,6 +7,7 @@ import {
   ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
 import { PLAN_CARDS as SETTINGS_PLAN_CARDS } from "@shared/entitlements";
@@ -1114,8 +1115,7 @@ function ChangeEmailPanel({ onBack }: { onBack: () => void }) {
             </div>
             <div style={{ marginBottom: "16px" }}>
               <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Current Password</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 placeholder="••••••••"
@@ -1182,8 +1182,7 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
         </p>
         <div style={{ marginBottom: "12px" }}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Current Password</label>
-          <input
-            type="password"
+          <PasswordInput
             value={current}
             onChange={(e) => setCurrent(e.target.value)}
             placeholder="••••••••"
@@ -1194,8 +1193,7 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
         </div>
         <div style={{ marginBottom: "12px" }}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>New Password</label>
-          <input
-            type="password"
+          <PasswordInput
             value={newPass}
             onChange={(e) => setNewPass(e.target.value)}
             placeholder="••••••••"
@@ -1206,8 +1204,7 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
         </div>
         <div style={{ marginBottom: "16px" }}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Confirm New Password</label>
-          <input
-            type="password"
+          <PasswordInput
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             placeholder="••••••••"
