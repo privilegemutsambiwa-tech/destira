@@ -2,7 +2,7 @@
 import { LayoutShell } from "@/components/layout-shell";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
-import { Brain, X, Loader2, MapPin, Heart, Play, Plus, Crown, Check, ArrowRight } from "lucide-react";
+import { Brain, X, Loader2, MapPin, Heart, Plus, Crown, Check, ArrowRight } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
 import { useTwinReadiness, useDismissReminder } from "@/hooks/use-onboarding";
 import { LIMITS } from "@shared/entitlements";
@@ -530,26 +530,28 @@ export default function Discover() {
                 </div>
               )}
 
-              {hasCardStories ? (
+              {hasCardStories && (
                 <button
                   onClick={() => handleViewCardStory(currentProfile)}
-                  className="absolute top-3 left-3 w-11 h-11 rounded-full flex items-center justify-center p-[2px]"
-                  style={{ background: "#FF6B4A", animation: "pulse 2s infinite" }}
-                  data-testid="story-ring-indicator"
-                  aria-label="View story"
+                  className="absolute top-3 left-3 w-11 h-11 rounded-full p-[2px] btn-press"
+                  style={{ background: "#FF6B4A" }}
+                  data-testid="card-story-ring"
+                  aria-label={`View ${currentProfile.displayName || "their"} story`}
                 >
-                  <div className="w-full h-full rounded-full flex items-center justify-center backdrop-blur-md" style={{ background: "rgba(0,0,0,0.35)" }}>
-                    <Play className="w-4 h-4 text-white fill-white" />
+                  <div className="w-full h-full rounded-full overflow-hidden bg-vf-surface2 flex items-center justify-center">
+                    {currentProfile.coverPhotoUrl || currentProfile.user?.profileImageUrl ? (
+                      <img
+                        src={currentProfile.coverPhotoUrl || currentProfile.user?.profileImageUrl}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="font-serif text-white/70 text-sm">
+                        {currentProfile.displayName?.[0] || "?"}
+                      </span>
+                    )}
                   </div>
                 </button>
-              ) : (
-                <div
-                  className="absolute top-3 left-3 w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20"
-                  style={{ background: "rgba(0,0,0,0.35)" }}
-                  data-testid="story-ring-indicator"
-                >
-                  <Play className="w-4 h-4 text-white fill-white" />
-                </div>
               )}
 
               <div className="absolute left-6 right-6 bottom-5 pointer-events-none">
