@@ -5,10 +5,11 @@
 import { db } from "../db";
 import { payments, subscriptions, profiles } from "@shared/schema";
 import { LIMITS } from "@shared/entitlements";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, lt, isNull, or } from "drizzle-orm";
 import { MockProvider } from "./mock";
 import { PaynowProvider, paynowConfigured } from "./paynow";
 import { maskPhone, type PaymentMethod, type PaymentProvider, type PaymentStatus } from "./types";
+import { alertPaymentSuccess, alertPaymentFailed, alertPaymentStuck } from "../email/templates";
 
 const mock = new MockProvider();
 const paynow = new PaynowProvider();
@@ -32,6 +33,7 @@ export async function initiatePayment(
   method: PaymentMethod,
   phone: string | undefined,
   authEmail: string | undefined,
+  sourceFeature?: string,
 ) {
   const amountCents = priceCentsFor(tier);
   const windowStart = new Date(Date.now() - 15 * 60 * 1000);
@@ -57,6 +59,7 @@ export async function initiatePayment(
       provider: name,
       phoneNumberMasked: maskPhone(phone),
       idempotencyKey: key,
+      sourceFeature: sourceFeature ?? null,
     })
     .returning();
 
@@ -89,7 +92,9 @@ export async function initiatePayment(
       failureReason: r.failureReason,
     };
   } catch (e: any) {
-    await db.update(payments).set({ status: "failed", failureReason: String(e?.message || e) }).where(eq(payments.id, row.id));
+    const reason = String(e?.message || e);
+    await db.update(payments).set({ status: "failed", failureReason: reason }).where(eq(payments.id, row.id));
+    await alertPaymentFailed({ userId, tier, amountCents, method: name, reason });
     throw e;
   }
 }
@@ -111,6 +116,7 @@ export async function refreshPayment(paymentId: number) {
     const expected = row.amount;
     if (r.settledCents != null && !provider.verifyAmount(r.settledCents, expected)) {
       await db.update(payments).set({ status: "failed", failureReason: "Settled amount did not match" }).where(eq(payments.id, paymentId));
+      await alertPaymentFailed({ userId: row.userId, tier: row.tier || "?", amountCents: row.amount, method: row.provider, reason: "Settled amount did not match" });
       return { ...row, status: "failed" as const };
     }
     await activateFromPayment(paymentId);
@@ -119,9 +125,46 @@ export async function refreshPayment(paymentId: number) {
   }
   if (r.status === "failed" || r.status === "cancelled" || r.status === "expired") {
     await db.update(payments).set({ status: r.status }).where(eq(payments.id, paymentId));
+    if (r.status === "failed") {
+      await alertPaymentFailed({ userId: row.userId, tier: row.tier || "?", amountCents: row.amount, method: row.provider, reason: row.failureReason ?? r.failureReason ?? null });
+    }
   }
   const [fresh] = await db.select().from(payments).where(eq(payments.id, paymentId));
   return fresh;
+}
+
+// Payments left "pending" too long with the gateway never confirming them —
+// the "took money, gave nothing" case. Alerts once per stuck payment (marks
+// it so it isn't re-alerted every sweep) and leaves status as pending; a
+// human has to look, this isn't something to auto-fail.
+const STUCK_AFTER_MS = 20 * 60 * 1000;
+const alertedStuck = new Set<number>();
+export async function sweepStuckPayments(): Promise<number> {
+  const cutoff = new Date(Date.now() - STUCK_AFTER_MS);
+  const stuck = await db
+    .select()
+    .from(payments)
+    .where(
+      and(
+        eq(payments.status, "pending"),
+        lt(payments.createdAt, cutoff),
+        or(isNull(payments.lastPolledAt), lt(payments.lastPolledAt, cutoff)),
+      ),
+    );
+  let alerted = 0;
+  for (const p of stuck) {
+    if (alertedStuck.has(p.id)) continue;
+    alertedStuck.add(p.id);
+    alerted++;
+    await alertPaymentStuck({
+      paymentId: p.id,
+      userId: p.userId,
+      tier: p.tier || "?",
+      amountCents: p.amount,
+      minutesStuck: Math.round((Date.now() - p.createdAt!.getTime()) / 60000),
+    });
+  }
+  return alerted;
 }
 
 // Idempotent. Writes the payment as paid, creates/extends the subscription,
@@ -175,6 +218,7 @@ export async function activateFromPayment(paymentId: number): Promise<void> {
 
   await db.update(payments).set({ status: "paid", subscriptionId: subId }).where(eq(payments.id, paymentId));
   await db.update(profiles).set({ subscriptionTier: tier }).where(eq(profiles.userId, pay.userId));
+  await alertPaymentSuccess({ userId: pay.userId, tier, amountCents: pay.amount, method: pay.provider, phoneMasked: pay.phoneNumberMasked });
 }
 
 // Cancel: as easy as subscribing. Keep the tier until the paid period ends,

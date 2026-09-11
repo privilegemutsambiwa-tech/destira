@@ -6,6 +6,8 @@ import { registerAdminAuthRoutes } from "./auth";
 import { registerAdminOverviewRoutes } from "./overview";
 import { registerAdminReportRoutes } from "./reports";
 import { registerAdminFeedbackRoutes } from "./feedback";
+import { registerAdminEmailRoutes } from "./email";
+import { registerAdminMetricsRoutes } from "./metrics";
 
 export function registerAdminConsole(app: Express) {
   mountAdminSession(app);
@@ -13,4 +15,6 @@ export function registerAdminConsole(app: Express) {
   registerAdminOverviewRoutes(app);
   registerAdminReportRoutes(app);
   registerAdminFeedbackRoutes(app);
+  registerAdminEmailRoutes(app);
+  registerAdminMetricsRoutes(app);
 }

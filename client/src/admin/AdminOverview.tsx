@@ -21,12 +21,17 @@ export default function AdminOverview() {
             <StatTile label="Investigating" value={data.investigatingReports} />
             <StatTile label="Safety-category open" value={data.safetyReportsOpen} alert={data.safetyReportsOpen > 0} />
             <StatTile label="Open feedback" value={data.openFeedback} />
-            <StatTile label="MRR" value={data.mrrUsd ?? "—"} />
-            <StatTile label="LLM spend today" value={data.llmSpendTodayUsd ?? "—"} />
-            <StatTile label="Error rate" value={data.errorRatePct ?? "—"} />
+            <StatTile label="Failed payments today" value={data.failedPaymentsToday} alert={data.failedPaymentsToday > 0} />
+            <StatTile label="MRR" value={data.mrrUsd != null ? `$${data.mrrUsd.toFixed(2)}` : "—"} />
+            <StatTile label="LLM spend (yesterday, est.)" value={data.llmSpendYesterdayUsd != null ? `$${data.llmSpendYesterdayUsd.toFixed(4)}` : "—"} />
+            <StatTile
+              label={`Error rate (${data.errorRateWindowMinutes}min)`}
+              value={data.errorRatePct != null ? `${data.errorRatePct}%` : "no traffic yet"}
+              alert={!!data.errorRatePct && data.errorRatePct > 2}
+            />
           </div>
           <p style={{ ...MONO, fontSize: 10.5, color: FAINT, marginTop: 18 }}>
-            computed {new Date(data.computedAt).toLocaleTimeString()} · MRR / LLM spend / error rate ship in phase 3
+            computed {new Date(data.computedAt).toLocaleTimeString()} · MRR / LLM spend are yesterday's rollup, error rate is live (last {data.errorRateSampleSize} requests) · full breakdown in Metrics
           </p>
         </>
       )}

@@ -9,6 +9,8 @@ import AdminOverview from "./AdminOverview";
 import AdminReports from "./AdminReports";
 import AdminReportDetail from "./AdminReportDetail";
 import AdminFeedback from "./AdminFeedback";
+import AdminMetrics from "./AdminMetrics";
+import AdminEmailConfig from "./AdminEmailConfig";
 
 // A dedicated QueryClient — deliberately not the member app's queryClient
 // (client/src/lib/queryClient.ts). Admin data must never share a cache key
@@ -57,6 +59,8 @@ function AdminApp() {
         <Route path="/console/reports" component={AdminReports} />
         <Route path="/console/reports/:id">{(params) => <AdminReportDetail id={params.id} />}</Route>
         <Route path="/console/feedback" component={AdminFeedback} />
+        <Route path="/console/metrics" component={AdminMetrics} />
+        <Route path="/console/email" component={AdminEmailConfig} />
         <Route>
           <p style={{ color: "#A79FB4" }}>Not found.</p>
         </Route>

@@ -28,6 +28,8 @@ const NAV = [
   { href: "/console", label: "Overview" },
   { href: "/console/reports", label: "Reports" },
   { href: "/console/feedback", label: "Feedback" },
+  { href: "/console/metrics", label: "Metrics" },
+  { href: "/console/email", label: "Email alerts" },
 ];
 
 export function AdminShell({ role, children }: { role: string; children: React.ReactNode }) {

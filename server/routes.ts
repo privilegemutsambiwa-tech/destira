@@ -29,6 +29,13 @@ import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
 import * as disclosure from "./disclosure";
 import { registerAdminConsole } from "./admin";
+import * as emailTemplates from "./email/templates";
+import { setAdminLockoutHook } from "./admin/auth";
+import { trackActivity } from "./admin/activity";
+import { requestOutcomeMiddleware } from "./admin/error-rate";
+import { logLlmCall } from "./admin/llm-log";
+import { runNightlyRollup, backfillRecentMetrics } from "./admin/metrics-rollup";
+import { sendDailyDigest, sendWeeklyDigest } from "./email/digest";
 import { REPORT_CATEGORIES, FEEDBACK_CATEGORIES } from "@shared/admin";
 import { reports as reportsTable, feedback as feedbackTable } from "@shared/schema";
 import { ageFromDob, MIN_AGE } from "@shared/essentials";
@@ -89,8 +96,13 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   await setupAuth(app);
+  app.use(trackActivity());
+  app.use(requestOutcomeMiddleware());
   registerAuthRoutes(app);
   registerAdminConsole(app);
+  setAdminLockoutHook((email, n) => {
+    emailTemplates.alertAdminLockout({ email, attempts: n }).catch(() => {});
+  });
 
   function getUserId(req: any): string | null {
     if (!req.isAuthenticated()) return null;
@@ -1414,6 +1426,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         fullResponse = await finalizeInterviewReply(fullResponse, targetProfile, message);
         history.push({ role: "assistant", content: fullResponse });
         await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
+        logLlmCall({ callType: "interview_chat", userId, fallbackInputText: message, fallbackOutputText: fullResponse }).catch(() => {});
 
         res.write(`data: ${JSON.stringify({ type: "done", content: fullResponse })}\n\n`);
         res.end();
@@ -1436,6 +1449,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         aiResponse = await finalizeInterviewReply(aiResponse, targetProfile, message);
         history.push({ role: "assistant", content: aiResponse });
         await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
+        logLlmCall({ callType: "interview_chat", userId, usageMetadata: (completion as any).usageMetadata, fallbackInputText: message, fallbackOutputText: aiResponse }).catch(() => {});
         res.json({ response: aiResponse });
       }
     } catch (e) {
@@ -1510,6 +1524,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         await storage.addTwinMemory(userId, fullResponse, "assistant");
 
         extractMemoryAfterChat(userId, [{ role: "user", content: message }, { role: "assistant", content: fullResponse }]).catch(() => {});
+        logLlmCall({ callType: "twin_chat", userId, fallbackInputText: message, fallbackOutputText: fullResponse }).catch(() => {});
 
         res.write(`data: ${JSON.stringify({ type: "done", content: fullResponse })}\n\n`);
         res.end();
@@ -1536,6 +1551,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         await storage.addTwinMemory(userId, aiResponse, "assistant");
 
         extractMemoryAfterChat(userId, [{ role: "user", content: message }, { role: "assistant", content: aiResponse }]).catch(() => {});
+        logLlmCall({ callType: "twin_chat", userId, usageMetadata: (completion as any).usageMetadata, fallbackInputText: message, fallbackOutputText: aiResponse }).catch(() => {});
 
         res.json({ response: aiResponse });
       }
@@ -2908,17 +2924,21 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     const parsed = initiatePaymentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid payment request" });
-    const { tier, method, phone } = parsed.data;
+    const { tier, method, phone, sourceFeature } = parsed.data;
     if (method === "ecocash" && !/^0?7\d{8}$/.test((phone || "").replace(/\D/g, ""))) {
       return res.status(400).json({ message: "Enter the EcoCash number as 07XX XXX XXX." });
     }
     try {
       const email = (req as any).user?.claims?.email || (await storage.getProfile(userId))?.displayName;
-      const result = await payments.initiatePayment(userId, tier, method, phone, typeof email === "string" ? email : undefined);
+      const result = await payments.initiatePayment(userId, tier, method, phone, typeof email === "string" ? email : undefined, sourceFeature);
       res.json(result);
     } catch (e: any) {
       console.error("Payment initiate error:", e);
-      res.status(502).json({ message: e?.message?.includes("not configured") ? "Payments aren't switched on yet." : "Couldn't reach the payment gateway. Try again." });
+      const notConfigured = e?.message?.includes("not configured");
+      if (!notConfigured) {
+        emailTemplates.alertGatewayUnreachable({ provider: method, error: String(e?.message || e) }).catch(() => {});
+      }
+      res.status(502).json({ message: notConfigured ? "Payments aren't switched on yet." : "Couldn't reach the payment gateway. Try again." });
     }
   });
 
@@ -2951,7 +2971,10 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   app.post("/api/payments/webhook/paynow", async (req, res) => {
     try {
       const parsed = payments.webhookProvider().handleWebhook((req.body || {}) as Record<string, string>);
-      if (!parsed) return res.status(400).send("bad signature");
+      if (!parsed) {
+        emailTemplates.alertWebhookSignatureFailure({ provider: "paynow" }).catch(() => {});
+        return res.status(400).send("bad signature");
+      }
       if (parsed.status === "paid") {
         await payments.activateFromPayment(Number(parsed.reference));
       }
@@ -3639,7 +3662,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       // The report is what actually persists and reaches the console queue.
       // The old audit-log-only trail stays too — belt and suspenders, cheap.
       await storage.createAuditLog(reporterId, "user_reported", { targetUserId, reason, category });
-      await db.insert(reportsTable).values({ reporterId, subjectId: targetUserId, category, freeText: reason || null, evidence });
+      const [newReport] = await db.insert(reportsTable).values({ reporterId, subjectId: targetUserId, category, freeText: reason || null, evidence }).returning();
+      const isSafety = category === "safety_escalation" || category === "underage_concern";
+      emailTemplates.alertReportFiled({ reportId: newReport.id, category, isSafety }).catch(() => {});
       // Auto-block so the reporter never has to see this person again — the
       // report persists independently of the block, and can't be undone by it.
       await storage.blockUser(reporterId, targetUserId).catch(() => {});
@@ -4484,6 +4509,33 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       .catch((e) => console.error("[proximity] sweep failed:", e));
   sweep();
   setInterval(sweep, 10 * 60 * 1000);
+
+  // Payments taken but never confirmed by the gateway — the "user paid, got
+  // nothing" case. Checked every 5 min; alerts once per payment (see
+  // sweepStuckPayments), never auto-fails it.
+  const sweepPayments = () =>
+    payments
+      .sweepStuckPayments()
+      .then((n) => n > 0 && console.log(`[payments] ${n} stuck payment(s) alerted`))
+      .catch((e) => console.error("[payments] stuck sweep failed:", e));
+  sweepPayments();
+  setInterval(sweepPayments, 5 * 60 * 1000);
+
+  // Metrics: backfill the trailing 30 days once on boot (so the console
+  // isn't blank the first time it's opened), then a real nightly rollup +
+  // digest every 24h. No cron dependency — same setInterval shape as every
+  // other periodic job in this file; "nightly" here means "roughly once a
+  // day, whenever the process happened to boot," which is an acceptable
+  // trade for a single-process local/small-scale deploy.
+  backfillRecentMetrics(30).catch((e) => console.error("[metrics] initial backfill failed:", e));
+  setInterval(() => {
+    runNightlyRollup()
+      .then(() => sendDailyDigest())
+      .then(() => {
+        if (new Date().getDay() === 1) return sendWeeklyDigest(); // Monday
+      })
+      .catch((e) => console.error("[metrics] nightly rollup/digest failed:", e));
+  }, 24 * 60 * 60 * 1000);
 
   // Clean up expired stories periodically
   setInterval(async () => {

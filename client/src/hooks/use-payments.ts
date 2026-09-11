@@ -15,7 +15,7 @@ export interface InitiateResult {
 
 export function useInitiatePayment() {
   return useMutation({
-    mutationFn: async (input: { tier: "spark" | "flame" | "ember"; method: PayMethod; phone?: string }) => {
+    mutationFn: async (input: { tier: "spark" | "flame" | "ember"; method: PayMethod; phone?: string; sourceFeature?: string }) => {
       const res = await fetch("/api/payments/initiate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

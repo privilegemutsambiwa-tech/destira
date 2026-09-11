@@ -26,6 +26,7 @@ export default function PlansPay() {
   const params = new URLSearchParams(search);
   const tierParam = params.get("tier");
   const returnRef = params.get("ref");
+  const sourceFeature = params.get("feature") || undefined;
 
   const card = useMemo(() => PLAN_CARDS.find((c) => c.tier === tierParam), [tierParam]);
   const tier = card?.tier as "spark" | "flame" | "ember" | undefined;
@@ -60,7 +61,7 @@ export default function PlansPay() {
   const pay = () => {
     setStartedAt(Date.now());
     initiate.mutate(
-      { tier, method: method!, phone: method === "ecocash" ? phone : undefined },
+      { tier, method: method!, phone: method === "ecocash" ? phone : undefined, sourceFeature },
       {
         onSuccess: (r) => {
           setPaymentId(r.paymentId);

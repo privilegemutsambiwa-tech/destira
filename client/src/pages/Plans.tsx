@@ -34,7 +34,8 @@ export default function Plans() {
 
   const choose = (card: PlanCard) => {
     if (card.tier === "free") return close();
-    setLocation(`/plans/pay?tier=${card.tier}`);
+    const featureQs = feature ? `&feature=${feature}` : "";
+    setLocation(`/plans/pay?tier=${card.tier}${featureQs}`);
   };
 
   return (

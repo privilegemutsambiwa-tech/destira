@@ -326,6 +326,10 @@ export const payments = pgTable("payments", {
   failureReason: text("failure_reason"),
   lastPolledAt: timestamp("last_polled_at"),
   stripeChargeId: varchar("stripe_charge_id"),
+  // Which locked feature's refusal sheet sent them to /plans, if any — the
+  // gate-conversion metric ("which paywall is doing the selling") reads this.
+  // Null for a cold /plans visit with no feature context.
+  sourceFeature: text("source_feature"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -335,6 +339,7 @@ export const initiatePaymentSchema = z.object({
   tier: z.enum(["spark", "flame", "ember"]),
   method: paymentMethodEnum,
   phone: z.string().trim().max(20).optional(),
+  sourceFeature: z.string().max(60).optional(),
 });
 export type InitiatePaymentInput = z.infer<typeof initiatePaymentSchema>;
 
@@ -1331,6 +1336,21 @@ export const llmCallLog = pgTable(
     createdAt: timestamp("created_at").defaultNow(),
   },
   (t) => [index("llm_call_log_type_created_idx").on(t.callType, t.createdAt)],
+);
+
+// One row per (user, calendar day) they made an authenticated request. This
+// is the whole activity signal DAU/WAU/MAU, retention and the funnel's
+// timing (D1 activation, D7/D30 retention) are computed from — the app had
+// no generic "last active" signal before this. Written by trackActivity()
+// middleware (server/admin/activity.ts): an idempotent insert, at most one
+// per user per day regardless of request volume.
+export const userActivityDaily = pgTable(
+  "user_activity_daily",
+  {
+    userId: varchar("user_id").notNull().references(() => users.id),
+    date: date("date").notNull(),
+  },
+  (t) => [uniqueIndex("user_activity_daily_user_date_idx").on(t.userId, t.date)],
 );
 
 export type AdminUser = typeof adminUsers.$inferSelect;
