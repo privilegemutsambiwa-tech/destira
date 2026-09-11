@@ -181,7 +181,7 @@ function SliderInput({ label, value, min, max, onChange, unit = "" }: {
 type PanelKey =
   | "change-email" | "change-password"
   | "twin-tone" | "location" | "age-range" | "block-list" | "proximity"
-  | "data-privacy" | "verify" | "billing" | "help" | "contact"
+  | "data-privacy" | "verify" | "billing" | "help" | "contact" | "feedback"
   | "terms" | "privacy-policy" | "clear-memory" | null;
 
 function Panel({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
@@ -1047,6 +1047,91 @@ function ContactPanel({ onBack }: { onBack: () => void }) {
   );
 }
 
+const FEEDBACK_CATEGORY_OPTIONS: { value: string; label: string }[] = [
+  { value: "bug", label: "Something's broken" },
+  { value: "idea", label: "An idea" },
+  { value: "confusing", label: "Something's confusing" },
+  { value: "praise", label: "Just saying thanks" },
+  { value: "other", label: "Other" },
+];
+
+// Different job from Contact Us: no ticket, no reply promised — a note that
+// lands in the operator's feedback queue, separate from the abuse-report queue.
+function FeedbackPanel({ onBack }: { onBack: () => void }) {
+  const { toast } = useToast();
+  const [category, setCategory] = useState("idea");
+  const [freeText, setFreeText] = useState("");
+  const [contactBackConsent, setContactBackConsent] = useState(false);
+
+  const submitMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", "/api/feedback", {
+        category,
+        freeText,
+        contactBackConsent,
+        appVersion: "1.0.0",
+        platform: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 40) : null,
+      }),
+    onSuccess: () => {
+      toast({ title: "Thanks — sent." });
+      setFreeText("");
+      setContactBackConsent(false);
+    },
+    onError: () => toast({ title: "Failed to send", variant: "destructive" }),
+  });
+
+  return (
+    <Panel title="Send Feedback" onBack={onBack}>
+      <div style={{ padding: "16px" }}>
+        <p className="text-sm mb-4" style={{ color: MUTED }}>
+          Not a support ticket — this goes straight to whoever's running Destira. No reply is promised.
+        </p>
+        <div style={{ marginBottom: "12px" }}>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>What kind of thing is this</label>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="w-full px-3 py-2 text-sm text-white"
+            style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+            data-testid="select-feedback-category"
+          >
+            {FEEDBACK_CATEGORY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value} style={{ background: CARD }}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+        <div style={{ marginBottom: "12px" }}>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Tell us</label>
+          <textarea
+            value={freeText}
+            onChange={(e) => setFreeText(e.target.value)}
+            placeholder="What happened, or what you'd change..."
+            rows={5}
+            className="w-full px-3 py-2 text-sm text-white resize-none"
+            style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+            data-testid="input-feedback-text"
+          />
+        </div>
+        <label className="flex items-center gap-2 mb-4 text-sm" style={{ color: MUTED }}>
+          <input type="checkbox" checked={contactBackConsent} onChange={(e) => setContactBackConsent(e.target.checked)} data-testid="checkbox-feedback-contact-back" />
+          It's OK to contact me about this
+        </label>
+        <GradientButton
+          label={submitMutation.isPending ? "Sending..." : "Send Feedback"}
+          onClick={() => {
+            if (!freeText.trim()) {
+              toast({ title: "Say a bit more first", variant: "destructive" });
+              return;
+            }
+            submitMutation.mutate();
+          }}
+          testId="button-send-feedback"
+        />
+      </div>
+    </Panel>
+  );
+}
+
 function ChangeEmailPanel({ onBack }: { onBack: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1409,6 +1494,7 @@ export default function Settings() {
   if (activePanel === "billing") return <BillingPanel onBack={() => setActivePanel(null)} profile={profile} />;
   if (activePanel === "help") return <HelpPanel onBack={() => setActivePanel(null)} />;
   if (activePanel === "contact") return <ContactPanel onBack={() => setActivePanel(null)} />;
+  if (activePanel === "feedback") return <FeedbackPanel onBack={() => setActivePanel(null)} />;
   if (activePanel === "terms") return <TermsPanel onBack={() => setActivePanel(null)} />;
   if (activePanel === "privacy-policy") return <PrivacyPolicyPanel onBack={() => setActivePanel(null)} />;
   if (activePanel === "clear-memory") return <ClearMemoryPanel onBack={() => setActivePanel(null)} />;
@@ -1492,6 +1578,7 @@ export default function Settings() {
         <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ChevronRow icon={BookOpen} label="Help Center" sublabel="FAQs and guides" onClick={() => setActivePanel("help")} testId="row-help" />
           <ChevronRow icon={Phone} label="Contact Us" sublabel="Send us a message" onClick={() => setActivePanel("contact")} testId="row-contact" />
+          <ChevronRow icon={Wrench} label="Send Feedback" sublabel="A bug, an idea, or just a note" onClick={() => setActivePanel("feedback")} testId="row-feedback" />
           <ChevronRow icon={FileText} label="Terms of Service" onClick={() => setActivePanel("terms")} testId="row-terms" />
           <ChevronRow icon={Shield} label="Privacy Policy" onClick={() => setActivePanel("privacy-policy")} testId="row-privacy-policy" />
         </div>

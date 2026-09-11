@@ -5,7 +5,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
+
+// Code-split and NOT linked from anywhere in the member app (no nav item, no
+// Settings row) — reachable only by knowing the exact path. Own session
+// cookie, own QueryClient, own auth; see client/src/admin/.
+const AdminConsoleRoot = lazy(() => import("@/admin"));
 
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
@@ -187,6 +192,19 @@ function App() {
   useEffect(() => {
     document.documentElement.classList.add("dark");
   }, []);
+
+  // The admin console is a fully separate app: its own session cookie, own
+  // QueryClient, own auth. Deciding this off window.location (not wouter)
+  // means the member Router/auth hooks never mount for a /console request —
+  // crossing the boundary is a full navigation, which is the right shape for
+  // two surfaces that don't share a session.
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/console")) {
+    return (
+      <Suspense fallback={null}>
+        <AdminConsoleRoot />
+      </Suspense>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>

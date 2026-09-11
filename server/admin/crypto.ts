@@ -1,0 +1,43 @@
+// AES-256-GCM at rest for admin TOTP secrets. Never store a TOTP secret in
+// plaintext — the DB is the highest-value target in the whole app (it's also
+// where the private twin chats live), so a DB dump alone must not be enough
+// to mint valid 2FA codes for an admin account.
+import crypto from "crypto";
+
+const KEY_ENV = "ADMIN_TOTP_ENC_KEY";
+
+function getKey(): Buffer {
+  const raw = process.env[KEY_ENV];
+  if (raw && raw.length >= 32) {
+    return crypto.createHash("sha256").update(raw).digest();
+  }
+  if (process.env.NODE_ENV === "production") {
+    console.warn(
+      `[SECURITY] ${KEY_ENV} is not set (or too short) in production. Set a strong random ` +
+        `32+ char value before any admin enrolls 2FA — until then, secrets are encrypted with ` +
+        `an insecure local-dev default and MUST be treated as compromised.`,
+    );
+  }
+  // Same shape as the SESSION_SECRET dev-default in replitAuth.ts: a stable,
+  // clearly-insecure fallback so local dev works without extra setup.
+  return crypto.createHash("sha256").update("local-dev-insecure-admin-totp-key").digest();
+}
+
+export function encryptSecret(plaintext: string): string {
+  const key = getKey();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const enc = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [iv.toString("base64"), tag.toString("base64"), enc.toString("base64")].join(".");
+}
+
+export function decryptSecret(stored: string): string {
+  const [ivB64, tagB64, encB64] = stored.split(".");
+  if (!ivB64 || !tagB64 || !encB64) throw new Error("Malformed encrypted TOTP secret");
+  const key = getKey();
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(ivB64, "base64"));
+  decipher.setAuthTag(Buffer.from(tagB64, "base64"));
+  const dec = Buffer.concat([decipher.update(Buffer.from(encB64, "base64")), decipher.final()]);
+  return dec.toString("utf8");
+}

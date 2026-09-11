@@ -28,6 +28,9 @@ import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } f
 import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
 import * as disclosure from "./disclosure";
+import { registerAdminConsole } from "./admin";
+import { REPORT_CATEGORIES, FEEDBACK_CATEGORIES } from "@shared/admin";
+import { reports as reportsTable, feedback as feedbackTable } from "@shared/schema";
 import { ageFromDob, MIN_AGE } from "@shared/essentials";
 import {
   normalizeDisclosure,
@@ -87,6 +90,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   await setupAuth(app);
   registerAuthRoutes(app);
+  registerAdminConsole(app);
 
   function getUserId(req: any): string | null {
     if (!req.isAuthenticated()) return null;
@@ -3622,12 +3626,46 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const { targetUserId } = req.params;
     if (targetUserId === reporterId) return res.status(400).json({ message: "You can't report yourself" });
     const reason = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, 1000) : "";
+    const category = (REPORT_CATEGORIES as readonly string[]).includes(req.body?.category) ? req.body.category : "other";
+    // Evidence ids are optional and client-supplied today (no picker UI yet) —
+    // {type: "direct_message"|"group_message", id}. Never raw content.
+    const evidence = Array.isArray(req.body?.evidence)
+      ? req.body.evidence
+          .filter((e: any) => e && typeof e.type === "string" && (typeof e.id === "string" || typeof e.id === "number"))
+          .slice(0, 10)
+          .map((e: any) => ({ type: e.type, id: String(e.id) }))
+      : [];
     try {
-      await storage.createAuditLog(reporterId, "user_reported", { targetUserId, reason });
+      // The report is what actually persists and reaches the console queue.
+      // The old audit-log-only trail stays too — belt and suspenders, cheap.
+      await storage.createAuditLog(reporterId, "user_reported", { targetUserId, reason, category });
+      await db.insert(reportsTable).values({ reporterId, subjectId: targetUserId, category, freeText: reason || null, evidence });
+      // Auto-block so the reporter never has to see this person again — the
+      // report persists independently of the block, and can't be undone by it.
       await storage.blockUser(reporterId, targetUserId).catch(() => {});
       res.json({ success: true });
     } catch (err) {
+      console.error("Report submission error:", err);
       res.status(500).json({ message: "Failed to submit report" });
+    }
+  });
+
+  // Settings → send feedback. Different job from a report: no target user, no
+  // block, just a note to the operator. Surfaced in its own console queue.
+  app.post("/api/feedback", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const category = (FEEDBACK_CATEGORIES as readonly string[]).includes(req.body?.category) ? req.body.category : "other";
+    const freeText = typeof req.body?.freeText === "string" ? req.body.freeText.trim().slice(0, 4000) : "";
+    if (!freeText) return res.status(400).json({ message: "Tell us a bit more" });
+    const contactBackConsent = req.body?.contactBackConsent === true;
+    const appVersion = typeof req.body?.appVersion === "string" ? req.body.appVersion.slice(0, 40) : null;
+    const platform = typeof req.body?.platform === "string" ? req.body.platform.slice(0, 40) : null;
+    try {
+      await db.insert(feedbackTable).values({ userId, category, freeText, contactBackConsent, appVersion, platform });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to send feedback" });
     }
   });
 

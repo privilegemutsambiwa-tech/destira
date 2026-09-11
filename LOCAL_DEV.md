@@ -53,3 +53,21 @@ killing the `npm` process alone can orphan the `node` child still holding port
 
 The original OIDC implementation is in git history for
 `server/replit_integrations/auth/replitAuth.ts`.
+
+## Admin console
+
+Entirely separate from member auth — own session cookie, own 2FA, no link
+from the member app. Sign up a normal account first, **stop the dev server**
+(PGlite is single-writer — running this alongside a live server produced a
+stale read in testing), then:
+
+```bash
+SEED_ADMIN_EMAIL=you@example.com SEED_ADMIN_ROLE=owner npm run seed:admin
+```
+
+Restart the server and open `/console`. First login forces TOTP enrolment —
+scan the QR code with any authenticator app. `ADMIN_SESSION_SECRET` /
+`ADMIN_TOTP_ENC_KEY` in `.env` need real random values before this holds
+anyone's data in production. `npm run check:admin-routes` fails the build if
+a route under `/api/admin` is ever registered without going through
+`requireAdmin()` — see `server/admin/auth.ts`.

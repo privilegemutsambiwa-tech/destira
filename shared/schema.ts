@@ -1191,5 +1191,153 @@ export type StoryComment = typeof storyComments.$inferSelect;
 export type StoryView = typeof storyViews.$inferSelect;
 export type Plan = typeof plans.$inferSelect;
 
+// ── Admin console ──────────────────────────────────────────────────────
+// No platform admin role exists anywhere else. A `users` row is never itself
+// admin — admin-ness is an active (revokedAt IS NULL) row here. The FIRST
+// admin is seeded by scripts/seed-admin.ts only; there is no endpoint, ever,
+// that can write to this table. See shared/admin.ts for the role vocabulary
+// and server/admin/ for enforcement.
+export const adminUsers = pgTable("admin_users", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id).unique(),
+  role: text("role").notNull(), // read_only | support | admin | owner — shared/admin.ts
+  totpSecret: text("totp_secret"), // AES-256-GCM encrypted, never plaintext — server/admin/crypto.ts
+  totpEnabledAt: timestamp("totp_enabled_at"),
+  grantedBy: varchar("granted_by").references(() => users.id),
+  grantedAt: timestamp("granted_at").defaultNow(),
+  revokedAt: timestamp("revoked_at"), // soft-revoke only — no delete path, history is kept
+  revokedBy: varchar("revoked_by").references(() => users.id),
+});
+
+// Append-only. Written BEFORE the read or write it covers, not after. No
+// update/delete route exists for this table, for any role, including owner.
+export const adminAuditLog = pgTable(
+  "admin_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    adminUserId: varchar("admin_user_id").notNull().references(() => users.id),
+    action: text("action").notNull(), // e.g. "report.view", "report.action", "payment.lookup", "export.csv"
+    targetType: text("target_type"), // "user" | "report" | "payment" | "feedback" | null
+    targetId: text("target_id"),
+    details: jsonb("details"),
+    ip: text("ip"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [index("admin_audit_log_admin_created_idx").on(t.adminUserId, t.createdAt)],
+);
+
+export const reports = pgTable(
+  "reports",
+  {
+    id: serial("id").primaryKey(),
+    reporterId: varchar("reporter_id").notNull().references(() => users.id),
+    subjectId: varchar("subject_id").notNull().references(() => users.id),
+    category: text("category").notNull(), // shared/admin.ts REPORT_CATEGORIES
+    freeText: text("free_text"),
+    // Cited evidence — ids only, never copied content: [{type:"message",id:"123"}, ...]
+    evidence: jsonb("evidence").$type<Array<{ type: string; id: string }>>(),
+    status: text("status").notNull().default("open"), // shared/admin.ts REPORT_STATUSES
+    assignee: varchar("assignee").references(() => users.id),
+    resolutionNote: text("resolution_note"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+    resolvedAt: timestamp("resolved_at"),
+  },
+  (t) => [
+    index("reports_status_created_idx").on(t.status, t.createdAt),
+    index("reports_subject_idx").on(t.subjectId),
+  ],
+);
+
+// One append-only row per action. targetUserId is who it's against; reportId
+// is nullable because an action can be proactive, not only report-triggered.
+// This IS the moderation history — never overwritten, never deleted.
+export const moderationActions = pgTable(
+  "moderation_actions",
+  {
+    id: serial("id").primaryKey(),
+    reportId: integer("report_id").references(() => reports.id),
+    targetUserId: varchar("target_user_id").notNull().references(() => users.id),
+    type: text("type").notNull(), // shared/admin.ts MODERATION_ACTION_TYPES
+    reason: text("reason").notNull(),
+    adminUserId: varchar("admin_user_id").notNull().references(() => users.id),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [index("moderation_actions_target_idx").on(t.targetUserId, t.createdAt)],
+);
+
+export const feedback = pgTable(
+  "feedback",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id").notNull().references(() => users.id),
+    category: text("category").notNull(), // shared/admin.ts FEEDBACK_CATEGORIES
+    freeText: text("free_text").notNull(),
+    contactBackConsent: boolean("contact_back_consent").notNull().default(false),
+    appVersion: text("app_version"),
+    platform: text("platform"),
+    status: text("status").notNull().default("open"), // shared/admin.ts FEEDBACK_STATUSES
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [index("feedback_status_created_idx").on(t.status, t.createdAt)],
+);
+
+// ── Admin console — Phase 3/4 groundwork (schema now, wired later) ───────
+export const emailAlertConfig = pgTable("email_alert_config", {
+  id: serial("id").primaryKey(),
+  alertType: text("alert_type").notNull().unique(),
+  enabled: boolean("enabled").notNull().default(true),
+  threshold: text("threshold"), // interpretation is per alertType
+  recipientEmail: text("recipient_email").notNull(),
+  updatedBy: varchar("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const emailLog = pgTable("email_log", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(),
+  recipient: text("recipient").notNull(),
+  status: text("status").notNull(), // sent | failed
+  providerMessageId: text("provider_message_id"),
+  error: text("error"),
+  idempotencyKey: varchar("idempotency_key").unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Generic daily rollup: one row per (date, metricKey). Cheap to extend —
+// see docs/admin-metrics.md (Phase 3) for the key namespace.
+export const metricDaily = pgTable(
+  "metric_daily",
+  {
+    id: serial("id").primaryKey(),
+    date: date("date").notNull(),
+    metricKey: text("metric_key").notNull(),
+    value: decimal("value", { precision: 18, scale: 4 }).notNull(),
+    computedAt: timestamp("computed_at").defaultNow(),
+  },
+  (t) => [uniqueIndex("metric_daily_date_key_idx").on(t.date, t.metricKey)],
+);
+
+export const llmCallLog = pgTable(
+  "llm_call_log",
+  {
+    id: serial("id").primaryKey(),
+    callType: text("call_type").notNull(), // twin_chat | interview | memory_extraction | disclosure_classify | disclosure_judge | ...
+    userId: varchar("user_id").references(() => users.id),
+    tokensIn: integer("tokens_in"),
+    tokensOut: integer("tokens_out"),
+    costUsd: decimal("cost_usd", { precision: 10, scale: 6 }),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [index("llm_call_log_type_created_idx").on(t.callType, t.createdAt)],
+);
+
+export type AdminUser = typeof adminUsers.$inferSelect;
+export type AdminAuditLogEntry = typeof adminAuditLog.$inferSelect;
+export type Report = typeof reports.$inferSelect;
+export type ModerationAction = typeof moderationActions.$inferSelect;
+export type Feedback = typeof feedback.$inferSelect;
+
 export type CreateProfileRequest = InsertProfile;
 export type UpdateProfileRequest = Partial<InsertProfile>;

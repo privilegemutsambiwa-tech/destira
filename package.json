@@ -15,7 +15,9 @@
     "check:twin-alerts": "tsx scripts/assert-twin-alerts.ts",
     "check:proximity": "tsx scripts/assert-proximity-alerts.ts",
     "check:proximity-payload": "tsx --env-file=.env scripts/verify-proximity-free-payload.ts",
-    "check:disclosure": "tsx scripts/assert-disclosure.ts"
+    "check:disclosure": "tsx scripts/assert-disclosure.ts",
+    "check:admin-routes": "tsx scripts/check-admin-routes.ts",
+    "seed:admin": "tsx --env-file=.env scripts/seed-admin.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
@@ -71,11 +73,13 @@
     "next-themes": "^0.4.6",
     "openai": "^6.32.0",
     "openid-client": "^6.8.2",
+    "otplib": "^12.0.1",
     "p-limit": "^7.3.0",
     "p-retry": "^7.1.1",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pg": "^8.20.0",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
@@ -107,6 +111,7 @@
     "@types/node": "^20.19.27",
     "@types/passport": "^1.0.17",
     "@types/passport-local": "^1.0.38",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
     "@types/web-push": "^3.6.4",
