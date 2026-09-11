@@ -26,6 +26,31 @@ async function subjectDisplay(userId: string) {
 }
 
 export function registerAdminReportRoutes(app: Express) {
+  // Filing volume, last 14 days — computed at request time straight from the
+  // reports table (not a metric_daily rollup) since it's cheap at this scale
+  // and this is the one place it's used.
+  adminRoute(app, "get", "/api/admin/reports/volume", "support", async (req, res) => {
+    try {
+      const since = new Date(Date.now() - 13 * 86400000);
+      since.setHours(0, 0, 0, 0);
+      const rows = await db
+        .select({ day: sql<string>`to_char(${reports.createdAt}, 'YYYY-MM-DD')`, n: count() })
+        .from(reports)
+        .where(sql`${reports.createdAt} >= ${since}`)
+        .groupBy(sql`to_char(${reports.createdAt}, 'YYYY-MM-DD')`);
+      const byDay = new Map(rows.map((r) => [r.day, Number(r.n)]));
+      const series: { date: string; value: number }[] = [];
+      for (let i = 13; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+        series.push({ date: d, value: byDay.get(d) ?? 0 });
+      }
+      res.json({ series });
+    } catch (e) {
+      console.error("[admin] report volume error:", e);
+      res.status(500).json({ message: "Failed to load report volume" });
+    }
+  });
+
   // Queue: oldest-first by default; safety categories always pinned to the top
   // regardless of sort, and flagged with the repeat-subject count.
   adminRoute(app, "get", "/api/admin/reports", "support", async (req, res) => {

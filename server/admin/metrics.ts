@@ -167,4 +167,112 @@ export function registerAdminMetricsRoutes(app: Express) {
       .catch((e) => console.error("[admin] backfill error:", e));
     res.json({ ok: true, started: true, days });
   });
+
+  // MRR/paying-users, LLM-spend/revenue, and payment-success-by-method —
+  // three of the console's charts share this one series fetch since they're
+  // all "money over time" and it's cheap to compute together.
+  adminRoute(app, "get", "/api/admin/metrics/money-series", "support", async (req, res) => {
+    const days = Math.min(180, Math.max(7, Number(req.query.days) || 90));
+    const from = isoDaysAgo(days - 1);
+    const to = isoDaysAgo(0);
+    try {
+      const [mrrRows, paidRows, llmRows, revenueRows, paymentTotalRows, paymentSuccessRows] = await Promise.all([
+        getRange("money.mrr_usd", from, to),
+        getRange("money.paid_subscribers.", from, to),
+        getRange("llm.cost_usd_estimated", from, to),
+        getRange("money.revenue_usd", from, to),
+        getRange("money.payment_count.", from, to),
+        getRange("money.payment_success_count.", from, to),
+      ]);
+      const dateSet = new Set<string>([...mrrRows, ...paidRows, ...llmRows, ...revenueRows].map((r) => r.date));
+      const dates = Array.from(dateSet).sort();
+      const onDate = (rows: typeof mrrRows, date: string, key: string) => {
+        const row = rows.find((r) => r.date === date && r.metricKey === key);
+        return row ? Number(row.value) : null;
+      };
+      const sumOnDate = (rows: typeof mrrRows, date: string) => {
+        const matches = rows.filter((r) => r.date === date);
+        return matches.length ? matches.reduce((s, r) => s + Number(r.value), 0) : null;
+      };
+
+      const points = dates.map((date) => ({
+        date,
+        mrrUsd: onDate(mrrRows, date, "money.mrr_usd"),
+        payingUsers: sumOnDate(paidRows, date),
+        llmCostUsd: onDate(llmRows, date, "llm.cost_usd_estimated"),
+        revenueUsd: onDate(revenueRows, date, "money.revenue_usd"),
+      }));
+
+      // Payment methods seen anywhere in the window, each with a
+      // success/failed count per day it actually had traffic — no bar for a
+      // day with no attempts, rather than a zero-height one.
+      const methods = Array.from(new Set(paymentTotalRows.map((r) => r.metricKey.replace("money.payment_count.", ""))));
+      const paymentsByMethod = methods.map((method) => ({
+        method,
+        points: dates
+          .map((date) => {
+            const total = onDate(paymentTotalRows, date, `money.payment_count.${method}`) ?? 0;
+            const success = onDate(paymentSuccessRows, date, `money.payment_success_count.${method}`) ?? 0;
+            return { date, success, failed: Math.max(0, total - success) };
+          })
+          .filter((p) => p.success > 0 || p.failed > 0),
+      }));
+
+      res.json({ from, to, points, paymentsByMethod });
+    } catch (e) {
+      console.error("[admin] money-series error:", e);
+      res.status(500).json({ message: "Failed to load money series" });
+    }
+  });
+
+  // Weekly signup cohorts' D1/D7/D30 retention, for the cohort-curve chart.
+  // Reuses the existing daily-cohort retention.* rows (unweighted average
+  // across the days in each week) rather than a new per-offset rollup — at
+  // today's signup volume a handful of cohorts wide, weighting by cohort
+  // size wouldn't change the picture, and it keeps this additive rather than
+  // a new nightly computation.
+  adminRoute(app, "get", "/api/admin/metrics/retention-cohorts", "support", async (req, res) => {
+    try {
+      const from = isoDaysAgo(70);
+      const rows = await getRange("retention.", from, isoDaysAgo(0));
+      const weekOf = (dateStr: string) => {
+        const d = new Date(`${dateStr}T00:00:00.000Z`);
+        const dayIdx = (d.getUTCDay() + 6) % 7; // Monday = 0
+        d.setUTCDate(d.getUTCDate() - dayIdx);
+        return d.toISOString().slice(0, 10);
+      };
+      const byWeek = new Map<string, { d1: number[]; d7: number[]; d30: number[] }>();
+      for (const r of rows) {
+        const wk = weekOf(r.date);
+        const bucket = byWeek.get(wk) ?? { d1: [], d7: [], d30: [] };
+        const v = Number(r.value);
+        if (r.metricKey === "retention.d1_pct") bucket.d1.push(v);
+        else if (r.metricKey === "retention.d7_pct") bucket.d7.push(v);
+        else if (r.metricKey === "retention.d30_pct") bucket.d30.push(v);
+        byWeek.set(wk, bucket);
+      }
+      const avg = (xs: number[]) => (xs.length ? Math.round((xs.reduce((s, x) => s + x, 0) / xs.length) * 10) / 10 : null);
+      const weeks = Array.from(byWeek.keys())
+        .sort()
+        .slice(-6);
+      const cohorts = weeks.map((wk, i) => ({
+        key: wk,
+        label: wk,
+        isLatest: i === weeks.length - 1,
+        d1: avg(byWeek.get(wk)!.d1),
+        d7: avg(byWeek.get(wk)!.d7),
+        d30: avg(byWeek.get(wk)!.d30),
+      }));
+      const offsets = [0, 1, 7, 30];
+      const points = offsets.map((offset) => {
+        const point: Record<string, number | null> = { offset };
+        for (const c of cohorts) point[c.key] = offset === 0 ? 100 : offset === 1 ? c.d1 : offset === 7 ? c.d7 : c.d30;
+        return point;
+      });
+      res.json({ offsets, cohorts: cohorts.map(({ key, label, isLatest }) => ({ key, label, isLatest })), points });
+    } catch (e) {
+      console.error("[admin] retention-cohorts error:", e);
+      res.status(500).json({ message: "Failed to load retention cohorts" });
+    }
+  });
 }

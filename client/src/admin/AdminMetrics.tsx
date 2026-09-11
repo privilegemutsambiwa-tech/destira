@@ -2,6 +2,16 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader, LABEL, MONO, LINE, SURFACE, MUTED, FAINT, TEXT } from "./AdminShell";
 import { adminGet } from "./api";
+import {
+  FunnelChart,
+  RetentionCohortChart,
+  ReadinessHistogram,
+  MrrChart,
+  LlmRevenueChart,
+  PaymentSuccessChart,
+  ResonanceHistogram,
+  ConversionByGateChart,
+} from "./charts";
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <div style={{ border: `1px solid ${LINE}`, background: SURFACE, borderRadius: 10, padding: 16, marginBottom: 14, display: "flex", flexDirection: "column" }}>
@@ -39,6 +49,10 @@ export default function AdminMetrics() {
     queryKey: ["admin", "metrics", "summary", date],
     queryFn: () => adminGet(`/api/admin/metrics/summary?date=${date}`),
   });
+  // Not date-scoped like the summary above — these are their own trailing
+  // windows, independent of whichever single day is selected.
+  const { data: moneySeries } = useQuery({ queryKey: ["admin", "metrics", "money-series"], queryFn: () => adminGet("/api/admin/metrics/money-series?days=90") });
+  const { data: retentionCohorts } = useQuery({ queryKey: ["admin", "metrics", "retention-cohorts"], queryFn: () => adminGet("/api/admin/metrics/retention-cohorts") });
 
   // Default to the most recent rollup that actually exists, rather than a
   // fixed "yesterday" the viewer has to notice is stale and correct by hand.
@@ -88,6 +102,16 @@ export default function AdminMetrics() {
 
       <div className="console-metrics-grid">
         <Section title="Funnel — this cohort's day-of-signup, as of now">
+          <FunnelChart
+            stages={[
+              { label: "Signed up", value: data.funnel.signup },
+              { label: "Basics complete", value: data.funnel.basics_complete },
+              { label: "≥1 soul-mapping answer", value: data.funnel.soul_answer },
+              { label: "Twin generated", value: data.funnel.twin_generated },
+              { label: "First interview", value: data.funnel.first_interview },
+              { label: "First match", value: data.funnel.first_match },
+            ]}
+          />
           {funnelStages.map(([label, key]) => (
             <Row key={key} label={label} value={fmt((data.funnel as any)[key])} />
           ))}
@@ -95,6 +119,7 @@ export default function AdminMetrics() {
         </Section>
 
         <Section title="Retention — trailing 30d cohorts">
+          {retentionCohorts && <RetentionCohortChart data={retentionCohorts} />}
           <Row label="D1" value={fmt(data.retention.d1Pct, "%")} note={data.retention.d1Pct == null ? retentionNote : undefined} />
           <Row label="D7" value={fmt(data.retention.d7Pct, "%")} note={data.retention.d7Pct == null ? retentionNote : undefined} />
           <Row label="D30" value={fmt(data.retention.d30Pct, "%")} note={data.retention.d30Pct == null ? retentionNote : undefined} />
@@ -108,6 +133,7 @@ export default function AdminMetrics() {
         </Section>
 
         <Section title="Twin layer">
+          <ReadinessHistogram buckets={data.twin.readinessBuckets || {}} avgPct={data.twin.readinessAvg} />
           <Row label="Interviews started" value={fmt(data.twin.interviewsStarted)} />
           <Row label="Interviews completed" value={fmt(data.twin.interviewsCompleted)} />
           <Row label="Abandonment" value={fmt(data.twin.abandonPct, "%")} />
@@ -130,9 +156,13 @@ export default function AdminMetrics() {
             badge={data.matching.resonanceScoredPct != null && data.matching.resonanceScoredPct < 5 ? <Tag>NOT BUILDABLE</Tag> : undefined}
             note={data.matching.resonanceScoredPct != null && data.matching.resonanceScoredPct < 5 ? "resonance isn't wired to real matches — see server/resonance.ts" : undefined}
           />
+          <div style={{ marginTop: 10 }}>
+            <ResonanceHistogram scoredPct={data.matching.resonanceScoredPct} />
+          </div>
         </Section>
 
         <Section title="Money">
+          {moneySeries && <MrrChart points={moneySeries.points} />}
           <Row label="MRR" value={fmtUsd(data.money.mrrUsd)} />
           <Row label="ARPU" value={fmtUsd(data.money.arpuUsd)} />
           <Row label="Revenue (that day)" value={fmtUsd(data.money.revenueUsd)} />
@@ -144,6 +174,7 @@ export default function AdminMetrics() {
         </Section>
 
         <Section title="Payment success by method">
+          {moneySeries && <PaymentSuccessChart paymentsByMethod={moneySeries.paymentsByMethod} />}
           {Object.keys(data.money.paymentSuccessPctByMethod || {}).length === 0 ? (
             <p style={{ fontSize: 12.5, color: FAINT }}>No payments that day.</p>
           ) : (
@@ -155,7 +186,7 @@ export default function AdminMetrics() {
           {Object.keys(data.money.conversionByGate || {}).length === 0 ? (
             <p style={{ fontSize: 12.5, color: FAINT }}>No paid conversions that day.</p>
           ) : (
-            Object.entries(data.money.conversionByGate).map(([k, v]) => <Row key={k} label={k} value={fmt(v as number)} />)
+            <ConversionByGateChart data={data.money.conversionByGate} />
           )}
         </Section>
 
@@ -180,9 +211,9 @@ export default function AdminMetrics() {
         </Section>
 
         <Section title="LLM spend">
+          {moneySeries && <LlmRevenueChart points={moneySeries.points} />}
           <Row label="Estimated cost (that day)" value={fmtUsd(data.llm.costUsdEstimated)} badge={<Tag>PARTIAL</Tag>} />
           <Row label="Per active user" value={fmtUsd(data.llm.costPerActiveUserUsdEstimated)} />
-          <p style={{ fontSize: 11, color: FAINT, marginTop: 6, lineHeight: 1.5 }}>Only twin_chat and interview_chat call sites are logged so far — this undercounts total spend.</p>
         </Section>
       </div>
     </div>

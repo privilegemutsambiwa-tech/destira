@@ -23,6 +23,16 @@ async function sumByPrefixOnDate(prefix: string, date: string): Promise<number> 
   const rows = await db.select().from(metricDaily).where(and(like(metricDaily.metricKey, `${prefix}%`), eq(metricDaily.date, date)));
   return rows.reduce((s, r) => s + Number(r.value), 0);
 }
+/** A plain {date, value} series for one metric key, oldest first — the shape
+ *  the Overview sparklines and signups chart draw directly. */
+async function seriesForKey(key: string, days: number): Promise<{ date: string; value: number }[]> {
+  const rows = await db
+    .select()
+    .from(metricDaily)
+    .where(and(eq(metricDaily.metricKey, key), gte(metricDaily.date, isoDaysAgo(days - 1))))
+    .orderBy(metricDaily.date);
+  return rows.map((r) => ({ date: r.date, value: Number(r.value) }));
+}
 
 export function registerAdminOverviewRoutes(app: Express) {
   adminRoute(app, "get", "/api/admin/overview", "read_only", async (req, res) => {
@@ -75,6 +85,16 @@ export function registerAdminOverviewRoutes(app: Express) {
         sumByPrefixOnDate("money.paid_subscribers.", yesterday),
       ]);
 
+      const [signups30d, sparkOpenReports, sparkSafety, sparkFeedback, sparkFailedPayments, sparkMrr, sparkLlm] = await Promise.all([
+        seriesForKey("growth.signups", 30),
+        seriesForKey("moderation.open_reports", 14),
+        seriesForKey("moderation.safety_reports_open", 14),
+        seriesForKey("moderation.open_feedback", 14),
+        seriesForKey("money.failed_payments", 14),
+        seriesForKey("money.mrr_usd", 14),
+        seriesForKey("llm.cost_usd_estimated", 14),
+      ]);
+
       res.json({
         computedAt: new Date().toISOString(),
         openReports: Number(open?.n ?? 0),
@@ -95,6 +115,15 @@ export function registerAdminOverviewRoutes(app: Express) {
         errorRatePct: err.pct,
         errorRateSampleSize: err.sampleSize,
         errorRateWindowMinutes: err.windowMinutes,
+        signups30d,
+        sparklines: {
+          openReports: sparkOpenReports.map((r) => r.value),
+          safetyReportsOpen: sparkSafety.map((r) => r.value),
+          openFeedback: sparkFeedback.map((r) => r.value),
+          failedPaymentsToday: sparkFailedPayments.map((r) => r.value),
+          mrrUsd: sparkMrr.map((r) => r.value),
+          llmSpendYesterdayUsd: sparkLlm.map((r) => r.value),
+        },
       });
     } catch (e) {
       console.error("[admin] overview error:", e);

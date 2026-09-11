@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { adminGet } from "./api";
 import { PageHeader, LABEL, MONO, LINE, SURFACE, MUTED, FAINT, ALERT, TEXT, formatDateTime } from "./AdminShell";
 import { REPORT_CATEGORIES, REPORT_STATUSES, REPORT_CATEGORY_LABEL } from "@shared/admin";
+import { ReportVolumeStrip } from "./charts";
 
 const th: React.CSSProperties = { ...LABEL, textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${LINE}` };
 const td: React.CSSProperties = { padding: "9px 10px", fontSize: 13, borderBottom: `1px solid ${LINE}`, color: TEXT };
@@ -23,10 +24,12 @@ export default function AdminReports() {
       return adminGet(`/api/admin/reports?${qs.toString()}`);
     },
   });
+  const { data: volume } = useQuery({ queryKey: ["admin", "reports", "volume"], queryFn: () => adminGet("/api/admin/reports/volume") });
 
   return (
     <div>
       <PageHeader title="Reports" sub="Oldest first. Safety-category reports are pinned to the top regardless." />
+      {volume && <ReportVolumeStrip series={volume.series} />}
 
       <div style={{ display: "flex", gap: 16, marginBottom: 14 }}>
         <div>

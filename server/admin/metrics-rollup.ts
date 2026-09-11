@@ -248,6 +248,11 @@ async function rollMoney(dateStr: string) {
   }
   for (const [method, v] of Object.entries(byMethod)) {
     await upsert(dateStr, `money.payment_success_pct.${method}`, v.total ? Math.round((v.paid / v.total) * 1000) / 10 : 0);
+    // Raw counts alongside the percentage — the console's payment-success
+    // chart stacks success/failure counts, which a percentage alone can't
+    // reconstruct (no denominator).
+    await upsert(dateStr, `money.payment_count.${method}`, v.total);
+    await upsert(dateStr, `money.payment_success_count.${method}`, v.paid);
   }
 
   // Conversion by gate: of payments that succeeded today, which sourceFeature

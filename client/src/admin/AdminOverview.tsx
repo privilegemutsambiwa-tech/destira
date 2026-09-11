@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { adminGet } from "./api";
 import { PageHeader, StatTile, Money, formatDateTime, MONO, FAINT } from "./AdminShell";
+import { SignupsChart } from "./charts";
 
 // "was N yesterday" — quiet when nothing has changed, present when it has.
 // Absent entirely when there's no prior-day rollup to compare against yet.
@@ -36,6 +37,7 @@ export default function AdminOverview() {
               value={data.openReports}
               alert={data.openReports > 0}
               trend={trendText(data.openReports, data.openReportsYesterday)}
+              sparkline={data.sparklines?.openReports}
             />
             <StatTile
               label="Investigating"
@@ -47,27 +49,32 @@ export default function AdminOverview() {
               value={data.safetyReportsOpen}
               alert={data.safetyReportsOpen > 0}
               trend={trendText(data.safetyReportsOpen, data.safetyReportsOpenYesterday)}
+              sparkline={data.sparklines?.safetyReportsOpen}
             />
             <StatTile
               label="Open feedback"
               value={data.openFeedback}
               trend={trendText(data.openFeedback, data.openFeedbackYesterday)}
+              sparkline={data.sparklines?.openFeedback}
             />
             <StatTile
               label="Failed payments today"
               value={data.failedPaymentsToday}
               alert={data.failedPaymentsToday > 0}
               trend={trendText(data.failedPaymentsToday, data.failedPaymentsYesterday)}
+              sparkline={data.sparklines?.failedPaymentsToday}
             />
             <StatTile
               label={`MRR${data.payingUsersCount != null ? ` · ${data.payingUsersCount} paying` : ""}`}
               value={<Money usd={data.mrrUsd} />}
               trend={moneyTrendText(data.mrrUsd, data.mrrUsdDayBefore)}
+              sparkline={data.sparklines?.mrrUsd}
             />
             <StatTile
               label="LLM spend (yesterday, est.)"
               value={<Money usd={data.llmSpendYesterdayUsd} />}
               trend={moneyTrendText(data.llmSpendYesterdayUsd, data.llmSpendDayBeforeUsd)}
+              sparkline={data.sparklines?.llmSpendYesterdayUsd}
             />
             <StatTile
               label={`Error rate (${data.errorRateWindowMinutes}min)`}
@@ -75,9 +82,10 @@ export default function AdminOverview() {
               alert={!!data.errorRatePct && data.errorRatePct > 2}
             />
           </div>
-          <p style={{ ...MONO, fontSize: 10.5, color: FAINT, marginTop: 18 }}>
+          <p style={{ ...MONO, fontSize: 10.5, color: FAINT, marginTop: 18, marginBottom: 22 }}>
             computed {formatDateTime(data.computedAt)} · MRR / LLM spend are yesterday's rollup, error rate is live (last {data.errorRateSampleSize} requests) · full breakdown in Metrics
           </p>
+          <SignupsChart series={data.signups30d ?? []} />
         </>
       )}
     </div>
