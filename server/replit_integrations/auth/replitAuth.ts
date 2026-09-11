@@ -80,11 +80,27 @@ export function getSession() {
   });
 }
 
+// The admin console mounts its own, separately-named session middleware on
+// /api/admin (see server/admin/session.ts). Both middlewares write to the
+// same req.session property, so if this member middleware also ran on admin
+// paths, whichever ran last would silently win — the two would fight over
+// req.session/req.sessionID and only one Set-Cookie would ever reach the
+// client (this is exactly how an earlier version of the admin console shipped
+// with admin login silently issuing a member connect.sid cookie instead of
+// its own). Excluding /api/admin here is what actually makes the two
+// sessions "entirely separate" rather than just separately coded.
+function skipAdminPaths(mw: RequestHandler): RequestHandler {
+  return (req, res, next) => {
+    if (req.path.startsWith("/api/admin")) return next();
+    return mw(req, res, next);
+  };
+}
+
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
-  app.use(getSession());
-  app.use(passport.initialize());
-  app.use(passport.session());
+  app.use(skipAdminPaths(getSession()));
+  app.use(skipAdminPaths(passport.initialize()));
+  app.use(skipAdminPaths(passport.session()));
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user as any));
