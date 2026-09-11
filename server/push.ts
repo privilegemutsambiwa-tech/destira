@@ -13,7 +13,7 @@ let ready = false;
 try {
   if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT || "mailto:hello@destira.app",
+      process.env.VAPID_SUBJECT || "mailto:hello@destira.date",
       process.env.VAPID_PUBLIC_KEY,
       process.env.VAPID_PRIVATE_KEY,
     );

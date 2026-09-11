@@ -933,7 +933,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
       </div>
 
       <p className="text-xs px-4 pt-4 pb-2 text-center" style={{ color: MUTED }}>
-        Questions? Email <span style={{ color: EMBER }}>support@destira.app</span>
+        Questions? Email <span style={{ color: EMBER }}>support@destira.date</span>
       </p>
     </Panel>
   );
@@ -1238,7 +1238,7 @@ function TermsPanel({ onBack }: { onBack: () => void }) {
         <p className="text-white font-semibold mb-1">6. Limitation of Liability</p>
         <p className="mb-4">Destira is provided as-is. We are not responsible for outcomes of matches or interactions between users.</p>
         <p className="text-white font-semibold mb-1">7. Contact</p>
-        <p>For questions, use the Contact Us page within the app or email support@destira.app.</p>
+        <p>For questions, use the Contact Us page within the app or email support@destira.date.</p>
       </div>
     </Panel>
   );
