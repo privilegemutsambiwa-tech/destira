@@ -1,0 +1,47 @@
+/* Admin console only — colocated with the lazy-loaded admin chunk so this
+   never ships in the member bundle. Plain classes (not Tailwind) to match
+   the rest of the console, which is styled with inline style objects and
+   only reaches for a stylesheet where inline can't express it: responsive
+   grid breakpoints and prefers-reduced-motion. */
+
+.console-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .console-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .console-kpi-grid { grid-template-columns: 1fr; }
+}
+
+.console-equal-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+@media (max-width: 720px) {
+  .console-equal-row { grid-template-columns: 1fr; }
+}
+.console-equal-row > * { height: 100%; }
+
+.console-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+@media (max-width: 760px) {
+  .console-metrics-grid { grid-template-columns: 1fr; }
+}
+.console-metrics-grid > * { height: 100%; box-sizing: border-box; }
+
+@media (prefers-reduced-motion: reduce) {
+  .console-root, .console-root * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

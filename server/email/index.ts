@@ -20,20 +20,37 @@ function baseUrl(): string {
 async function getConfig(type: AlertType) {
   const [row] = await db.select().from(emailAlertConfig).where(eq(emailAlertConfig.alertType, type));
   if (row) return row;
-  // First touch: seed a default row so the console always has something to
-  // show and edit, rather than a blank until someone thinks to create it.
+  // First touch: seed a blank row so the console always has something to
+  // show and edit. Blank, not pre-filled — every alert type inherits the
+  // one default recipient (below) unless someone sets an override, so a
+  // freshly-seeded row isn't secretly missing delivery.
   const [created] = await db
     .insert(emailAlertConfig)
-    .values({
-      alertType: type,
-      enabled: true,
-      recipientEmail: process.env.ADMIN_ALERT_EMAIL || "",
-    })
+    .values({ alertType: type, enabled: true, recipientEmail: "" })
     .onConflictDoNothing()
     .returning();
   if (created) return created;
   const [row2] = await db.select().from(emailAlertConfig).where(eq(emailAlertConfig.alertType, type));
   return row2;
+}
+
+// The default recipient every alert type inherits unless it has its own
+// override. Stored as a sentinel row in the same table (an unconstrained
+// text key, like everything else here) rather than a new table for one
+// value. Excluded from /api/admin/email/config's listing by callers, since
+// it isn't an alert type.
+export const DEFAULT_RECIPIENT_KEY = "__default_recipient__";
+
+export async function getDefaultRecipient(): Promise<string> {
+  const [row] = await db.select().from(emailAlertConfig).where(eq(emailAlertConfig.alertType, DEFAULT_RECIPIENT_KEY));
+  return row?.recipientEmail || process.env.ADMIN_ALERT_EMAIL || "";
+}
+
+export async function setDefaultRecipient(recipientEmail: string, updatedBy: string): Promise<void> {
+  await db
+    .insert(emailAlertConfig)
+    .values({ alertType: DEFAULT_RECIPIENT_KEY, enabled: true, recipientEmail, updatedBy, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: emailAlertConfig.alertType, set: { recipientEmail, updatedBy, updatedAt: new Date() } });
 }
 
 /** Every admin (support role and above) account email, for alerts that must
@@ -96,7 +113,7 @@ export async function sendAlert(type: AlertType, subject: string, text: string, 
     await writeLog(type, cfg.recipientEmail || "", "skipped", undefined, "Alert type disabled in console");
     return;
   }
-  const recipient = cfg?.recipientEmail || "";
+  const recipient = cfg?.recipientEmail || (await getDefaultRecipient());
 
   if (meta.dedupWindowMs > 0) {
     const now = Date.now();
@@ -131,13 +148,13 @@ export async function sendConfiguredEmail(type: string, subject: string, text: s
     await writeLog(type, row.recipientEmail || "", "skipped", undefined, "Disabled in console");
     return;
   }
-  const recipient = row?.recipientEmail || process.env.ADMIN_ALERT_EMAIL || "";
+  const recipient = row?.recipientEmail || (await getDefaultRecipient());
   await deliver(recipient, subject, text, type);
 }
 
 export async function testSend(type: AlertType, recipientOverride?: string): Promise<{ ok: boolean; error?: string }> {
   const cfg = await getConfig(type);
-  const recipient = recipientOverride || cfg?.recipientEmail || "";
+  const recipient = recipientOverride || cfg?.recipientEmail || (await getDefaultRecipient());
   if (!recipient) {
     await writeLog(`test:${type}`, "(none)", "skipped", undefined, "No recipient set");
     return { ok: false, error: "No recipient set" };

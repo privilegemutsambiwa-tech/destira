@@ -1,35 +1,61 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { PageHeader, LABEL, MONO, LINE, SURFACE, MUTED, FAINT, TEXT } from "./AdminShell";
 import { adminGet } from "./api";
-import { PageHeader, LABEL, MONO, LINE, SURFACE, MUTED, FAINT, TEXT, EMBER } from "./AdminShell";
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <div style={{ border: `1px solid ${LINE}`, background: SURFACE, borderRadius: 10, padding: 16, marginBottom: 14 }}>
+  <div style={{ border: `1px solid ${LINE}`, background: SURFACE, borderRadius: 10, padding: 16, marginBottom: 14, display: "flex", flexDirection: "column" }}>
     <div style={{ ...LABEL, marginBottom: 10 }}>{title}</div>
     {children}
   </div>
 );
-const Row = ({ label, value, note }: { label: string; value: React.ReactNode; note?: string }) => (
-  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "5px 0", borderBottom: `1px solid ${LINE}` }}>
+const Tag = ({ children }: { children: React.ReactNode }) => (
+  <span style={{ ...MONO, fontSize: 9, color: FAINT, border: `1px solid ${LINE}`, borderRadius: 4, padding: "1px 5px", letterSpacing: "0.06em" }}>{children}</span>
+);
+const Row = ({ label, value, note, badge }: { label: string; value: React.ReactNode; note?: string; badge?: React.ReactNode }) => (
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "5px 0", borderBottom: `1px solid ${LINE}`, gap: 10 }}>
     <span style={{ fontSize: 13, color: MUTED }}>{label}</span>
     <span style={{ textAlign: "right" }}>
       <span style={{ ...MONO, fontSize: 14, color: TEXT }}>{value ?? "—"}</span>
-      {note && <div style={{ fontSize: 10.5, color: FAINT }}>{note}</div>}
+      {badge && <div style={{ marginTop: 3 }}>{badge}</div>}
+      {note && <div style={{ fontSize: 10.5, color: FAINT, marginTop: 2, maxWidth: 220 }}>{note}</div>}
     </span>
   </div>
 );
 const fmt = (n: number | null | undefined, suffix = "") => (n == null ? "—" : `${n}${suffix}`);
 const fmtUsd = (n: number | null | undefined) => (n == null ? "—" : `$${n.toFixed(2)}`);
 
+function shiftIsoDate(iso: string, deltaDays: number): string {
+  const d = new Date(`${iso}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function AdminMetrics() {
   const [date, setDate] = useState(() => new Date(Date.now() - 86400000).toISOString().slice(0, 10));
+  const [userPicked, setUserPicked] = useState(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["admin", "metrics", "summary", date],
     queryFn: () => adminGet(`/api/admin/metrics/summary?date=${date}`),
   });
 
+  // Default to the most recent rollup that actually exists, rather than a
+  // fixed "yesterday" the viewer has to notice is stale and correct by hand.
+  // Only until they've touched the control themselves.
+  useEffect(() => {
+    if (!userPicked && data?.latestAvailableDate && data.latestAvailableDate !== date) {
+      setDate(data.latestAvailableDate);
+    }
+  }, [data?.latestAvailableDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (isLoading || !data) return <p style={{ color: FAINT }}>Loading…</p>;
+
+  const atLatest = !data.latestAvailableDate || date >= data.latestAvailableDate;
+  const goToDate = (next: string) => {
+    setUserPicked(true);
+    setDate(next);
+  };
 
   const funnelStages: [string, string][] = [
     ["Signed up", "signup"],
@@ -40,18 +66,27 @@ export default function AdminMetrics() {
     ["First match", "first_match"],
   ];
 
+  const retentionNote = "Not enough time has passed for any cohort yet";
+
   return (
     <div>
       <PageHeader title="Metrics" sub={`Rollup for ${data.date}. Recomputed nightly — not live.`} />
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center" }}>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ height: 32, borderRadius: 6, border: `1px solid ${LINE}`, background: SURFACE, color: TEXT, fontSize: 12.5, padding: "0 8px" }} />
-        <button onClick={() => refetch()} style={{ height: 32, padding: "0 10px", borderRadius: 6, border: `1px solid ${LINE}`, background: "transparent", color: MUTED, fontSize: 12, cursor: "pointer" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
+        <button onClick={() => goToDate(shiftIsoDate(date, -1))} style={navBtnStyle} aria-label="Previous day" data-testid="metrics-prev-day">
+          ←
+        </button>
+        <input type="date" value={date} onChange={(e) => goToDate(e.target.value)} style={{ height: 32, borderRadius: 6, border: `1px solid ${LINE}`, background: SURFACE, color: TEXT, fontSize: 12.5, padding: "0 8px" }} />
+        <span style={{ ...MONO, fontSize: 11, color: FAINT }}>{date}</span>
+        <button onClick={() => goToDate(shiftIsoDate(date, 1))} disabled={atLatest} style={{ ...navBtnStyle, opacity: atLatest ? 0.4 : 1, cursor: atLatest ? "not-allowed" : "pointer" }} aria-label="Next day" data-testid="metrics-next-day">
+          →
+        </button>
+        <button onClick={() => refetch()} style={navBtnStyle}>
           Reload
         </button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div className="console-metrics-grid">
         <Section title="Funnel — this cohort's day-of-signup, as of now">
           {funnelStages.map(([label, key]) => (
             <Row key={key} label={label} value={fmt((data.funnel as any)[key])} />
@@ -60,9 +95,9 @@ export default function AdminMetrics() {
         </Section>
 
         <Section title="Retention — trailing 30d cohorts">
-          <Row label="D1" value={fmt(data.retention.d1Pct, "%")} />
-          <Row label="D7" value={fmt(data.retention.d7Pct, "%")} />
-          <Row label="D30" value={fmt(data.retention.d30Pct, "%")} note="blank until enough time has passed for that cohort" />
+          <Row label="D1" value={fmt(data.retention.d1Pct, "%")} note={data.retention.d1Pct == null ? retentionNote : undefined} />
+          <Row label="D7" value={fmt(data.retention.d7Pct, "%")} note={data.retention.d7Pct == null ? retentionNote : undefined} />
+          <Row label="D30" value={fmt(data.retention.d30Pct, "%")} note={data.retention.d30Pct == null ? retentionNote : undefined} />
         </Section>
 
         <Section title="Growth">
@@ -92,7 +127,8 @@ export default function AdminMetrics() {
           <Row
             label="Matches with a real resonance score"
             value={fmt(data.matching.resonanceScoredPct, "%")}
-            note={data.matching.resonanceScoredPct != null && data.matching.resonanceScoredPct < 5 ? "near-zero: the resonance model isn't wired to real matches — see server/resonance.ts" : undefined}
+            badge={data.matching.resonanceScoredPct != null && data.matching.resonanceScoredPct < 5 ? <Tag>NOT BUILDABLE</Tag> : undefined}
+            note={data.matching.resonanceScoredPct != null && data.matching.resonanceScoredPct < 5 ? "resonance isn't wired to real matches — see server/resonance.ts" : undefined}
           />
         </Section>
 
@@ -134,7 +170,7 @@ export default function AdminMetrics() {
           <Row label="Created" value={fmt(data.events.created)} />
           <Row label="Published" value={fmt(data.events.published)} />
           <Row label="RSVPs (going)" value={fmt(data.events.rsvpsGoing)} />
-          <Row label="No-show rate" value="—" note="not buildable — no day-of check-in data exists yet" />
+          <Row label="No-show rate" value="—" badge={<Tag>NOT BUILDABLE</Tag>} note="No day-of check-in data exists yet" />
         </Section>
 
         <Section title="Moderation">
@@ -144,11 +180,22 @@ export default function AdminMetrics() {
         </Section>
 
         <Section title="LLM spend">
-          <Row label="Estimated cost (that day)" value={fmtUsd(data.llm.costUsdEstimated)} />
+          <Row label="Estimated cost (that day)" value={fmtUsd(data.llm.costUsdEstimated)} badge={<Tag>PARTIAL</Tag>} />
           <Row label="Per active user" value={fmtUsd(data.llm.costPerActiveUserUsdEstimated)} />
-          <p style={{ fontSize: 11, color: FAINT, marginTop: 6, lineHeight: 1.5 }}>{data.llm.note}</p>
+          <p style={{ fontSize: 11, color: FAINT, marginTop: 6, lineHeight: 1.5 }}>Only twin_chat and interview_chat call sites are logged so far — this undercounts total spend.</p>
         </Section>
       </div>
     </div>
   );
 }
+
+const navBtnStyle: React.CSSProperties = {
+  height: 32,
+  padding: "0 10px",
+  borderRadius: 6,
+  border: `1px solid ${LINE}`,
+  background: "transparent",
+  color: MUTED,
+  fontSize: 12,
+  cursor: "pointer",
+};

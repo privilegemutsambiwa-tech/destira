@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { adminGet } from "./api";
-import { PageHeader, LABEL, MONO, LINE, SURFACE, MUTED, FAINT, ALERT, TEXT } from "./AdminShell";
+import { PageHeader, LABEL, MONO, LINE, SURFACE, MUTED, FAINT, ALERT, TEXT, formatDateTime } from "./AdminShell";
 import { REPORT_CATEGORIES, REPORT_STATUSES, REPORT_CATEGORY_LABEL } from "@shared/admin";
 
 const th: React.CSSProperties = { ...LABEL, textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${LINE}` };
@@ -28,21 +28,33 @@ export default function AdminReports() {
     <div>
       <PageHeader title="Reports" sub="Oldest first. Safety-category reports are pinned to the top regardless." />
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-        <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} style={selectStyle} data-testid="reports-filter-status">
-          <option value="">All statuses</option>
-          {REPORT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }} style={selectStyle} data-testid="reports-filter-category">
-          <option value="">All categories</option>
-          {REPORT_CATEGORIES.map((c) => <option key={c} value={c}>{REPORT_CATEGORY_LABEL[c]}</option>)}
-        </select>
+      <div style={{ display: "flex", gap: 16, marginBottom: 14 }}>
+        <div>
+          <div style={{ ...LABEL, marginBottom: 4 }}>Status</div>
+          <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} style={selectStyle} data-testid="reports-filter-status">
+            <option value="">All statuses</option>
+            {REPORT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={{ ...LABEL, marginBottom: 4 }}>Category</div>
+          <select value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }} style={selectStyle} data-testid="reports-filter-category">
+            <option value="">All categories</option>
+            {REPORT_CATEGORIES.map((c) => <option key={c} value={c}>{REPORT_CATEGORY_LABEL[c]}</option>)}
+          </select>
+        </div>
       </div>
 
       {isLoading ? (
         <p style={{ color: FAINT }}>Loading…</p>
       ) : data.reports.length === 0 ? (
-        <p style={{ color: FAINT, fontSize: 13 }}>Nothing here.</p>
+        <p style={{ color: FAINT, fontSize: 13 }}>
+          {status === "open" && !category
+            ? "No open reports. Safety-category reports would appear here first."
+            : status === "" && !category
+              ? "No reports yet."
+              : "Nothing here for this filter."}
+        </p>
       ) : (
         <div style={{ border: `1px solid ${LINE}`, borderRadius: 10, overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", background: SURFACE }}>
@@ -59,7 +71,7 @@ export default function AdminReports() {
             <tbody>
               {data.reports.map((r: any) => (
                 <tr key={r.id} data-testid={`report-row-${r.id}`}>
-                  <td style={{ ...td, ...MONO, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{new Date(r.createdAt).toLocaleString()}</td>
+                  <td style={{ ...td, ...MONO, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{formatDateTime(r.createdAt)}</td>
                   <td style={td}>
                     {r.isSafety && (
                       <span style={{ ...LABEL, color: ALERT, fontSize: 9, marginRight: 7, border: `1px solid ${ALERT}66`, borderRadius: 4, padding: "1px 4px" }}>

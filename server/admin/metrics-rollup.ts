@@ -21,6 +21,7 @@ import {
   eventAttendees,
   reports,
   moderationActions,
+  feedback,
   llmCallLog,
   userActivityDaily,
   metricDaily,
@@ -28,6 +29,7 @@ import {
 import { and, eq, gte, lt, sql, count, sum, inArray, isNotNull, ne } from "drizzle-orm";
 import { DISCLOSURE_CATEGORY_KEYS } from "@shared/disclosure";
 import { LIMITS } from "@shared/entitlements";
+import { SAFETY_CATEGORIES } from "@shared/admin";
 
 function dayRange(dateStr: string): { start: Date; end: Date } {
   const start = new Date(`${dateStr}T00:00:00.000Z`);
@@ -103,16 +105,16 @@ async function rollFunnelForCohortDay(dateStr: string) {
 async function rollRetentionForCohortDay(dateStr: string) {
   const { start, end } = dayRange(dateStr);
   const cohort = await db.select({ id: users.id }).from(users).where(and(gte(users.createdAt, start), lt(users.createdAt, end)));
-  if (cohort.length === 0) {
-    await upsert(dateStr, "retention.d1_pct", 0);
-    await upsert(dateStr, "retention.d7_pct", 0);
-    await upsert(dateStr, "retention.d30_pct", 0);
-    return;
-  }
   const ids = cohort.map((c) => c.id);
   for (const [key, offset] of [["d1", 1], ["d7", 7], ["d30", 30]] as const) {
     const targetDate = new Date(start.getTime() + offset * 86400000);
-    if (targetDate > new Date()) continue; // not enough time has passed yet — leave unset
+    // Leave the row unset (never a fake 0) in either case where there's
+    // nothing to measure: not enough time has passed yet, or nobody signed
+    // up this day so there's no cohort/denominator at all. Previously an
+    // empty cohort wrote an explicit 0 immediately, even for offsets still
+    // in the future — the false zero this metric exists to avoid.
+    if (targetDate > new Date()) continue;
+    if (ids.length === 0) continue;
     const targetDateStr = targetDate.toISOString().slice(0, 10);
     const active = await db
       .selectDistinct({ userId: userActivityDaily.userId })
@@ -235,6 +237,7 @@ async function rollMoney(dateStr: string) {
   const { start, end } = dayRange(dateStr);
   const dayPayments = await db.select().from(payments).where(and(gte(payments.createdAt, start), lt(payments.createdAt, end)));
   await upsert(dateStr, "money.revenue_usd", Math.round(dayPayments.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount, 0)) / 100);
+  await upsert(dateStr, "money.failed_payments", dayPayments.filter((p) => p.status === "failed").length);
 
   const byMethod: Record<string, { paid: number; total: number }> = {};
   for (const p of dayPayments) {
@@ -315,6 +318,19 @@ async function rollEvents(dateStr: string) {
 async function rollModeration(dateStr: string) {
   const openNow = await db.select({ n: count() }).from(reports).where(inArray(reports.status, ["open", "investigating"]));
   await upsert(dateStr, "moderation.open_reports", Number(openNow[0]?.n ?? 0));
+
+  // Snapshots (as-of-rollup-time, like open_reports above) — exist purely so
+  // the Overview screen can say "was N yesterday" against today's live count,
+  // rather than a bare, contextless zero.
+  const investigatingNow = await db.select({ n: count() }).from(reports).where(eq(reports.status, "investigating"));
+  await upsert(dateStr, "moderation.investigating_reports", Number(investigatingNow[0]?.n ?? 0));
+  const safetyNow = await db
+    .select({ n: count() })
+    .from(reports)
+    .where(and(inArray(reports.category, SAFETY_CATEGORIES as unknown as string[]), inArray(reports.status, ["open", "investigating"])));
+  await upsert(dateStr, "moderation.safety_reports_open", Number(safetyNow[0]?.n ?? 0));
+  const feedbackOpenNow = await db.select({ n: count() }).from(feedback).where(eq(feedback.status, "open"));
+  await upsert(dateStr, "moderation.open_feedback", Number(feedbackOpenNow[0]?.n ?? 0));
 
   const { start, end } = dayRange(dateStr);
   const [actionsToday] = await db.select({ n: count() }).from(moderationActions).where(and(gte(moderationActions.createdAt, start), lt(moderationActions.createdAt, end)));

@@ -19,16 +19,16 @@ const adminQueryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 15_000 } },
 });
 
-type Auth = { loading: boolean; role: string | null };
+type Auth = { loading: boolean; role: string | null; email: string | null };
 
 function useAdminWhoAmI(): Auth & { refresh: () => void } {
-  const [state, setState] = useState<Auth>({ loading: true, role: null });
+  const [state, setState] = useState<Auth>({ loading: true, role: null, email: null });
   const [tick, setTick] = useState(0);
   useEffect(() => {
     let cancelled = false;
     adminGet("/api/admin/auth/whoami")
-      .then((r) => !cancelled && setState({ loading: false, role: r.role }))
-      .catch(() => !cancelled && setState({ loading: false, role: null }));
+      .then((r) => !cancelled && setState({ loading: false, role: r.role, email: r.email ?? null }))
+      .catch(() => !cancelled && setState({ loading: false, role: null, email: null }));
     return () => {
       cancelled = true;
     };
@@ -37,7 +37,7 @@ function useAdminWhoAmI(): Auth & { refresh: () => void } {
 }
 
 function AdminApp() {
-  const { loading, role, refresh } = useAdminWhoAmI();
+  const { loading, role, email, refresh } = useAdminWhoAmI();
   const [location] = useLocation();
 
   if (loading) {
@@ -53,7 +53,7 @@ function AdminApp() {
   }
 
   return (
-    <AdminShell role={role}>
+    <AdminShell role={role} email={email}>
       <Switch>
         <Route path="/console" component={AdminOverview} />
         <Route path="/console/reports" component={AdminReports} />

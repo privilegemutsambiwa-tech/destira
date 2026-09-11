@@ -5,44 +5,57 @@ import { desc, eq } from "drizzle-orm";
 import { adminRoute } from "./auth";
 import { auditAdmin } from "./audit";
 import { ALERT_TYPES, ALERT_META, DIGEST_TYPES, DIGEST_META } from "@shared/email-alerts";
-import { testSend } from "../email";
+import { testSend, getDefaultRecipient, setDefaultRecipient } from "../email";
 
 export function registerAdminEmailRoutes(app: Express) {
   // Always returns every known alert type, seeding a default row for any
   // that don't have one yet — the console never shows a blank for a type
-  // that simply hasn't been touched.
+  // that simply hasn't been touched. Every row also carries the resolved
+  // effectiveRecipient (its own override, or the console-wide default) so
+  // "enabled with nowhere to send" is a value the client can just check for,
+  // not recompute.
   adminRoute(app, "get", "/api/admin/email/config", "admin", async (req, res) => {
     try {
       const rows = await db.select().from(emailAlertConfig);
       const byType = new Map(rows.map((r) => [r.alertType, r]));
-      const alerts = ALERT_TYPES.map((type) => {
+      const defaultRecipient = await getDefaultRecipient();
+
+      const build = (type: string, label: string, configurable: boolean, hasThreshold: boolean) => {
         const row = byType.get(type);
-        const meta = ALERT_META[type];
+        const recipientEmail = row?.recipientEmail ?? "";
+        const enabled = row?.enabled ?? true;
+        const effectiveRecipient = recipientEmail || defaultRecipient;
         return {
           alertType: type,
-          label: meta.label,
-          configurable: meta.configurable,
-          hasThreshold: meta.hasThreshold,
-          enabled: row?.enabled ?? true,
+          label,
+          configurable,
+          hasThreshold,
+          enabled,
           threshold: row?.threshold ?? null,
-          recipientEmail: row?.recipientEmail ?? "",
+          recipientEmail,
+          isInherited: !recipientEmail,
+          effectiveRecipient,
+          noRecipient: enabled && !effectiveRecipient,
         };
-      });
-      const digests = DIGEST_TYPES.map((type) => {
-        const row = byType.get(type);
-        return {
-          alertType: type,
-          label: DIGEST_META[type].label,
-          configurable: true,
-          hasThreshold: false,
-          enabled: row?.enabled ?? true,
-          threshold: null,
-          recipientEmail: row?.recipientEmail ?? "",
-        };
-      });
-      res.json([...digests, ...alerts]);
+      };
+
+      const digests = DIGEST_TYPES.map((type) => build(type, DIGEST_META[type].label, true, false));
+      const alerts = ALERT_TYPES.map((type) => build(type, ALERT_META[type].label, ALERT_META[type].configurable, ALERT_META[type].hasThreshold));
+      res.json({ defaultRecipient, items: [...digests, ...alerts] });
     } catch (e) {
       res.status(500).json({ message: "Failed to load email config" });
+    }
+  });
+
+  adminRoute(app, "patch", "/api/admin/email/default-recipient", "admin", async (req, res) => {
+    const recipientEmail = typeof req.body?.recipientEmail === "string" ? req.body.recipientEmail.trim() : "";
+    try {
+      await setDefaultRecipient(recipientEmail, (req as any).admin.userId);
+      await auditAdmin(req, (req as any).admin.userId, "email_config.update", { targetType: "default_recipient", details: { recipientEmail } });
+      res.json({ ok: true, defaultRecipient: recipientEmail });
+    } catch (e) {
+      console.error("[admin] default recipient update error:", e);
+      res.status(500).json({ message: "Failed to save" });
     }
   });
 

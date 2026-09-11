@@ -64,9 +64,11 @@ export function registerAdminMetricsRoutes(app: Express) {
     try {
       const rows = await getRange("", from, isoDaysAgo(0));
       const err = currentErrorRate();
+      const [latestRow] = await db.select().from(metricDaily).orderBy(desc(metricDaily.date)).limit(1);
 
       res.json({
         date,
+        latestAvailableDate: latestRow?.date ?? null,
         computedRange: { from, to: isoDaysAgo(0) },
         live: { errorRatePct: err.pct, errorSampleSize: err.sampleSize, errorWindowMinutes: err.windowMinutes },
         growth: {

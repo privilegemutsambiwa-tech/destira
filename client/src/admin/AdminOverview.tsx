@@ -1,6 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { adminGet } from "./api";
-import { PageHeader, StatTile, MONO, FAINT } from "./AdminShell";
+import { PageHeader, StatTile, Money, formatDateTime, MONO, FAINT } from "./AdminShell";
+
+// "was N yesterday" — quiet when nothing has changed, present when it has.
+// Absent entirely when there's no prior-day rollup to compare against yet.
+function trendText(now: number, before: number | null | undefined): string | undefined {
+  if (before == null) return undefined;
+  if (now === before) return `was ${before} yesterday too`;
+  return `was ${before} yesterday`;
+}
+function moneyTrendText(now: number | null | undefined, before: number | null | undefined): string | undefined {
+  if (now == null || before == null) return undefined;
+  const delta = now - before;
+  if (Math.abs(delta) < 0.005) return "flat vs the day before";
+  return `${delta > 0 ? "+" : "-"}$${Math.abs(delta).toFixed(2)} vs the day before`;
+}
 
 export default function AdminOverview() {
   const { data, isLoading } = useQuery({
@@ -16,14 +30,45 @@ export default function AdminOverview() {
         <p style={{ color: FAINT }}>Loading…</p>
       ) : (
         <>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <StatTile label="Open reports" value={data.openReports} alert={data.openReports > 0} />
-            <StatTile label="Investigating" value={data.investigatingReports} />
-            <StatTile label="Safety-category open" value={data.safetyReportsOpen} alert={data.safetyReportsOpen > 0} />
-            <StatTile label="Open feedback" value={data.openFeedback} />
-            <StatTile label="Failed payments today" value={data.failedPaymentsToday} alert={data.failedPaymentsToday > 0} />
-            <StatTile label="MRR" value={data.mrrUsd != null ? `$${data.mrrUsd.toFixed(2)}` : "—"} />
-            <StatTile label="LLM spend (yesterday, est.)" value={data.llmSpendYesterdayUsd != null ? `$${data.llmSpendYesterdayUsd.toFixed(4)}` : "—"} />
+          <div className="console-kpi-grid">
+            <StatTile
+              label="Open reports"
+              value={data.openReports}
+              alert={data.openReports > 0}
+              trend={trendText(data.openReports, data.openReportsYesterday)}
+            />
+            <StatTile
+              label="Investigating"
+              value={data.investigatingReports}
+              trend={trendText(data.investigatingReports, data.investigatingReportsYesterday)}
+            />
+            <StatTile
+              label="Safety-category open"
+              value={data.safetyReportsOpen}
+              alert={data.safetyReportsOpen > 0}
+              trend={trendText(data.safetyReportsOpen, data.safetyReportsOpenYesterday)}
+            />
+            <StatTile
+              label="Open feedback"
+              value={data.openFeedback}
+              trend={trendText(data.openFeedback, data.openFeedbackYesterday)}
+            />
+            <StatTile
+              label="Failed payments today"
+              value={data.failedPaymentsToday}
+              alert={data.failedPaymentsToday > 0}
+              trend={trendText(data.failedPaymentsToday, data.failedPaymentsYesterday)}
+            />
+            <StatTile
+              label={`MRR${data.payingUsersCount != null ? ` · ${data.payingUsersCount} paying` : ""}`}
+              value={<Money usd={data.mrrUsd} />}
+              trend={moneyTrendText(data.mrrUsd, data.mrrUsdDayBefore)}
+            />
+            <StatTile
+              label="LLM spend (yesterday, est.)"
+              value={<Money usd={data.llmSpendYesterdayUsd} />}
+              trend={moneyTrendText(data.llmSpendYesterdayUsd, data.llmSpendDayBeforeUsd)}
+            />
             <StatTile
               label={`Error rate (${data.errorRateWindowMinutes}min)`}
               value={data.errorRatePct != null ? `${data.errorRatePct}%` : "no traffic yet"}
@@ -31,7 +76,7 @@ export default function AdminOverview() {
             />
           </div>
           <p style={{ ...MONO, fontSize: 10.5, color: FAINT, marginTop: 18 }}>
-            computed {new Date(data.computedAt).toLocaleTimeString()} · MRR / LLM spend are yesterday's rollup, error rate is live (last {data.errorRateSampleSize} requests) · full breakdown in Metrics
+            computed {formatDateTime(data.computedAt)} · MRR / LLM spend are yesterday's rollup, error rate is live (last {data.errorRateSampleSize} requests) · full breakdown in Metrics
           </p>
         </>
       )}
