@@ -5,6 +5,19 @@ export default {
   content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
+      // The one breakpoint scale for the whole app — written down here so
+      // it stops being decided per-file. Tailwind's sm/md/lg/xl defaults
+      // already line up with this; only 2xl is widened (1536 -> 1680) to
+      // mark "large desktop", not just "slightly wider desktop".
+      //   <640          phone
+      //   640–767  sm   large phone
+      //   768–1023 md   tablet portrait — bottom tab bar still, not the sidebar (see layout-shell.tsx)
+      //   1024–1279 lg  tablet landscape / small laptop — sidebar appears here
+      //   1280–1679 xl  desktop
+      //   1680+    2xl  large desktop
+      screens: {
+        "2xl": "1680px",
+      },
       borderRadius: {
         lg: "1.25rem",   /* 20px — card radius */
         md: "0.875rem",  /* 14px — button radius */

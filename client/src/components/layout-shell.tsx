@@ -50,12 +50,18 @@ export function LayoutShell({ children }: LayoutShellProps) {
       : `Answer ${remaining === 1 ? "one more" : `${remaining} more`} — your twin gets sharper.`;
 
   return (
-    <div className="min-h-screen bg-vf-ink">
+    <div className="min-h-dvh bg-vf-ink">
       <LocationPermissionModal />
       <ProximityAlerts />
 
-      {/* Mobile header — logo centered */}
-      <header className="sticky top-0 z-50 md:hidden flex items-center justify-center h-14 px-4 bg-vf-ink border-b border-vf-line">
+      {/* Mobile/tablet-portrait header — logo centered. Persists through
+          tablet portrait (to lg, 1024) — see the breakpoint scale in
+          tailwind.config.ts: an iPad in portrait is treated as a big phone,
+          not squeezed into the desktop sidebar layout at its tightest width. */}
+      <header
+        className="sticky top-0 z-50 lg:hidden flex items-center justify-center h-14 px-4 bg-vf-ink border-b border-vf-line"
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)", height: "calc(56px + env(safe-area-inset-top, 0px))" }}
+      >
         <Link href="/">
           <div className="flex items-center cursor-pointer text-vf-text" data-testid="link-logo-mobile">
             <DestiraLockup orientation="horizontal" size={28} />
@@ -63,9 +69,10 @@ export function LayoutShell({ children }: LayoutShellProps) {
         </Link>
       </header>
 
-      <div className="flex flex-col md:flex-row min-h-screen">
-        {/* Desktop rail */}
-        <aside className="hidden md:flex flex-col w-[216px] shrink-0 sticky top-0 h-screen p-[18px] gap-[26px] border-r border-vf-line">
+      <div className="flex flex-col lg:flex-row min-h-dvh">
+        {/* Desktop rail — appears at lg (1024) so tablet portrait (768–1023)
+            gets the tab bar, not a sidebar with barely 550px left for content. */}
+        <aside className="hidden lg:flex flex-col w-[216px] shrink-0 sticky top-0 h-dvh p-[18px] gap-[26px] border-r border-vf-line">
           <Link href="/">
             <div className="flex items-center gap-2.5 cursor-pointer px-2 text-vf-text" data-testid="link-logo-desktop">
               <DestiraLockup orientation="horizontal" size={30} />
@@ -147,19 +154,30 @@ export function LayoutShell({ children }: LayoutShellProps) {
           </div>
         </aside>
 
-        {/* Main content */}
-        <main className="flex-1 md:overflow-y-auto">
-          <div className="max-w-5xl mx-auto p-4 md:p-8 lg:p-12 pb-24 md:pb-12">
+        {/* Main content — width is per-surface (each page decides its own
+            reading vs. grid ceiling), not one global cap; this just keeps
+            an outer sanity limit so nothing runs edge-to-edge on an
+            ultra-wide display. */}
+        <main className="flex-1 lg:overflow-y-auto">
+          <div
+            className="max-w-[1600px] mx-auto p-4 md:p-8 lg:p-12 pb-24 lg:pb-12"
+            style={{ paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))", paddingRight: "max(1rem, env(safe-area-inset-right, 0px))" }}
+          >
             {children}
           </div>
         </main>
 
-        {/* Mobile bottom tab bar */}
+        {/* Bottom tab bar — phone and tablet portrait (to lg, 1024) */}
         <nav
-          className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-vf-ink border-t border-vf-line"
-          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)", height: "64px" }}
+          className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-vf-ink border-t border-vf-line"
+          style={{
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+            paddingLeft: "env(safe-area-inset-left, 0px)",
+            paddingRight: "env(safe-area-inset-right, 0px)",
+            height: "calc(64px + env(safe-area-inset-bottom, 0px))",
+          }}
         >
-          <div className="flex justify-around items-center h-full px-2">
+          <div className="flex justify-around items-center h-16 px-2">
             {navItems.map((item) => {
               const isActive = location === item.href;
               return (
