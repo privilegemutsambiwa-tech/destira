@@ -7,6 +7,7 @@ import {
   ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme, type ThemePreference } from "@/hooks/use-theme";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
@@ -18,17 +19,25 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from "@/components/ui/dialog";
 
-const BG = "#0C0910";        // vf-ink — page ground
-const CARD = "#161220";      // vf-surface2 — setting rows
-const ELEVATED = "rgba(255,255,255,0.05)"; // input fill
-const BORDER = "rgba(255,255,255,0.09)";   // vf-line — hairline
-const MUTED = "#A79FB4";     // vf-muted — body
-const FAINT = "#7E7690";     // vf-faint — 12-13px metadata only
-const TEXT = "#F5F0EA";      // vf-text
-const EMBER = "#FF6B4A";     // human / primary action
-const MINT = "#8FE3C7";      // AI-twin layer — and toggle tracks, per the global rule
-const INK = "#0C0910";       // knob on a mint track, text on an ember fill
-const GOLD = "#E9C46A";      // Ember premium / upsell only
+// Theme-aware — these resolve through the CSS custom properties in
+// index.css (dark on bare :root, light under :root[data-theme="light"] /
+// prefers-color-scheme), the same tokens tailwind.config.ts's vf-* classes
+// use. This file predates that wiring and reads colors as JS constants
+// rather than Tailwind classes, so it has to go through var()/hsl(var())
+// by hand instead of getting the switch for free — but a value only needs
+// changing here, once, for every one of this file's ~1500 lines that
+// reference the constant to pick up the theme correctly.
+const BG = "hsl(var(--vf-ink))";        // page ground
+const CARD = "var(--vf-surface2)";      // setting rows
+const ELEVATED = "var(--vf-elevated)";  // input fill
+const BORDER = "var(--vf-line)";        // hairline
+const MUTED = "var(--vf-muted)";        // body
+const FAINT = "var(--vf-faint)";        // 12-13px metadata only
+const TEXT = "hsl(var(--vf-text))";
+const EMBER = "hsl(var(--vf-ember))";   // human / primary action
+const MINT = "hsl(var(--vf-mint))";     // AI-twin layer — and toggle tracks, per the global rule
+const INK = "hsl(var(--vf-ink))";       // knob on a mint track, text on an ember fill
+const GOLD = "hsl(var(--vf-gold))";     // Ember premium / upsell only
 
 const SERIF: React.CSSProperties = { fontFamily: '"Instrument Serif", serif', fontWeight: 400 };
 const MONO_EYEBROW: React.CSSProperties = {
@@ -81,7 +90,7 @@ function ToggleRow({ icon: Icon, label, value, onChange, testId }: {
   return (
     <div style={ROW_STYLE} onClick={() => onChange(!value)} data-testid={testId}>
       <Icon className="w-5 h-5 mr-3" style={{ color: MUTED }} />
-      <span className="flex-1 text-sm font-medium text-white">{label}</span>
+      <span className="flex-1 text-sm font-medium text-foreground">{label}</span>
       <Toggle value={value} onChange={onChange} />
     </div>
   );
@@ -95,7 +104,7 @@ function ChevronRow({ icon: Icon, label, sublabel, onClick, destructive, testId 
     <div style={ROW_STYLE} onClick={onClick} data-testid={testId}>
       <Icon className="w-5 h-5 mr-3" style={{ color: destructive ? "#EF4444" : MUTED }} />
       <div className="flex-1">
-        <p className="text-sm font-medium" style={{ color: destructive ? "#EF4444" : "#FFFFFF" }}>{label}</p>
+        <p className="text-sm font-medium" style={{ color: destructive ? "#EF4444" : TEXT }}>{label}</p>
         {sublabel && <p className="text-xs" style={{ color: MUTED }}>{sublabel}</p>}
       </div>
       <ChevronRight className="w-4 h-4" style={{ color: MUTED }} />
@@ -161,7 +170,7 @@ function SliderInput({ label, value, min, max, onChange, unit = "" }: {
   return (
     <div style={{ padding: "12px 16px", borderBottom: `1px solid ${BORDER}` }}>
       <div className="flex justify-between items-center mb-2">
-        <span className="text-sm font-medium text-white">{label}</span>
+        <span className="text-sm font-medium text-foreground">{label}</span>
         <span className="text-sm" style={{ ...SERIF, color: EMBER, fontSize: "15px" }}>{value}{unit}</span>
       </div>
       <input
@@ -255,7 +264,7 @@ function TwinTonePanel({ onBack, profile }: { onBack: () => void; profile: any }
         {controls.map((c, i) => (
           <div key={c.key} style={{ padding: "14px 16px", borderBottom: i < controls.length - 1 ? `1px solid ${BORDER}` : "none" }}>
             <div className="flex justify-between mb-2">
-              <p className="text-sm font-semibold text-white">{c.label}</p>
+              <p className="text-sm font-semibold text-foreground">{c.label}</p>
               <p className="text-xs font-medium" style={{ color: MUTED }}>{c.low} → {c.high}</p>
             </div>
             <input
@@ -267,7 +276,7 @@ function TwinTonePanel({ onBack, profile }: { onBack: () => void; profile: any }
             />
             <div className="flex justify-between mt-1">
               <span className="text-xs" style={{ color: MUTED }}>{c.low}</span>
-              <span className="text-xs font-medium text-white">{c.value}</span>
+              <span className="text-xs font-medium text-foreground">{c.value}</span>
               <span className="text-xs" style={{ color: MUTED }}>{c.high}</span>
             </div>
           </div>
@@ -329,12 +338,12 @@ function LocationPanel({ onBack, profile }: { onBack: () => void; profile: any }
         <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}` }}>
           <p className="text-xs font-semibold mb-1" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Current Location</p>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-white" data-testid="text-current-location">{currentLocation || "Not set"}</p>
+            <p className="text-sm text-foreground" data-testid="text-current-location">{currentLocation || "Not set"}</p>
             <button
               onClick={refreshLocation}
               disabled={refreshing}
               className="text-xs font-semibold px-3 py-1.5 rounded-lg"
-              style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: refreshing ? MUTED : "#FFFFFF" }}
+              style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: refreshing ? MUTED : TEXT }}
               data-testid="button-refresh-location"
             >
               {refreshing ? "Updating..." : "Refresh"}
@@ -377,6 +386,45 @@ function ChoiceRow({ label, options, value, onChange, testId }: {
                 color: active ? MINT : TEXT,
               }}
               data-testid={testId ? `${testId}-${o.value}` : undefined}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// A set-once preference, not a frequent action — lives here in Settings,
+// not the top nav. Ember for the active state (this isn't twin-related, so
+// it doesn't borrow mint) via CSS Color 4 hsl(var(...) / alpha) rather than
+// a literal rgba, so the tint stays correct if the ember token itself ever
+// moves.
+function AppearanceRow() {
+  const { preference, setPreference } = useTheme();
+  const options: { value: ThemePreference; label: string }[] = [
+    { value: "system", label: "System" },
+    { value: "light", label: "Light" },
+    { value: "dark", label: "Dark" },
+  ];
+  return (
+    <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}` }} data-testid="row-appearance">
+      <p style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "10px" }}>Appearance</p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((o) => {
+          const active = o.value === preference;
+          return (
+            <button
+              key={o.value}
+              onClick={() => setPreference(o.value)}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg btn-press"
+              style={{
+                background: active ? "hsl(var(--vf-ember) / 0.14)" : ELEVATED,
+                border: `1px solid ${active ? "hsl(var(--vf-ember) / 0.4)" : BORDER}`,
+                color: active ? EMBER : TEXT,
+              }}
+              data-testid={`row-appearance-${o.value}`}
             >
               {o.label}
             </button>
@@ -621,7 +669,7 @@ function BlockListPanel({ onBack }: { onBack: () => void }) {
                   : <UserX className="w-4 h-4" style={{ color: MUTED }} />
                 }
               </div>
-              <span className="flex-1 text-sm text-white" data-testid={`text-blocked-name-${entry.blockedId}`}>{entry.displayName || entry.blockedId}</span>
+              <span className="flex-1 text-sm text-foreground" data-testid={`text-blocked-name-${entry.blockedId}`}>{entry.displayName || entry.blockedId}</span>
               <button
                 onClick={() => unblockMutation.mutate(entry.blockedId)}
                 className="text-xs font-semibold px-3 py-1"
@@ -691,7 +739,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
             }}>
               <Trash2 className="w-7 h-7" style={{ color: "#EF4444" }} />
             </div>
-            <p className="font-semibold text-white mb-1">This is permanent</p>
+            <p className="font-semibold text-foreground mb-1">This is permanent</p>
             <p className="text-sm" style={{ color: MUTED }}>All your profile data, matches, Twin memory, and account will be permanently deleted. This cannot be undone.</p>
           </div>
           <div style={{ marginBottom: "16px" }}>
@@ -700,7 +748,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="DELETE"
-              className="w-full px-3 py-2 text-sm text-white"
+              className="w-full px-3 py-2 text-sm text-foreground"
               style={{ background: CARD, border: `1px solid #EF4444`, borderRadius: "10px", outline: "none" }}
               data-testid="input-delete-confirm"
             />
@@ -708,7 +756,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
           <button
             disabled={deleteConfirmText !== "DELETE" || deleteMutation.isPending}
             onClick={() => deleteMutation.mutate()}
-            className="w-full py-3 text-sm font-semibold text-white rounded-xl"
+            className="w-full py-3 text-sm font-semibold text-foreground rounded-xl"
             style={{
               background: deleteConfirmText === "DELETE" ? "#EF4444" : ELEVATED,
               opacity: deleteConfirmText !== "DELETE" || deleteMutation.isPending ? 0.5 : 1,
@@ -736,7 +784,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
         >
           <Shield className="w-5 h-5 mr-3" style={{ color: MUTED }} />
           <div className="flex-1">
-            <p className="text-sm font-medium text-white">What We Collect</p>
+            <p className="text-sm font-medium text-foreground">What We Collect</p>
             <p className="text-xs" style={{ color: MUTED }}>See all data categories we store</p>
           </div>
           {showCollect ? <ChevronUp className="w-4 h-4" style={{ color: MUTED }} /> : <ChevronDown className="w-4 h-4" style={{ color: MUTED }} />}
@@ -754,7 +802,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
         <div style={ROW_STYLE} onClick={handleExport} data-testid="row-export-data">
           <Download className="w-5 h-5 mr-3" style={{ color: MUTED }} />
           <div className="flex-1">
-            <p className="text-sm font-medium text-white">Export My Data</p>
+            <p className="text-sm font-medium text-foreground">Export My Data</p>
             <p className="text-xs" style={{ color: MUTED }}>Download a JSON file of your profile and data</p>
           </div>
           <ChevronRight className="w-4 h-4" style={{ color: MUTED }} />
@@ -813,7 +861,7 @@ function VerifyPanel({ onBack }: { onBack: () => void }) {
         {submitted ? (
           <div className="w-full py-4 text-center rounded-xl" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
             <Check className="w-6 h-6 mx-auto mb-2" style={{ color: "#10B981" }} />
-            <p className="text-sm font-semibold text-white">Verification Pending</p>
+            <p className="text-sm font-semibold text-foreground">Verification Pending</p>
             <p className="text-xs mt-1" style={{ color: MUTED }}>We'll review your submission within 24 hours</p>
           </div>
         ) : (
@@ -825,7 +873,7 @@ function VerifyPanel({ onBack }: { onBack: () => void }) {
             <div style={{ width: "100%", marginBottom: "12px" }}>
               <button
                 onClick={() => fileRef.current?.click()}
-                className="w-full py-3 text-sm font-semibold text-white mb-3"
+                className="w-full py-3 text-sm font-semibold text-foreground mb-3"
                 style={{ background: ELEVATED, borderRadius: "12px", border: `1px solid ${BORDER}` }}
                 data-testid="button-take-selfie"
               >
@@ -871,10 +919,10 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
         <div className="flex items-start justify-between mb-2">
           <div>
             <p className="text-xs font-semibold mb-1" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1.2px" }}>Current Plan</p>
-            <p className="text-xl font-bold text-white">{tierInfo.label}</p>
+            <p className="text-xl font-bold text-foreground">{tierInfo.label}</p>
           </div>
           <div className="text-right">
-            <p className="text-lg font-bold text-white">{tierInfo.price}</p>
+            <p className="text-lg font-bold text-foreground">{tierInfo.price}</p>
             <p className="text-xs" style={{ color: MUTED }}>{tierInfo.cycle}</p>
           </div>
         </div>
@@ -895,8 +943,8 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
           ) : (
             <div>
               <div className="flex justify-between items-center py-1.5">
-                <p className="text-sm text-white">Destira {tierInfo.label}</p>
-                <p className="text-sm font-semibold text-white">{tierInfo.price}</p>
+                <p className="text-sm text-foreground">Destira {tierInfo.label}</p>
+                <p className="text-sm font-semibold text-foreground">{tierInfo.price}</p>
               </div>
               <div className="flex justify-between items-center py-1.5">
                 <p className="text-xs" style={{ color: MUTED }}>March 1, 2026</p>
@@ -924,7 +972,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
             }}
           >
             <div className="flex-1">
-              <p className="text-sm font-medium text-white">Cancel subscription</p>
+              <p className="text-sm font-medium text-foreground">Cancel subscription</p>
               <p className="text-xs" style={{ color: MUTED }}>Keeps working until the period ends. No exit fee.</p>
             </div>
             {cancelSub.isPending ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: MUTED }} /> : <ChevronRight className="w-4 h-4" style={{ color: MUTED }} />}
@@ -961,7 +1009,7 @@ function HelpPanel({ onBack }: { onBack: () => void }) {
               style={{ display: "flex", alignItems: "center", padding: "14px 16px", cursor: "pointer" }}
               data-testid={`faq-toggle-${i}`}
             >
-              <p className="flex-1 text-sm font-medium text-white">{faq.q}</p>
+              <p className="flex-1 text-sm font-medium text-foreground">{faq.q}</p>
               {open === i ? <ChevronUp className="w-4 h-4" style={{ color: MUTED }} /> : <ChevronDown className="w-4 h-4" style={{ color: MUTED }} />}
             </div>
             {open === i && (
@@ -1010,7 +1058,7 @@ function ContactPanel({ onBack }: { onBack: () => void }) {
           <select
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            className="w-full px-3 py-2 text-sm text-white"
+            className="w-full px-3 py-2 text-sm text-foreground"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="select-contact-subject"
           >
@@ -1026,7 +1074,7 @@ function ContactPanel({ onBack }: { onBack: () => void }) {
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Describe your issue or question..."
             rows={5}
-            className="w-full px-3 py-2 text-sm text-white resize-none"
+            className="w-full px-3 py-2 text-sm text-foreground resize-none"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="input-contact-message"
           />
@@ -1091,7 +1139,7 @@ function FeedbackPanel({ onBack }: { onBack: () => void }) {
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full px-3 py-2 text-sm text-white"
+            className="w-full px-3 py-2 text-sm text-foreground"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="select-feedback-category"
           >
@@ -1107,7 +1155,7 @@ function FeedbackPanel({ onBack }: { onBack: () => void }) {
             onChange={(e) => setFreeText(e.target.value)}
             placeholder="What happened, or what you'd change..."
             rows={5}
-            className="w-full px-3 py-2 text-sm text-white resize-none"
+            className="w-full px-3 py-2 text-sm text-foreground resize-none"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="input-feedback-text"
           />
@@ -1182,7 +1230,7 @@ function ChangeEmailPanel({ onBack }: { onBack: () => void }) {
               <Mail className="w-7 h-7" style={{ color: INK }} />
             </div>
             <p className="mb-2" style={{ ...SERIF, color: TEXT, fontSize: "18px" }}>Email updated</p>
-            <p className="text-sm" style={{ color: MUTED }}>Your account email is now <strong style={{ color: "#FFFFFF" }}>{email}</strong></p>
+            <p className="text-sm" style={{ color: MUTED }}>Your account email is now <strong style={{ color: TEXT }}>{email}</strong></p>
           </div>
         ) : (
           <>
@@ -1193,7 +1241,7 @@ function ChangeEmailPanel({ onBack }: { onBack: () => void }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="new@example.com"
-                className="w-full px-3 py-2 text-sm text-white"
+                className="w-full px-3 py-2 text-sm text-foreground"
                 style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
                 data-testid="input-new-email"
               />
@@ -1204,7 +1252,7 @@ function ChangeEmailPanel({ onBack }: { onBack: () => void }) {
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-3 py-2 text-sm text-white"
+                className="w-full px-3 py-2 text-sm text-foreground"
                 style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
                 data-testid="input-email-current-password"
               />
@@ -1271,7 +1319,7 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
             value={current}
             onChange={(e) => setCurrent(e.target.value)}
             placeholder="••••••••"
-            className="w-full px-3 py-2 text-sm text-white"
+            className="w-full px-3 py-2 text-sm text-foreground"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="input-current-password"
           />
@@ -1282,7 +1330,7 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
             value={newPass}
             onChange={(e) => setNewPass(e.target.value)}
             placeholder="••••••••"
-            className="w-full px-3 py-2 text-sm text-white"
+            className="w-full px-3 py-2 text-sm text-foreground"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="input-new-password"
           />
@@ -1293,7 +1341,7 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             placeholder="••••••••"
-            className="w-full px-3 py-2 text-sm text-white"
+            className="w-full px-3 py-2 text-sm text-foreground"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="input-confirm-password"
           />
@@ -1308,21 +1356,21 @@ function TermsPanel({ onBack }: { onBack: () => void }) {
   return (
     <Panel title="Terms of Service" onBack={onBack}>
       <div style={{ padding: "16px", color: MUTED, fontSize: "13px", lineHeight: "1.8" }}>
-        <p className="text-white font-semibold mb-2">Last updated: March 2026</p>
+        <p className="text-foreground font-semibold mb-2">Last updated: March 2026</p>
         <p className="mb-4">Welcome to Destira. By using our service, you agree to these Terms of Service.</p>
-        <p className="text-white font-semibold mb-1">1. Eligibility</p>
+        <p className="text-foreground font-semibold mb-1">1. Eligibility</p>
         <p className="mb-4">You must be at least 18 years old to use Destira. By registering, you confirm you meet this requirement.</p>
-        <p className="text-white font-semibold mb-1">2. Acceptable Use</p>
+        <p className="text-foreground font-semibold mb-1">2. Acceptable Use</p>
         <p className="mb-4">You agree not to harass, impersonate, or harm other users. Automated access, scraping, or abuse of our AI features is prohibited.</p>
-        <p className="text-white font-semibold mb-1">3. Content</p>
+        <p className="text-foreground font-semibold mb-1">3. Content</p>
         <p className="mb-4">You retain ownership of content you post but grant Destira a license to display it within the platform.</p>
-        <p className="text-white font-semibold mb-1">4. Subscriptions</p>
+        <p className="text-foreground font-semibold mb-1">4. Subscriptions</p>
         <p className="mb-4">Paid subscriptions auto-renew. Cancel anytime through your billing settings. Refunds are handled per our refund policy.</p>
-        <p className="text-white font-semibold mb-1">5. Termination</p>
+        <p className="text-foreground font-semibold mb-1">5. Termination</p>
         <p className="mb-4">Destira may suspend or terminate accounts that violate these Terms, engage in fraudulent activity, or otherwise abuse the platform at our sole discretion.</p>
-        <p className="text-white font-semibold mb-1">6. Limitation of Liability</p>
+        <p className="text-foreground font-semibold mb-1">6. Limitation of Liability</p>
         <p className="mb-4">Destira is provided as-is. We are not responsible for outcomes of matches or interactions between users.</p>
-        <p className="text-white font-semibold mb-1">7. Contact</p>
+        <p className="text-foreground font-semibold mb-1">7. Contact</p>
         <p>For questions, use the Contact Us page within the app or email support@destira.date.</p>
       </div>
     </Panel>
@@ -1333,19 +1381,19 @@ function PrivacyPolicyPanel({ onBack }: { onBack: () => void }) {
   return (
     <Panel title="Privacy Policy" onBack={onBack}>
       <div style={{ padding: "16px", color: MUTED, fontSize: "13px", lineHeight: "1.8" }}>
-        <p className="text-white font-semibold mb-2">Last updated: March 2026</p>
+        <p className="text-foreground font-semibold mb-2">Last updated: March 2026</p>
         <p className="mb-4">Destira is committed to protecting your privacy.</p>
-        <p className="text-white font-semibold mb-1">Data We Collect</p>
+        <p className="text-foreground font-semibold mb-1">Data We Collect</p>
         <p className="mb-4">We collect your name, email, profile data, location (if permitted), and conversation data to power AI features.</p>
-        <p className="text-white font-semibold mb-1">How We Use Data</p>
+        <p className="text-foreground font-semibold mb-1">How We Use Data</p>
         <p className="mb-4">Your data trains your personal AI Twin and improves match quality. We never sell personal data to third parties.</p>
-        <p className="text-white font-semibold mb-1">AI Processing</p>
+        <p className="text-foreground font-semibold mb-1">AI Processing</p>
         <p className="mb-4">AI features use Google Vertex AI (Gemini). Data sent to Gemini is subject to Google's data processing terms.</p>
-        <p className="text-white font-semibold mb-1">Data Retention</p>
+        <p className="text-foreground font-semibold mb-1">Data Retention</p>
         <p className="mb-4">You can delete all your data at any time via Settings → Data & Privacy → Delete All Data.</p>
-        <p className="text-white font-semibold mb-1">Cookies</p>
+        <p className="text-foreground font-semibold mb-1">Cookies</p>
         <p className="mb-4">We use session cookies for authentication. No third-party advertising cookies are used.</p>
-        <p className="text-white font-semibold mb-1">Contact</p>
+        <p className="text-foreground font-semibold mb-1">Contact</p>
         <p>Reach us via the Contact Us page for any privacy concerns.</p>
       </div>
     </Panel>
@@ -1389,7 +1437,7 @@ function ClearMemoryPanel({ onBack }: { onBack: () => void }) {
             <button
               onClick={() => clearMutation.mutate()}
               disabled={clearMutation.isPending}
-              className="w-full py-3 text-sm font-semibold text-white"
+              className="w-full py-3 text-sm font-semibold text-foreground"
               style={{ background: "#EF4444", borderRadius: "12px", border: "none", cursor: "pointer" }}
               data-testid="button-confirm-clear-final"
             >
@@ -1518,6 +1566,11 @@ export default function Settings() {
           <ChevronRow icon={Lock} label="Change Password" sublabel="Update your password" onClick={() => setActivePanel("change-password")} testId="row-change-password" />
         </div>
 
+        <div style={SECTION_HEADER_STYLE}>Appearance</div>
+        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+          <AppearanceRow />
+        </div>
+
         <div style={SECTION_HEADER_STYLE}>Twin Settings</div>
         <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ChevronRow icon={Brain} label="Interview AI Twin" onClick={() => setLocation("/twin-chat?from=/settings")} testId="row-twin-chat" />
@@ -1634,7 +1687,7 @@ export default function Settings() {
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="DELETE"
-              className="w-full px-3 py-2 text-sm text-white"
+              className="w-full px-3 py-2 text-sm text-foreground"
               style={{ background: ELEVATED, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
               data-testid="input-delete-confirm"
             />
@@ -1643,7 +1696,7 @@ export default function Settings() {
             <button className="px-4 py-2 text-sm font-medium" style={{ color: MUTED }} onClick={() => { setShowDeleteDialog(false); setDeleteConfirmText(""); }} data-testid="button-cancel-delete">Cancel</button>
             <button
               disabled={deleteConfirmText !== "DELETE" || deleteMutation.isPending}
-              className="px-4 py-2 text-sm font-semibold text-white"
+              className="px-4 py-2 text-sm font-semibold text-foreground"
               style={{ background: deleteConfirmText === "DELETE" ? "#EF4444" : BORDER, borderRadius: "10px", border: "none", cursor: deleteConfirmText === "DELETE" ? "pointer" : "not-allowed" }}
               onClick={() => deleteMutation.mutate()}
               data-testid="button-confirm-delete"

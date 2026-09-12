@@ -470,7 +470,7 @@ export default function TwinChat() {
           <div className="relative w-9 h-9 shrink-0">
             <div
               className="absolute inset-0 rounded-full animate-[vf-breathe_5s_ease-in-out_infinite]"
-              style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint), #2E7F6B)" }}
+              style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint-vivid), #2E7F6B)" }}
             />
           </div>
           <div className="min-w-0">

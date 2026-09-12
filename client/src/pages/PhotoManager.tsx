@@ -516,7 +516,7 @@ function PhotoEditor({
                 {/* active frame — solid cream */}
                 <div
                   className="absolute pointer-events-none motion-reduce:transition-none transition-[left,top,width,height] duration-150"
-                  style={{ left: activePos.left, top: activePos.top, width: activeFrame.w, height: activeFrame.h, border: "2px solid var(--vf-text)" }}
+                  style={{ left: activePos.left, top: activePos.top, width: activeFrame.w, height: activeFrame.h, border: "2px solid hsl(var(--vf-text))" }}
                 />
                 {/* focal ring */}
                 <div

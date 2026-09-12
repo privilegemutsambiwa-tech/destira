@@ -104,20 +104,29 @@ export default {
         // — from the pre-rename "VibeFlow" name. Kept deliberately: renaming it
         // touches hundreds of class names with zero user-visible benefit and a
         // real chance of silently dropping a colour.
+        // Theme-aware: dark values live on bare :root, light overrides under
+        // :root[data-theme="light"] / (prefers-color-scheme: light) — see
+        // index.css. ink/gold/mint/ember/text are wrapped in hsl(.../
+        // <alpha-value>) because they're used with Tailwind's /NN opacity
+        // modifier in ~85 places (bg-vf-mint/20 etc) — that needs a bare HSL
+        // triple behind the scenes, not a hex. The rest are never used with a
+        // modifier, so they stay plain var() referencing a real color value
+        // (hex, or for vf-line an already-translucent rgba — baking in its
+        // own alpha, not meant to take a further modifier).
         vf: {
-          ink: "#0C0910", // page ground
-          surface: "#14101C", // primary card
-          surface2: "#161220", // secondary card
-          line: "rgba(255,255,255,.09)",
-          text: "#F5F0EA",
-          muted: "#A79FB4",
-          faint: "#7E7690", // 12-13px metadata only, never body copy
-          ember: "#FF6B4A", // human action
-          emberSoft: "#FF7A57",
-          mint: "#8FE3C7", // AI-twin layer, never anything else
-          gold: "#E9C46A", // Ember premium only
-          warn: "#FFC46B",
-          soft: "#CFC7DA", // secondary text on dark cards (lighter than vf-muted)
+          ink: "hsl(var(--vf-ink) / <alpha-value>)", // page ground
+          surface: "var(--vf-surface)", // primary card
+          surface2: "var(--vf-surface2)", // secondary card
+          line: "var(--vf-line)",
+          text: "hsl(var(--vf-text) / <alpha-value>)",
+          muted: "var(--vf-muted)",
+          faint: "var(--vf-faint)", // 12-13px metadata only, never body copy
+          ember: "hsl(var(--vf-ember) / <alpha-value>)", // human action
+          emberSoft: "var(--vf-ember-soft)",
+          mint: "hsl(var(--vf-mint) / <alpha-value>)", // AI-twin layer, never anything else
+          gold: "hsl(var(--vf-gold) / <alpha-value>)", // Ember premium only
+          warn: "var(--vf-warn)",
+          soft: "var(--vf-soft)", // secondary text on dark cards (lighter than vf-muted)
         },
       },
       fontFamily: {

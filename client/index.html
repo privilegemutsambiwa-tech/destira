@@ -3,8 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#0C0910" />
+    <meta name="theme-color" content="#0C0910" id="meta-theme-color" />
     <title>Destira</title>
+    <!-- Sets data-theme before first paint — no flash of the wrong theme, and
+         critically no flash of light for a dark-preferring user (the one that
+         actually hurts) — plus the <meta name="theme-color"> above, which a
+         media-attribute pair can't cover once the user has explicitly
+         overridden the OS preference in-app. Synchronous, blocking, in
+         <head>, on purpose: this has to run before the browser's first
+         frame, not just before CSS loads. Kept in lockstep with
+         client/src/hooks/use-theme.ts, the only other place that reads/
+         writes destira-theme or this meta tag. -->
+    <script>
+      (function () {
+        var THEME_COLOR = { dark: "#0C0910", light: "#FBF8F5" };
+        try {
+          var v = localStorage.getItem("destira-theme");
+          var resolved;
+          if (v === "light" || v === "dark") {
+            document.documentElement.setAttribute("data-theme", v);
+            resolved = v;
+          } else {
+            // "system" (or unset/invalid) sets no attribute — index.css's
+            // :root:not([data-theme]) + prefers-color-scheme handles the CSS
+            // side; this just needs the same answer for the meta tag below.
+            resolved = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          }
+          var meta = document.getElementById("meta-theme-color");
+          if (meta) meta.setAttribute("content", THEME_COLOR[resolved]);
+        } catch (e) {
+          /* localStorage/matchMedia unavailable (private mode, old browser)
+             — falls back to the dark default already in the meta tag and
+             the OS-preference CSS path. */
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg" />
     <link rel="icon" type="image/png" sizes="192x192" href="/brand/destira-icon-192.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />

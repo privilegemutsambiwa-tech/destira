@@ -908,7 +908,7 @@ export default function Landing() {
                     <div className="relative w-11 h-11">
                       <div
                         className="absolute inset-0 rounded-full animate-[vf-breathe_5s_ease-in-out_infinite]"
-                        style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint), #2E7F6B)" }}
+                        style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint-vivid), #2E7F6B)" }}
                       />
                     </div>
                   ),

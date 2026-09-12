@@ -90,7 +90,7 @@ function CardGallery({ photos, initial }: { photos: GalleryPhoto[]; initial: str
   if (count === 0) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-vf-surface2">
-        <span className="font-serif text-white/25" style={{ fontSize: "96px" }}>
+        <span className="font-serif text-vf-text/20" style={{ fontSize: "96px" }}>
           {initial}
         </span>
       </div>

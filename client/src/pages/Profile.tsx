@@ -150,7 +150,7 @@ function TwinOrb({ size = 44 }: { size?: number }) {
       style={{
         width: size,
         height: size,
-        background: "radial-gradient(circle at 35% 30%, var(--vf-mint), #2E7F6B)",
+        background: "radial-gradient(circle at 35% 30%, var(--vf-mint-vivid), #2E7F6B)",
       }}
       aria-hidden
     />

@@ -40,7 +40,7 @@ export function LocationPermissionModal() {
         <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-mint mb-3 flex items-center gap-2">
           <span
             className="w-2 h-2 rounded-full bg-vf-mint animate-[vf-pulse_2.6s_ease-in-out_infinite] motion-reduce:animate-none"
-            style={{ boxShadow: "0 0 10px var(--vf-mint)" }}
+            style={{ boxShadow: "0 0 10px var(--vf-mint-vivid)" }}
           />
           your twin
         </div>

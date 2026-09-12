@@ -344,7 +344,7 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
       <div className="flex items-center gap-2">
         <span
           className="block w-[11px] h-[11px] rounded-full shrink-0 animate-[vf-breathe_4.5s_ease-in-out_infinite] motion-reduce:animate-none"
-          style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint), #2E7F6B)" }}
+          style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint-vivid), #2E7F6B)" }}
         />
         <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint">When your twins talked</span>
       </div>

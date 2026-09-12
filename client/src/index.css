@@ -10,17 +10,108 @@
   --font-mono: 'DM Mono', monospace;
 
   /* Destira redesign palette (mirrors tailwind.config.ts theme.extend.colors.vf).
-     Single source for the few spots — conic/radial gradient stops — that
-     Tailwind utility classes can't express and need a raw CSS value. */
-  --vf-ink: #0C0910;
+     Dark is the unconditional default on bare :root — light overrides live in
+     the two blocks below (System-follows-OS and the explicit toggle). Where a
+     component needs one of these as a real, standalone color value (a
+     gradient stop, a box-shadow, anything outside a Tailwind class) wrap it —
+     hsl(var(--vf-mint)) — for ink/gold/mint/ember/text specifically, which
+     are bare HSL triples (not hex) because they're used with Tailwind's /NN
+     opacity modifier in ~85 places elsewhere and that needs a triple, not a
+     hex, behind hsl(.../<alpha-value>). Everything else here is a plain
+     color value (hex, or for --vf-line an already-translucent rgba) and
+     never takes a further modifier. */
+  --vf-ink: 266 28% 5%;            /* #0C0910 */
   --vf-surface: #14101C;
   --vf-surface2: #161220;
-  --vf-text: #F5F0EA;
-  --vf-ember: #FF6B4A;
+  --vf-line: rgba(255, 255, 255, 0.09);
+  --vf-text: 33 35% 94%;           /* #F5F0EA */
+  --vf-muted: #A79FB4;
+  --vf-faint: #7E7690;             /* 12-13px metadata only, never body copy */
+  --vf-ember: 11 100% 65%;         /* #FF6B4A */
   --vf-ember-soft: #FF7A57;
-  --vf-mint: #8FE3C7;
-  --vf-gold: #E9C46A;
+  --vf-mint: 160 60% 73%;          /* #8FE3C7 — AI-twin layer, never anything else */
+  --vf-mint-vivid: #8FE3C7;        /* decorative-only (the twin orb, the dial's glow) — kept vivid regardless of theme; --vf-mint itself darkens in light mode for text/border contrast and would flatten into the orb's own gradient endpoint otherwise */
+  --vf-gold: 43 74% 66%;           /* #E9C46A — Ember premium only */
   --vf-warn: #FFC46B;
+  --vf-soft: #CFC7DA;              /* secondary text on dark cards (lighter than vf-muted) */
+  --vf-dial-remainder: rgba(255, 255, 255, 0.08); /* resonance-dial's unfilled arc */
+  --vf-dial-glow: rgba(255, 122, 87, 0.28);       /* resonance-dial's outer breathing glow */
+  --vf-elevated: rgba(255, 255, 255, 0.05);       /* input-fill tint one step off the page ground */
+
+  color-scheme: dark;
+}
+
+/* System preference = light, and no explicit in-app override */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --vf-ink: 30 43% 97%;          /* #FBF8F5 — warm off-white, not pure white */
+    --vf-surface: #FFFFFF;
+    --vf-surface2: #F6F1EC;
+    --vf-line: rgba(28, 20, 24, 0.14);
+    --vf-text: 320 13% 9%;         /* #1A1418 */
+    --vf-muted: #6B5F68;
+    --vf-faint: #7A6E76;
+    --vf-ember: 11 55% 45%;        /* #B34B34 — darker/lower-lightness, same hue; works as text (5:1 on ground) and as a filled-button background under white text (5.3:1) */
+    --vf-ember-soft: #C25A3D;
+    --vf-mint: 160 23% 36%;        /* #487264 — 5.1:1 on ground; the pale mint-tint fills elsewhere come for free from this at low opacity (bg-vf-mint/10 etc), not a separate token */
+    --vf-mint-vivid: #5FBFA0;
+    --vf-gold: 43 38% 36%;         /* #806C3A — 4.8:1 on ground */
+    --vf-warn: #8C6C3B;
+    --vf-soft: #4A3F47;
+    --vf-dial-remainder: rgba(28, 20, 24, 0.06);
+    --vf-dial-glow: rgba(179, 75, 52, 0.18);
+    --vf-elevated: rgba(28, 20, 24, 0.04);
+    color-scheme: light;
+  }
+}
+
+/* Explicit in-app choice — wins over OS preference in both directions */
+:root[data-theme="light"] {
+  --vf-ink: 30 43% 97%;
+  --vf-surface: #FFFFFF;
+  --vf-surface2: #F6F1EC;
+  --vf-line: rgba(28, 20, 24, 0.14);
+  --vf-text: 320 13% 9%;
+  --vf-muted: #6B5F68;
+  --vf-faint: #7A6E76;
+  --vf-ember: 11 55% 45%;
+  --vf-ember-soft: #C25A3D;
+  --vf-mint: 160 23% 36%;
+  --vf-mint-vivid: #5FBFA0;
+  --vf-gold: 43 38% 36%;
+  --vf-warn: #8C6C3B;
+  --vf-soft: #4A3F47;
+  --vf-dial-remainder: rgba(28, 20, 24, 0.06);
+  --vf-dial-glow: rgba(179, 75, 52, 0.18);
+  --vf-elevated: rgba(28, 20, 24, 0.04);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  /* Explicit Dark always wins over OS preference too — bare :root above is
+     already dark, so this only needs to exist to override the (prefers-
+     color-scheme: light) block on a light-OS device that explicitly chose
+     Dark in-app. Values match bare :root exactly. */
+  --vf-ink: 266 28% 5%;
+  --vf-surface: #14101C;
+  --vf-surface2: #161220;
+  --vf-line: rgba(255, 255, 255, 0.09);
+  --vf-text: 33 35% 94%;
+  --vf-muted: #A79FB4;
+  --vf-faint: #7E7690;
+  --vf-ember: 11 100% 65%;
+  --vf-ember-soft: #FF7A57;
+  --vf-mint: 160 60% 73%;
+  --vf-mint-vivid: #8FE3C7;
+  --vf-gold: 43 74% 66%;
+  --vf-warn: #FFC46B;
+  --vf-soft: #CFC7DA;
+  --vf-dial-remainder: rgba(255, 255, 255, 0.08);
+  --vf-dial-glow: rgba(255, 122, 87, 0.28);
+  --vf-elevated: rgba(255, 255, 255, 0.05);
+  color-scheme: dark;
+}
+
+:root {
 
   /* shadcn/ui tokens, repointed onto the Destira palette above — these used
      to be a leftover pre-redesign purple system (#7C3AED primary, #EC4899
@@ -34,11 +125,21 @@
      calendar.tsx, table.tsx, toast.tsx). No app-only default theme yet
      (App.tsx is still dark-only until the light theme lands) so this is the
      one and only palette for now. */
-  --background: 266 28% 5%;          /* vf-ink #0C0910 */
-  --foreground: 33 35% 94%;          /* vf-text #F5F0EA */
-
-  --primary: 11 100% 65%;            /* vf-ember #FF6B4A */
-  --primary-foreground: 266 28% 5%;  /* vf-ink — dark text on a filled ember control */
+  /* Six of these just reference the already-theme-aware vf-* triples above —
+     no separate light override needed, they inherit automatically. The rest
+     (secondary/muted/accent/border/card/popover/input/sidebar's non-ember
+     bits) don't map 1:1 onto a vf-* token, so they get their own explicit
+     light values below under the same two selectors the vf-* overrides use. */
+  --background: var(--vf-ink);
+  --foreground: var(--vf-text);
+  --primary: var(--vf-ember);
+  --primary-foreground: var(--vf-ink);  /* dark-on-ember in dark mode, and still correct in light mode — vf-ink is the light ground there, which is exactly the "dark text" a light-mode filled ember button needs */
+  --ring: var(--vf-ember);              /* focus rings are ember, not purple */
+  --primary-border: hsl(var(--vf-ember));
+  --sidebar-primary: var(--vf-ember);
+  --sidebar-primary-foreground: var(--vf-ink);
+  --sidebar-ring: var(--vf-ember);
+  --sidebar-primary-border: hsl(var(--vf-ember));
 
   --secondary: 257 28% 10%;          /* vf-surface2 #161220 — neutral, not mint/gold (those are semantic-only) */
   --secondary-foreground: 33 35% 94%;
@@ -49,26 +150,24 @@
   --accent: 259 26% 12%;             /* #1C1727 — one step lighter than surface2, for hover/highlight states */
   --accent-foreground: 33 35% 94%;
 
-  --destructive: 0 84% 60%;          /* #EF4444 — matches the admin console's ALERT colour */
+  --destructive: 0 84% 60%;          /* #EF4444 — matches the admin console's ALERT colour; same in both themes, red-on-red-adjacent doesn't need re-tuning */
   --destructive-foreground: 0 0% 100%;
+  --destructive-border: #EF4444;
 
   --border: 266 10% 14%;             /* #221F26 — vf-line's rgba(255,255,255,.09) flattened over vf-ink */
   --input: 257 28% 10%;              /* vf-surface2 */
-  --ring: 11 100% 65%;               /* vf-ember — focus rings are ember, not purple */
 
   --card: 260 27% 9%;                /* vf-surface #14101C */
   --card-foreground: 33 35% 94%;
-  --card-border: 266 10% 14%;        /* tailwind.config.ts wraps this one in hsl(), unlike primary/secondary/etc below — needs a bare HSL triple, not a hex */
+  --card-border: 266 10% 14%;        /* tailwind.config.ts wraps this one in hsl(), unlike primary/secondary/etc — needs a bare HSL triple, not a hex */
 
   --popover: 257 28% 10%;            /* vf-surface2 */
   --popover-foreground: 33 35% 94%;
   --popover-border: 266 10% 14%;
 
-  --primary-border: #FF6B4A;
   --secondary-border: #221F26;
   --muted-border: #221F26;
   --accent-border: #221F26;
-  --destructive-border: #EF4444;
 
   /* Sidebar — shadcn's ui/sidebar.tsx isn't used anywhere in this app
      (layout-shell.tsx is hand-rolled), but repointed rather than left
@@ -76,21 +175,77 @@
   --sidebar: 257 28% 10%;
   --sidebar-foreground: 33 35% 94%;
   --sidebar-border: 266 10% 14%;
-  --sidebar-ring: 11 100% 65%;
-  --sidebar-primary: 11 100% 65%;
-  --sidebar-primary-foreground: 266 28% 5%;
   --sidebar-accent: 259 26% 12%;
   --sidebar-accent-foreground: 33 35% 94%;
-  --sidebar-primary-border: #FF6B4A;
   --sidebar-accent-border: #221F26;
 
   /* Cards: 20px per new spec */
   --radius: 1.25rem;
 
   /* Shadows — dark theme relies on borders for structure, so these stay
-     subtle/rare; kept only because .hover-elevate still references them. */
+     subtle/rare; light theme actually uses these (white cards need to lift
+     off the warm ground somehow, and it can't be by lightening further). */
   --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4);
   --shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --secondary: 30 36% 95%;          /* vf-surface2 #F6F1EC */
+    --secondary-foreground: 320 13% 9%;
+    --muted: 30 36% 95%;
+    --muted-foreground: 315 6% 40%;   /* vf-muted #6B5F68 */
+    --accent: 32 35% 90%;             /* #EFE7DE — one step deeper than surface2 */
+    --accent-foreground: 320 13% 9%;
+    --border: 20 8% 85%;              /* #DCD8D6 — vf-line flattened over the light ground */
+    --input: 30 36% 95%;
+    --card: 0 0% 100%;                /* vf-surface #FFFFFF */
+    --card-foreground: 320 13% 9%;
+    --card-border: 20 8% 85%;
+    --popover: 30 36% 95%;
+    --popover-foreground: 320 13% 9%;
+    --popover-border: 20 8% 85%;
+    --secondary-border: #DCD8D6;
+    --muted-border: #DCD8D6;
+    --accent-border: #DCD8D6;
+    --sidebar: 30 36% 95%;
+    --sidebar-foreground: 320 13% 9%;
+    --sidebar-border: 20 8% 85%;
+    --sidebar-accent: 32 35% 90%;
+    --sidebar-accent-foreground: 320 13% 9%;
+    --sidebar-accent-border: #DCD8D6;
+    /* White cards on a warm ground need a real shadow to read as elevated —
+       borders alone (the dark-theme approach) don't show up on off-white. */
+    --shadow-card: 0 2px 12px rgba(28, 20, 24, 0.06), 0 1px 3px rgba(28, 20, 24, 0.08);
+    --shadow-hover: 0 8px 28px rgba(28, 20, 24, 0.10), 0 2px 6px rgba(28, 20, 24, 0.08);
+  }
+}
+:root[data-theme="light"] {
+  --secondary: 30 36% 95%;
+  --secondary-foreground: 320 13% 9%;
+  --muted: 30 36% 95%;
+  --muted-foreground: 315 6% 40%;
+  --accent: 32 35% 90%;
+  --accent-foreground: 320 13% 9%;
+  --border: 20 8% 85%;
+  --input: 30 36% 95%;
+  --card: 0 0% 100%;
+  --card-foreground: 320 13% 9%;
+  --card-border: 20 8% 85%;
+  --popover: 30 36% 95%;
+  --popover-foreground: 320 13% 9%;
+  --popover-border: 20 8% 85%;
+  --secondary-border: #DCD8D6;
+  --muted-border: #DCD8D6;
+  --accent-border: #DCD8D6;
+  --sidebar: 30 36% 95%;
+  --sidebar-foreground: 320 13% 9%;
+  --sidebar-border: 20 8% 85%;
+  --sidebar-accent: 32 35% 90%;
+  --sidebar-accent-foreground: 320 13% 9%;
+  --sidebar-accent-border: #DCD8D6;
+  --shadow-card: 0 2px 12px rgba(28, 20, 24, 0.06), 0 1px 3px rgba(28, 20, 24, 0.08);
+  --shadow-hover: 0 8px 28px rgba(28, 20, 24, 0.10), 0 2px 6px rgba(28, 20, 24, 0.08);
 }
 
 @layer base {
@@ -98,21 +253,16 @@
     @apply border-border;
   }
 
-  html {
-    /* Force dark mode always */
-    color-scheme: dark;
-  }
-
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
-    background-color: var(--vf-ink);
-    color: var(--vf-text);
+    background-color: hsl(var(--vf-ink));
+    color: hsl(var(--vf-text));
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-sans);
-    @apply font-bold text-white;
+    @apply font-bold text-foreground;
     letter-spacing: -0.5px;
   }
 
@@ -168,7 +318,7 @@
      something of yours to act on" rather than borrowing mint (twin-layer
      only) or gold (premium only). */
   .story-ring-active {
-    background: conic-gradient(from 0deg, var(--vf-ember), var(--vf-ember-soft), var(--vf-ember));
+    background: conic-gradient(from 0deg, hsl(var(--vf-ember)), var(--vf-ember-soft), hsl(var(--vf-ember)));
     border-radius: 50%;
     padding: 2.5px;
     animation: spin-story-ring 2.5s linear infinite;

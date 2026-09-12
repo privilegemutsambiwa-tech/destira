@@ -78,7 +78,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
               <DestiraLockup orientation="horizontal" size={30} />
               <span
                 className="w-[7px] h-[7px] rounded-full bg-vf-mint animate-[vf-pulse_2.6s_ease-in-out_infinite] shrink-0"
-                style={{ boxShadow: "0 0 10px var(--vf-mint)" }}
+                style={{ boxShadow: "0 0 10px var(--vf-mint-vivid)" }}
               />
             </div>
           </Link>
