@@ -1198,21 +1198,64 @@ export type Plan = typeof plans.$inferSelect;
 
 // ── Admin console ──────────────────────────────────────────────────────
 // No platform admin role exists anywhere else. A `users` row is never itself
-// admin — admin-ness is an active (revokedAt IS NULL) row here. The FIRST
-// admin is seeded by scripts/seed-admin.ts only; there is no endpoint, ever,
-// that can write to this table. See shared/admin.ts for the role vocabulary
-// and server/admin/ for enforcement.
+// admin — admin-ness is an active (revokedAt IS NULL, suspendedAt IS NULL)
+// row here. The FIRST admin (the owner) is seeded by scripts/seed-admin.ts
+// only — there is still no self-promotion path. Every other grant comes
+// through server/admin/team.ts's invite+accept flow or an owner's role
+// change, both gated and audited; see shared/admin.ts for the role
+// vocabulary and server/admin/ for enforcement.
 export const adminUsers = pgTable("admin_users", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id).unique(),
   role: text("role").notNull(), // read_only | support | admin | owner — shared/admin.ts
   totpSecret: text("totp_secret"), // AES-256-GCM encrypted, never plaintext — server/admin/crypto.ts
   totpEnabledAt: timestamp("totp_enabled_at"),
+  lastSignInAt: timestamp("last_sign_in_at"),
   grantedBy: varchar("granted_by").references(() => users.id),
   grantedAt: timestamp("granted_at").defaultNow(),
+  // Suspend: immediate, reversible, sessions killed, row kept as-is.
+  suspendedAt: timestamp("suspended_at"),
+  suspendedBy: varchar("suspended_by").references(() => users.id),
+  suspendedReason: text("suspended_reason"),
+  // Remove: ends the grant. Distinct from suspend so the two never collapse
+  // into one ambiguous "revoked" flag — a removed admin's row (and every
+  // adminAuditLog row referencing them) is never deleted.
   revokedAt: timestamp("revoked_at"), // soft-revoke only — no delete path, history is kept
   revokedBy: varchar("revoked_by").references(() => users.id),
+  revokedReason: text("revoked_reason"),
 });
+
+// A single-use, time-limited grant of admin access, sent by email. The raw
+// token is never stored — only its SHA-256 (server/admin/crypto.ts) — so a
+// DB dump alone can't mint a working invite link, same posture as TOTP
+// secrets. accept-invite (pre-auth, like login) consumes it.
+export const adminInvites = pgTable("admin_invites", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  role: text("role").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  invitedBy: varchar("invited_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  acceptedAt: timestamp("accepted_at"),
+  revokedAt: timestamp("revoked_at"),
+  revokedBy: varchar("revoked_by").references(() => users.id),
+});
+
+// One row per issued recovery code, hashed the same way as invite tokens.
+// Consumed (usedAt set) at most once each; regenerating deletes the unused
+// ones and issues a fresh batch, shown exactly once in the response.
+export const adminRecoveryCodes = pgTable(
+  "admin_recovery_codes",
+  {
+    id: serial("id").primaryKey(),
+    adminUserId: varchar("admin_user_id").notNull().references(() => users.id),
+    codeHash: text("code_hash").notNull().unique(),
+    createdAt: timestamp("created_at").defaultNow(),
+    usedAt: timestamp("used_at"),
+  },
+  (t) => [index("admin_recovery_codes_admin_idx").on(t.adminUserId)],
+);
 
 // Append-only. Written BEFORE the read or write it covers, not after. No
 // update/delete route exists for this table, for any role, including owner.

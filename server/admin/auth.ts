@@ -9,15 +9,25 @@
 
 import type { Express, Request, Response, NextFunction, RequestHandler } from "express";
 import { db } from "../db";
-import { adminUsers, users } from "@shared/schema";
+import { adminUsers, adminRecoveryCodes, adminInvites, users } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { authenticator } from "otplib";
 import QRCode from "qrcode";
-import { verifyPassword } from "../replit_integrations/auth/password";
-import { encryptSecret, decryptSecret } from "./crypto";
-import { ADMIN_SESSION_ABSOLUTE_MS } from "./session";
+import { verifyPassword, hashPassword } from "../replit_integrations/auth/password";
+import { authStorage } from "../replit_integrations/auth/storage";
+import { encryptSecret, decryptSecret, generateRecoveryCode, hashOpaqueToken } from "./crypto";
+import { ADMIN_SESSION_ABSOLUTE_MS, touchSessionMeta } from "./session";
 import { auditAdmin } from "./audit";
 import { adminRoleRank, meetsAdminRole, type AdminRole } from "@shared/admin";
+
+const RECOVERY_CODE_COUNT = 10;
+const RECOVERY_CODE_SHAPE = /^[A-Z0-9]{4}-[A-Z0-9]{4}$/i;
+
+async function issueRecoveryCodes(adminUserId: string): Promise<string[]> {
+  const codes = Array.from({ length: RECOVERY_CODE_COUNT }, () => generateRecoveryCode());
+  await db.insert(adminRecoveryCodes).values(codes.map((code) => ({ adminUserId, codeHash: hashOpaqueToken(code) })));
+  return codes; // raw — the only time these are ever readable again
+}
 
 // ── login attempt lockout — tighter than the member login (5/15min vs 8/15min) ──
 const attempts = new Map<string, { count: number; firstAttempt: number }>();
@@ -63,7 +73,13 @@ async function loadActiveAdmin(userId: string) {
   const [row] = await db
     .select()
     .from(adminUsers)
-    .where(and(eq(adminUsers.userId, userId), isNull(adminUsers.revokedAt)));
+    .where(and(eq(adminUsers.userId, userId), isNull(adminUsers.revokedAt), isNull(adminUsers.suspendedAt)));
+  return row;
+}
+/** Unfiltered — requireAdmin uses this so it can tell a suspended admin
+ *  from a removed one instead of one generic "access revoked". */
+async function loadAdminRow(userId: string) {
+  const [row] = await db.select().from(adminUsers).where(eq(adminUsers.userId, userId));
   return row;
 }
 
@@ -82,14 +98,19 @@ export function requireAdmin(minRole: AdminRole): RequestHandler {
       return res.status(401).json({ message: "2FA required" });
     }
 
-    const admin = await loadActiveAdmin(adminUserId);
-    if (!admin) {
+    const admin = await loadAdminRow(adminUserId);
+    if (!admin || admin.revokedAt) {
       req.session.destroy(() => {});
-      return res.status(403).json({ message: "Access revoked" });
+      return res.status(403).json({ message: "Access removed", code: "ADMIN_REMOVED" });
+    }
+    if (admin.suspendedAt) {
+      req.session.destroy(() => {});
+      return res.status(403).json({ message: "This admin account is suspended", code: "ADMIN_SUSPENDED" });
     }
     if (!meetsAdminRole(admin.role, minRole)) {
       return res.status(403).json({ message: "Insufficient role" });
     }
+    touchSessionMeta(req);
     (req as any).admin = admin;
     next();
   };
@@ -155,6 +176,8 @@ export function registerAdminAuthRoutes(app: Express) {
       req.session.adminUserId = user.id;
       req.session.adminLoginAt = Date.now();
       req.session.totpVerifiedAt = undefined; // TOTP is a separate step, every login
+      touchSessionMeta(req);
+      await db.update(adminUsers).set({ lastSignInAt: new Date() }).where(eq(adminUsers.id, admin.id));
       await auditAdmin(req, user.id, "admin.login", { details: { totpEnrolled: !!admin.totpEnabledAt } });
       res.json({ ok: true, totpEnrolled: !!admin.totpEnabledAt });
     } catch (e) {
@@ -190,23 +213,46 @@ export function registerAdminAuthRoutes(app: Express) {
   app.post("/api/admin/auth/totp/verify", async (req, res) => {
     const adminUserId = req.session?.adminUserId;
     if (!adminUserId) return res.sendStatus(401);
-    const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
-    if (!/^\d{6}$/.test(code)) return res.status(400).json({ message: "Enter the 6-digit code" });
+    const raw = typeof req.body?.code === "string" ? req.body.code.trim() : "";
+    const isRecoveryShape = RECOVERY_CODE_SHAPE.test(raw);
+    if (!/^\d{6}$/.test(raw) && !isRecoveryShape) {
+      return res.status(400).json({ message: "Enter the 6-digit code, or a recovery code" });
+    }
     try {
       const admin = await loadActiveAdmin(adminUserId);
       if (!admin?.totpSecret) return res.status(400).json({ message: "2FA isn't set up yet" });
-      const secret = decryptSecret(admin.totpSecret);
-      const valid = authenticator.verify({ token: code, secret });
+
+      let valid = false;
+      if (isRecoveryShape) {
+        const hash = hashOpaqueToken(raw.toUpperCase());
+        const [row] = await db
+          .select()
+          .from(adminRecoveryCodes)
+          .where(and(eq(adminRecoveryCodes.adminUserId, adminUserId), eq(adminRecoveryCodes.codeHash, hash), isNull(adminRecoveryCodes.usedAt)));
+        if (row) {
+          await db.update(adminRecoveryCodes).set({ usedAt: new Date() }).where(eq(adminRecoveryCodes.id, row.id));
+          valid = true;
+          await auditAdmin(req, adminUserId, "admin.totp_recovery_code_used");
+        }
+      } else {
+        const secret = decryptSecret(admin.totpSecret);
+        valid = authenticator.verify({ token: raw, secret });
+      }
       if (!valid) {
         await auditAdmin(req, adminUserId, "admin.totp_verify_failed");
-        return res.status(401).json({ message: "Wrong code" });
+        return res.status(401).json({ message: isRecoveryShape ? "That recovery code isn't valid or was already used" : "Wrong code" });
       }
       req.session.totpVerifiedAt = Date.now();
+      touchSessionMeta(req);
+
+      let recoveryCodes: string[] | undefined;
       if (!admin.totpEnabledAt) {
         await db.update(adminUsers).set({ totpEnabledAt: new Date() }).where(eq(adminUsers.id, admin.id));
+        recoveryCodes = await issueRecoveryCodes(adminUserId);
+        await auditAdmin(req, adminUserId, "admin.totp_enabled");
       }
       await auditAdmin(req, adminUserId, "admin.totp_verify_ok");
-      res.json({ ok: true, role: admin.role });
+      res.json({ ok: true, role: admin.role, ...(recoveryCodes ? { recoveryCodes } : {}) });
     } catch (e) {
       console.error("[admin] totp verify error:", e);
       res.status(500).json({ message: "Verification failed" });
@@ -241,6 +287,60 @@ export function registerAdminAuthRoutes(app: Express) {
 
   app.post("/api/admin/auth/logout", (req, res) => {
     req.session?.destroy(() => res.json({ ok: true }));
+  });
+
+  // Invite preview — lets the accept-invite page show who/what before
+  // asking for a password. Never reveals which case failed beyond "not
+  // usable", same generic-failure posture as login.
+  app.get("/api/admin/auth/invite-info", async (req, res) => {
+    const token = typeof req.query.token === "string" ? req.query.token : "";
+    if (!token) return res.status(400).json({ message: "Missing invite token" });
+    try {
+      const hash = hashOpaqueToken(token);
+      const [invite] = await db.select().from(adminInvites).where(eq(adminInvites.tokenHash, hash));
+      if (!invite || invite.revokedAt || invite.acceptedAt || invite.expiresAt < new Date()) {
+        return res.status(404).json({ message: "This invite link isn't usable — it may be expired, already used, or revoked." });
+      }
+      res.json({ email: invite.email, role: invite.role, expiresAt: invite.expiresAt });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to load invite" });
+    }
+  });
+
+  app.post("/api/admin/auth/accept-invite", async (req, res) => {
+    const token = typeof req.body?.token === "string" ? req.body.token : "";
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!token) return res.status(400).json({ message: "Missing invite token" });
+    if (password.length < 8) return res.status(400).json({ message: "Password must be at least 8 characters" });
+    try {
+      const hash = hashOpaqueToken(token);
+      const [invite] = await db.select().from(adminInvites).where(eq(adminInvites.tokenHash, hash));
+      if (!invite || invite.revokedAt || invite.acceptedAt || invite.expiresAt < new Date()) {
+        return res.status(404).json({ message: "This invite link isn't usable — it may be expired, already used, or revoked." });
+      }
+      const existingUser = await authStorage.getUserByEmail(invite.email);
+      if (existingUser) {
+        return res.status(409).json({ message: "An account with this email already exists — ask an owner to send a new invite." });
+      }
+      const passwordHash = await hashPassword(password);
+      const user = await authStorage.createUser({ email: invite.email, passwordHash });
+      const [adminRow] = await db.insert(adminUsers).values({ userId: user.id, role: invite.role, grantedBy: invite.invitedBy }).returning();
+      await db.update(adminInvites).set({ acceptedAt: new Date() }).where(eq(adminInvites.id, invite.id));
+
+      req.session.adminUserId = user.id;
+      req.session.adminLoginAt = Date.now();
+      req.session.totpVerifiedAt = undefined; // straight into forced enrollment, same as any first login
+      touchSessionMeta(req);
+      await db.update(adminUsers).set({ lastSignInAt: new Date() }).where(eq(adminUsers.id, adminRow.id));
+      await auditAdmin(req, user.id, "admin.invite_accepted", { details: { role: invite.role, invitedBy: invite.invitedBy } });
+      res.json({ ok: true });
+    } catch (e: any) {
+      if (e?.code === "23505") {
+        return res.status(409).json({ message: "An account with this email already exists — ask an owner to send a new invite." });
+      }
+      console.error("[admin] accept-invite error:", e);
+      res.status(500).json({ message: "Failed to accept invite" });
+    }
   });
 }
 

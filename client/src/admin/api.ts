@@ -6,10 +6,12 @@
 export class AdminApiError extends Error {
   status: number;
   stepUpRequired?: boolean;
-  constructor(status: number, message: string, stepUpRequired?: boolean) {
+  code?: string;
+  constructor(status: number, message: string, stepUpRequired?: boolean, code?: string) {
     super(message);
     this.status = status;
     this.stepUpRequired = stepUpRequired;
+    this.code = code;
   }
 }
 
@@ -26,7 +28,7 @@ export async function adminFetch(path: string, init?: RequestInit): Promise<any>
     /* empty body */
   }
   if (!res.ok) {
-    throw new AdminApiError(res.status, body?.message || res.statusText, body?.stepUpRequired);
+    throw new AdminApiError(res.status, body?.message || res.statusText, body?.stepUpRequired, body?.code);
   }
   return body;
 }

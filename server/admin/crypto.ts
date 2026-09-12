@@ -41,3 +41,24 @@ export function decryptSecret(stored: string): string {
   const dec = Buffer.concat([decipher.update(Buffer.from(encB64, "base64")), decipher.final()]);
   return dec.toString("utf8");
 }
+
+// Invite tokens and recovery codes are high-entropy and machine-generated
+// (never user-chosen), so unlike passwords there's no low-entropy guessable
+// space to defend against with a slow hash — a plain SHA-256 of the raw
+// value is the right tool: fast, and the DB never holds anything that works
+// on its own.
+export function generateOpaqueToken(): { raw: string; hash: string } {
+  const raw = crypto.randomBytes(32).toString("base64url");
+  return { raw, hash: hashOpaqueToken(raw) };
+}
+export function hashOpaqueToken(raw: string): string {
+  return crypto.createHash("sha256").update(raw).digest("hex");
+}
+
+// Recovery codes: shorter, grouped for readability when read off a screen —
+// XXXX-XXXX, drawn from an unambiguous alphabet (no 0/O/1/I/L).
+const RECOVERY_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+export function generateRecoveryCode(): string {
+  const chars = Array.from({ length: 8 }, () => RECOVERY_ALPHABET[crypto.randomInt(RECOVERY_ALPHABET.length)]).join("");
+  return `${chars.slice(0, 4)}-${chars.slice(4)}`;
+}

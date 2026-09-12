@@ -31,7 +31,7 @@ const LABEL: React.CSSProperties = {
   display: "block",
 };
 
-type Step = "credentials" | "enroll" | "verify";
+type Step = "credentials" | "enroll" | "verify" | "recovery-codes";
 
 export default function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
   const [, setLocation] = useLocation();
@@ -41,6 +41,7 @@ export default function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
   const [code, setCode] = useState("");
   const [qr, setQr] = useState<string | null>(null);
   const [manualSecret, setManualSecret] = useState<string | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -70,7 +71,14 @@ export default function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
     setError(null);
     setBusy(true);
     try {
-      await adminPost("/api/admin/auth/totp/verify", { code });
+      const res = await adminPost("/api/admin/auth/totp/verify", { code });
+      if (res.recoveryCodes?.length) {
+        // First-time enable issues these — shown exactly once, right here,
+        // before the session is treated as "in". Losing this screen loses them.
+        setRecoveryCodes(res.recoveryCodes);
+        setStep("recovery-codes");
+        return;
+      }
       onSignedIn();
       setLocation("/console");
     } catch (err: any) {
@@ -78,6 +86,11 @@ export default function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const finish = () => {
+    onSignedIn();
+    setLocation("/console");
   };
 
   return (
@@ -136,6 +149,25 @@ export default function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
               {busy ? "Verifying…" : "Continue"}
             </button>
           </form>
+        )}
+
+        {step === "recovery-codes" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <p style={{ fontSize: 13, color: EMBER, lineHeight: 1.6, margin: 0 }}>
+              Save these recovery codes now — each works once, in place of a 6-digit code, if you lose access to your
+              authenticator app. They're shown exactly this one time.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {recoveryCodes.map((c) => (
+                <div key={c} style={{ fontFamily: '"DM Mono", monospace', fontSize: 13, color: TEXT, background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 10px", textAlign: "center" }}>
+                  {c}
+                </div>
+              ))}
+            </div>
+            <button onClick={finish} style={{ height: 42, borderRadius: 8, background: EMBER, color: INK, border: "none", fontWeight: 600, fontSize: 14 }} data-testid="admin-recovery-codes-done">
+              I've saved them — continue
+            </button>
+          </div>
         )}
       </div>
     </div>

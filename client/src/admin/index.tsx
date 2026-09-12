@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { QueryClient } from "@tanstack/react-query";
 import { adminGet } from "./api";
 import AdminLogin from "./AdminLogin";
+import AdminAcceptInvite from "./AdminAcceptInvite";
 import { AdminShell, INK, TEXT } from "./AdminShell";
 import AdminOverview from "./AdminOverview";
 import AdminReports from "./AdminReports";
@@ -11,6 +12,8 @@ import AdminReportDetail from "./AdminReportDetail";
 import AdminFeedback from "./AdminFeedback";
 import AdminMetrics from "./AdminMetrics";
 import AdminEmailConfig from "./AdminEmailConfig";
+import AdminTeam from "./AdminTeam";
+import AdminAccount from "./AdminAccount";
 
 // A dedicated QueryClient — deliberately not the member app's queryClient
 // (client/src/lib/queryClient.ts). Admin data must never share a cache key
@@ -49,6 +52,10 @@ function AdminApp() {
   }
 
   if (!role) {
+    // accept-invite is reachable without a session — it's how one starts.
+    if (location.startsWith("/console/accept-invite")) {
+      return <AdminAcceptInvite onSignedIn={refresh} />;
+    }
     return <AdminLogin onSignedIn={refresh} />;
   }
 
@@ -61,6 +68,8 @@ function AdminApp() {
         <Route path="/console/feedback" component={AdminFeedback} />
         <Route path="/console/metrics" component={AdminMetrics} />
         <Route path="/console/email" component={AdminEmailConfig} />
+        {(role === "owner" || role === "admin") && <Route path="/console/team" component={AdminTeam} />}
+        {(role === "owner" || role === "admin") && <Route path="/console/account" component={AdminAccount} />}
         <Route>
           <p style={{ color: "#A79FB4" }}>Not found.</p>
         </Route>

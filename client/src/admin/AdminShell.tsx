@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { adminGet, adminPost } from "./api";
+import { adminGet, adminPost, AdminApiError } from "./api";
 import "./admin.css";
 
 export const INK = "#0C0910";
@@ -80,6 +80,189 @@ const NAV = [
   { href: "/console/metrics", label: "Metrics" },
   { href: "/console/email", label: "Email alerts" },
 ];
+// Below the fold, gated separately — support/read_only see neither.
+const TEAM_NAV = [
+  { href: "/console/team", label: "Team" },
+  { href: "/console/account", label: "My account" },
+];
+
+// ── step-up: re-enter password for a destructive action ─────────────────
+// A shared prompt + retry wrapper so every page that needs it (Team's
+// suspend/remove/role-change, Account's sign-out-everywhere and recovery
+// code regeneration) asks the same way, once, instead of five bespoke
+// password modals.
+type StepUpFn = <T>(action: () => Promise<T>) => Promise<T>;
+const StepUpContext = createContext<StepUpFn>(async (action) => action());
+export function useStepUp(): StepUpFn {
+  return useContext(StepUpContext);
+}
+
+export function Modal({ children, onClose, width = 380 }: { children: React.ReactNode; onClose?: () => void; width?: number }) {
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 12, padding: 20, width: "100%", maxWidth: width, maxHeight: "90vh", overflowY: "auto" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function StepUpPrompt({ onSubmit, onCancel }: { onSubmit: (password: string) => void; onCancel: () => void }) {
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await adminPost("/api/admin/auth/step-up", { password });
+      onSubmit(password);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Wrong password");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal onClose={onCancel}>
+      <div style={{ ...LABEL, marginBottom: 10 }}>Confirm it's you</div>
+      <p style={{ fontSize: 13, color: MUTED, marginTop: 0, marginBottom: 12 }}>Re-enter your password to continue with this action.</p>
+      <input
+        type="password"
+        autoFocus
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && password && !busy && submit()}
+        style={{ width: "100%", height: 36, borderRadius: 6, border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: TEXT, fontSize: 13, padding: "0 10px", boxSizing: "border-box" }}
+        data-testid="step-up-password"
+      />
+      {error && <p style={{ color: ALERT, fontSize: 12.5, marginTop: 8 }}>{error}</p>}
+      <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+        <button onClick={onCancel} style={{ height: 32, padding: "0 12px", borderRadius: 6, border: `1px solid ${LINE}`, background: "transparent", color: MUTED, fontSize: 12.5, cursor: "pointer" }}>
+          Cancel
+        </button>
+        <button
+          onClick={submit}
+          disabled={!password || busy}
+          style={{ height: 32, padding: "0 14px", borderRadius: 6, border: "none", background: EMBER, color: "#1a0e08", fontSize: 12.5, fontWeight: 600, cursor: password && !busy ? "pointer" : "not-allowed", opacity: password && !busy ? 1 : 0.5 }}
+          data-testid="step-up-submit"
+        >
+          {busy ? "Checking…" : "Confirm"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function StepUpProvider({ children }: { children: React.ReactNode }) {
+  const [pending, setPending] = useState<{ resolve: () => void; reject: () => void } | null>(null);
+
+  const withStepUp = useCallback(<T,>(action: () => Promise<T>): Promise<T> => {
+    return action().catch((e) => {
+      if (e instanceof AdminApiError && e.stepUpRequired) {
+        return new Promise<T>((resolve, reject) => {
+          setPending({
+            resolve: () => {
+              setPending(null);
+              action().then(resolve, reject);
+            },
+            reject: () => {
+              setPending(null);
+              reject(e);
+            },
+          });
+        });
+      }
+      throw e;
+    });
+  }, []);
+
+  return (
+    <StepUpContext.Provider value={withStepUp}>
+      {children}
+      {pending && <StepUpPrompt onSubmit={pending.resolve} onCancel={pending.reject} />}
+    </StepUpContext.Provider>
+  );
+}
+
+/** A destructive-action confirm — never the default button, never one
+ *  click. `consequence` states what happens in plain words (not "are you
+ *  sure?"); pass `requireReason` for actions the invariants require a
+ *  written reason for. */
+export function ConfirmDialog({
+  title,
+  consequence,
+  confirmLabel,
+  requireReason,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  consequence: React.ReactNode;
+  confirmLabel: string;
+  requireReason?: boolean;
+  onConfirm: (reason: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (requireReason && !reason.trim()) {
+      setError("A reason is required");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await onConfirm(reason.trim());
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal onClose={busy ? undefined : onClose} width={440}>
+      <div style={{ ...SERIF, fontSize: 19, color: TEXT, marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.55, marginBottom: 14 }}>{consequence}</div>
+      {requireReason && (
+        <textarea
+          autoFocus
+          placeholder="Reason (required — kept in the audit log)"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={3}
+          style={{ width: "100%", borderRadius: 6, border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: TEXT, fontSize: 13, padding: 10, boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
+          data-testid="confirm-reason"
+        />
+      )}
+      {error && <p style={{ color: ALERT, fontSize: 12.5, marginTop: 8 }}>{error}</p>}
+      <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+        <button onClick={onClose} disabled={busy} style={{ height: 34, padding: "0 14px", borderRadius: 6, border: `1px solid ${LINE}`, background: "transparent", color: MUTED, fontSize: 12.5, cursor: "pointer" }}>
+          Cancel
+        </button>
+        <button
+          onClick={submit}
+          disabled={busy}
+          style={{ height: 34, padding: "0 14px", borderRadius: 6, border: `1px solid ${ALERT}`, background: "transparent", color: ALERT, fontSize: 12.5, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer" }}
+          data-testid="confirm-submit"
+        >
+          {busy ? "Working…" : confirmLabel}
+        </button>
+      </div>
+    </Modal>
+  );
+}
 
 type OverviewSnapshot = {
   openReports: number;
@@ -149,6 +332,31 @@ export function AdminShell({ role, email, children }: { role: string; email?: st
                 </Link>
               );
             })}
+            {(role === "owner" || role === "admin") && (
+              <>
+                <div style={{ borderTop: `1px solid ${LINE}`, margin: "8px 0" }} />
+                {TEAM_NAV.map((item) => {
+                  const active = location === item.href;
+                  return (
+                    <Link key={item.href} href={item.href}>
+                      <div
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: 6,
+                          fontSize: 13.5,
+                          cursor: "pointer",
+                          background: active ? "rgba(255,255,255,.06)" : "transparent",
+                          color: active ? TEXT : MUTED,
+                        }}
+                        data-testid={`admin-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                      >
+                        {item.label}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </>
+            )}
           </nav>
 
           <div>
@@ -185,7 +393,9 @@ export function AdminShell({ role, email, children }: { role: string; email?: st
             </button>
           </div>
         </aside>
-        <main style={{ flex: 1, minWidth: 0, padding: "20px 28px", overflowX: "auto" }}>{children}</main>
+        <main style={{ flex: 1, minWidth: 0, padding: "20px 28px", overflowX: "auto" }}>
+          <StepUpProvider>{children}</StepUpProvider>
+        </main>
       </div>
     </div>
   );

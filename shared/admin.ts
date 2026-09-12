@@ -114,3 +114,17 @@ export const FEEDBACK_CATEGORY_LABEL: Record<FeedbackCategory, string> = {
   praise: "Just saying thanks",
   other: "Other",
 };
+
+// ── team / roles ─────────────────────────────────────────────────────────
+// One line each — this is what a "what does granting X actually give them"
+// check reads, on the Team page, instead of the source.
+export const ADMIN_ROLE_REFERENCE: Record<AdminRole, string> = {
+  read_only:
+    "Can view Overview, Reports, Feedback, Metrics and Email alert config. Sees report-scoped personal data (a reporter's and subject's cited evidence) same as every other role — there's no lower tier that hides it.",
+  support: "Everything read_only sees, plus can action reports and feedback: warn, suspend, ban, dismiss, remove content, mark feedback reviewed.",
+  admin: "Everything support can do, plus edit email alert config, recompute metrics, invite/suspend/remove admins at or below their own role.",
+  owner: "Everything admin can do, plus grant or change the owner role itself, and act on other owners. At least one owner always exists — the last one can't be demoted, suspended or removed.",
+};
+
+export const ADMIN_STATUSES = ["active", "suspended", "removed"] as const;
+export type AdminStatus = (typeof ADMIN_STATUSES)[number];

@@ -5,14 +5,24 @@ import { db } from "../db";
 import { adminAuditLog } from "@shared/schema";
 import type { Request } from "express";
 
+type DbLike = Pick<typeof db, "insert">;
+
+/** `dbOrTx` defaults to the module-level `db`, but MUST be passed the open
+ *  transaction (`tx`) when called from inside a `db.transaction()` block —
+ *  PGlite has effectively one connection, so a write against the top-level
+ *  `db` while a transaction is still open on that same connection deadlocks
+ *  (the outer transaction can't commit until this insert returns, and this
+ *  insert can't get the connection until the transaction commits). Hit this
+ *  live once building team.ts's suspend/remove/role-change flows. */
 export async function auditAdmin(
   req: Request,
   adminUserId: string,
   action: string,
   opts: { targetType?: string; targetId?: string | number; details?: unknown } = {},
+  dbOrTx: DbLike = db,
 ): Promise<void> {
   try {
-    await db.insert(adminAuditLog).values({
+    await dbOrTx.insert(adminAuditLog).values({
       adminUserId,
       action,
       targetType: opts.targetType ?? null,
