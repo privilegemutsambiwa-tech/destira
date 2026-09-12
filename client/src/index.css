@@ -15,89 +15,82 @@
   --vf-ink: #0C0910;
   --vf-surface: #14101C;
   --vf-surface2: #161220;
+  --vf-text: #F5F0EA;
   --vf-ember: #FF6B4A;
   --vf-ember-soft: #FF7A57;
   --vf-mint: #8FE3C7;
   --vf-gold: #E9C46A;
   --vf-warn: #FFC46B;
 
-  /* Destira Dark Design System */
-  --background: 240 14% 7%;         /* #0F0F14 near-black */
-  --foreground: 0 0% 100%;           /* #FFFFFF */
+  /* shadcn/ui tokens, repointed onto the Destira palette above — these used
+     to be a leftover pre-redesign purple system (#7C3AED primary, #EC4899
+     secondary) that the rename commit never actually removed, so every
+     shadcn primitive (focus rings, default Button/Badge/Switch/Checkbox
+     fills, Toast/Dialog borders) was still rendering purple regardless of
+     the vf-* classes used everywhere else. Values below are the HSL
+     equivalents of the vf-* hexes (Tailwind's `hsl(var(--x) / <alpha-value>)`
+     wrapper needs a bare triple, not a hex, to keep /NN opacity modifiers
+     working on the handful of primitives that use them — alert.tsx,
+     calendar.tsx, table.tsx, toast.tsx). No app-only default theme yet
+     (App.tsx is still dark-only until the light theme lands) so this is the
+     one and only palette for now. */
+  --background: 266 28% 5%;          /* vf-ink #0C0910 */
+  --foreground: 33 35% 94%;          /* vf-text #F5F0EA */
 
-  /* Primary: #7C3AED deep violet */
-  --primary: 262 84% 58%;
-  --primary-foreground: 0 0% 100%;
+  --primary: 11 100% 65%;            /* vf-ember #FF6B4A */
+  --primary-foreground: 266 28% 5%;  /* vf-ink — dark text on a filled ember control */
 
-  /* Secondary: #EC4899 hot pink */
-  --secondary: 330 81% 60%;
-  --secondary-foreground: 0 0% 100%;
+  --secondary: 257 28% 10%;          /* vf-surface2 #161220 — neutral, not mint/gold (those are semantic-only) */
+  --secondary-foreground: 33 35% 94%;
 
-  /* Surfaces */
-  --muted: 240 17% 17%;              /* #242433 Surface2 elevated */
-  --muted-foreground: 240 8% 61%;    /* #9090A8 secondary text */
+  --muted: 257 28% 10%;              /* vf-surface2 */
+  --muted-foreground: 263 12% 66%;   /* vf-muted #A79FB4 */
 
-  --accent: 240 17% 17%;             /* #242433 */
-  --accent-foreground: 0 0% 100%;
+  --accent: 259 26% 12%;             /* #1C1727 — one step lighter than surface2, for hover/highlight states */
+  --accent-foreground: 33 35% 94%;
 
-  --destructive: 0 84% 60%;          /* #EF4444 */
+  --destructive: 0 84% 60%;          /* #EF4444 — matches the admin console's ALERT colour */
   --destructive-foreground: 0 0% 100%;
 
-  --border: 240 17% 22%;             /* #2E2E42 subtle borders */
-  --input: 240 16% 12%;              /* #1A1A24 surface */
-  --ring: 262 84% 58%;
+  --border: 266 10% 14%;             /* #221F26 — vf-line's rgba(255,255,255,.09) flattened over vf-ink */
+  --input: 257 28% 10%;              /* vf-surface2 */
+  --ring: 11 100% 65%;               /* vf-ember — focus rings are ember, not purple */
 
-  --card: 240 16% 12%;               /* #1A1A24 card bg */
-  --card-foreground: 0 0% 100%;
+  --card: 260 27% 9%;                /* vf-surface #14101C */
+  --card-foreground: 33 35% 94%;
+  --card-border: 266 10% 14%;        /* tailwind.config.ts wraps this one in hsl(), unlike primary/secondary/etc below — needs a bare HSL triple, not a hex */
 
-  --popover: 240 16% 12%;
-  --popover-foreground: 0 0% 100%;
+  --popover: 257 28% 10%;            /* vf-surface2 */
+  --popover-foreground: 33 35% 94%;
+  --popover-border: 266 10% 14%;
 
-  /* Sidebar */
-  --sidebar: 240 16% 12%;
-  --sidebar-foreground: 0 0% 100%;
-  --sidebar-border: 240 17% 22%;
-  --sidebar-ring: 262 84% 58%;
-  --sidebar-primary: 262 84% 58%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 240 17% 17%;
-  --sidebar-accent-foreground: 0 0% 100%;
+  --primary-border: #FF6B4A;
+  --secondary-border: #221F26;
+  --muted-border: #221F26;
+  --accent-border: #221F26;
+  --destructive-border: #EF4444;
+
+  /* Sidebar — shadcn's ui/sidebar.tsx isn't used anywhere in this app
+     (layout-shell.tsx is hand-rolled), but repointed rather than left
+     purple in case that ever changes. */
+  --sidebar: 257 28% 10%;
+  --sidebar-foreground: 33 35% 94%;
+  --sidebar-border: 266 10% 14%;
+  --sidebar-ring: 11 100% 65%;
+  --sidebar-primary: 11 100% 65%;
+  --sidebar-primary-foreground: 266 28% 5%;
+  --sidebar-accent: 259 26% 12%;
+  --sidebar-accent-foreground: 33 35% 94%;
+  --sidebar-primary-border: #FF6B4A;
+  --sidebar-accent-border: #221F26;
 
   /* Cards: 20px per new spec */
   --radius: 1.25rem;
 
-  /* Gradients */
-  --gradient-primary: linear-gradient(135deg, #7C3AED, #EC4899);
-  --gradient-hero: linear-gradient(135deg, #7C3AED, #EC4899);
-
-  /* Shadows */
+  /* Shadows — dark theme relies on borders for structure, so these stay
+     subtle/rare; kept only because .hover-elevate still references them. */
   --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4);
-  --shadow-btn: 0 4px 20px rgba(124, 58, 237, 0.4);
-  --shadow-glow: 0 0 40px rgba(124, 58, 237, 0.15);
   --shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.5);
-}
-
-/* Mirror dark tokens to .dark class for components that check it */
-.dark {
-  --background: 240 14% 7%;
-  --foreground: 0 0% 100%;
-  --primary: 262 84% 58%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 330 81% 60%;
-  --secondary-foreground: 0 0% 100%;
-  --muted: 240 17% 17%;
-  --muted-foreground: 240 8% 61%;
-  --accent: 240 17% 17%;
-  --accent-foreground: 0 0% 100%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 240 17% 22%;
-  --input: 240 16% 12%;
-  --ring: 262 84% 58%;
-  --card: 240 16% 12%;
-  --card-foreground: 0 0% 100%;
-  --popover: 240 16% 12%;
-  --popover-foreground: 0 0% 100%;
 }
 
 @layer base {
@@ -113,8 +106,8 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
-    background-color: #0F0F14;
-    color: #FFFFFF;
+    background-color: var(--vf-ink);
+    color: var(--vf-text);
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -133,52 +126,17 @@
     text-wrap: balance;
   }
 
-  /* Gradient background — primary gradient */
-  .gradient-bg {
-    background: var(--gradient-primary);
-  }
-
-  .gradient-hero {
-    background: var(--gradient-hero);
-  }
-
-  /* Gradient text */
-  .gradient-text {
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  /* Card shadow */
-  .shadow-card {
-    box-shadow: var(--shadow-card);
-  }
   .shadow-hover {
     box-shadow: var(--shadow-hover);
   }
-  .shadow-btn {
-    box-shadow: var(--shadow-btn);
-  }
-  .shadow-glow {
-    box-shadow: var(--shadow-glow);
-  }
 
-  /* Button press micro-animation */
+  /* Button press micro-animation — 24 consumers app-wide, unrelated to the
+     old purple system (no colour of its own). */
   .btn-press {
     transition: transform 120ms ease-out;
   }
   .btn-press:active {
     transform: scale(0.96);
-  }
-
-  /* Card lift on hover */
-  .card-lift {
-    transition: transform 200ms ease, box-shadow 200ms ease;
-  }
-  .card-lift:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-hover);
   }
 
   /* Scrollbar hide */
@@ -190,49 +148,9 @@
     display: none;
   }
 
-  /* Fade slide in animation */
-  .fade-slide-in {
-    animation: fadeSlideIn 200ms ease-out forwards;
-  }
-
-  /* Gradient button helper */
-  .btn-gradient {
-    background: linear-gradient(135deg, #7C3AED, #EC4899);
-    color: #FFFFFF;
-    box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
-    transition: opacity 120ms ease, transform 120ms ease;
-  }
-  .btn-gradient:hover {
-    opacity: 0.9;
-  }
-  .btn-gradient:active {
-    transform: scale(0.96);
-  }
-
-  /* Dark input surface */
-  .input-dark {
-    background: #1A1A24;
-    border: 1px solid #2E2E42;
-    color: #FFFFFF;
-    border-radius: 12px;
-  }
-  .input-dark::placeholder {
-    color: #9090A8;
-  }
-
-  /* Filter tab active/inactive */
-  .filter-tab-active {
-    background: linear-gradient(135deg, #7C3AED, #EC4899);
-    color: #FFFFFF;
-    border: none;
-  }
-  .filter-tab-inactive {
-    background: transparent;
-    color: #9090A8;
-    border: 1px solid #2E2E42;
-  }
-
-  /* Elevation utilities — kept for Badge, Button, profile components */
+  /* Elevation utilities — kept for Badge/Button (hover-elevate) and one
+     active-state consumer; card-lift/toggle-elevate/toggle-elevated/
+     no-default-*-elevate had zero consumers and were removed. */
   .hover-elevate {
     transition: transform 200ms ease, box-shadow 200ms ease;
   }
@@ -243,24 +161,14 @@
   .active-elevate-2:active {
     transform: scale(0.97);
   }
-  .toggle-elevate {
-    transition: transform 150ms ease, box-shadow 150ms ease;
-  }
-  .toggle-elevated {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-card);
-  }
-  .no-default-hover-elevate:hover {
-    transform: none !important;
-    box-shadow: none !important;
-  }
-  .no-default-active-elevate:active {
-    transform: none !important;
-  }
 
-  /* Story ring — animated gradient border */
+  /* Story ring — the unseen-story indicator on Discover. Was a spinning
+     purple/pink conic-gradient (#7C3AED/#EC4899) inherited from the old
+     palette; ember is the human/action accent, so the ring reads as "there's
+     something of yours to act on" rather than borrowing mint (twin-layer
+     only) or gold (premium only). */
   .story-ring-active {
-    background: conic-gradient(from 0deg, #7C3AED, #EC4899, #7C3AED);
+    background: conic-gradient(from 0deg, var(--vf-ember), var(--vf-ember-soft), var(--vf-ember));
     border-radius: 50%;
     padding: 2.5px;
     animation: spin-story-ring 2.5s linear infinite;
@@ -268,48 +176,17 @@
 
   .story-ring-inactive {
     background: transparent;
-    border: 2px dashed #9090A8;
+    border: 2px dashed rgba(255, 255, 255, 0.18);
     border-radius: 50%;
   }
 }
 
 /* ---- Keyframes ---- */
 
-@keyframes fadeSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @keyframes spin-story-ring {
   to {
     transform: rotate(360deg);
   }
-}
-
-@keyframes gradient {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-@keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.4); }
-  50% { box-shadow: 0 0 0 12px rgba(124, 58, 237, 0); }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-}
-
-.animate-float {
-  animation: float 3s ease-in-out infinite;
 }
 
 /* Destira redesign (docs/redesign-handoff.md §1) */
@@ -322,7 +199,4 @@
 @media (prefers-reduced-motion: reduce) {
   .btn-press:active { transform: none; }
   .story-ring-active { animation: none; }
-  .fade-slide-in { animation: none; opacity: 1; transform: none; }
-  .card-lift:hover { transform: none; }
-  .animate-float { animation: none; }
 }

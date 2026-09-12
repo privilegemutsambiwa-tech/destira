@@ -189,9 +189,12 @@ function Router() {
 }
 
 function App() {
-  useEffect(() => {
-    document.documentElement.classList.add("dark");
-  }, []);
+  // No theme effect here — the app is dark-only for now (index.css's :root
+  // holds the dark palette unconditionally, no .dark class needed), so
+  // there's nothing to apply after mount. The old version of this
+  // (`classList.add("dark")` in a useEffect) had no state, no persistence,
+  // and produced a frame of unstyled light before it ran; a real Light /
+  // Dark / System setting replaces this when the light theme lands.
 
   // The admin console is a fully separate app: its own session cookie, own
   // QueryClient, own auth. Deciding this off window.location (not wouter)
