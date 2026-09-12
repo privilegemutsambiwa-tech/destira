@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useCreateMatch } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
+import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -114,6 +115,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
   }, []);
 
   useEffect(scrollToBottom, [messages, isTyping, scrollToBottom]);
+  useKeyboardScroll(scrollToBottom);
 
   const handleSend = async (textArg?: string) => {
     const text = (textArg ?? input).trim();
@@ -274,7 +276,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
   const showSuggestions = messages.length <= 1 && !isStreaming && !isTyping;
 
   return (
-    <div className="h-screen flex flex-col bg-vf-ink text-vf-text" data-testid="interview-chat-page">
+    <div className="h-dvh flex flex-col bg-vf-ink text-vf-text" data-testid="interview-chat-page">
       <div className="bg-vf-ink border-b border-vf-line px-4 py-3 flex items-center justify-between gap-2 sticky top-0 z-50">
         <div className="flex items-center gap-3 min-w-0">
           <Button

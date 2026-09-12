@@ -17,6 +17,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useTwinMemory, useTwinStructuredProfile, useExtractTwinProfile } from "@/hooks/use-interactions";
+import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -247,6 +248,7 @@ export default function TwinChat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isTyping, scrollToBottom]);
+  useKeyboardScroll(scrollToBottom);
 
   const handleSend = useCallback(async (text: string) => {
     if (!text.trim() || isStreaming) return;
@@ -454,7 +456,7 @@ export default function TwinChat() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-vf-ink">
+    <div className="h-dvh flex flex-col bg-vf-ink">
       <div className="border-b border-vf-line px-4 py-3 flex items-center gap-3 sticky top-0 z-10 bg-vf-ink shrink-0">
         <Button
           variant="ghost"

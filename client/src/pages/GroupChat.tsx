@@ -25,6 +25,7 @@ import {
 } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
 
 interface MessageAction {
   icon: React.ReactNode;
@@ -294,6 +295,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, highlightMsgId]);
+  useKeyboardScroll(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
 
   const messagesMap = useMemo(() => {
     const map: Record<number, any> = {};
@@ -391,7 +393,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   }
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: INK }}>
+    <div className="h-dvh flex flex-col" style={{ background: INK }}>
       <div
         className="px-4 py-3 flex items-center gap-3 sticky top-0 z-50"
         style={{

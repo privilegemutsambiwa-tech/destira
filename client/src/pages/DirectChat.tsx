@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Send, ArrowLeft, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
 import { motion } from "framer-motion";
 
 export default function DirectChat({ params }: { params: { matchId: string } }) {
@@ -25,6 +26,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
   };
 
   useEffect(scrollToBottom, [messages]);
+  useKeyboardScroll(scrollToBottom);
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -38,7 +40,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
   };
 
   return (
-    <div className="h-screen flex flex-col bg-vf-ink">
+    <div className="h-dvh flex flex-col bg-vf-ink">
       <div className="border-b border-vf-line px-4 py-3 flex items-center gap-4 sticky top-0 z-10 bg-vf-ink">
         <Button variant="ghost" size="icon" onClick={() => setLocation("/matches")} data-testid="button-back">
           <ArrowLeft className="w-5 h-5 text-vf-text" />
