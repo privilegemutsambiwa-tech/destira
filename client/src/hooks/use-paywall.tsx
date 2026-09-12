@@ -80,7 +80,8 @@ export function RefusalSheet({
       data-testid={`refusal-${feature}`}
     >
       <div
-        className="w-full max-w-[440px] rounded-t-[24px] sm:rounded-[24px] border border-vf-line bg-vf-surface p-7 pb-10 sm:pb-7 motion-safe:animate-[vf-rise_0.24s_ease-out_both]"
+        className="w-full max-w-[440px] rounded-t-[24px] sm:rounded-[24px] border border-vf-line bg-vf-surface p-7 sm:pb-7 motion-safe:animate-[vf-rise_0.24s_ease-out_both]"
+        style={{ paddingBottom: "max(2.5rem, calc(env(safe-area-inset-bottom, 0px) + 1.25rem))" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2.5">

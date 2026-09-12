@@ -143,7 +143,7 @@ function CardGallery({ photos, initial }: { photos: GalleryPhoto[]; initial: str
             type="button"
             onClick={() => go(-1)}
             aria-label="Previous photo"
-            className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
             style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)" }}
           >
             <ChevronLeft className="w-5 h-5 text-white" />
@@ -152,7 +152,7 @@ function CardGallery({ photos, initial }: { photos: GalleryPhoto[]; initial: str
             type="button"
             onClick={() => go(1)}
             aria-label="Next photo"
-            className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
             style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)" }}
           >
             <ChevronRight className="w-5 h-5 text-white" />
@@ -653,7 +653,11 @@ export default function Discover() {
 
   return (
     <LayoutShell>
-      <div className="max-w-3xl mx-auto">
+      {/* Grid/showcase surface, not a reading column — grows with the
+          viewport instead of staying pinned at 768px regardless of screen
+          size (that was the actual cause of the hero card looking squeezed
+          on anything wider than a tablet, not the shell's own cap). */}
+      <div className="max-w-3xl lg:max-w-5xl xl:max-w-6xl mx-auto">
         <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
           <div>
             <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2">

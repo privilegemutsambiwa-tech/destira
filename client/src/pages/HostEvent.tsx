@@ -277,7 +277,7 @@ export default function HostEvent() {
   ];
 
   return (
-    <div className="min-h-screen bg-vf-ink text-vf-text">
+    <div className="min-h-dvh bg-vf-ink text-vf-text">
       <div className="sticky top-0 z-10 bg-vf-ink border-b border-vf-line flex items-center gap-3 px-4 h-14">
         <button onClick={back} className="w-8 h-8 flex items-center justify-center" data-testid="button-host-back">
           <ArrowLeft className="w-5 h-5 text-vf-ember" />
@@ -648,7 +648,10 @@ export default function HostEvent() {
         )}
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 bg-vf-ink/90 backdrop-blur border-t border-vf-line px-4 py-3">
+      <div
+        className="fixed bottom-0 inset-x-0 bg-vf-ink/90 backdrop-blur border-t border-vf-line px-4 pt-3"
+        style={{ paddingBottom: "max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.5rem))" }}
+      >
         <div className="max-w-[560px] mx-auto flex gap-3">
           <button onClick={back} className="h-12 px-5 rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-white/20 text-[14px] transition-colors" data-testid="button-step-back">
             {step === 0 ? "Cancel" : "Back"}

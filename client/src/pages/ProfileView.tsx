@@ -177,7 +177,7 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
 
         <div className="mt-3 lg:mt-0 lg:pb-2 min-w-0">
           {meta && <div className={`${EYEBROW} mb-1.5`}>{meta}</div>}
-          <h1 className="font-serif font-normal text-vf-text leading-none tracking-[-0.02em] text-[34px] lg:text-[44px]">
+          <h1 className="font-serif font-normal text-vf-text leading-none tracking-[-0.02em] text-[clamp(30px,6vw,44px)]">
             {name}
             {profile.age ? <span className="text-vf-text">, {profile.age}</span> : null}
           </h1>

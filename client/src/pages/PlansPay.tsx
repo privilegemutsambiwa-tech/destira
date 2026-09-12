@@ -80,7 +80,7 @@ export default function PlansPay() {
     return (
       <Shell>
         <div className={EYEBROW}>Done</div>
-        <h1 className="font-serif font-normal text-vf-text mt-3 text-[30px] leading-[1.1]">
+        <h1 className="font-serif font-normal text-vf-text mt-3 text-[clamp(24px,7vw,30px)] leading-[1.1]">
           You're on {card.name}.
         </h1>
         <p className="text-[14px] text-vf-muted mt-3">

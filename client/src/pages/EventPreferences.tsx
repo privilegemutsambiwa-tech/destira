@@ -140,7 +140,7 @@ export default function EventPreferences() {
 
   if (isLoading || !draft) {
     return (
-      <div className="min-h-screen bg-vf-ink flex items-center justify-center">
+      <div className="min-h-dvh bg-vf-ink flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-vf-muted" />
       </div>
     );
@@ -157,7 +157,7 @@ export default function EventPreferences() {
   const sizeMode = draft.groupSizeMax == null ? "any" : draft.groupSizeMax <= 10 ? "intimate" : "medium";
 
   return (
-    <div className="min-h-screen bg-vf-ink text-vf-text">
+    <div className="min-h-dvh bg-vf-ink text-vf-text">
       <div className="sticky top-0 z-10 bg-vf-ink border-b border-vf-line flex items-center gap-3 px-4 h-14">
         <button onClick={() => setLocation(backTo)} className="w-8 h-8 flex items-center justify-center" data-testid="button-prefs-back">
           <ArrowLeft className="w-5 h-5 text-vf-ember" />
@@ -302,7 +302,10 @@ export default function EventPreferences() {
         </section>
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 bg-vf-ink/90 backdrop-blur border-t border-vf-line px-4 py-3">
+      <div
+        className="fixed bottom-0 inset-x-0 bg-vf-ink/90 backdrop-blur border-t border-vf-line px-4 pt-3"
+        style={{ paddingBottom: "max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.5rem))" }}
+      >
         <div className="max-w-[520px] mx-auto">
           <button
             onClick={() => draft && save.mutate(draft)}

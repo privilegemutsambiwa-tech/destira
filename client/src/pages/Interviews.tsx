@@ -49,7 +49,7 @@ export default function Interviews() {
     <LayoutShell>
       {/* Header */}
       <div className="mb-6">
-        <h1 className="font-serif font-normal text-[32px] text-vf-text" data-testid="text-chat-title">
+        <h1 className="font-serif font-normal text-[clamp(26px,6vw,32px)] text-vf-text" data-testid="text-chat-title">
           Chat
         </h1>
         <p className="mt-1 text-sm text-vf-muted">All your conversations in one place</p>
