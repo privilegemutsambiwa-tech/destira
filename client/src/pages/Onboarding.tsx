@@ -95,7 +95,7 @@ export default function Onboarding() {
 
   if (isLoading || !data) {
     return (
-      <div className="min-h-screen bg-vf-ink flex items-center justify-center">
+      <div className="min-h-dvh bg-vf-ink flex items-center justify-center">
         <Loader2 className="w-7 h-7 animate-spin text-vf-ember" />
       </div>
     );
@@ -271,7 +271,7 @@ export default function Onboarding() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-vf-ink text-vf-text flex items-center justify-center px-6 py-16">
+    <div className="min-h-dvh bg-vf-ink text-vf-text flex items-center justify-center px-6 py-16">
       <div className="w-full max-w-[520px]">{children}</div>
     </div>
   );

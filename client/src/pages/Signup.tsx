@@ -151,7 +151,7 @@ export default function Signup() {
   const heading = step === 1 ? "Create your account" : "The basics";
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-vf-ink text-vf-text py-16">
+    <div className="min-h-dvh flex flex-col items-center justify-center px-6 bg-vf-ink text-vf-text py-16">
       <div className="w-full max-w-[460px]">
         <div className="flex justify-center mb-8 text-vf-text">
           <DestiraLockup orientation="horizontal" size={30} />

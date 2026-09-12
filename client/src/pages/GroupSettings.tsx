@@ -60,7 +60,7 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
 
   if (isLoading) {
     return (
-      <div className="h-screen flex items-center justify-center" style={{ background: "#0F0F14" }}>
+      <div className="h-dvh flex items-center justify-center" style={{ background: "#0F0F14" }}>
         <Loader2 className="w-8 h-8 animate-spin" style={{ color: "#7C3AED" }} />
       </div>
     );
@@ -93,7 +93,7 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
   const isPending = updateGroup.isPending || updateSettings.isPending;
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "#0F0F14" }}>
+    <div className="h-dvh flex flex-col" style={{ background: "#0F0F14" }}>
       <div
         className="px-4 py-3 flex items-center gap-3 sticky top-0 z-50"
         style={{ background: "#1A1A24", borderBottom: "1px solid #2E2E42" }}

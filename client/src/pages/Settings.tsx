@@ -186,7 +186,7 @@ type PanelKey =
 
 function Panel({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
   return (
-    <div className="min-h-screen" style={{ background: BG, color: TEXT }}>
+    <div className="min-h-dvh" style={{ background: BG, color: TEXT }}>
       <div className="sticky top-0 z-10 flex items-center gap-3 px-4"
         style={{ height: "56px", background: BG, borderBottom: `1px solid ${BORDER}` }}>
         <button onClick={onBack} className="w-8 h-8 flex items-center justify-center" data-testid="button-panel-back">
@@ -1500,7 +1500,7 @@ export default function Settings() {
   if (activePanel === "clear-memory") return <ClearMemoryPanel onBack={() => setActivePanel(null)} />;
 
   return (
-    <div className="min-h-screen" style={{ background: BG, color: TEXT }} data-testid="page-settings">
+    <div className="min-h-dvh" style={{ background: BG, color: TEXT }} data-testid="page-settings">
       <div className="sticky top-0 z-10 flex items-center gap-3 px-4"
         style={{ height: "56px", background: BG, borderBottom: `1px solid ${BORDER}` }}>
         <button onClick={() => setLocation("/profile")} className="w-8 h-8 flex items-center justify-center" data-testid="button-settings-back">

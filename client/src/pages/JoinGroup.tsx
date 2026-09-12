@@ -67,7 +67,7 @@ export default function JoinGroup({ params }: { params?: { token?: string } }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: "#0F0F14" }}>
+    <div className="min-h-dvh flex flex-col items-center justify-center px-4" style={{ background: "#0F0F14" }}>
       <div
         className="w-full max-w-sm rounded-2xl p-8 text-center"
         style={{ background: "#1A1A24", border: "1px solid #2E2E42" }}

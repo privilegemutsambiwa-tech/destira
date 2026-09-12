@@ -313,7 +313,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
 
   if (groupLoading) {
     return (
-      <div className="h-screen flex items-center justify-center" style={{ background: INK }}>
+      <div className="h-dvh flex items-center justify-center" style={{ background: INK }}>
         <Loader2 className="w-8 h-8 animate-spin" style={{ color: EMBER }} />
       </div>
     );
@@ -326,7 +326,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   const currentlyMuted = currentMember?.isMuted ?? isMuted;
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: INK }}>
+    <div className="h-dvh flex flex-col" style={{ background: INK }}>
       <div
         className="px-4 py-3 flex items-center gap-3 sticky top-0 z-50"
         style={{ background: SURFACE2, borderBottom: `1px solid ${LINE}` }}

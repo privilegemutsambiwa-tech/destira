@@ -52,7 +52,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-vf-ink text-vf-text">
+    <div className="min-h-dvh flex flex-col items-center justify-center px-6 bg-vf-ink text-vf-text">
       <div className="w-full max-w-[460px]">
         <div className="flex justify-center mb-8 text-vf-text">
           <DestiraLockup orientation="horizontal" size={30} />

@@ -502,7 +502,7 @@ export default function Landing() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-vf-ink text-vf-text">
+    <div className="min-h-dvh bg-vf-ink text-vf-text">
       {inIframe && (
         <div
           className="fixed top-0 inset-x-0 z-[100] px-4 py-2 flex items-center gap-2 text-sm font-medium"
@@ -566,7 +566,7 @@ export default function Landing() {
 
       {/* ============ 2 · HERO ============ */}
       <section
-        className="relative px-6 pb-[88px] lg:pb-0 lg:min-h-screen lg:flex lg:items-center"
+        className="relative px-6 pb-[88px] lg:pb-0 lg:min-h-dvh lg:flex lg:items-center"
         aria-labelledby="hero-heading"
         data-testid="section-hero"
       >

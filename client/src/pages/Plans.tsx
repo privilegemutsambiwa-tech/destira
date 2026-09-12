@@ -39,7 +39,7 @@ export default function Plans() {
   };
 
   return (
-    <div className="min-h-screen bg-vf-ink text-vf-text">
+    <div className="min-h-dvh bg-vf-ink text-vf-text">
       <div className="max-w-5xl mx-auto px-5 sm:px-8 py-6">
         <div className="flex items-center justify-between">
           <button onClick={() => setLocation("/")} className="text-vf-text" data-testid="link-home">

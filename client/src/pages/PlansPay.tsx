@@ -244,7 +244,7 @@ export default function PlansPay() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-vf-ink text-vf-text flex items-center justify-center px-6 py-16">
+    <div className="min-h-dvh bg-vf-ink text-vf-text flex items-center justify-center px-6 py-16">
       <div className="w-full max-w-[460px]">{children}</div>
     </div>
   );

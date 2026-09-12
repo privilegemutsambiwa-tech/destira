@@ -115,14 +115,14 @@ export default function TwinDisclosure() {
 
   if (isLoading || !settings) {
     return (
-      <div className="min-h-screen bg-vf-ink flex items-center justify-center">
+      <div className="min-h-dvh bg-vf-ink flex items-center justify-center">
         <Loader2 className="w-7 h-7 animate-spin text-vf-ember" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-vf-ink text-vf-text">
+    <div className="min-h-dvh bg-vf-ink text-vf-text">
       <div className="sticky top-0 z-10 bg-vf-ink border-b border-vf-line flex items-center gap-3 px-4 h-14">
         <button onClick={() => setLocation("/settings")} className="w-8 h-8 flex items-center justify-center" data-testid="button-disclosure-back">
           <ArrowLeft className="w-5 h-5 text-vf-ember" />
