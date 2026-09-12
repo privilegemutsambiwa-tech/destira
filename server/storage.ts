@@ -1,0 +1,2043 @@
+import { db } from "./db";
+import {
+  profiles, matches, interviews, groups, groupMembers, directMessages, groupMessages,
+  userPhotos, groupJoinRequests, groupInviteLinks, groupModerationLogs,
+  polls, pollOptions, pollVotes, messageReactions, starredMessages,
+  twinMemory, twinNotifications, subscriptions, payments, entitlements,
+  twinProfilesStructured, twinMemoryFacts, twinMemorySummary,
+  questions, userAnswers, questionSchedule, auditLogs,
+  stories, storyMedia, storyLikes, storyComments, storyViews, plans, chatRequests,
+  blockedUsers, supportTickets, dailyLikeCounts, inviteRequests,
+  type Profile, type InsertProfile, type UpdateProfileRequest,
+  type Match, type Interview, type Group, type GroupMember, type DirectMessage, type GroupMessage,
+  type GroupJoinRequest, type GroupInviteLink, type GroupModerationLog,
+  type Poll, type PollOption, type PollVote, type MessageReaction, type StarredMessage,
+  type UserPhoto, type TwinMemoryEntry, type TwinNotification,
+  type Subscription, type Payment, type Entitlement,
+  type TwinProfileStructured, type TwinMemoryFact, type TwinMemorySummaryEntry,
+  type Question, type UserAnswer, type QuestionScheduleEntry, type AuditLog,
+  type Story, type StoryMedia, type StoryLike, type StoryComment, type StoryView, type Plan,
+  type ChatRequest, type BlockedUser, type SupportTicket,
+  type InviteRequest, type InsertInviteRequest
+} from "@shared/schema";
+import { users } from "@shared/models/auth";
+import type { PhotoRole } from "@shared/schema";
+import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lte, inArray } from "drizzle-orm";
+
+export class PhotoNotFoundError extends Error {
+  constructor() { super("Photo not found"); }
+}
+export class PhotoTooSmallError extends Error {
+  constructor(public role: string, public longEdge: number, public min: number) {
+    super(`This is ${longEdge}px on the long edge — ${role}s need at least ${min}px`);
+  }
+}
+const ROLE_MIN_LONG_EDGE: Record<string, number> = { cover: 1200, portrait: 800 };
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Move `photo` into `role`, inside an open transaction: demote whoever currently
+// holds that role, set the new role, and mirror the result into
+// profiles.coverPhotoUrl / user_photos.isMainProfilePhoto so Discover, Matches
+// and the rest keep rendering. No size check here — callers that represent an
+// explicit user choice (setPhotoRole) do that first; auto-assignment on first
+// upload skips it so a small photo still beats a blank card.
+async function applyPhotoRoleTx(
+  tx: Tx,
+  userId: string,
+  photo: UserPhoto,
+  role: PhotoRole,
+): Promise<{ displaced: { id: number; role: PhotoRole } | null }> {
+  const prevRole = photo.role as PhotoRole;
+  let displaced: { id: number; role: PhotoRole } | null = null;
+
+  if (role === "cover" || role === "portrait") {
+    const [current] = await tx
+      .select()
+      .from(userPhotos)
+      .where(and(eq(userPhotos.userId, userId), eq(userPhotos.role, role)));
+    if (current && current.id !== photo.id) {
+      await tx.update(userPhotos).set({ role: "gallery" }).where(eq(userPhotos.id, current.id));
+      displaced = { id: current.id, role };
+    }
+  }
+
+  await tx.update(userPhotos).set({ role }).where(eq(userPhotos.id, photo.id));
+
+  if (role === "cover") {
+    await tx.update(profiles).set({ coverPhotoUrl: photo.photoUrl }).where(eq(profiles.userId, userId));
+  } else if (prevRole === "cover") {
+    await tx.update(profiles).set({ coverPhotoUrl: null }).where(eq(profiles.userId, userId));
+  }
+  if (role === "portrait") {
+    await tx
+      .update(userPhotos)
+      .set({ isMainProfilePhoto: false })
+      .where(and(eq(userPhotos.userId, userId), ne(userPhotos.id, photo.id)));
+    await tx.update(userPhotos).set({ isMainProfilePhoto: true }).where(eq(userPhotos.id, photo.id));
+  } else if (prevRole === "portrait") {
+    await tx.update(userPhotos).set({ isMainProfilePhoto: false }).where(eq(userPhotos.id, photo.id));
+  }
+
+  return { displaced };
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export interface IStorage {
+  getProfile(userId: string): Promise<Profile | undefined>;
+  createProfile(profile: InsertProfile & { userId: string }): Promise<Profile>;
+  updateProfile(userId: string, updates: Partial<InsertProfile>): Promise<Profile>;
+  getDiscoverableProfiles(excludeUserId: string, filter?: string, userLat?: number, userLng?: number): Promise<any[]>;
+  getProfileWithUser(userId: string): Promise<any>;
+  getPublicAnswers(userId: string, limit?: number): Promise<Array<{ question: string; answer: string }>>;
+  getGroupsForUser(targetUserId: string, viewerUserId: string): Promise<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean }>>;
+
+  createMatch(user1Id: string, user2Id: string): Promise<Match>;
+  getMatches(userId: string): Promise<Match[]>;
+  getMatch(id: number): Promise<Match | undefined>;
+  updateMatchStatus(id: number, status: string): Promise<Match>;
+  getMatchBetweenUsers(user1Id: string, user2Id: string): Promise<Match | undefined>;
+  getMatchesWithProfiles(userId: string): Promise<any[]>;
+  softDeleteChat(matchId: number, userId: string): Promise<Match>;
+  unmatch(matchId: number): Promise<Match>;
+
+  createInterview(requesterId: string, targetId: string): Promise<Interview>;
+  getInterviews(userId: string): Promise<Interview[]>;
+  getInterview(id: number): Promise<Interview | undefined>;
+  updateInterviewTranscript(id: number, transcript: string): Promise<Interview>;
+  updateInterviewStatus(id: number, status: string): Promise<Interview>;
+  getInterviewsWithProfiles(userId: string): Promise<any[]>;
+
+  getGroups(): Promise<Group[]>;
+  getGroup(id: number): Promise<Group | undefined>;
+  createGroup(name: string, description: string, type: string): Promise<Group>;
+  createGroupFull(data: { name: string; description: string; type: string; ownerId: string; iconUrl?: string; categoryTags?: string[]; privacyMode?: string; mediaEnabled?: boolean; stickersEnabled?: boolean; postingPermission?: string; inviteDirectJoinEnabled?: boolean }): Promise<Group>;
+  updateGroup(id: number, updates: Partial<Group>): Promise<Group>;
+  deleteGroup(id: number): Promise<void>;
+  searchGroups(query: string): Promise<Group[]>;
+  joinGroup(groupId: number, userId: string, nickname: string): Promise<GroupMember>;
+  getGroupMembers(groupId: number): Promise<GroupMember[]>;
+  getGroupMember(groupId: number, userId: string): Promise<GroupMember | undefined>;
+  isGroupMember(groupId: number, userId: string): Promise<boolean>;
+  updateGroupMemberRole(groupId: number, userId: string, role: string): Promise<GroupMember>;
+  removeGroupMember(groupId: number, userId: string): Promise<void>;
+  getGroupMessages(groupId: number, limit?: number, since?: Date): Promise<GroupMessage[]>;
+  getVisibleGroupMessages(groupId: number, userId: string, limit?: number): Promise<GroupMessage[]>;
+  getGroupMessage(messageId: number): Promise<GroupMessage | undefined>;
+  sendGroupMessage(groupId: number, userId: string, nickname: string, content: string, opts?: { contentType?: string; mediaUrl?: string; replyToMessageId?: number }): Promise<GroupMessage>;
+  deleteGroupMessage(messageId: number): Promise<GroupMessage>;
+  deleteMessageForEveryone(messageId: number): Promise<GroupMessage>;
+  createJoinRequest(groupId: number, userId: string): Promise<GroupJoinRequest>;
+  getJoinRequests(groupId: number): Promise<GroupJoinRequest[]>;
+  processJoinRequest(id: number, processedBy: string, status: string): Promise<GroupJoinRequest>;
+  createInviteLink(groupId: number, createdBy: string, token: string, expiresAt?: Date): Promise<GroupInviteLink>;
+  getInviteLink(token: string): Promise<GroupInviteLink | undefined>;
+  revokeInviteLink(id: number): Promise<void>;
+  getGroupInviteLinks(groupId: number): Promise<GroupInviteLink[]>;
+  createModerationLog(data: { groupId: number; messageId?: number; userId: string; action: string; reason?: string; moderatedBy?: string }): Promise<GroupModerationLog>;
+
+  createPoll(groupId: number, createdBy: string, question: string, options: string[], allowMultiple: boolean): Promise<{ poll: Poll; options: PollOption[]; message: GroupMessage }>;
+  getPoll(pollId: number): Promise<{ poll: Poll; options: PollOption[]; votes: PollVote[] } | undefined>;
+  votePoll(pollId: number, optionId: number, userId: string): Promise<PollVote>;
+  removePollVote(pollId: number, optionId: number, userId: string): Promise<void>;
+  getPollByMessageId(messageId: number): Promise<{ poll: Poll; options: PollOption[]; votes: PollVote[] } | undefined>;
+
+  addReaction(messageId: number, userId: string, reaction: string): Promise<MessageReaction>;
+  removeReaction(messageId: number, userId: string, reaction: string): Promise<void>;
+  getReactions(messageId: number): Promise<MessageReaction[]>;
+  getReactionsForMessages(messageIds: number[]): Promise<MessageReaction[]>;
+
+  getMediaMessages(groupId: number): Promise<GroupMessage[]>;
+
+  getDirectMessages(matchId: number, limit?: number): Promise<DirectMessage[]>;
+  sendDirectMessage(matchId: number, senderId: string, content: string): Promise<DirectMessage>;
+
+  getUserPhotos(userId: string): Promise<UserPhoto[]>;
+  addUserPhoto(userId: string, photoUrl: string, orderIndex: number, opts?: { isMain?: boolean; width?: number; height?: number; variants?: { w800?: string; w1600?: string } }): Promise<UserPhoto>;
+  deleteUserPhoto(userId: string, id: number): Promise<void>;
+  reorderUserPhotos(userId: string, photoIds: number[]): Promise<void>;
+  setPhotoRole(userId: string, photoId: number, role: PhotoRole): Promise<{ photoId: number; role: PhotoRole; displaced: { id: number; role: PhotoRole } | null }>;
+  setPhotoFocal(userId: string, photoId: number, target: "cover" | "portrait", x: number, y: number): Promise<UserPhoto>;
+  updateProfilePrompts(userId: string, prompts: { q: string; a: string }[]): Promise<Profile>;
+  getProfileWeekStats(userId: string): Promise<{ twinTalks: number; readsOver80: number; meetsSet: number }>;
+
+  addTwinMemory(userId: string, message: string, role: string, useForTraining?: boolean): Promise<TwinMemoryEntry>;
+  getTwinMemory(userId: string, limit?: number): Promise<TwinMemoryEntry[]>;
+  updateTwinTrainingOptOut(userId: string, useForTraining: boolean): Promise<void>;
+
+  createNotification(userId: string, type: string, title: string, body: string): Promise<TwinNotification>;
+  getNotifications(userId: string): Promise<TwinNotification[]>;
+  markNotificationRead(id: number): Promise<void>;
+  getUnreadNotificationCount(userId: string): Promise<number>;
+
+  createSubscription(userId: string, tier: string, stripeSubId?: string): Promise<Subscription>;
+  getSubscription(userId: string): Promise<Subscription | undefined>;
+  updateSubscription(id: number, updates: Partial<Subscription>): Promise<Subscription>;
+  cancelSubscription(id: number): Promise<Subscription>;
+
+  createPayment(userId: string, amount: number, currency: string, stripeChargeId?: string, subscriptionId?: number): Promise<Payment>;
+  getPayments(userId: string): Promise<Payment[]>;
+
+  getEntitlements(userId: string): Promise<Entitlement[]>;
+  addEntitlement(userId: string, type: string, quantity: number, expiresAt?: Date): Promise<Entitlement>;
+  useEntitlement(userId: string, type: string): Promise<boolean>;
+
+  starMessage(messageId: number, userId: string, groupId: number): Promise<StarredMessage>;
+  unstarMessage(messageId: number, userId: string): Promise<void>;
+  getStarredMessages(groupId: number, userId: string): Promise<any[]>;
+  isMessageStarred(messageId: number, userId: string): Promise<boolean>;
+
+  getProfileCompletion(userId: string): Promise<{ score: number; tasks: { key: string; label: string; benefit: string; completed: boolean; weight: number }[] }>;
+  updateProfileCompletionScore(userId: string, score: number): Promise<void>;
+
+  getTwinProfileStructured(userId: string): Promise<TwinProfileStructured | undefined>;
+  upsertTwinProfileStructured(userId: string, data: Partial<TwinProfileStructured>): Promise<TwinProfileStructured>;
+
+  addTwinMemoryFact(userId: string, factText: string, source?: string, opts?: { sensitivity?: string[]; classified?: boolean }): Promise<TwinMemoryFact>;
+  getTwinMemoryFacts(userId: string, limit?: number): Promise<TwinMemoryFact[]>;
+  clearExpiredMemoryFacts(): Promise<void>;
+
+  upsertTwinMemorySummary(userId: string, summaryText: string): Promise<TwinMemorySummaryEntry>;
+  getTwinMemorySummary(userId: string): Promise<TwinMemorySummaryEntry | undefined>;
+
+  getQuestions(): Promise<Question[]>;
+  getQuestion(id: number): Promise<Question | undefined>;
+  createQuestion(data: { text: string; category: string; answerType?: string; options?: any; isOnboardingQuestion?: boolean; weight?: number; orderIndex?: number }): Promise<Question>;
+  getNextQuestion(userId: string): Promise<Question | undefined>;
+
+  submitAnswer(userId: string, questionId: number, answerText?: string, selectedOptions?: any, ratingValue?: number, isPrivate?: boolean): Promise<UserAnswer>;
+  getUserAnswers(userId: string): Promise<UserAnswer[]>;
+  getUserAnswer(userId: string, questionId: number): Promise<UserAnswer | undefined>;
+
+  recordQuestionAsked(userId: string, questionId: number): Promise<QuestionScheduleEntry>;
+  skipQuestion(userId: string, questionId: number): Promise<QuestionScheduleEntry>;
+
+  createAuditLog(userId: string | null, eventType: string, details?: any): Promise<AuditLog>;
+  getAuditLogs(userId?: string, limit?: number): Promise<AuditLog[]>;
+
+  createStory(userId: string, expiresAt: Date): Promise<Story>;
+  getStory(id: number): Promise<Story | undefined>;
+  getActiveStories(): Promise<any[]>;
+  getUserStories(userId: string): Promise<Story[]>;
+  deleteExpiredStories(): Promise<void>;
+  addStoryMedia(storyId: number, type: string, url: string | null, caption?: string, textContent?: string): Promise<StoryMedia>;
+  deleteStory(id: number): Promise<void>;
+  getStoryMedia(storyId: number): Promise<StoryMedia[]>;
+  likeStory(storyId: number, userId: string): Promise<StoryLike>;
+  unlikeStory(storyId: number, userId: string): Promise<void>;
+  getStoryLikes(storyId: number): Promise<StoryLike[]>;
+  addStoryComment(storyId: number, userId: string, text: string): Promise<StoryComment>;
+  getStoryComments(storyId: number): Promise<StoryComment[]>;
+  addStoryView(storyId: number, userId: string): Promise<StoryView>;
+  getStoryViews(storyId: number): Promise<StoryView[]>;
+
+  getPlans(): Promise<Plan[]>;
+  getPlan(id: number): Promise<Plan | undefined>;
+  createPlan(data: { name: string; durationDays: number; priceUsd: string; weeklyEquivalent?: string; isBestValue?: boolean; features?: string[]; stripePriceId?: string }): Promise<Plan>;
+  updatePlan(id: number, updates: Partial<Plan>): Promise<Plan>;
+
+
+  updateGroupMemberMute(groupId: number, userId: string, isMuted: boolean): Promise<GroupMember>;
+  isGroupNicknameTaken(nickname: string): Promise<boolean>;
+  isGroupNicknameTakenByOther(nickname: string, currentUserId: string): Promise<boolean>;
+  suggestAvailableGroupNicknames(base: string, count?: number): Promise<string[]>;
+
+  createChatRequest(requesterId: string, targetId: string, groupId: number, expiresAt: Date): Promise<ChatRequest>;
+  getChatRequest(id: number): Promise<ChatRequest | undefined>;
+  getChatRequests(userId: string): Promise<ChatRequest[]>;
+  updateChatRequestStatus(id: number, status: string): Promise<ChatRequest>;
+
+  searchUsers(query: string, excludeUserId: string): Promise<any[]>;
+
+  blockUser(blockerId: string, blockedId: string): Promise<BlockedUser>;
+  unblockUser(blockerId: string, blockedId: string): Promise<void>;
+  getBlockedUsers(blockerId: string): Promise<BlockedUser[]>;
+  isBlocked(blockerId: string, blockedId: string): Promise<boolean>;
+
+  deleteAllTwinMemoryFacts(userId: string): Promise<void>;
+  clearTwinMemorySummary(userId: string): Promise<void>;
+
+  createSupportTicket(userId: string, subject: string, message: string): Promise<SupportTicket>;
+
+  createInviteRequest(data: InsertInviteRequest): Promise<InviteRequest>;
+
+  incrementDailyLikes(userId: string): Promise<number>;
+  getDailyLikeCount(userId: string): Promise<number>;
+
+  deleteAllUserData(userId: string): Promise<void>;
+
+  seedDemoData(): Promise<void>;
+}
+
+export class DatabaseStorage implements IStorage {
+  async getProfile(userId: string): Promise<Profile | undefined> {
+    const [profile] = await db.select().from(profiles).where(eq(profiles.userId, userId));
+    return profile;
+  }
+
+  async createProfile(profile: InsertProfile & { userId: string }): Promise<Profile> {
+    const [newProfile] = await db.insert(profiles).values(profile).returning();
+    return newProfile;
+  }
+
+  async updateProfile(userId: string, updates: Partial<InsertProfile>): Promise<Profile> {
+    const [updated] = await db.update(profiles)
+      .set(updates)
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return updated;
+  }
+
+  // The photo a card / avatar should show, resolved so a missing role can never
+  // blank it out: role 'cover' -> role 'portrait' -> lowest orderIndex ->
+  // whatever coverPhotoUrl already held -> users.profileImageUrl.
+  //
+  // user_photos is only consulted for PUBLIC profiles — a private profile keeps
+  // exactly the coverPhotoUrl column it already had, so its hidden gallery is
+  // never exposed through this path.
+  private async resolveProfilePhotos(
+    entries: Array<{ userId: string; isPublic: boolean | null; coverPhotoUrl: string | null; profileImageUrl: string | null }>,
+  ): Promise<Map<string, string | null>> {
+    const out = new Map<string, string | null>();
+    const publicIds = entries.filter((e) => e.isPublic).map((e) => e.userId);
+    const rows = publicIds.length
+      ? await db
+          .select({
+            userId: userPhotos.userId,
+            role: userPhotos.role,
+            photoUrl: userPhotos.photoUrl,
+          })
+          .from(userPhotos)
+          .where(inArray(userPhotos.userId, publicIds))
+          .orderBy(asc(userPhotos.orderIndex))
+      : [];
+    const byUser = new Map<string, typeof rows>();
+    for (const r of rows) {
+      if (!byUser.has(r.userId)) byUser.set(r.userId, []);
+      byUser.get(r.userId)!.push(r);
+    }
+    for (const e of entries) {
+      const photos = byUser.get(e.userId) ?? [];
+      const cover = photos.find((p) => p.role === "cover")?.photoUrl;
+      const portrait = photos.find((p) => p.role === "portrait")?.photoUrl;
+      const firstByOrder = photos[0]?.photoUrl; // rows already ordered by orderIndex asc
+      out.set(e.userId, cover ?? portrait ?? firstByOrder ?? e.coverPhotoUrl ?? e.profileImageUrl ?? null);
+    }
+    return out;
+  }
+
+  async getDiscoverableProfiles(excludeUserId: string, filter?: string, userLat?: number, userLng?: number): Promise<any[]> {
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+    const requesterProfile = await this.getProfile(excludeUserId);
+    const maxDistanceKm = requesterProfile?.maxDistanceKm ?? null;
+    const ageMin = requesterProfile?.ageMinPreference ?? null;
+    const ageMax = requesterProfile?.ageMaxPreference ?? null;
+
+    const blockedByRequester = await db.select({ blockedId: blockedUsers.blockedId })
+      .from(blockedUsers)
+      .where(eq(blockedUsers.blockerId, excludeUserId));
+    const blockedOfRequester = await db.select({ blockerId: blockedUsers.blockerId })
+      .from(blockedUsers)
+      .where(eq(blockedUsers.blockedId, excludeUserId));
+    const excludedIds = new Set([
+      excludeUserId,
+      ...blockedByRequester.map(r => r.blockedId),
+      ...blockedOfRequester.map(r => r.blockerId),
+    ]);
+
+    const baseCondition = and(
+      ne(profiles.userId, excludeUserId),
+      eq(profiles.onboardingCompleted, true),
+      eq(profiles.isPublic, true)
+    );
+
+    const filterCondition = filter === "online"
+      ? and(baseCondition, gt(profiles.locationUpdatedAt, thirtyMinutesAgo))
+      : baseCondition;
+
+    const orderBy = filter === "new"
+      ? desc(profiles.createdAt)
+      : asc(profiles.createdAt);
+
+    const rows = await db
+      .select({
+        id: profiles.id,
+        userId: profiles.userId,
+        displayName: profiles.displayName,
+        bio: profiles.bio,
+        aboutMe: profiles.aboutMe,
+        age: profiles.age,
+        gender: profiles.gender,
+        location: profiles.location,
+        personalityProfile: profiles.personalityProfile,
+        twinPersona: profiles.twinPersona,
+        prompts: profiles.prompts,
+        isVerified: profiles.isVerified,
+        onboardingCompleted: profiles.onboardingCompleted,
+        isPublic: profiles.isPublic,
+        createdAt: profiles.createdAt,
+        _lat: profiles.locationLat,
+        _lng: profiles.locationLng,
+        locationName: profiles.locationName,
+        locationUpdatedAt: profiles.locationUpdatedAt,
+        showDistance: profiles.showDistance,
+        coverPhotoUrl: profiles.coverPhotoUrl,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          profileImageUrl: users.profileImageUrl,
+        }
+      })
+      .from(profiles)
+      .innerJoin(users, eq(profiles.userId, users.id))
+      .where(filterCondition)
+      .orderBy(orderBy);
+
+    const shaped = rows
+      .filter(row => !excludedIds.has(row.userId))
+      .filter(row => {
+        if (ageMin !== null && row.age !== null && row.age < ageMin) return false;
+        if (ageMax !== null && row.age !== null && row.age > ageMax) return false;
+        return true;
+      })
+      .map(({ _lat, _lng, ...rest }) => {
+        if (!rest.showDistance) {
+          return { ...rest, locationName: null, locationUpdatedAt: null, distanceKm: null, isNearbyNow: false };
+        }
+        const pLat = _lat ? parseFloat(String(_lat)) : null;
+        const pLng = _lng ? parseFloat(String(_lng)) : null;
+        const distanceKm = (userLat !== undefined && userLng !== undefined && pLat !== null && pLng !== null)
+          ? haversineKm(userLat, userLng, pLat, pLng)
+          : null;
+        if (maxDistanceKm !== null && distanceKm !== null && distanceKm > maxDistanceKm) return null;
+        const isNearby = rest.locationUpdatedAt
+          ? Date.now() - new Date(rest.locationUpdatedAt).getTime() < 30 * 60 * 1000
+          : false;
+        return { ...rest, distanceKm, isNearbyNow: isNearby };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+
+    // Attach everything the card is allowed to show. Every row here is already
+    // isPublic === true + onboardingCompleted === true; the batched fetches
+    // below each re-check isPublic / isPrivate so nothing the viewer isn't
+    // permitted to see reaches the JSON.
+    const ids = shaped.map((r) => r.userId);
+    const [galleries, answersByUser, interestsByUser] = await Promise.all([
+      this.getPublicGalleries(ids),
+      this.getPublicAnswersForUsers(ids, 3),
+      this.getInterestsForUsers(ids),
+    ]);
+    return shaped.map((r) => {
+      const photos = galleries.get(r.userId) ?? [];
+      const lead =
+        photos.find((p) => p.role === "cover") ?? photos.find((p) => p.role === "portrait") ?? photos[0];
+      return {
+        ...r,
+        coverPhotoUrl: lead?.w1600 ?? lead?.url ?? r.coverPhotoUrl ?? r.user?.profileImageUrl ?? null,
+        photos,
+        answers: answersByUser.get(r.userId) ?? [],
+        interests: interestsByUser.get(r.userId) ?? [],
+      };
+    });
+  }
+
+  // Full ordered photo arrays for the Discover gallery — cover, then portrait,
+  // then gallery by orderIndex — for PUBLIC profiles only (private -> absent).
+  async getPublicGalleries(userIds: string[]): Promise<
+    Map<string, Array<{
+      url: string; w800: string | null; w1600: string | null;
+      role: string; orderIndex: number; width: number | null; height: number | null;
+      focalX: number; focalY: number;
+    }>>
+  > {
+    const out = new Map<string, any[]>();
+    if (userIds.length === 0) return out as any;
+    const pubRows = await db
+      .select({ userId: profiles.userId })
+      .from(profiles)
+      .where(and(inArray(profiles.userId, userIds), eq(profiles.isPublic, true)));
+    const pub = pubRows.map((r) => r.userId);
+    if (pub.length === 0) return out as any;
+    const rows = await db.select().from(userPhotos).where(inArray(userPhotos.userId, pub));
+    const rank = (role: string) => (role === "cover" ? 0 : role === "portrait" ? 1 : 2);
+    for (const uid of pub) {
+      const mine = rows
+        .filter((r) => r.userId === uid)
+        .sort((a, b) => rank(a.role) - rank(b.role) || a.orderIndex - b.orderIndex)
+        .map((r) => {
+          const v = (r.variants ?? {}) as { w800?: string; w1600?: string };
+          const isCover = r.role === "cover";
+          return {
+            url: r.photoUrl,
+            w800: v.w800 ?? null,
+            w1600: v.w1600 ?? null,
+            role: r.role,
+            orderIndex: r.orderIndex,
+            width: r.width ?? null,
+            height: r.height ?? null,
+            focalX: isCover ? r.coverFocalX : r.portraitFocalX,
+            focalY: isCover ? r.coverFocalY : r.portraitFocalY,
+          };
+        });
+      out.set(uid, mine);
+    }
+    return out as any;
+  }
+
+  // Public soul-mapping answers (isPrivate = false), newest first, capped per
+  // user. Batched for the Discover feed.
+  async getPublicAnswersForUsers(
+    userIds: string[],
+    perUser = 3,
+  ): Promise<Map<string, Array<{ question: string; answer: string }>>> {
+    const out = new Map<string, Array<{ question: string; answer: string }>>();
+    if (userIds.length === 0) return out;
+    const rows = await db
+      .select({
+        userId: userAnswers.userId,
+        question: questions.text,
+        answer: userAnswers.answerText,
+      })
+      .from(userAnswers)
+      .innerJoin(questions, eq(userAnswers.questionId, questions.id))
+      .where(and(inArray(userAnswers.userId, userIds), eq(userAnswers.isPrivate, false)))
+      .orderBy(desc(userAnswers.answeredAt));
+    for (const r of rows) {
+      if (typeof r.answer !== "string" || !r.answer.trim()) continue;
+      const list = out.get(r.userId) ?? [];
+      if (list.length >= perUser) continue;
+      list.push({ question: r.question, answer: r.answer.trim() });
+      out.set(r.userId, list);
+    }
+    return out;
+  }
+
+  // Interest tags from the structured twin profile. No privacy flag of their
+  // own — gated by the profile being public, which the caller guarantees.
+  async getInterestsForUsers(userIds: string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
+    if (userIds.length === 0) return out;
+    const rows = await db
+      .select({ userId: twinProfilesStructured.userId, interests: twinProfilesStructured.interests })
+      .from(twinProfilesStructured)
+      .where(inArray(twinProfilesStructured.userId, userIds));
+    for (const r of rows) {
+      const list = (r.interests ?? []).filter(
+        (s): s is string => typeof s === "string" && s.trim().length > 0,
+      );
+      if (list.length) out.set(r.userId, list.slice(0, 8));
+    }
+    return out;
+  }
+
+
+  async getProfileWithUser(userId: string): Promise<any> {
+    const [result] = await db
+      .select({
+        id: profiles.id,
+        userId: profiles.userId,
+        displayName: profiles.displayName,
+        bio: profiles.bio,
+        aboutMe: profiles.aboutMe,
+        age: profiles.age,
+        gender: profiles.gender,
+        location: profiles.location,
+        locationName: profiles.locationName,
+        locationLat: profiles.locationLat,
+        locationLng: profiles.locationLng,
+        showDistance: profiles.showDistance,
+        personalityProfile: profiles.personalityProfile,
+        twinPersona: profiles.twinPersona,
+        prompts: profiles.prompts,
+        coverPhotoUrl: profiles.coverPhotoUrl,
+        isVerified: profiles.isVerified,
+        verificationStatus: profiles.verificationStatus,
+        subscriptionTier: profiles.subscriptionTier,
+        onboardingCompleted: profiles.onboardingCompleted,
+        isPublic: profiles.isPublic,
+        createdAt: profiles.createdAt,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          profileImageUrl: users.profileImageUrl,
+        }
+      })
+      .from(profiles)
+      .innerJoin(users, eq(profiles.userId, users.id))
+      .where(eq(profiles.userId, userId));
+    if (!result) return result;
+    // Resolve the avatar the same way Discover does, so Matches / interview
+    // threads don't fall back to a monogram when the 'cover' role is unset.
+    // Private profiles keep their existing coverPhotoUrl untouched.
+    const resolved = await this.resolveProfilePhotos([
+      {
+        userId: result.userId,
+        isPublic: result.isPublic,
+        coverPhotoUrl: result.coverPhotoUrl ?? null,
+        profileImageUrl: result.user?.profileImageUrl ?? null,
+      },
+    ]);
+    return { ...result, coverPhotoUrl: resolved.get(result.userId) ?? result.coverPhotoUrl ?? null };
+  }
+
+  async getPublicAnswers(userId: string, limit = 5): Promise<Array<{ question: string; answer: string }>> {
+    const rows = await db
+      .select({ question: questions.text, answer: userAnswers.answerText, answeredAt: userAnswers.answeredAt })
+      .from(userAnswers)
+      .innerJoin(questions, eq(userAnswers.questionId, questions.id))
+      .where(and(eq(userAnswers.userId, userId), eq(userAnswers.isPrivate, false)))
+      .orderBy(desc(userAnswers.answeredAt));
+    return rows
+      .filter((r) => typeof r.answer === "string" && r.answer.trim().length > 0)
+      .slice(0, limit)
+      .map((r) => ({ question: r.question, answer: (r.answer as string).trim() }));
+  }
+
+  async getGroupsForUser(
+    targetUserId: string,
+    viewerUserId: string,
+  ): Promise<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean }>> {
+    const theirRows = await db
+      .select({ id: groups.id, name: groups.name, iconUrl: groups.iconUrl, privacyMode: groups.privacyMode })
+      .from(groupMembers)
+      .innerJoin(groups, eq(groupMembers.groupId, groups.id))
+      .where(eq(groupMembers.userId, targetUserId));
+    if (theirRows.length === 0) return [];
+    const mine = await db
+      .select({ groupId: groupMembers.groupId })
+      .from(groupMembers)
+      .where(eq(groupMembers.userId, viewerUserId));
+    const mineSet = new Set(mine.map((m) => m.groupId));
+    return theirRows
+      // don't expose private groups the viewer isn't in
+      .filter((g) => g.privacyMode !== "private" || mineSet.has(g.id))
+      .map((g) => ({ id: g.id, name: g.name, iconUrl: g.iconUrl, viewerIsMember: mineSet.has(g.id) }));
+  }
+
+  async createMatch(user1Id: string, user2Id: string): Promise<Match> {
+    const [match] = await db.insert(matches).values({
+      user1Id,
+      user2Id,
+      status: "pending"
+    }).returning();
+    return match;
+  }
+
+  async getMatches(userId: string): Promise<Match[]> {
+    return db.select().from(matches).where(
+      or(eq(matches.user1Id, userId), eq(matches.user2Id, userId))
+    );
+  }
+
+  async getMatch(id: number): Promise<Match | undefined> {
+    const [match] = await db.select().from(matches).where(eq(matches.id, id));
+    return match;
+  }
+
+  async updateMatchStatus(id: number, status: string): Promise<Match> {
+    const [updated] = await db.update(matches).set({ status }).where(eq(matches.id, id)).returning();
+    return updated;
+  }
+
+  async getMatchBetweenUsers(user1Id: string, user2Id: string): Promise<Match | undefined> {
+    const [match] = await db.select().from(matches).where(
+      and(
+        eq(matches.status, "matched"),
+        or(
+          and(eq(matches.user1Id, user1Id), eq(matches.user2Id, user2Id)),
+          and(eq(matches.user1Id, user2Id), eq(matches.user2Id, user1Id))
+        )
+      )
+    );
+    return match;
+  }
+
+  async getMatchesWithProfiles(userId: string): Promise<any[]> {
+    const userMatches = await this.getMatches(userId);
+    const result = [];
+    for (const match of userMatches) {
+      const isUser1 = match.user1Id === userId;
+      if (isUser1 && match.user1DeletedChat) continue;
+      if (!isUser1 && match.user2DeletedChat) continue;
+      const otherUserId = isUser1 ? match.user2Id : match.user1Id;
+      const otherProfile = await this.getProfileWithUser(otherUserId);
+      result.push({
+        ...match,
+        otherProfile: otherProfile || null,
+        isRequester: isUser1,
+      });
+    }
+    return result;
+  }
+
+  async softDeleteChat(matchId: number, userId: string): Promise<Match> {
+    const match = await this.getMatch(matchId);
+    if (!match) throw new Error("Match not found");
+    const isUser1 = match.user1Id === userId;
+    const [updated] = await db.update(matches)
+      .set(isUser1 ? { user1DeletedChat: true } : { user2DeletedChat: true })
+      .where(eq(matches.id, matchId))
+      .returning();
+    return updated;
+  }
+
+  async unmatch(matchId: number): Promise<Match> {
+    const [updated] = await db.update(matches)
+      .set({ status: "unmatched" })
+      .where(eq(matches.id, matchId))
+      .returning();
+    return updated;
+  }
+
+  async createInterview(requesterId: string, targetId: string): Promise<Interview> {
+    const [interview] = await db.insert(interviews).values({
+      requesterId,
+      targetId,
+      status: "in_progress"
+    }).returning();
+    return interview;
+  }
+
+  async getInterviews(userId: string): Promise<Interview[]> {
+    return db.select().from(interviews).where(
+      or(eq(interviews.requesterId, userId), eq(interviews.targetId, userId))
+    );
+  }
+
+  async getInterview(id: number): Promise<Interview | undefined> {
+    const [interview] = await db.select().from(interviews).where(eq(interviews.id, id));
+    return interview;
+  }
+
+  async updateInterviewTranscript(id: number, transcript: string): Promise<Interview> {
+    const [updated] = await db.update(interviews)
+      .set({ transcript })
+      .where(eq(interviews.id, id))
+      .returning();
+    return updated;
+  }
+
+  async updateInterviewStatus(id: number, status: string): Promise<Interview> {
+    const [updated] = await db.update(interviews)
+      .set({ status })
+      .where(eq(interviews.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getInterviewsWithProfiles(userId: string): Promise<any[]> {
+    const userInterviews = await this.getInterviews(userId);
+    const result = [];
+    for (const interview of userInterviews) {
+      const targetProfile = await this.getProfileWithUser(interview.targetId);
+      result.push({
+        ...interview,
+        targetProfile: targetProfile || null,
+      });
+    }
+    return result;
+  }
+
+  async getGroups(): Promise<Group[]> {
+    return db.select().from(groups);
+  }
+
+  async getGroup(id: number): Promise<Group | undefined> {
+    const [group] = await db.select().from(groups).where(eq(groups.id, id));
+    return group;
+  }
+
+  async createGroup(name: string, description: string, type: string): Promise<Group> {
+    const [group] = await db.insert(groups).values({ name, description, type }).returning();
+    return group;
+  }
+
+  async createGroupFull(data: { name: string; description: string; type: string; ownerId: string; iconUrl?: string; categoryTags?: string[]; privacyMode?: string; mediaEnabled?: boolean; stickersEnabled?: boolean; postingPermission?: string; inviteDirectJoinEnabled?: boolean }): Promise<Group> {
+    const [group] = await db.insert(groups).values(data).returning();
+    return group;
+  }
+
+  async updateGroup(id: number, updates: Partial<Group>): Promise<Group> {
+    const [updated] = await db.update(groups)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(groups.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteGroup(id: number): Promise<void> {
+    await db.delete(groupMembers).where(eq(groupMembers.groupId, id));
+    await db.delete(groupMessages).where(eq(groupMessages.groupId, id));
+    await db.delete(groupJoinRequests).where(eq(groupJoinRequests.groupId, id));
+    await db.delete(groupInviteLinks).where(eq(groupInviteLinks.groupId, id));
+    await db.delete(groupModerationLogs).where(eq(groupModerationLogs.groupId, id));
+    await db.delete(groups).where(eq(groups.id, id));
+  }
+
+  async searchGroups(query: string): Promise<Group[]> {
+    return db.select().from(groups).where(
+      or(
+        ilike(groups.name, `%${query}%`),
+        ilike(groups.description, `%${query}%`)
+      )
+    );
+  }
+
+  async joinGroup(groupId: number, userId: string, nickname: string): Promise<GroupMember> {
+    const [member] = await db.insert(groupMembers).values({ groupId, userId, nickname }).returning();
+    return member;
+  }
+
+  async getGroupMembers(groupId: number): Promise<GroupMember[]> {
+    return db.select().from(groupMembers).where(eq(groupMembers.groupId, groupId));
+  }
+
+  async getGroupMember(groupId: number, userId: string): Promise<GroupMember | undefined> {
+    const [member] = await db.select().from(groupMembers).where(
+      and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId))
+    );
+    return member;
+  }
+
+  async isGroupMember(groupId: number, userId: string): Promise<boolean> {
+    const [member] = await db.select().from(groupMembers).where(
+      and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId))
+    );
+    return !!member;
+  }
+
+  async updateGroupMemberRole(groupId: number, userId: string, role: string): Promise<GroupMember> {
+    const [updated] = await db.update(groupMembers)
+      .set({ role })
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  async removeGroupMember(groupId: number, userId: string): Promise<void> {
+    await db.delete(groupMembers).where(
+      and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId))
+    );
+  }
+
+  async getGroupMessages(groupId: number, limit: number = 50, since?: Date): Promise<GroupMessage[]> {
+    const where = since
+      ? and(eq(groupMessages.groupId, groupId), gte(groupMessages.createdAt, since))
+      : eq(groupMessages.groupId, groupId);
+    return db.select().from(groupMessages)
+      .where(where)
+      .orderBy(asc(groupMessages.createdAt))
+      .limit(limit);
+  }
+
+  // What a given user is allowed to see: nothing unless they're a member, and
+  // only messages sent at or after they joined. History from before their join
+  // (or from a spell when they'd left) stays hidden.
+  async getVisibleGroupMessages(groupId: number, userId: string, limit: number = 50): Promise<GroupMessage[]> {
+    const member = await this.getGroupMember(groupId, userId);
+    if (!member) return [];
+    return this.getGroupMessages(groupId, limit, member.joinedAt ?? undefined);
+  }
+
+  async getGroupMessage(messageId: number): Promise<GroupMessage | undefined> {
+    const [msg] = await db.select().from(groupMessages).where(eq(groupMessages.id, messageId));
+    return msg;
+  }
+
+  async sendGroupMessage(groupId: number, userId: string, nickname: string, content: string, opts?: { contentType?: string; mediaUrl?: string; replyToMessageId?: number }): Promise<GroupMessage> {
+    const values: any = { groupId, userId, nickname, content };
+    if (opts?.contentType) values.contentType = opts.contentType;
+    if (opts?.mediaUrl) values.mediaUrl = opts.mediaUrl;
+    if (opts?.replyToMessageId) values.replyToMessageId = opts.replyToMessageId;
+    const [msg] = await db.insert(groupMessages).values(values).returning();
+    return msg;
+  }
+
+  async deleteGroupMessage(messageId: number): Promise<GroupMessage> {
+    const [msg] = await db.select().from(groupMessages).where(eq(groupMessages.id, messageId));
+    const [updated] = await db.update(groupMessages)
+      .set({ isDeletedByAdmin: true, originalContent: msg.content, content: "[Message deleted by admin]" })
+      .where(eq(groupMessages.id, messageId))
+      .returning();
+    return updated;
+  }
+
+  async deleteMessageForEveryone(messageId: number): Promise<GroupMessage> {
+    const [msg] = await db.select().from(groupMessages).where(eq(groupMessages.id, messageId));
+    const [updated] = await db.update(groupMessages)
+      .set({ deletedForEveryone: true, originalContent: msg.content, content: "[Message deleted]" })
+      .where(eq(groupMessages.id, messageId))
+      .returning();
+    return updated;
+  }
+
+  async createJoinRequest(groupId: number, userId: string): Promise<GroupJoinRequest> {
+    const [request] = await db.insert(groupJoinRequests).values({ groupId, userId }).returning();
+    return request;
+  }
+
+  async getJoinRequests(groupId: number): Promise<GroupJoinRequest[]> {
+    return db.select().from(groupJoinRequests)
+      .where(and(eq(groupJoinRequests.groupId, groupId), eq(groupJoinRequests.status, "pending")));
+  }
+
+  async processJoinRequest(id: number, processedBy: string, status: string): Promise<GroupJoinRequest> {
+    const [updated] = await db.update(groupJoinRequests)
+      .set({ status, processedBy, processedAt: new Date() })
+      .where(eq(groupJoinRequests.id, id))
+      .returning();
+    return updated;
+  }
+
+  async createInviteLink(groupId: number, createdBy: string, token: string, expiresAt?: Date): Promise<GroupInviteLink> {
+    const values: any = { groupId, createdBy, token };
+    if (expiresAt) values.expiresAt = expiresAt;
+    const [link] = await db.insert(groupInviteLinks).values(values).returning();
+    return link;
+  }
+
+  async getInviteLink(token: string): Promise<GroupInviteLink | undefined> {
+    const [link] = await db.select().from(groupInviteLinks).where(
+      and(eq(groupInviteLinks.token, token), eq(groupInviteLinks.isActive, true))
+    );
+    return link;
+  }
+
+  async revokeInviteLink(id: number): Promise<void> {
+    await db.update(groupInviteLinks).set({ isActive: false }).where(eq(groupInviteLinks.id, id));
+  }
+
+  async getGroupInviteLinks(groupId: number): Promise<GroupInviteLink[]> {
+    return db.select().from(groupInviteLinks).where(eq(groupInviteLinks.groupId, groupId));
+  }
+
+  async createModerationLog(data: { groupId: number; messageId?: number; userId: string; action: string; reason?: string; moderatedBy?: string }): Promise<GroupModerationLog> {
+    const [log] = await db.insert(groupModerationLogs).values(data).returning();
+    return log;
+  }
+
+  async createPoll(groupId: number, createdBy: string, question: string, optionTexts: string[], allowMultiple: boolean): Promise<{ poll: Poll; options: PollOption[]; message: GroupMessage }> {
+    const member = await this.getGroupMember(groupId, createdBy);
+    const nickname = member?.nickname || "Anonymous";
+    const [msg] = await db.insert(groupMessages).values({
+      groupId, userId: createdBy, nickname, content: question, contentType: "poll"
+    }).returning();
+    const [poll] = await db.insert(polls).values({
+      groupId, createdBy, question, allowMultiple, messageId: msg.id
+    }).returning();
+    const opts: PollOption[] = [];
+    for (let i = 0; i < optionTexts.length; i++) {
+      const [opt] = await db.insert(pollOptions).values({
+        pollId: poll.id, text: optionTexts[i], orderIndex: i
+      }).returning();
+      opts.push(opt);
+    }
+    return { poll, options: opts, message: msg };
+  }
+
+  async getPoll(pollId: number): Promise<{ poll: Poll; options: PollOption[]; votes: PollVote[] } | undefined> {
+    const [poll] = await db.select().from(polls).where(eq(polls.id, pollId));
+    if (!poll) return undefined;
+    const opts = await db.select().from(pollOptions).where(eq(pollOptions.pollId, pollId)).orderBy(asc(pollOptions.orderIndex));
+    const votes = await db.select().from(pollVotes).where(eq(pollVotes.pollId, pollId));
+    return { poll, options: opts, votes };
+  }
+
+  async votePoll(pollId: number, optionId: number, userId: string): Promise<PollVote> {
+    const poll = await this.getPoll(pollId);
+    if (poll && !poll.poll.allowMultiple) {
+      await db.delete(pollVotes).where(
+        and(eq(pollVotes.pollId, pollId), eq(pollVotes.userId, userId))
+      );
+    }
+    const [vote] = await db.insert(pollVotes).values({ pollId, optionId, userId }).returning();
+    return vote;
+  }
+
+  async removePollVote(pollId: number, optionId: number, userId: string): Promise<void> {
+    await db.delete(pollVotes).where(
+      and(eq(pollVotes.pollId, pollId), eq(pollVotes.optionId, optionId), eq(pollVotes.userId, userId))
+    );
+  }
+
+  async getPollByMessageId(messageId: number): Promise<{ poll: Poll; options: PollOption[]; votes: PollVote[] } | undefined> {
+    const [poll] = await db.select().from(polls).where(eq(polls.messageId, messageId));
+    if (!poll) return undefined;
+    return this.getPoll(poll.id);
+  }
+
+  async addReaction(messageId: number, userId: string, reaction: string): Promise<MessageReaction> {
+    await db.delete(messageReactions).where(
+      and(eq(messageReactions.messageId, messageId), eq(messageReactions.userId, userId), eq(messageReactions.reaction, reaction))
+    );
+    const [r] = await db.insert(messageReactions).values({ messageId, userId, reaction }).returning();
+    return r;
+  }
+
+  async removeReaction(messageId: number, userId: string, reaction: string): Promise<void> {
+    await db.delete(messageReactions).where(
+      and(eq(messageReactions.messageId, messageId), eq(messageReactions.userId, userId), eq(messageReactions.reaction, reaction))
+    );
+  }
+
+  async getReactions(messageId: number): Promise<MessageReaction[]> {
+    return db.select().from(messageReactions).where(eq(messageReactions.messageId, messageId));
+  }
+
+  async getReactionsForMessages(messageIds: number[]): Promise<MessageReaction[]> {
+    if (messageIds.length === 0) return [];
+    return db.select().from(messageReactions).where(
+      sql`${messageReactions.messageId} = ANY(${sql.raw(`ARRAY[${messageIds.join(',')}]`)})`
+    );
+  }
+
+  async getMediaMessages(groupId: number): Promise<GroupMessage[]> {
+    return db.select().from(groupMessages)
+      .where(and(
+        eq(groupMessages.groupId, groupId),
+        sql`${groupMessages.contentType} IN ('image', 'video')`
+      ))
+      .orderBy(desc(groupMessages.createdAt));
+  }
+
+  async getDirectMessages(matchId: number, limit: number = 50): Promise<DirectMessage[]> {
+    return db.select().from(directMessages)
+      .where(eq(directMessages.matchId, matchId))
+      .orderBy(asc(directMessages.createdAt))
+      .limit(limit);
+  }
+
+  async sendDirectMessage(matchId: number, senderId: string, content: string): Promise<DirectMessage> {
+    const [msg] = await db.insert(directMessages).values({ matchId, senderId, content }).returning();
+    return msg;
+  }
+
+  async getUserPhotos(userId: string): Promise<UserPhoto[]> {
+    return db.select().from(userPhotos)
+      .where(eq(userPhotos.userId, userId))
+      .orderBy(asc(userPhotos.orderIndex));
+  }
+
+  async addUserPhoto(
+    userId: string,
+    photoUrl: string,
+    orderIndex: number,
+    opts: { isMain?: boolean; width?: number; height?: number; variants?: { w800?: string; w1600?: string } } = {},
+  ): Promise<UserPhoto> {
+    return db.transaction(async (tx) => {
+      const [photo] = await tx
+        .insert(userPhotos)
+        .values({
+          userId,
+          photoUrl,
+          orderIndex,
+          isMainProfilePhoto: opts.isMain ?? false,
+          width: opts.width ?? null,
+          height: opts.height ?? null,
+          variants: opts.variants ?? null,
+        })
+        .returning();
+
+      // First upload auto-fills the empty roles so the uploader shows up in
+      // Discover / Matches without ever opening the role picker.
+      const held = await tx
+        .select({ role: userPhotos.role })
+        .from(userPhotos)
+        .where(eq(userPhotos.userId, userId));
+      const hasCover = held.some((r) => r.role === "cover");
+      const hasPortrait = held.some((r) => r.role === "portrait");
+
+      let current = photo;
+      if (!hasCover) {
+        await applyPhotoRoleTx(tx, userId, current, "cover");
+        current = { ...current, role: "cover" };
+      } else if (!hasPortrait) {
+        await applyPhotoRoleTx(tx, userId, current, "portrait");
+        current = { ...current, role: "portrait", isMainProfilePhoto: true };
+      }
+      return current;
+    });
+  }
+
+  async deleteUserPhoto(userId: string, id: number): Promise<void> {
+    await db.transaction(async (tx) => {
+      const [photo] = await tx
+        .select()
+        .from(userPhotos)
+        .where(and(eq(userPhotos.id, id), eq(userPhotos.userId, userId)));
+      if (!photo) return;
+      await tx.delete(userPhotos).where(eq(userPhotos.id, id));
+
+      // Deleting the cover shouldn't silently drop the user out of Discover:
+      // promote the next gallery photo (lowest orderIndex) into the role. If the
+      // only thing left is the portrait, don't cannibalise it — just null the
+      // mirror and let the read-side resolver fall back to the portrait.
+      if (photo.role === "cover") {
+        const [next] = await tx
+          .select()
+          .from(userPhotos)
+          .where(and(eq(userPhotos.userId, userId), eq(userPhotos.role, "gallery")))
+          .orderBy(asc(userPhotos.orderIndex))
+          .limit(1);
+        if (next) {
+          await applyPhotoRoleTx(tx, userId, next, "cover");
+        } else {
+          await tx.update(profiles).set({ coverPhotoUrl: null }).where(eq(profiles.userId, userId));
+        }
+      }
+    });
+  }
+
+  async reorderUserPhotos(userId: string, photoIds: number[]): Promise<void> {
+    for (let i = 0; i < photoIds.length; i++) {
+      await db.update(userPhotos)
+        .set({ orderIndex: i })
+        .where(and(eq(userPhotos.id, photoIds[i]), eq(userPhotos.userId, userId)));
+    }
+  }
+
+  // One transaction: verify ownership, size-check for cover/portrait, then hand
+  // off to applyPhotoRoleTx for the demote / promote / mirror. The partial
+  // unique indexes on user_photos are the backstop — demote must land first.
+  async setPhotoRole(
+    userId: string,
+    photoId: number,
+    role: PhotoRole,
+  ): Promise<{ photoId: number; role: PhotoRole; displaced: { id: number; role: PhotoRole } | null }> {
+    return db.transaction(async (tx) => {
+      const [photo] = await tx
+        .select()
+        .from(userPhotos)
+        .where(and(eq(userPhotos.id, photoId), eq(userPhotos.userId, userId)));
+      if (!photo) throw new PhotoNotFoundError();
+
+      if (role === "cover" || role === "portrait") {
+        const longEdge = Math.max(photo.width ?? 0, photo.height ?? 0);
+        const min = ROLE_MIN_LONG_EDGE[role];
+        if (longEdge > 0 && longEdge < min) throw new PhotoTooSmallError(role, longEdge, min);
+      }
+
+      const { displaced } = await applyPhotoRoleTx(tx, userId, photo, role);
+      return { photoId, role, displaced };
+    });
+  }
+
+  async setPhotoFocal(
+    userId: string,
+    photoId: number,
+    target: "cover" | "portrait",
+    x: number,
+    y: number,
+  ): Promise<UserPhoto> {
+    const clamp = (n: number) => Math.min(1, Math.max(0, n));
+    const patch =
+      target === "cover"
+        ? { coverFocalX: clamp(x), coverFocalY: clamp(y) }
+        : { portraitFocalX: clamp(x), portraitFocalY: clamp(y) };
+    const [row] = await db
+      .update(userPhotos)
+      .set(patch)
+      .where(and(eq(userPhotos.id, photoId), eq(userPhotos.userId, userId)))
+      .returning();
+    if (!row) throw new PhotoNotFoundError();
+    return row;
+  }
+
+  async updateProfilePrompts(userId: string, prompts: { q: string; a: string }[]): Promise<Profile> {
+    const [row] = await db
+      .update(profiles)
+      .set({ prompts })
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return row;
+  }
+
+  async getProfileWeekStats(
+    userId: string,
+  ): Promise<{ twinTalks: number; readsOver80: number; meetsSet: number }> {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const mine = or(eq(matches.user1Id, userId), eq(matches.user2Id, userId));
+    const [[talks], [reads], [meets]] = await Promise.all([
+      db
+        .select({ c: count() })
+        .from(twinMemory)
+        .where(and(eq(twinMemory.userId, userId), eq(twinMemory.role, "user"), gt(twinMemory.createdAt, since))),
+      db
+        .select({ c: count() })
+        .from(matches)
+        .where(and(mine, gte(matches.compatibilityScore, 80), gt(matches.createdAt, since))),
+      db
+        .select({ c: count() })
+        .from(matches)
+        .where(and(mine, eq(matches.status, "matched"), gt(matches.createdAt, since))),
+    ]);
+    return {
+      twinTalks: Number(talks?.c ?? 0),
+      readsOver80: Number(reads?.c ?? 0),
+      meetsSet: Number(meets?.c ?? 0),
+    };
+  }
+
+  async addTwinMemory(userId: string, message: string, role: string, useForTraining: boolean = true): Promise<TwinMemoryEntry> {
+    const [entry] = await db.insert(twinMemory).values({ userId, message, role, useForTraining }).returning();
+    return entry;
+  }
+
+  async getTwinMemory(userId: string, limit: number = 100): Promise<TwinMemoryEntry[]> {
+    return db.select().from(twinMemory)
+      .where(eq(twinMemory.userId, userId))
+      .orderBy(desc(twinMemory.createdAt))
+      .limit(limit);
+  }
+
+  async updateTwinTrainingOptOut(userId: string, useForTraining: boolean): Promise<void> {
+    await db.update(twinMemory)
+      .set({ useForTraining })
+      .where(eq(twinMemory.userId, userId));
+  }
+
+  async createNotification(userId: string, type: string, title: string, body: string): Promise<TwinNotification> {
+    const [notif] = await db.insert(twinNotifications).values({ userId, type, title, body }).returning();
+    return notif;
+  }
+
+  async getNotifications(userId: string): Promise<TwinNotification[]> {
+    return db.select().from(twinNotifications)
+      .where(eq(twinNotifications.userId, userId))
+      .orderBy(desc(twinNotifications.createdAt));
+  }
+
+  async markNotificationRead(id: number): Promise<void> {
+    await db.update(twinNotifications).set({ read: true }).where(eq(twinNotifications.id, id));
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const [result] = await db.select({ value: count() }).from(twinNotifications)
+      .where(and(eq(twinNotifications.userId, userId), eq(twinNotifications.read, false)));
+    return result?.value ?? 0;
+  }
+
+  async createSubscription(userId: string, tier: string, stripeSubId?: string): Promise<Subscription> {
+    const values: any = { userId, tier, status: "active" };
+    if (stripeSubId) values.stripeSubscriptionId = stripeSubId;
+    const [sub] = await db.insert(subscriptions).values(values).returning();
+    return sub;
+  }
+
+  async getSubscription(userId: string): Promise<Subscription | undefined> {
+    const [sub] = await db.select().from(subscriptions)
+      .where(eq(subscriptions.userId, userId))
+      .orderBy(desc(subscriptions.createdAt))
+      .limit(1);
+    return sub;
+  }
+
+  async updateSubscription(id: number, updates: Partial<Subscription>): Promise<Subscription> {
+    const [updated] = await db.update(subscriptions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(subscriptions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async cancelSubscription(id: number): Promise<Subscription> {
+    const [updated] = await db.update(subscriptions)
+      .set({ status: "canceled", updatedAt: new Date() })
+      .where(eq(subscriptions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async createPayment(userId: string, amount: number, currency: string, stripeChargeId?: string, subscriptionId?: number): Promise<Payment> {
+    const values: any = { userId, amount, currency, status: "completed" };
+    if (stripeChargeId) values.stripeChargeId = stripeChargeId;
+    if (subscriptionId) values.subscriptionId = subscriptionId;
+    const [payment] = await db.insert(payments).values(values).returning();
+    return payment;
+  }
+
+  async getPayments(userId: string): Promise<Payment[]> {
+    return db.select().from(payments)
+      .where(eq(payments.userId, userId))
+      .orderBy(desc(payments.createdAt));
+  }
+
+  async getEntitlements(userId: string): Promise<Entitlement[]> {
+    return db.select().from(entitlements)
+      .where(eq(entitlements.userId, userId));
+  }
+
+  async addEntitlement(userId: string, type: string, quantity: number, expiresAt?: Date): Promise<Entitlement> {
+    const values: any = { userId, type, quantity };
+    if (expiresAt) values.expiresAt = expiresAt;
+    const [ent] = await db.insert(entitlements).values(values).returning();
+    return ent;
+  }
+
+  async useEntitlement(userId: string, type: string): Promise<boolean> {
+    const [ent] = await db.select().from(entitlements).where(
+      and(eq(entitlements.userId, userId), eq(entitlements.type, type))
+    );
+    if (!ent || ent.quantity <= 0) return false;
+    if (ent.expiresAt && new Date(ent.expiresAt) < new Date()) return false;
+    await db.update(entitlements)
+      .set({ quantity: ent.quantity - 1, updatedAt: new Date() })
+      .where(eq(entitlements.id, ent.id));
+    return true;
+  }
+
+  async seedDemoData(): Promise<void> {
+    // Tier plans. Reseed if the table is empty OR still holds the old
+    // duration-based rows (no `tier`) — the stale $54 "6 Months" row must not
+    // survive.
+    const existingPlans = await db.select().from(plans);
+    const isOldShape = existingPlans.length > 0 && existingPlans.every((p) => p.tier == null);
+    if (existingPlans.length === 0 || isOldShape) {
+      if (isOldShape) await db.delete(plans);
+      await db.insert(plans).values([
+        { name: "Free", tier: "free", priceCents: 0, isBestValue: false },
+        { name: "Spark", tier: "spark", priceCents: 499, isBestValue: false },
+        { name: "Flame", tier: "flame", priceCents: 999, isBestValue: true },
+        { name: "Ember", tier: "ember", priceCents: 1999, isBestValue: false },
+      ]);
+    }
+
+    const existingGroups = await this.getGroups();
+    if (existingGroups.length > 0) return;
+
+    await this.createGroup("Morning Coffee", "For early risers who love a good brew and deep conversations.", "interest");
+    await this.createGroup("Adventure Seekers", "Hikers, travelers, and adrenaline junkies looking for their next adventure partner.", "interest");
+    await this.createGroup("Book Club", "Discussing the latest sci-fi, fantasy, and literary fiction.", "interest");
+    await this.createGroup("Foodies Unite", "Share your favorite recipes and restaurant discoveries.", "interest");
+    await this.createGroup("Mindfulness & Growth", "For those on a journey of self-improvement and mindfulness.", "interest");
+
+    const demoUsers = [
+      { id: "demo_sarah_001", email: "sarah@demo.vibeflow.app", firstName: "Sarah", lastName: "Chen", profileImageUrl: null },
+      { id: "demo_james_002", email: "james@demo.vibeflow.app", firstName: "James", lastName: "Rivera", profileImageUrl: null },
+      { id: "demo_elena_003", email: "elena@demo.vibeflow.app", firstName: "Elena", lastName: "Petrov", profileImageUrl: null },
+      { id: "demo_alex_004", email: "alex@demo.vibeflow.app", firstName: "Alex", lastName: "Kim", profileImageUrl: null },
+      { id: "demo_maya_005", email: "maya@demo.vibeflow.app", firstName: "Maya", lastName: "Johnson", profileImageUrl: null },
+    ];
+
+    for (const demoUser of demoUsers) {
+      const existing = await db.select().from(users).where(eq(users.id, demoUser.id));
+      if (existing.length === 0) {
+        await db.insert(users).values(demoUser);
+      }
+    }
+
+    const demoProfiles = [
+      {
+        userId: "demo_sarah_001",
+        displayName: "Sarah",
+        bio: "Artist & coffee lover. I find beauty in the small moments. Looking for someone who values deep conversation over small talk.",
+        age: 28, gender: "Female", location: "San Francisco, CA",
+        personalityProfile: { openness: 92, conscientiousness: 78, extraversion: 65, agreeableness: 88, neuroticism: 35 },
+        twinPersona: "I'm Sarah's AI Twin. Sarah is a creative soul who values authenticity above all else. She believes in growth through vulnerability and seeks someone who can match her emotional depth. She loves morning hikes, gallery openings, and cooking elaborate meals while listening to jazz. She's looking for a partner who is intellectually curious and emotionally available.",
+        onboardingCompleted: true, isPublic: true,
+      },
+      {
+        userId: "demo_james_002",
+        displayName: "James",
+        bio: "Tech entrepreneur building the future. I believe in combining ambition with kindness. Weekend warrior who codes by day and surfs by sunset.",
+        age: 31, gender: "Male", location: "Los Angeles, CA",
+        personalityProfile: { openness: 85, conscientiousness: 90, extraversion: 72, agreeableness: 80, neuroticism: 28 },
+        twinPersona: "I'm James's AI Twin. James is driven but grounded. He co-founded a startup focused on sustainable tech and genuinely cares about making the world better. He's looking for someone who has their own passions and ambitions, but also knows how to slow down and enjoy life. He values honesty, humor, and someone who challenges him intellectually.",
+        onboardingCompleted: true, isPublic: true,
+      },
+      {
+        userId: "demo_elena_003",
+        displayName: "Elena",
+        bio: "Nature enthusiast and amateur chef. I believe the best dates involve cooking together and stargazing. Looking for my adventure partner.",
+        age: 26, gender: "Female", location: "Portland, OR",
+        personalityProfile: { openness: 88, conscientiousness: 70, extraversion: 55, agreeableness: 92, neuroticism: 40 },
+        twinPersona: "I'm Elena's AI Twin. Elena is warm-hearted and adventurous in a quiet way. She'd rather explore a hidden trail than go to a crowded club. She's passionate about sustainable living and farm-to-table cooking. She's looking for someone genuine, patient, and who shares her love for nature and good food.",
+        onboardingCompleted: true, isPublic: true,
+      },
+      {
+        userId: "demo_alex_004",
+        displayName: "Alex",
+        bio: "Musician & software engineer. I write code by day and compose music by night. Looking for someone who appreciates both logic and creativity.",
+        age: 29, gender: "Non-binary", location: "Austin, TX",
+        personalityProfile: { openness: 95, conscientiousness: 82, extraversion: 58, agreeableness: 75, neuroticism: 42 },
+        twinPersona: "I'm Alex's AI Twin. Alex bridges the gap between technical precision and artistic expression. They play piano and guitar, and recently started producing electronic music. They value deep intellectual conversations and emotional authenticity. They're looking for someone who embraces complexity and isn't afraid to be different.",
+        onboardingCompleted: true, isPublic: true,
+      },
+      {
+        userId: "demo_maya_005",
+        displayName: "Maya",
+        bio: "Yoga instructor & travel blogger. 30 countries and counting. I believe connection is the foundation of happiness.",
+        age: 27, gender: "Female", location: "New York, NY",
+        personalityProfile: { openness: 90, conscientiousness: 68, extraversion: 85, agreeableness: 88, neuroticism: 30 },
+        twinPersona: "I'm Maya's AI Twin. Maya is vibrant, open-minded, and deeply empathetic. She's traveled extensively and has a gift for making anyone feel comfortable. She's looking for someone with a growth mindset who is curious about the world and values meaningful experiences over material things.",
+        onboardingCompleted: true, isPublic: true,
+      }
+    ];
+
+    for (const demoProfile of demoProfiles) {
+      const existing = await db.select().from(profiles).where(eq(profiles.userId, demoProfile.userId));
+      if (existing.length === 0) {
+        await db.insert(profiles).values(demoProfile);
+      }
+    }
+
+  }
+
+  async starMessage(messageId: number, userId: string, groupId: number): Promise<StarredMessage> {
+    const existing = await db.select().from(starredMessages)
+      .where(and(eq(starredMessages.messageId, messageId), eq(starredMessages.userId, userId)));
+    if (existing.length > 0) return existing[0];
+    const [starred] = await db.insert(starredMessages).values({ messageId, userId, groupId }).returning();
+    return starred;
+  }
+
+  async unstarMessage(messageId: number, userId: string): Promise<void> {
+    await db.delete(starredMessages)
+      .where(and(eq(starredMessages.messageId, messageId), eq(starredMessages.userId, userId)));
+  }
+
+  async getStarredMessages(groupId: number, userId: string): Promise<any[]> {
+    const starred = await db.select({
+      id: starredMessages.id,
+      messageId: starredMessages.messageId,
+      starredAt: starredMessages.createdAt,
+      content: groupMessages.content,
+      nickname: groupMessages.nickname,
+      contentType: groupMessages.contentType,
+      mediaUrl: groupMessages.mediaUrl,
+      messageCreatedAt: groupMessages.createdAt,
+      senderId: groupMessages.userId,
+    })
+    .from(starredMessages)
+    .innerJoin(groupMessages, eq(starredMessages.messageId, groupMessages.id))
+    .where(and(eq(starredMessages.groupId, groupId), eq(starredMessages.userId, userId)))
+    .orderBy(desc(starredMessages.createdAt));
+    return starred;
+  }
+
+  async isMessageStarred(messageId: number, userId: string): Promise<boolean> {
+    const [result] = await db.select().from(starredMessages)
+      .where(and(eq(starredMessages.messageId, messageId), eq(starredMessages.userId, userId)));
+    return !!result;
+  }
+
+  async getProfileCompletion(userId: string): Promise<{ score: number; tasks: { key: string; label: string; benefit: string; completed: boolean; weight: number }[] }> {
+    const profile = await this.getProfile(userId);
+    const photos = await this.getUserPhotos(userId);
+
+    const tasks = [
+      { key: "bio", label: "Say something in your words", benefit: "Your twin sounds more like you", completed: !!profile?.bio && profile.bio.length > 5, weight: 20 },
+      { key: "photos", label: "Add two more photos", benefit: "Two more photos and your twin has more to work with", completed: photos.length >= 3, weight: 25 },
+      { key: "onboarding", label: "Finish Soul-Mapping", benefit: "This is what your twin learns from", completed: !!profile?.onboardingCompleted, weight: 25 },
+      { key: "verify", label: "Get verified", benefit: "One less thing for people to wonder about", completed: !!profile?.isVerified, weight: 15 },
+      { key: "personality", label: "Answer a few more questions", benefit: "Sharper reads, both directions", completed: !!profile?.aboutSummary, weight: 15 },
+    ];
+
+    const totalWeight = tasks.reduce((sum, t) => sum + t.weight, 0);
+    const completedWeight = tasks.filter(t => t.completed).reduce((sum, t) => sum + t.weight, 0);
+    const score = Math.round((completedWeight / totalWeight) * 100);
+
+    return { score, tasks };
+  }
+
+  async updateProfileCompletionScore(userId: string, score: number): Promise<void> {
+    await db.update(profiles).set({ profileCompletionScore: score }).where(eq(profiles.userId, userId));
+  }
+
+  async getTwinProfileStructured(userId: string): Promise<TwinProfileStructured | undefined> {
+    const [result] = await db.select().from(twinProfilesStructured).where(eq(twinProfilesStructured.userId, userId));
+    return result;
+  }
+
+  async upsertTwinProfileStructured(userId: string, data: Partial<TwinProfileStructured>): Promise<TwinProfileStructured> {
+    const existing = await this.getTwinProfileStructured(userId);
+    if (existing) {
+      const [updated] = await db.update(twinProfilesStructured)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(twinProfilesStructured.userId, userId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(twinProfilesStructured)
+      .values({ userId, ...data } as any)
+      .returning();
+    return created;
+  }
+
+  async addTwinMemoryFact(
+    userId: string,
+    factText: string,
+    source?: string,
+    opts?: { sensitivity?: string[]; classified?: boolean },
+  ): Promise<TwinMemoryFact> {
+    const [fact] = await db.insert(twinMemoryFacts)
+      .values({
+        userId,
+        factText,
+        source: source || "chat",
+        sensitivity: opts?.sensitivity ?? null,
+        disclosable: opts?.classified ?? false,
+      })
+      .returning();
+    return fact;
+  }
+
+  async getTwinMemoryFacts(userId: string, limit?: number): Promise<TwinMemoryFact[]> {
+    let query = db.select().from(twinMemoryFacts)
+      .where(eq(twinMemoryFacts.userId, userId))
+      .orderBy(desc(twinMemoryFacts.createdAt));
+    if (limit) {
+      return await query.limit(limit);
+    }
+    return await query;
+  }
+
+  async clearExpiredMemoryFacts(): Promise<void> {
+    await db.delete(twinMemoryFacts)
+      .where(and(
+        sql`${twinMemoryFacts.expiresAt} IS NOT NULL`,
+        sql`${twinMemoryFacts.expiresAt} < NOW()`
+      ));
+  }
+
+  async deleteAllTwinMemoryFacts(userId: string): Promise<void> {
+    await db.delete(twinMemoryFacts).where(eq(twinMemoryFacts.userId, userId));
+  }
+
+  async clearTwinMemorySummary(userId: string): Promise<void> {
+    await db.delete(twinMemorySummary).where(eq(twinMemorySummary.userId, userId));
+  }
+
+  async upsertTwinMemorySummary(userId: string, summaryText: string): Promise<TwinMemorySummaryEntry> {
+    const existing = await this.getTwinMemorySummary(userId);
+    if (existing) {
+      const [updated] = await db.update(twinMemorySummary)
+        .set({ summaryText, updatedAt: new Date() })
+        .where(eq(twinMemorySummary.userId, userId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(twinMemorySummary)
+      .values({ userId, summaryText })
+      .returning();
+    return created;
+  }
+
+  async getTwinMemorySummary(userId: string): Promise<TwinMemorySummaryEntry | undefined> {
+    const [result] = await db.select().from(twinMemorySummary).where(eq(twinMemorySummary.userId, userId));
+    return result;
+  }
+
+  async getQuestions(): Promise<Question[]> {
+    return await db.select().from(questions).orderBy(asc(questions.orderIndex));
+  }
+
+  async getQuestion(id: number): Promise<Question | undefined> {
+    const [q] = await db.select().from(questions).where(eq(questions.id, id));
+    return q;
+  }
+
+  async createQuestion(data: { text: string; category: string; answerType?: string; options?: any; isOnboardingQuestion?: boolean; weight?: number; orderIndex?: number }): Promise<Question> {
+    const [q] = await db.insert(questions).values({
+      text: data.text,
+      category: data.category,
+      answerType: data.answerType || "text",
+      options: data.options,
+      isOnboardingQuestion: data.isOnboardingQuestion || false,
+      weight: data.weight || 1,
+      orderIndex: data.orderIndex || 0,
+    }).returning();
+    return q;
+  }
+
+  async getNextQuestion(userId: string): Promise<Question | undefined> {
+    const answered = await db.select({ questionId: userAnswers.questionId })
+      .from(userAnswers)
+      .where(eq(userAnswers.userId, userId));
+    const skipped = await db.select({ questionId: questionSchedule.questionId })
+      .from(questionSchedule)
+      .where(and(
+        eq(questionSchedule.userId, userId),
+        sql`${questionSchedule.skippedAt} IS NOT NULL`,
+        sql`(${questionSchedule.nextAskAt} IS NULL OR ${questionSchedule.nextAskAt} > NOW())`
+      ));
+    const answeredIds = answered.map(a => a.questionId);
+    const skippedIds = skipped.map(s => s.questionId);
+    const excludeIds = [...answeredIds, ...skippedIds];
+
+    const allQuestions = await this.getQuestions();
+    const unanswered = allQuestions.filter(q => !excludeIds.includes(q.id));
+
+    if (unanswered.length === 0) return undefined;
+
+    const categoryCounts: Record<string, number> = {};
+    for (const a of answered) {
+      const q = allQuestions.find(q2 => q2.id === a.questionId);
+      if (q) categoryCounts[q.category] = (categoryCounts[q.category] || 0) + 1;
+    }
+    const categorySet = new Set(allQuestions.map(q => q.category));
+    const allCategories = Array.from(categorySet);
+    let lowestCategory = allCategories[0];
+    let lowestCount = Infinity;
+    for (const cat of allCategories) {
+      const c = categoryCounts[cat] || 0;
+      if (c < lowestCount) {
+        lowestCount = c;
+        lowestCategory = cat;
+      }
+    }
+
+    const fromCategory = unanswered.filter(q => q.category === lowestCategory);
+    const candidates = fromCategory.length > 0 ? fromCategory : unanswered;
+    candidates.sort((a, b) => (b.weight || 1) - (a.weight || 1));
+    return candidates[0];
+  }
+
+  async submitAnswer(userId: string, questionId: number, answerText?: string, selectedOptions?: any, ratingValue?: number, isPrivate?: boolean): Promise<UserAnswer> {
+    const [answer] = await db.insert(userAnswers).values({
+      userId,
+      questionId,
+      answerText,
+      selectedOptions,
+      ratingValue,
+      isPrivate: isPrivate || false,
+    }).returning();
+    return answer;
+  }
+
+  async getUserAnswers(userId: string): Promise<UserAnswer[]> {
+    return await db.select().from(userAnswers).where(eq(userAnswers.userId, userId)).orderBy(desc(userAnswers.answeredAt));
+  }
+
+  async getUserAnswer(userId: string, questionId: number): Promise<UserAnswer | undefined> {
+    const [answer] = await db.select().from(userAnswers)
+      .where(and(eq(userAnswers.userId, userId), eq(userAnswers.questionId, questionId)));
+    return answer;
+  }
+
+  async recordQuestionAsked(userId: string, questionId: number): Promise<QuestionScheduleEntry> {
+    const [entry] = await db.insert(questionSchedule).values({ userId, questionId }).returning();
+    return entry;
+  }
+
+  async skipQuestion(userId: string, questionId: number): Promise<QuestionScheduleEntry> {
+    const nextAsk = new Date();
+    nextAsk.setDate(nextAsk.getDate() + 7);
+    const [entry] = await db.insert(questionSchedule).values({
+      userId,
+      questionId,
+      skippedAt: new Date(),
+      nextAskAt: nextAsk,
+    }).returning();
+    return entry;
+  }
+
+  async createAuditLog(userId: string | null, eventType: string, details?: any): Promise<AuditLog> {
+    const [log] = await db.insert(auditLogs).values({
+      userId,
+      eventType,
+      details: details || {},
+    }).returning();
+    return log;
+  }
+
+  async getAuditLogs(userId?: string, limit?: number): Promise<AuditLog[]> {
+    if (userId) {
+      const q = db.select().from(auditLogs).where(eq(auditLogs.userId, userId)).orderBy(desc(auditLogs.createdAt));
+      return limit ? await q.limit(limit) : await q;
+    }
+    const q = db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt));
+    return limit ? await q.limit(limit) : await q;
+  }
+
+  async createStory(userId: string, expiresAt: Date): Promise<Story> {
+    const [story] = await db.insert(stories).values({ userId, expiresAt }).returning();
+    return story;
+  }
+
+  async getStory(id: number): Promise<Story | undefined> {
+    const [story] = await db.select().from(stories).where(
+      and(eq(stories.id, id), gt(stories.expiresAt, new Date()))
+    );
+    return story;
+  }
+
+  async getActiveStories(): Promise<any[]> {
+    const activeStories = await db
+      .select({
+        id: stories.id,
+        userId: stories.userId,
+        createdAt: stories.createdAt,
+        expiresAt: stories.expiresAt,
+        firstName: users.firstName,
+        profileImageUrl: users.profileImageUrl,
+      })
+      .from(stories)
+      .innerJoin(users, eq(stories.userId, users.id))
+      .where(gt(stories.expiresAt, new Date()))
+      .orderBy(desc(stories.createdAt));
+
+    const grouped: Record<string, { userId: string; user: { firstName: string | null; profileImageUrl: string | null }; stories: any[] }> = {};
+    for (const row of activeStories) {
+      if (!grouped[row.userId]) {
+        grouped[row.userId] = {
+          userId: row.userId,
+          user: { firstName: row.firstName, profileImageUrl: row.profileImageUrl },
+          stories: [],
+        };
+      }
+      grouped[row.userId].stories.push({
+        id: row.id,
+        userId: row.userId,
+        createdAt: row.createdAt,
+        expiresAt: row.expiresAt,
+      });
+    }
+    return Object.values(grouped);
+  }
+
+  async getUserStories(userId: string): Promise<Story[]> {
+    await db.delete(stories).where(lte(stories.expiresAt, new Date()));
+    return db.select().from(stories)
+      .where(and(eq(stories.userId, userId), gt(stories.expiresAt, new Date())))
+      .orderBy(desc(stories.createdAt));
+  }
+
+  async deleteExpiredStories(): Promise<void> {
+    await db.delete(stories).where(lte(stories.expiresAt, new Date()));
+  }
+
+  async addStoryMedia(storyId: number, type: string, url: string | null, caption?: string, textContent?: string): Promise<StoryMedia> {
+    const values: any = { storyId, type };
+    if (url !== null) values.url = url;
+    if (caption) values.caption = caption;
+    if (textContent) values.textContent = textContent;
+    const [media] = await db.insert(storyMedia).values(values).returning();
+    return media;
+  }
+
+  async deleteStory(id: number): Promise<void> {
+    await db.delete(storyMedia).where(eq(storyMedia.storyId, id));
+    await db.delete(storyLikes).where(eq(storyLikes.storyId, id));
+    await db.delete(storyComments).where(eq(storyComments.storyId, id));
+    await db.delete(storyViews).where(eq(storyViews.storyId, id));
+    await db.delete(stories).where(eq(stories.id, id));
+  }
+
+  async getStoryMedia(storyId: number): Promise<StoryMedia[]> {
+    return db.select().from(storyMedia).where(eq(storyMedia.storyId, storyId));
+  }
+
+  async likeStory(storyId: number, userId: string): Promise<StoryLike> {
+    const existing = await db.select().from(storyLikes)
+      .where(and(eq(storyLikes.storyId, storyId), eq(storyLikes.userId, userId)));
+    if (existing.length > 0) return existing[0];
+    const [like] = await db.insert(storyLikes).values({ storyId, userId }).returning();
+    return like;
+  }
+
+  async unlikeStory(storyId: number, userId: string): Promise<void> {
+    await db.delete(storyLikes)
+      .where(and(eq(storyLikes.storyId, storyId), eq(storyLikes.userId, userId)));
+  }
+
+  async getStoryLikes(storyId: number): Promise<StoryLike[]> {
+    return db.select().from(storyLikes).where(eq(storyLikes.storyId, storyId));
+  }
+
+  async addStoryComment(storyId: number, userId: string, text: string): Promise<StoryComment> {
+    const [comment] = await db.insert(storyComments).values({ storyId, userId, text }).returning();
+    return comment;
+  }
+
+  async getStoryComments(storyId: number): Promise<StoryComment[]> {
+    return db.select().from(storyComments).where(eq(storyComments.storyId, storyId)).orderBy(asc(storyComments.createdAt));
+  }
+
+  async addStoryView(storyId: number, userId: string): Promise<StoryView> {
+    const existing = await db.select().from(storyViews)
+      .where(and(eq(storyViews.storyId, storyId), eq(storyViews.userId, userId)));
+    if (existing.length > 0) return existing[0];
+    const [view] = await db.insert(storyViews).values({ storyId, userId }).returning();
+    return view;
+  }
+
+  async getStoryViews(storyId: number): Promise<StoryView[]> {
+    return db.select().from(storyViews).where(eq(storyViews.storyId, storyId));
+  }
+
+  async getPlans(): Promise<Plan[]> {
+    return db.select().from(plans).where(eq(plans.isActive, true));
+  }
+
+  async getPlan(id: number): Promise<Plan | undefined> {
+    const [plan] = await db.select().from(plans).where(eq(plans.id, id));
+    return plan;
+  }
+
+  async createPlan(data: { name: string; durationDays: number; priceUsd: string; weeklyEquivalent?: string; isBestValue?: boolean; features?: string[]; stripePriceId?: string }): Promise<Plan> {
+    const [plan] = await db.insert(plans).values(data).returning();
+    return plan;
+  }
+
+  async updatePlan(id: number, updates: Partial<Plan>): Promise<Plan> {
+    const [updated] = await db.update(plans).set(updates).where(eq(plans.id, id)).returning();
+    return updated;
+  }
+
+  async updateGroupMemberMute(groupId: number, userId: string, isMuted: boolean): Promise<GroupMember> {
+    const [updated] = await db.update(groupMembers)
+      .set({ isMuted })
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  async isGroupNicknameTaken(nickname: string): Promise<boolean> {
+    const [row] = await db.select().from(profiles).where(
+      sql`lower(${profiles.groupNickname}) = lower(${nickname})`
+    );
+    return !!row;
+  }
+
+  async isGroupNicknameTakenByOther(nickname: string, currentUserId: string): Promise<boolean> {
+    const [row] = await db.select().from(profiles).where(
+      and(
+        sql`lower(${profiles.groupNickname}) = lower(${nickname})`,
+        ne(profiles.userId, currentUserId)
+      )
+    );
+    return !!row;
+  }
+
+  // Given a desired nickname that's already taken, propose a few close
+  // alternatives that are actually free. One query pulls every taken nickname
+  // sharing the base, then we probe numeric/underscore variants in memory.
+  async suggestAvailableGroupNicknames(base: string, count = 3): Promise<string[]> {
+    const cleanedBase = base.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20) || "user";
+
+    const rows = await db
+      .select({ groupNickname: profiles.groupNickname })
+      .from(profiles)
+      .where(ilike(profiles.groupNickname, `${cleanedBase}%`));
+    const taken = new Set(
+      rows
+        .map((r) => (r.groupNickname || "").toLowerCase())
+        .filter(Boolean)
+    );
+
+    // Keep each candidate within the 3-20 char limit by trimming the base
+    // before appending the suffix.
+    const withSuffix = (suffix: string) => {
+      const room = Math.max(3, 20 - suffix.length);
+      return cleanedBase.slice(0, room) + suffix;
+    };
+
+    const candidates: string[] = [];
+    const pushIfNew = (nick: string) => {
+      if (
+        nick.length >= 3 &&
+        nick.length <= 20 &&
+        !taken.has(nick.toLowerCase()) &&
+        !candidates.some((c) => c.toLowerCase() === nick.toLowerCase())
+      ) {
+        candidates.push(nick);
+      }
+    };
+
+    for (let n = 1; n <= 99 && candidates.length < count; n++) {
+      pushIfNew(withSuffix(String(n)));
+      pushIfNew(withSuffix(`_${n}`));
+    }
+    for (let tries = 0; tries < 50 && candidates.length < count; tries++) {
+      pushIfNew(withSuffix(`_${Math.floor(1000 + Math.random() * 9000)}`));
+    }
+    return candidates.slice(0, count);
+  }
+
+  async createChatRequest(requesterId: string, targetId: string, groupId: number, expiresAt: Date): Promise<ChatRequest> {
+    const [req] = await db.insert(chatRequests).values({ requesterId, targetId, groupId, expiresAt }).returning();
+    return req;
+  }
+
+  async getChatRequest(id: number): Promise<ChatRequest | undefined> {
+    const [req] = await db.select().from(chatRequests).where(eq(chatRequests.id, id));
+    return req;
+  }
+
+  async getChatRequests(userId: string): Promise<ChatRequest[]> {
+    return db.select().from(chatRequests).where(
+      or(eq(chatRequests.requesterId, userId), eq(chatRequests.targetId, userId))
+    ).orderBy(desc(chatRequests.createdAt));
+  }
+
+  async updateChatRequestStatus(id: number, status: string): Promise<ChatRequest> {
+    const [updated] = await db.update(chatRequests).set({ status }).where(eq(chatRequests.id, id)).returning();
+    return updated;
+  }
+
+  async searchUsers(query: string, excludeUserId: string): Promise<any[]> {
+    const rows = await db
+      .select({
+        userId: profiles.userId,
+        displayName: profiles.displayName,
+        groupNickname: profiles.groupNickname,
+        subscriptionTier: profiles.subscriptionTier,
+        profileImageUrl: users.profileImageUrl,
+      })
+      .from(profiles)
+      .innerJoin(users, eq(profiles.userId, users.id))
+      .where(
+        and(
+          ne(profiles.userId, excludeUserId),
+          eq(profiles.isPublic, true),
+          or(
+            ilike(profiles.displayName, `%${query}%`),
+            ilike(profiles.groupNickname, `%${query}%`)
+          )
+        )
+      )
+      .limit(20);
+    return rows;
+  }
+
+  async blockUser(blockerId: string, blockedId: string): Promise<BlockedUser> {
+    const existing = await db.select().from(blockedUsers).where(
+      and(eq(blockedUsers.blockerId, blockerId), eq(blockedUsers.blockedId, blockedId))
+    );
+    if (existing.length > 0) return existing[0];
+    const [row] = await db.insert(blockedUsers).values({ blockerId, blockedId }).returning();
+    return row;
+  }
+
+  async unblockUser(blockerId: string, blockedId: string): Promise<void> {
+    await db.delete(blockedUsers).where(
+      and(eq(blockedUsers.blockerId, blockerId), eq(blockedUsers.blockedId, blockedId))
+    );
+  }
+
+  async getBlockedUsers(blockerId: string): Promise<BlockedUser[]> {
+    return db.select().from(blockedUsers).where(eq(blockedUsers.blockerId, blockerId)).orderBy(desc(blockedUsers.createdAt));
+  }
+
+  async isBlocked(blockerId: string, blockedId: string): Promise<boolean> {
+    const [row] = await db.select().from(blockedUsers).where(
+      and(eq(blockedUsers.blockerId, blockerId), eq(blockedUsers.blockedId, blockedId))
+    );
+    return !!row;
+  }
+
+  async createSupportTicket(userId: string, subject: string, message: string): Promise<SupportTicket> {
+    const [ticket] = await db.insert(supportTickets).values({ userId, subject, message }).returning();
+    return ticket;
+  }
+
+  async createInviteRequest(data: InsertInviteRequest): Promise<InviteRequest> {
+    const [row] = await db.insert(inviteRequests).values(data).returning();
+    return row;
+  }
+
+  async incrementDailyLikes(userId: string): Promise<number> {
+    const today = new Date().toISOString().slice(0, 10);
+    const existing = await db.select().from(dailyLikeCounts).where(
+      and(eq(dailyLikeCounts.userId, userId), eq(dailyLikeCounts.date, today))
+    );
+    if (existing.length > 0) {
+      const newCount = existing[0].count + 1;
+      await db.update(dailyLikeCounts)
+        .set({ count: newCount })
+        .where(eq(dailyLikeCounts.id, existing[0].id));
+      return newCount;
+    } else {
+      await db.insert(dailyLikeCounts).values({ userId, date: today, count: 1 });
+      return 1;
+    }
+  }
+
+  async getDailyLikeCount(userId: string): Promise<number> {
+    const today = new Date().toISOString().slice(0, 10);
+    const [row] = await db.select().from(dailyLikeCounts).where(
+      and(eq(dailyLikeCounts.userId, userId), eq(dailyLikeCounts.date, today))
+    );
+    return row?.count ?? 0;
+  }
+
+  async deleteAllUserData(userId: string): Promise<void> {
+    // Twin data
+    await db.delete(twinMemory).where(eq(twinMemory.userId, userId));
+    await db.delete(twinMemoryFacts).where(eq(twinMemoryFacts.userId, userId));
+    await db.delete(twinMemorySummary).where(eq(twinMemorySummary.userId, userId));
+    await db.delete(twinProfilesStructured).where(eq(twinProfilesStructured.userId, userId));
+    await db.delete(twinNotifications).where(eq(twinNotifications.userId, userId));
+    // Messaging
+    await db.delete(starredMessages).where(eq(starredMessages.userId, userId));
+    await db.delete(messageReactions).where(eq(messageReactions.userId, userId));
+    // Polls
+    await db.delete(pollVotes).where(eq(pollVotes.userId, userId));
+    // Q&A
+    await db.delete(userAnswers).where(eq(userAnswers.userId, userId));
+    await db.delete(questionSchedule).where(eq(questionSchedule.userId, userId));
+    // Payments & entitlements
+    await db.delete(entitlements).where(eq(entitlements.userId, userId));
+    const userSubs = await db.select({ id: subscriptions.id }).from(subscriptions).where(eq(subscriptions.userId, userId));
+    for (const sub of userSubs) {
+      await db.delete(payments).where(eq(payments.subscriptionId, sub.id));
+    }
+    await db.delete(subscriptions).where(eq(subscriptions.userId, userId));
+    // Audit logs
+    await db.delete(auditLogs).where(eq(auditLogs.userId, userId));
+    // Support
+    await db.delete(supportTickets).where(eq(supportTickets.userId, userId));
+    // Block lists
+    await db.delete(blockedUsers).where(eq(blockedUsers.blockerId, userId));
+    await db.delete(blockedUsers).where(eq(blockedUsers.blockedId, userId));
+    // Daily counts
+    await db.delete(dailyLikeCounts).where(eq(dailyLikeCounts.userId, userId));
+    // Chat requests
+    await db.delete(chatRequests).where(or(eq(chatRequests.requesterId, userId), eq(chatRequests.targetId, userId)));
+    // Groups
+    await db.delete(groupJoinRequests).where(eq(groupJoinRequests.userId, userId));
+    await db.delete(groupModerationLogs).where(eq(groupModerationLogs.userId, userId));
+    const userGroupMemberships = await db.select().from(groupMembers).where(eq(groupMembers.userId, userId));
+    for (const gm of userGroupMemberships) {
+      await db.delete(groupMessages).where(and(eq(groupMessages.groupId, gm.groupId), eq(groupMessages.userId, userId)));
+    }
+    await db.delete(groupMembers).where(eq(groupMembers.userId, userId));
+    // Direct messages
+    const userMatches = await this.getMatches(userId);
+    for (const m of userMatches) {
+      await db.delete(directMessages).where(eq(directMessages.matchId, m.id));
+    }
+    await db.delete(matches).where(or(eq(matches.user1Id, userId), eq(matches.user2Id, userId)));
+    // Interviews
+    await db.delete(interviews).where(or(eq(interviews.requesterId, userId), eq(interviews.targetId, userId)));
+    // Photos
+    await db.delete(userPhotos).where(eq(userPhotos.userId, userId));
+    // Stories
+    const userStories = await db.select({ id: stories.id }).from(stories).where(eq(stories.userId, userId));
+    for (const s of userStories) {
+      await db.delete(storyMedia).where(eq(storyMedia.storyId, s.id));
+      await db.delete(storyLikes).where(eq(storyLikes.storyId, s.id));
+      await db.delete(storyComments).where(eq(storyComments.storyId, s.id));
+      await db.delete(storyViews).where(eq(storyViews.storyId, s.id));
+    }
+    await db.delete(storyLikes).where(eq(storyLikes.userId, userId));
+    await db.delete(storyComments).where(eq(storyComments.userId, userId));
+    await db.delete(storyViews).where(eq(storyViews.userId, userId));
+    await db.delete(stories).where(eq(stories.userId, userId));
+    // Profile (last, FK anchor)
+    await db.delete(profiles).where(eq(profiles.userId, userId));
+  }
+}
+
+export const storage = new DatabaseStorage();

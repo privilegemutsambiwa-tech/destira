@@ -1,0 +1,23 @@
+{
+  "name": "Destira",
+  "short_name": "Destira",
+  "description": "Personality-first dating. Your AI twin does the first date's worth of talking before you do.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0C0910",
+  "theme_color": "#0C0910",
+  "icons": [
+    {
+      "src": "/brand/destira-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/brand/destira-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
