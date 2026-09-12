@@ -625,7 +625,7 @@ export default function TwinChat() {
               <Button
                 type="submit"
                 size="icon"
-                className="rounded-full bg-vf-mint text-vf-ink hover:bg-[#A9EDD6] disabled:opacity-50"
+                className="rounded-full bg-vf-mint text-vf-ink hover:bg-[var(--vf-mint-vivid)] disabled:opacity-50"
                 disabled={!input.trim() || isStreaming}
                 data-testid="button-send-twin"
               >

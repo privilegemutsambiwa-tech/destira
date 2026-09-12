@@ -409,7 +409,7 @@ export default function HostEvent() {
                     className={`w-[42px] h-[24px] rounded-full shrink-0 flex items-center p-[3px] transition-colors ${d.isPrivateAddress ? "bg-vf-gold justify-end" : "bg-white/[0.14] justify-start"}`}
                     data-testid="toggle-private"
                   >
-                    <span className="block w-[18px] h-[18px] rounded-full" style={{ background: d.isPrivateAddress ? "#0C0910" : "#CFC7DA" }} />
+                    <span className="block w-[18px] h-[18px] rounded-full" style={{ background: d.isPrivateAddress ? "hsl(var(--vf-ink))" : "#CFC7DA" }} />
                   </button>
                 </div>
                 {d.isPrivateAddress && (
@@ -588,7 +588,7 @@ export default function HostEvent() {
                 aria-pressed={d.isSober}
                 className={`w-[42px] h-[24px] rounded-full shrink-0 flex items-center p-[3px] transition-colors ${d.isSober ? "bg-vf-mint justify-end" : "bg-white/[0.14] justify-start"}`}
               >
-                <span className="block w-[18px] h-[18px] rounded-full" style={{ background: d.isSober ? "#0C0910" : "#CFC7DA" }} />
+                <span className="block w-[18px] h-[18px] rounded-full" style={{ background: d.isSober ? "hsl(var(--vf-ink))" : "#CFC7DA" }} />
               </button>
             </div>
 

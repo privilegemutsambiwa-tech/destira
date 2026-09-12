@@ -86,7 +86,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
         on ? "bg-vf-mint justify-end" : "bg-white/[0.14] justify-start"
       }`}
     >
-      <span className="block w-[18px] h-[18px] rounded-full" style={{ background: on ? "#0C0910" : "#CFC7DA" }} />
+      <span className="block w-[18px] h-[18px] rounded-full" style={{ background: on ? "hsl(var(--vf-ink))" : "#CFC7DA" }} />
     </button>
   );
 }
@@ -200,7 +200,7 @@ export default function EventPreferences() {
             value={draft.maxDistanceKm}
             onChange={(e) => patch({ maxDistanceKm: Number(e.target.value) })}
             className="w-full"
-            style={{ accentColor: "#8FE3C7" }}
+            style={{ accentColor: "var(--vf-mint-vivid)" }}
             data-testid="slider-distance"
           />
           <p className="mt-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
@@ -290,7 +290,7 @@ export default function EventPreferences() {
                   value={draft.notifyThreshold}
                   onChange={(e) => patch({ notifyThreshold: Number(e.target.value) })}
                   className="w-full"
-                  style={{ accentColor: "#8FE3C7" }}
+                  style={{ accentColor: "var(--vf-mint-vivid)" }}
                   data-testid="slider-threshold"
                 />
               </div>

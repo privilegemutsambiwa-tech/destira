@@ -350,7 +350,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
                 <div
                   className={`px-4 py-3 text-sm leading-relaxed ${
                     msg.sender === "user"
-                      ? "rounded-[18px] rounded-br-[6px] bg-vf-ember text-[#180B07] font-medium"
+                      ? "rounded-[18px] rounded-br-[6px] bg-vf-ember text-[hsl(var(--vf-ink))] font-medium"
                       : "rounded-[18px] rounded-bl-[6px] border border-vf-mint/[0.22] bg-vf-mint/[0.09] text-vf-text"
                   }`}
                 >
@@ -440,7 +440,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
           <Button
             type="submit"
             size="icon"
-            className="rounded-full bg-vf-mint text-vf-ink hover:bg-[#A9EDD6] disabled:opacity-50"
+            className="rounded-full bg-vf-mint text-vf-ink hover:bg-[var(--vf-mint-vivid)] disabled:opacity-50"
             disabled={!input.trim() || isStreaming}
             data-testid="button-send"
           >

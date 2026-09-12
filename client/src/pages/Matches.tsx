@@ -238,7 +238,7 @@ export default function Matches() {
               key={tab.value}
               onClick={() => setActiveTab(tab.value)}
               className="relative pb-3 pt-1 text-sm font-medium transition-colors"
-              style={{ color: isActive ? "#F5F0EA" : "#A79FB4" }}
+              style={{ color: isActive ? "hsl(var(--vf-text))" : "var(--vf-muted)" }}
               data-testid={`tab-${tab.value}`}
             >
               {tab.label}

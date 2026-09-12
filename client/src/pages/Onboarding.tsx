@@ -288,7 +288,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
       }`}
       data-testid="toggle-public"
     >
-      <span className="block w-[20px] h-[20px] rounded-full" style={{ background: on ? "#0C0910" : "#CFC7DA" }} />
+      <span className="block w-[20px] h-[20px] rounded-full" style={{ background: on ? "hsl(var(--vf-ink))" : "#CFC7DA" }} />
     </button>
   );
 }
