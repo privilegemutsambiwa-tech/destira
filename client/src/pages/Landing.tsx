@@ -619,8 +619,11 @@ export default function Landing() {
               </div>
             </Reveal>
 
-            {/* mobile: primary image only, below the type */}
-            <div className="lg:hidden mt-10">
+            {/* Below lg (1024) this column runs full-width, which on an
+                iPad's 768–1023px portrait band would stretch a phone-sized
+                4:5 photo well past 1000px tall — constrain it so tablet
+                portrait gets a sane single photo, not a full-bleed poster. */}
+            <div className="lg:hidden mt-10 max-w-[420px] mx-auto md:mx-0">
               <RotatingPhoto slots={HERO_SET} ratio="4/5" priority />
             </div>
           </div>
