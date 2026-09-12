@@ -433,7 +433,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={`Ask about ${meetName}…`}
-            className="flex-1 rounded-full bg-white/5 border-vf-line text-vf-text"
+            className="flex-1 rounded-full bg-vf-text/5 border-vf-line text-vf-text"
             disabled={isStreaming}
             data-testid="input-message"
           />

@@ -299,7 +299,7 @@ function EmailCapture({ className = "" }: { className?: string }) {
         onChange={(e) => setEmail(e.target.value)}
         placeholder="you@email.com"
         aria-label="Your email"
-        className="flex-1 rounded-full border border-vf-line bg-white/5 px-5 h-12 text-[14.5px] text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow"
+        className="flex-1 rounded-full border border-vf-line bg-vf-text/5 px-5 h-12 text-[14.5px] text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow"
         data-testid="input-hero-email"
       />
       <button
@@ -319,7 +319,7 @@ function BoundaryToggle({ label, on }: { label: string; on: boolean }) {
     <div className="flex items-center gap-3">
       <span
         className={`w-[42px] h-[24px] rounded-full shrink-0 flex items-center p-[3px] ${
-          on ? "bg-vf-mint justify-end" : "bg-white/[0.14] justify-start"
+          on ? "bg-vf-mint justify-end" : "bg-vf-text/[0.14] justify-start"
         }`}
       >
         <span className="block w-[18px] h-[18px] rounded-full bg-vf-ink" />
@@ -667,7 +667,7 @@ export default function Landing() {
           <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
             How it actually works
           </span>
-          <span className="w-px h-10 bg-white/20" aria-hidden="true" />
+          <span className="w-px h-10 bg-vf-text/20" aria-hidden="true" />
         </div>
       </section>
 

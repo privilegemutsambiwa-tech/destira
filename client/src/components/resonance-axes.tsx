@@ -32,7 +32,7 @@ export function ResonanceAxes({ axes }: ResonanceAxesProps) {
             data-testid={`resonance-axis-${axis.label}`}
           >
             <span className="text-[13px] text-vf-soft">{axis.label}</span>
-            <span className="h-[5px] rounded-full bg-white/[0.08] overflow-hidden block">
+            <span className="h-[5px] rounded-full bg-vf-text/[0.08] overflow-hidden block">
               <span className={`block h-full rounded-full ${color}`} style={{ width: `${value}%` }} />
             </span>
             <span className="font-mono text-xs text-vf-muted text-right">{Math.round(axis.value)}</span>

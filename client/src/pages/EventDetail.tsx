@@ -223,14 +223,14 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                         });
                         setEditing(true);
                       }}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-full border border-vf-line text-vf-soft hover:border-white/25 text-[13px] transition-colors"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-full border border-vf-line text-vf-soft hover:border-vf-text/25 text-[13px] transition-colors"
                       data-testid="button-edit-event"
                     >
                       <Pencil className="w-3.5 h-3.5" /> Edit
                     </button>
                     <button
                       onClick={() => setCancelOpen(true)}
-                      className="flex-1 h-9 rounded-full border border-vf-line text-vf-faint hover:text-vf-text hover:border-white/25 text-[13px] transition-colors"
+                      className="flex-1 h-9 rounded-full border border-vf-line text-vf-faint hover:text-vf-text hover:border-vf-text/25 text-[13px] transition-colors"
                       data-testid="button-open-cancel-event"
                     >
                       Call it off

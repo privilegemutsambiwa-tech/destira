@@ -343,7 +343,7 @@ function ScopePill({ active, onToggle }: { active: boolean; onToggle: () => void
       className={`text-sm font-medium px-4 py-1.5 rounded-full border transition-colors ${
         active
           ? "bg-vf-ember border-transparent text-vf-ink"
-          : "border-vf-line text-vf-soft hover:border-white/25"
+          : "border-vf-line text-vf-soft hover:border-vf-text/25"
       }`}
       data-testid="chip-nearby"
     >
@@ -852,7 +852,7 @@ export default function Discover() {
               <div className="flex gap-2.5 flex-wrap mt-auto pt-2">
                 <button
                   onClick={handlePass}
-                  className="flex items-center justify-center w-12 h-12 rounded-full border border-white/14 text-vf-faint hover:text-vf-text hover:border-white/25 transition-colors btn-press shrink-0"
+                  className="flex items-center justify-center w-12 h-12 rounded-full border border-vf-text/14 text-vf-faint hover:text-vf-text hover:border-vf-text/25 transition-colors btn-press shrink-0"
                   data-testid="button-pass"
                   aria-label="Pass"
                 >
@@ -916,7 +916,7 @@ export default function Discover() {
                   <button
                     key={p.userId}
                     onClick={() => setCurrentIdx(idx)}
-                    className="text-left rounded-[20px] border border-vf-line bg-vf-surface2 p-4 flex gap-3.5 items-center hover:border-white/20 transition-colors"
+                    className="text-left rounded-[20px] border border-vf-line bg-vf-surface2 p-4 flex gap-3.5 items-center hover:border-vf-text/20 transition-colors"
                     data-testid={`card-upcoming-${p.userId}`}
                   >
                     <div className="w-[58px] h-[72px] rounded-[14px] shrink-0 overflow-hidden bg-vf-surface2 flex items-center justify-center">
@@ -1002,14 +1002,14 @@ export default function Discover() {
                 onChange={(e) => setReportReason(e.target.value)}
                 placeholder="What's going on? (optional)"
                 rows={3}
-                className="w-full mb-4 rounded-[12px] bg-vf-surface2 border border-vf-line p-3 text-[14px] text-vf-text placeholder:text-vf-faint resize-none outline-none focus:border-white/25"
+                className="w-full mb-4 rounded-[12px] bg-vf-surface2 border border-vf-line p-3 text-[14px] text-vf-text placeholder:text-vf-faint resize-none outline-none focus:border-vf-text/25"
                 data-testid="input-report-reason"
               />
             )}
             <div className="flex gap-2.5">
               <button
                 onClick={() => { setConfirm(null); setReportReason(""); }}
-                className="flex-1 h-11 rounded-full border border-white/14 text-[14px] text-vf-muted hover:text-vf-text transition-colors"
+                className="flex-1 h-11 rounded-full border border-vf-text/14 text-[14px] text-vf-muted hover:text-vf-text transition-colors"
                 data-testid="button-confirm-cancel"
               >
                 Cancel

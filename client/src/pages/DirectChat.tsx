@@ -104,7 +104,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={`Message ${otherName}...`}
-            className="flex-1 rounded-full h-12 px-6 bg-white/5 border-vf-line text-vf-text"
+            className="flex-1 rounded-full h-12 px-6 bg-vf-text/5 border-vf-line text-vf-text"
             data-testid="input-message"
           />
           <Button

@@ -103,7 +103,7 @@ function Chip({
       className={`rounded-full border px-3.5 h-8 text-[12.5px] capitalize transition-colors ${
         active
           ? "border-vf-mint/50 bg-vf-mint/10 text-vf-text"
-          : "border-vf-line text-vf-muted hover:text-vf-text hover:border-white/20"
+          : "border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20"
       }`}
     >
       {label}
@@ -248,7 +248,7 @@ export default function Events() {
               if (panelOpen) backToFeed();
               else setPanelOpen(true);
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-white/20 h-9 px-4 text-[13px] transition-colors"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20 h-9 px-4 text-[13px] transition-colors"
             data-testid="button-toggle-search"
           >
             {panelOpen ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
@@ -261,7 +261,7 @@ export default function Events() {
           </button>
           <button
             onClick={() => setLocation("/settings/events?from=/events")}
-            className="inline-flex items-center justify-center rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-white/20 h-9 px-4 text-[13px] transition-colors"
+            className="inline-flex items-center justify-center rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20 h-9 px-4 text-[13px] transition-colors"
             data-testid="button-event-preferences"
           >
             Preferences

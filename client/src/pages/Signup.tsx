@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ageFromDob, MIN_AGE } from "@shared/essentials";
 
 const INPUT =
-  "w-full rounded-[12px] border border-vf-line bg-white/5 px-3.5 h-11 text-sm text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow";
+  "w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-11 text-sm text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow";
 const LABEL = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-1.5 block";
 
 // Signup collects the account + the basics only. The soul-mapping questions —
@@ -211,7 +211,7 @@ export default function Signup() {
                     <span
                       key={i}
                       className={`h-1 flex-1 rounded-full transition-colors ${
-                        i < pwScore ? "bg-vf-ember" : "bg-white/[0.12]"
+                        i < pwScore ? "bg-vf-ember" : "bg-vf-text/[0.12]"
                       }`}
                     />
                   ))}

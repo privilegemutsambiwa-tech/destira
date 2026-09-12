@@ -77,7 +77,7 @@ function Chip({ label, active, onClick }: { label: string; active: boolean; onCl
       onClick={onClick}
       aria-pressed={active}
       className={`rounded-full border px-3.5 h-9 text-[13px] capitalize transition-colors ${
-        active ? "border-vf-mint/50 bg-vf-mint/10 text-vf-text" : "border-vf-line text-vf-muted hover:text-vf-text hover:border-white/20"
+        active ? "border-vf-mint/50 bg-vf-mint/10 text-vf-text" : "border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20"
       }`}
     >
       {label}
@@ -355,12 +355,12 @@ export default function HostEvent() {
                   {placeOpen && placeQuery.trim().length > 0 && (
                     <div className="absolute z-10 mt-1 w-full rounded-[12px] border border-vf-line bg-vf-surface2 overflow-hidden">
                       {places.length === 0 ? (
-                        <button type="button" onClick={() => { setPlaceOpen(false); }} className="block w-full text-left px-3.5 py-2.5 text-[13px] text-vf-muted hover:bg-white/[0.03]">
+                        <button type="button" onClick={() => { setPlaceOpen(false); }} className="block w-full text-left px-3.5 py-2.5 text-[13px] text-vf-muted hover:bg-vf-text/[0.03]">
                           Nothing matched — enter it as "somewhere else" below.
                         </button>
                       ) : (
                         places.map((p) => (
-                          <button key={p.id} type="button" onClick={() => pickPlace(p)} className="block w-full text-left px-3.5 py-2.5 hover:bg-white/[0.03]" data-testid={`place-option-${p.id}`}>
+                          <button key={p.id} type="button" onClick={() => pickPlace(p)} className="block w-full text-left px-3.5 py-2.5 hover:bg-vf-text/[0.03]" data-testid={`place-option-${p.id}`}>
                             <div className="text-[14px] text-vf-text flex items-center gap-2">
                               {p.name}
                               {p.verifiedAt && <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-vf-mint">verified</span>}
@@ -406,7 +406,7 @@ export default function HostEvent() {
                     type="button"
                     onClick={() => set({ isPrivateAddress: !d.isPrivateAddress })}
                     aria-pressed={d.isPrivateAddress}
-                    className={`w-[42px] h-[24px] rounded-full shrink-0 flex items-center p-[3px] transition-colors ${d.isPrivateAddress ? "bg-vf-gold justify-end" : "bg-white/[0.14] justify-start"}`}
+                    className={`w-[42px] h-[24px] rounded-full shrink-0 flex items-center p-[3px] transition-colors ${d.isPrivateAddress ? "bg-vf-gold justify-end" : "bg-vf-text/[0.14] justify-start"}`}
                     data-testid="toggle-private"
                   >
                     <span className="block w-[18px] h-[18px] rounded-full" style={{ background: d.isPrivateAddress ? "hsl(var(--vf-ink))" : "#CFC7DA" }} />
@@ -441,7 +441,7 @@ export default function HostEvent() {
                   </div>
                 ))}
                 {d.photos.length < 6 && (
-                  <label className="rounded-[12px] border border-dashed border-vf-line flex items-center justify-center text-vf-faint hover:text-vf-text hover:border-white/25 cursor-pointer text-[12px]" style={{ aspectRatio: "3/2" }}>
+                  <label className="rounded-[12px] border border-dashed border-vf-line flex items-center justify-center text-vf-faint hover:text-vf-text hover:border-vf-text/25 cursor-pointer text-[12px]" style={{ aspectRatio: "3/2" }}>
                     Add
                     <input
                       type="file"
@@ -586,7 +586,7 @@ export default function HostEvent() {
                 type="button"
                 onClick={() => set({ isSober: !d.isSober })}
                 aria-pressed={d.isSober}
-                className={`w-[42px] h-[24px] rounded-full shrink-0 flex items-center p-[3px] transition-colors ${d.isSober ? "bg-vf-mint justify-end" : "bg-white/[0.14] justify-start"}`}
+                className={`w-[42px] h-[24px] rounded-full shrink-0 flex items-center p-[3px] transition-colors ${d.isSober ? "bg-vf-mint justify-end" : "bg-vf-text/[0.14] justify-start"}`}
               >
                 <span className="block w-[18px] h-[18px] rounded-full" style={{ background: d.isSober ? "hsl(var(--vf-ink))" : "#CFC7DA" }} />
               </button>
@@ -653,7 +653,7 @@ export default function HostEvent() {
         style={{ paddingBottom: "max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.5rem))" }}
       >
         <div className="max-w-[560px] mx-auto flex gap-3">
-          <button onClick={back} className="h-12 px-5 rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-white/20 text-[14px] transition-colors" data-testid="button-step-back">
+          <button onClick={back} className="h-12 px-5 rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20 text-[14px] transition-colors" data-testid="button-step-back">
             {step === 0 ? "Cancel" : "Back"}
           </button>
           {step < STEPS.length - 1 ? (

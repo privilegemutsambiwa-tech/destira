@@ -583,7 +583,7 @@ export default function Profile() {
                 ))}
                 <button
                   onClick={() => setLocation("/photos")}
-                  className="rounded-[16px] border border-dashed border-vf-line text-vf-faint hover:border-white/25 hover:text-vf-text transition-colors flex items-center justify-center"
+                  className="rounded-[16px] border border-dashed border-vf-line text-vf-faint hover:border-vf-text/25 hover:text-vf-text transition-colors flex items-center justify-center"
                   style={{ aspectRatio: "3 / 4" }}
                   data-testid="button-add-photo"
                 >
@@ -598,7 +598,7 @@ export default function Profile() {
               <p className="text-[14px] text-vf-muted mt-3">Nobody has vouched for you yet.</p>
               <button
                 onClick={askFriends}
-                className="mt-3 inline-flex items-center rounded-full border border-vf-line text-vf-soft hover:border-white/25 px-4 h-9 text-[13px] transition-colors"
+                className="mt-3 inline-flex items-center rounded-full border border-vf-line text-vf-soft hover:border-vf-text/25 px-4 h-9 text-[13px] transition-colors"
                 data-testid="button-ask-friends"
               >
                 Ask two friends
@@ -619,7 +619,7 @@ export default function Profile() {
                     <button
                       key={g.id}
                       onClick={() => setLocation(`/lounge/group/${g.id}`)}
-                      className="inline-flex items-center gap-2 rounded-full border border-vf-line text-vf-soft hover:border-white/25 px-3.5 h-9 text-[13px] transition-colors"
+                      className="inline-flex items-center gap-2 rounded-full border border-vf-line text-vf-soft hover:border-vf-text/25 px-3.5 h-9 text-[13px] transition-colors"
                       data-testid={`room-chip-${g.id}`}
                     >
                       {g.name}
@@ -654,7 +654,7 @@ export default function Profile() {
                 Talk to your twin
               </button>
               <div className="mt-4">
-                <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-1 rounded-full bg-vf-text/10 overflow-hidden">
                   <div className="h-full bg-vf-mint transition-all duration-500" style={{ width: `${answeredPct}%` }} data-testid="bar-twin-training" />
                 </div>
                 <p className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mt-2">{answered} of 100 answered</p>
@@ -796,7 +796,7 @@ function EditProfileDialog({
     location === initialLocation;
 
   const inputClass =
-    "bg-white/5 border-vf-line rounded-[12px] text-vf-text focus-visible:ring-2 focus-visible:ring-vf-ember/60 focus-visible:ring-offset-2 focus-visible:ring-offset-vf-surface";
+    "bg-vf-text/5 border-vf-line rounded-[12px] text-vf-text focus-visible:ring-2 focus-visible:ring-vf-ember/60 focus-visible:ring-offset-2 focus-visible:ring-offset-vf-surface";
 
   const handleSave = async () => {
     if (pristine) return;

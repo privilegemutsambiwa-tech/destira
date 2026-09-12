@@ -114,7 +114,7 @@ export default function Interviews() {
             className={`px-4 py-1.5 text-sm font-medium rounded-full border transition-colors btn-press ${
               activeFilter === f.value
                 ? "bg-vf-ember border-transparent text-vf-ink"
-                : "border-vf-line text-vf-soft hover:border-white/25"
+                : "border-vf-line text-vf-soft hover:border-vf-text/25"
             }`}
             data-testid={`filter-${f.value}`}
           >
@@ -135,7 +135,7 @@ export default function Interviews() {
             return (
               <Link key={thread.id} href={thread.href}>
                 <div
-                  className={`flex items-center gap-3 px-1 py-4 cursor-pointer rounded-xl transition-colors hover:bg-white/[0.03] ${
+                  className={`flex items-center gap-3 px-1 py-4 cursor-pointer rounded-xl transition-colors hover:bg-vf-text/[0.03] ${
                     idx < filteredThreads.length - 1 ? "border-b border-vf-line" : ""
                   }`}
                   data-testid={`card-thread-${thread.id}`}

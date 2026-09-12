@@ -285,7 +285,7 @@ export default function PhotoManager() {
                     key={p.id}
                     onClick={() => setSelectedId(selectedId === p.id ? null : p.id)}
                     className={`relative overflow-hidden rounded-[16px] transition-colors ${
-                      isCover ? "border-2 border-vf-mint" : isPortrait ? "border-2 border-vf-ember" : "border border-vf-line hover:border-white/25"
+                      isCover ? "border-2 border-vf-mint" : isPortrait ? "border-2 border-vf-ember" : "border border-vf-line hover:border-vf-text/25"
                     } ${selectedId === p.id ? "ring-2 ring-vf-text/60" : ""}`}
                     style={{ aspectRatio: "3 / 4" }}
                     data-testid={`photo-tile-${p.id}`}
@@ -304,7 +304,7 @@ export default function PhotoManager() {
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
                 className={`rounded-[16px] border border-dashed flex flex-col items-center justify-center gap-1.5 text-vf-faint transition-colors ${
-                  dragOver ? "border-vf-text/60 text-vf-text" : "border-vf-line hover:border-white/25 hover:text-vf-text"
+                  dragOver ? "border-vf-text/60 text-vf-text" : "border-vf-line hover:border-vf-text/25 hover:text-vf-text"
                 }`}
                 style={{ aspectRatio: "3 / 4" }}
                 data-testid="button-upload"
@@ -360,7 +360,7 @@ function EmptyState({ onPick, dragOver, uploading }: { onPick: () => void; dragO
             onClick={onPick}
             disabled={uploading}
             className={`rounded-[18px] border border-dashed p-6 flex flex-col items-center justify-center gap-3 text-center transition-colors ${
-              dragOver ? "border-vf-text/60" : "border-vf-line hover:border-white/25"
+              dragOver ? "border-vf-text/60" : "border-vf-line hover:border-vf-text/25"
             }`}
             style={{ minHeight: 200 }}
           >
@@ -464,7 +464,7 @@ function PhotoEditor({
         </div>
         <button
           onClick={onDelete}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-vf-line text-vf-faint hover:text-vf-text hover:border-white/25 text-[13px] transition-colors"
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-vf-line text-vf-faint hover:text-vf-text hover:border-vf-text/25 text-[13px] transition-colors"
           data-testid="button-delete-selected"
         >
           <Trash2 className="w-3.5 h-3.5" /> Delete

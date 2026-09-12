@@ -618,7 +618,7 @@ export default function TwinChat() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Tell your twin something true..."
-                className="flex-1 rounded-full bg-white/5 border-vf-line text-vf-text"
+                className="flex-1 rounded-full bg-vf-text/5 border-vf-line text-vf-text"
                 disabled={isStreaming}
                 data-testid="input-twin-message"
               />

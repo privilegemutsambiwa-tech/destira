@@ -90,7 +90,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
                 <Link key={item.href} href={item.href}>
                   <div
                     className={`flex items-center justify-between gap-2 px-4 py-3 rounded-xl cursor-pointer transition-colors ${
-                      isActive ? "bg-white/[0.08] text-vf-text font-medium" : "text-vf-faint hover:text-vf-text"
+                      isActive ? "bg-vf-text/[0.08] text-vf-text font-medium" : "text-vf-faint hover:text-vf-text"
                     }`}
                     data-testid={`nav-${item.label.toLowerCase()}`}
                   >
@@ -118,7 +118,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
                 {score}
                 <span className="text-[14px] text-vf-muted">%</span>
               </div>
-              <div className="h-1 rounded-full bg-white/10 my-2.5 overflow-hidden">
+              <div className="h-1 rounded-full bg-vf-text/10 my-2.5 overflow-hidden">
                 <div className="h-full bg-vf-mint" style={{ width: `${score}%` }} />
               </div>
               {remaining > 0 ? (
@@ -143,7 +143,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
                 </div>
               </div>
               <button
-                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[13px] text-vf-faint border border-vf-line hover:text-vf-text hover:border-white/20 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[13px] text-vf-faint border border-vf-line hover:text-vf-text hover:border-vf-text/20 transition-colors"
                 onClick={() => logout()}
                 data-testid="button-logout-desktop"
               >

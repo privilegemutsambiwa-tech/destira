@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 const INPUT =
-  "w-full rounded-[12px] border border-vf-line bg-white/5 px-3.5 h-11 text-[15px] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60 transition-colors";
+  "w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-11 text-[15px] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60 transition-colors";
 
 type Step = "nickname" | "deal" | number; // number = question index
 
@@ -201,7 +201,7 @@ export default function Onboarding() {
           Finish later
         </button>
       </div>
-      <div className="h-1 rounded-full bg-white/10 overflow-hidden mb-8">
+      <div className="h-1 rounded-full bg-vf-text/10 overflow-hidden mb-8">
         <div className="h-full bg-vf-ember transition-[width] duration-500" style={{ width: `${pct}%` }} />
       </div>
 
@@ -225,7 +225,7 @@ export default function Onboarding() {
                   className={`text-left rounded-[12px] border px-4 py-3 text-[14.5px] transition-colors ${
                     on
                       ? "border-vf-ember/60 bg-vf-ember/[0.08] text-vf-text"
-                      : "border-vf-line text-vf-muted hover:text-vf-text hover:border-white/20"
+                      : "border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20"
                   }`}
                   data-testid={`option-${opt}`}
                 >
@@ -284,7 +284,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
       onClick={() => onChange(!on)}
       aria-pressed={on}
       className={`w-[44px] h-[26px] rounded-full shrink-0 flex items-center p-[3px] transition-colors ${
-        on ? "bg-vf-ember justify-end" : "bg-white/[0.14] justify-start"
+        on ? "bg-vf-ember justify-end" : "bg-vf-text/[0.14] justify-start"
       }`}
       data-testid="toggle-public"
     >
@@ -363,7 +363,7 @@ function NicknameStep({
             <button
               key={s}
               onClick={() => { onChange(s); setTouched(true); }}
-              className="text-[12px] px-3 h-8 rounded-full border border-vf-line text-vf-text hover:border-white/25 transition-colors"
+              className="text-[12px] px-3 h-8 rounded-full border border-vf-line text-vf-text hover:border-vf-text/25 transition-colors"
             >
               @{s}
             </button>

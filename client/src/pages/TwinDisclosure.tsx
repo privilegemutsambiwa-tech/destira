@@ -44,7 +44,7 @@ function StatePicker({
             className={`flex-1 min-h-[44px] rounded-[10px] px-2 py-2 text-[12px] leading-tight transition-colors ${
               active
                 ? "border-2 border-vf-ember bg-vf-ember/10 text-vf-text font-medium"
-                : "border border-vf-line bg-white/[0.03] text-vf-muted hover:text-vf-text"
+                : "border border-vf-line bg-vf-text/[0.03] text-vf-muted hover:text-vf-text"
             }`}
             data-testid={`disclosure-state-${s}`}
           >
@@ -156,7 +156,7 @@ export default function TwinDisclosure() {
 
         <section className="flex flex-col gap-2.5">
           <div className={LABEL}>Never — regardless of the above</div>
-          <div className="rounded-[14px] border border-vf-line bg-white/[0.02] divide-y divide-vf-line">
+          <div className="rounded-[14px] border border-vf-line bg-vf-text/[0.02] divide-y divide-vf-line">
             {NEVER_DISCLOSED.map((n) => (
               <div key={n} className="flex items-center gap-2.5 px-3.5 py-3">
                 <Lock className="w-3.5 h-3.5 text-vf-faint shrink-0" />
@@ -181,7 +181,7 @@ export default function TwinDisclosure() {
             }}
             rows={4}
             placeholder="e.g. Don't bring up my divorce, and never mention my sister at all."
-            className="w-full rounded-[12px] border border-vf-line bg-white/[0.04] p-3.5 text-[14px] leading-[1.6] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60 transition-colors resize-none"
+            className="w-full rounded-[12px] border border-vf-line bg-vf-text/[0.04] p-3.5 text-[14px] leading-[1.6] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60 transition-colors resize-none"
             data-testid="input-disclosure-directive"
           />
           <div className="flex items-center justify-between">

@@ -47,7 +47,7 @@ export default function Plans() {
           </button>
           <button
             onClick={close}
-            className="inline-flex items-center gap-1.5 h-11 -mr-2 px-3 rounded-full text-[13px] text-vf-text hover:bg-white/[0.06] transition-colors"
+            className="inline-flex items-center gap-1.5 h-11 -mr-2 px-3 rounded-full text-[13px] text-vf-text hover:bg-vf-text/[0.06] transition-colors"
             data-testid="button-close-plans"
           >
             {intro ? "Skip — start on Free" : (<><X className="w-4 h-4" /> Close</>)}
@@ -145,7 +145,7 @@ export default function Plans() {
                   className={`mt-5 h-11 rounded-full text-[13.5px] font-semibold btn-press transition-colors disabled:opacity-40 ${
                     emphasise
                       ? "bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)]"
-                      : "border border-vf-line text-vf-text hover:border-white/25"
+                      : "border border-vf-line text-vf-text hover:border-vf-text/25"
                   }`}
                   data-testid={`button-choose-${card.tier}`}
                 >

@@ -90,7 +90,7 @@ export default function Lounge() {
             className={`px-4 py-1.5 text-sm font-medium rounded-full border transition-colors btn-press ${
               activeFilter === f.value
                 ? "bg-vf-ember border-transparent text-vf-ink"
-                : "border-vf-line text-vf-soft hover:border-white/25"
+                : "border-vf-line text-vf-soft hover:border-vf-text/25"
             }`}
             data-testid={`filter-${f.value}`}
           >
@@ -178,7 +178,7 @@ function GroupCard({ group, idx, onNavigate, isJoinCard = false }: {
       transition={{ delay: idx * 0.04 }}
     >
       <div
-        className="rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden cursor-pointer transition-colors hover:border-white/20"
+        className="rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden cursor-pointer transition-colors hover:border-vf-text/20"
         onClick={() => onNavigate(group.id)}
         data-testid={`card-group-${group.id}`}
       >

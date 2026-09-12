@@ -15,7 +15,7 @@ export type ButtonVariant = "solid" | "ghost" | "gold-outline" | "gold-ghost";
 
 export const BUTTON_CLASSES: Record<ButtonVariant, string> = {
   solid: "bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)]",
-  ghost: "border border-vf-line text-vf-soft hover:border-white/25",
+  ghost: "border border-vf-line text-vf-soft hover:border-vf-text/25",
   "gold-outline": "border border-vf-gold/40 text-vf-gold hover:bg-vf-gold/[0.08]",
   "gold-ghost": "border border-vf-gold/25 text-vf-gold/80",
 };
@@ -91,7 +91,7 @@ export function EventRow({ event, groupName, isHost, pending, onOpen, onAttend, 
   return (
     <div
       onClick={onOpen}
-      className="rounded-[22px] border border-vf-line bg-vf-surface2 p-5 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-[22px] items-center cursor-pointer hover:border-white/20 transition-colors"
+      className="rounded-[22px] border border-vf-line bg-vf-surface2 p-5 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-[22px] items-center cursor-pointer hover:border-vf-text/20 transition-colors"
       data-testid={`event-row-${event.id}`}
     >
       <div className="text-center min-w-[56px]">

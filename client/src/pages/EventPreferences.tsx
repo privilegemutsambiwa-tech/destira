@@ -68,7 +68,7 @@ function Chip({
       className={`rounded-full border px-3.5 h-9 text-[13px] capitalize transition-colors ${
         active
           ? "border-vf-mint/50 bg-vf-mint/10 text-vf-text"
-          : "border-vf-line text-vf-muted hover:text-vf-text hover:border-white/20"
+          : "border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20"
       }`}
     >
       {label}
@@ -83,7 +83,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
       onClick={() => onChange(!on)}
       aria-pressed={on}
       className={`w-[42px] h-[24px] rounded-full shrink-0 flex items-center p-[3px] transition-colors ${
-        on ? "bg-vf-mint justify-end" : "bg-white/[0.14] justify-start"
+        on ? "bg-vf-mint justify-end" : "bg-vf-text/[0.14] justify-start"
       }`}
     >
       <span className="block w-[18px] h-[18px] rounded-full" style={{ background: on ? "hsl(var(--vf-ink))" : "#CFC7DA" }} />

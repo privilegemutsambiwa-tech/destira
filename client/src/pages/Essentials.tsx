@@ -48,7 +48,7 @@ function OptionRow({
       className={`w-full text-left rounded-[14px] px-4 py-3.5 min-h-[56px] flex items-center justify-between gap-3 transition-colors ${
         selected
           ? "border-2 border-vf-ember bg-vf-ember/10 text-vf-text"
-          : "border border-vf-line text-vf-muted hover:text-vf-text hover:border-white/20"
+          : "border border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20"
       }`}
     >
       <span>
@@ -186,7 +186,7 @@ export default function Essentials() {
         ) : (
           <div className="w-6" />
         )}
-        <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+        <div className="flex-1 h-1 rounded-full bg-vf-text/10 overflow-hidden">
           <div className="h-full bg-vf-ember transition-[width] duration-300" style={{ width: `${pct}%` }} />
         </div>
         <span className="font-mono text-[10.5px] text-vf-faint tabular-nums">
@@ -218,7 +218,7 @@ export default function Essentials() {
                 value={selfDescribe}
                 onChange={(e) => setSelfDescribe(e.target.value.slice(0, 60))}
                 placeholder="In your words"
-                className="w-full rounded-[12px] border border-vf-line bg-white/5 px-3.5 h-11 text-[15px] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60"
+                className="w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-11 text-[15px] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60"
                 data-testid="input-gender-self-describe"
               />
               <button
@@ -311,7 +311,7 @@ export default function Essentials() {
                 setAgeTouched(true);
                 setAgeMin(Math.max(MIN_AGE, Math.min(Number(e.target.value) || MIN_AGE, ageMax)));
               }}
-              className="w-20 rounded-[12px] border border-vf-line bg-white/5 px-3 h-12 text-center text-[20px] font-serif text-vf-text outline-none focus:border-vf-ember/60"
+              className="w-20 rounded-[12px] border border-vf-line bg-vf-text/5 px-3 h-12 text-center text-[20px] font-serif text-vf-text outline-none focus:border-vf-ember/60"
               data-testid="input-age-min"
             />
             <span className="text-vf-faint">to</span>
@@ -325,7 +325,7 @@ export default function Essentials() {
                 setAgeTouched(true);
                 setAgeMax(Math.min(MAX_AGE, Math.max(Number(e.target.value) || MAX_AGE, ageMin)));
               }}
-              className="w-20 rounded-[12px] border border-vf-line bg-white/5 px-3 h-12 text-center text-[20px] font-serif text-vf-text outline-none focus:border-vf-ember/60"
+              className="w-20 rounded-[12px] border border-vf-line bg-vf-text/5 px-3 h-12 text-center text-[20px] font-serif text-vf-text outline-none focus:border-vf-ember/60"
               data-testid="input-age-max"
             />
           </div>
@@ -369,7 +369,7 @@ export default function Essentials() {
             onChange={(e) => setAreaQuery(e.target.value)}
             autoComplete="address-level2"
             placeholder="Suburb or town — e.g. Avondale"
-            className="w-full rounded-[12px] border border-vf-line bg-white/5 px-3.5 h-11 text-[15px] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60"
+            className="w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-11 text-[15px] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60"
             data-testid="input-area-search"
           />
           {areaResults.length > 0 && (
@@ -382,7 +382,7 @@ export default function Essentials() {
                     setAreaQuery("");
                     setAreaResults([]);
                   }}
-                  className="w-full text-left px-3.5 py-3 text-[14px] text-vf-text hover:bg-white/[0.04]"
+                  className="w-full text-left px-3.5 py-3 text-[14px] text-vf-text hover:bg-vf-text/[0.04]"
                   data-testid={`area-result-${r.label}`}
                 >
                   {r.label}

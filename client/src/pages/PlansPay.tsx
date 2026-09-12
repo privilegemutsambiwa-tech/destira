@@ -163,7 +163,7 @@ export default function PlansPay() {
           <button
             disabled={!canResend || initiate.isPending}
             onClick={() => { setPaymentId(null); setStartedAt(null); pay(); }}
-            className="h-10 px-4 rounded-full border border-vf-line text-[13px] text-vf-text hover:border-white/25 disabled:opacity-40 transition-colors"
+            className="h-10 px-4 rounded-full border border-vf-line text-[13px] text-vf-text hover:border-vf-text/25 disabled:opacity-40 transition-colors"
             data-testid="button-resend-prompt"
           >
             {canResend ? "Send the prompt again" : `Resend in ${Math.ceil((RESEND_AFTER_MS - waited) / 1000)}s`}
@@ -191,7 +191,7 @@ export default function PlansPay() {
             key={m.id}
             onClick={() => setMethod(m.id)}
             className={`text-left rounded-[14px] border p-4 transition-colors ${
-              method === m.id ? "border-vf-ember/60 bg-vf-ember/[0.06]" : "border-vf-line hover:border-white/20"
+              method === m.id ? "border-vf-ember/60 bg-vf-ember/[0.06]" : "border-vf-line hover:border-vf-text/20"
             }`}
             data-testid={`method-${m.id}`}
           >
@@ -209,7 +209,7 @@ export default function PlansPay() {
             onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, "").slice(0, 10))}
             inputMode="numeric"
             placeholder="0771 234 567"
-            className="w-full rounded-[12px] border border-vf-line bg-white/5 px-3.5 h-12 text-[16px] tracking-[0.04em] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60"
+            className="w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-12 text-[16px] tracking-[0.04em] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60"
             data-testid="input-ecocash-phone"
           />
           <p className="text-[12px] text-vf-faint mt-2 leading-[1.5]">

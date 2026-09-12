@@ -6,7 +6,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
 
 const INPUT =
-  "w-full rounded-[12px] border border-vf-line bg-white/5 px-3.5 h-11 text-sm text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow";
+  "w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-11 text-sm text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow";
 const LABEL = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-1.5 block";
 
 export default function Login() {
@@ -135,7 +135,7 @@ export default function Login() {
           <button
             onClick={handleDemo}
             disabled={demoLoading}
-            className="mt-3 w-full inline-flex items-center justify-center rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-white/25 h-11 text-sm transition-colors disabled:opacity-50"
+            className="mt-3 w-full inline-flex items-center justify-center rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/25 h-11 text-sm transition-colors disabled:opacity-50"
             data-testid="button-demo-login"
           >
             {demoLoading ? "Starting demo…" : "Try a demo"}

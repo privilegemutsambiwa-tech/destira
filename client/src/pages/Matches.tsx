@@ -87,7 +87,7 @@ function InterestRow({
   return (
     <div
       className={`group flex items-center gap-3 border-b border-vf-line last:border-b-0 min-h-[72px] py-3 transition-colors ${
-        onOpen ? "rounded-[14px] px-3 -mx-3 hover:bg-white/[0.035] focus-within:bg-white/[0.035]" : ""
+        onOpen ? "rounded-[14px] px-3 -mx-3 hover:bg-vf-text/[0.035] focus-within:bg-vf-text/[0.035]" : ""
       }`}
       data-testid={testId}
     >
