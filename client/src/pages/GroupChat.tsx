@@ -53,16 +53,18 @@ const REACTIONS = [
   { key: "star", Icon: Star },
 ];
 
-// vf-* tokens as literals (this file styles inline)
-const INK = "#0C0910";
-const SURFACE2 = "#161220";
-const ELEVATED = "rgba(255,255,255,0.05)";
-const LINE = "rgba(255,255,255,0.09)";
-const MUTED = "#A79FB4";
-const FAINT = "#7E7690";
-const TEXT = "#F5F0EA";
-const EMBER = "#FF6B4A";
-const MINT = "#8FE3C7";
+// vf-* tokens, theme-aware — see client/src/index.css for the light/dark
+// values these resolve through (this file styles inline rather than via
+// Tailwind's vf-* classes, so a value only needs to change here once).
+const INK = "hsl(var(--vf-ink))";
+const SURFACE2 = "var(--vf-surface2)";
+const ELEVATED = "var(--vf-elevated)";
+const LINE = "var(--vf-line)";
+const MUTED = "var(--vf-muted)";
+const FAINT = "var(--vf-faint)";
+const TEXT = "hsl(var(--vf-text))";
+const EMBER = "hsl(var(--vf-ember))";
+const MINT = "hsl(var(--vf-mint))";
 const SERIF: React.CSSProperties = { fontFamily: '"Instrument Serif", serif', fontWeight: 400 };
 const MONO: React.CSSProperties = {
   fontFamily: '"DM Mono", ui-monospace, monospace',
@@ -113,7 +115,7 @@ function PollBubble({ messageId, groupId }: { messageId: number; groupId: number
 
   return (
     <div className="space-y-2 min-w-[200px]" data-testid={`poll-bubble-${messageId}`}>
-      <p className="font-medium text-sm text-white">{poll.question}</p>
+      <p className="font-medium text-sm text-foreground">{poll.question}</p>
       {poll.allowMultiple && <p className="text-xs" style={{ color: MUTED }}>Multiple answers allowed</p>}
       <div className="space-y-1.5">
         {options?.map((opt: any) => {
@@ -128,17 +130,17 @@ function PollBubble({ messageId, groupId }: { messageId: number; groupId: number
               className="w-full text-left p-2 text-xs relative overflow-hidden transition-colors"
               style={{
                 borderRadius: "8px",
-                border: isVoted ? "1px solid rgba(255,107,74,0.6)" : `1px solid ${LINE}`,
-                background: isVoted ? "rgba(255,107,74,0.12)" : SURFACE2,
+                border: isVoted ? "1px solid hsl(var(--vf-ember) / 0.6)" : `1px solid ${LINE}`,
+                background: isVoted ? "hsl(var(--vf-ember) / 0.12)" : SURFACE2,
               }}
               data-testid={`poll-option-${opt.id}`}
             >
               <div
                 className="absolute inset-0 rounded-md"
-                style={{ width: `${pct}%`, background: "rgba(255,107,74,0.1)" }}
+                style={{ width: `${pct}%`, background: "hsl(var(--vf-ember) / 0.1)" }}
               />
               <div className="relative flex items-center justify-between gap-2">
-                <span className={isVoted ? "font-medium text-white" : "text-white/80"}>{opt.text}</span>
+                <span className={isVoted ? "font-medium text-foreground" : "text-foreground/80"}>{opt.text}</span>
                 <span style={{ color: MUTED }}>{optVotes} ({pct}%)</span>
               </div>
             </button>
@@ -195,7 +197,7 @@ function PollComposerDialog({ groupId, open, onClose }: { groupId: number; open:
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <label className="text-sm font-medium mb-1 block text-white">Question</label>
+            <label className="text-sm font-medium mb-1 block text-foreground">Question</label>
             <Input
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
@@ -204,7 +206,7 @@ function PollComposerDialog({ groupId, open, onClose }: { groupId: number; open:
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium mb-1 block text-white">Options</label>
+            <label className="text-sm font-medium mb-1 block text-foreground">Options</label>
             {options.map((opt, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <Input
@@ -227,7 +229,7 @@ function PollComposerDialog({ groupId, open, onClose }: { groupId: number; open:
             )}
           </div>
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <label className="text-sm font-medium text-white">Allow multiple answers</label>
+            <label className="text-sm font-medium text-foreground">Allow multiple answers</label>
             <Switch checked={allowMultiple} onCheckedChange={setAllowMultiple} data-testid="switch-allow-multiple" />
           </div>
         </div>
@@ -487,7 +489,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                 <div
                   id={`msg-${msg.id}`}
                   className={`flex ${isMe ? "justify-end" : "justify-start"} ${groupedWithPrev ? "mb-0.5" : "mb-2"} transition-all duration-500`}
-                  style={highlightedMsgId === msg.id ? { background: "rgba(255,107,74,0.12)", borderRadius: "12px", marginLeft: "-8px", marginRight: "-8px", paddingLeft: "8px", paddingRight: "8px" } : undefined}
+                  style={highlightedMsgId === msg.id ? { background: "hsl(var(--vf-ember) / 0.12)", borderRadius: "12px", marginLeft: "-8px", marginRight: "-8px", paddingLeft: "8px", paddingRight: "8px" } : undefined}
                   data-testid={`message-${msg.id}`}
                 >
                   {!isMe && (
@@ -528,11 +530,11 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                               : isMe
                                 ? {
                                     background: EMBER,
-                                    color: "#180B07",
+                                    color: "hsl(var(--vf-ink))",
                                     fontWeight: 500,
                                   }
                                 : {
-                                    background: "rgba(255,255,255,0.07)",
+                                    background: ELEVATED,
                                     color: TEXT,
                                   }),
                           }}
@@ -546,8 +548,8 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                               className="mb-1.5 p-1.5"
                               style={{
                                 borderRadius: "6px",
-                                borderLeft: isMe ? "2px solid rgba(255,255,255,0.4)" : "2px solid #FF6B4A",
-                                background: isMe ? "rgba(255,255,255,0.1)" : "rgba(255,107,74,0.12)",
+                                borderLeft: isMe ? "2px solid rgba(255,255,255,0.4)" : "2px solid hsl(var(--vf-ember))",
+                                background: isMe ? "rgba(255,255,255,0.1)" : "hsl(var(--vf-ember) / 0.12)",
                                 fontSize: "12px",
                               }}
                             >
@@ -732,7 +734,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
           <div className="px-4 pt-2 flex items-center gap-2">
             <div
               className="flex-1 min-w-0 p-2 text-xs"
-              style={{ background: ELEVATED, borderRadius: "8px", borderLeft: "2px solid #FF6B4A" }}
+              style={{ background: ELEVATED, borderRadius: "8px", borderLeft: `2px solid ${EMBER}` }}
             >
               <span className="font-medium" style={{ color: EMBER }}>{replyTo.nickname || "Anonymous"}</span>
               <p className="truncate" style={{ color: MUTED }}>{replyTo.content}</p>
@@ -755,7 +757,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
               disabled={joinGroup.isPending}
               style={{
                 background: EMBER,
-                color: "#180B07",
+                color: "hsl(var(--vf-ink))",
                 height: "48px",
                 borderRadius: "12px",
                 border: "none",
@@ -820,7 +822,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                   borderRadius: "50%",
                   background: input.trim() ? EMBER : ELEVATED,
                   border: "none",
-                  color: input.trim() ? "#180B07" : MUTED,
+                  color: input.trim() ? "hsl(var(--vf-ink))" : MUTED,
                   transition: "all 0.2s ease",
                 }}
                 data-testid="button-send-group"

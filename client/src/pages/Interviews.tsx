@@ -197,7 +197,7 @@ function EmptyState() {
       </p>
       <button
         onClick={() => setLocation("/discover")}
-        className="font-semibold btn-press px-8 h-12 rounded-full bg-vf-ember text-vf-ink hover:bg-[#FF8163] transition-colors"
+        className="font-semibold btn-press px-8 h-12 rounded-full bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors"
         data-testid="button-go-discover"
       >
         Discover People

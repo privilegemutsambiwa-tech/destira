@@ -96,7 +96,7 @@ export function PhotoFrame({
         <>
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-vf-ink/85 to-transparent"
+            className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-vf-scrim/85 to-transparent"
             style={{ height: "45%" }}
           />
           <figcaption

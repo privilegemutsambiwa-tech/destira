@@ -69,7 +69,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
       onClick={(e) => { e.stopPropagation(); onChange(!value); }}
       style={{
         width: "42px", height: "24px", borderRadius: "100px",
-        background: value ? MINT : "rgba(255,255,255,0.14)",
+        background: value ? MINT : "var(--vf-line)",
         transition: "background 0.2s", position: "relative", cursor: "pointer", flexShrink: 0,
       }}
     >
@@ -1420,7 +1420,7 @@ function ClearMemoryPanel({ onBack }: { onBack: () => void }) {
       <div className="flex flex-col items-center px-6 pt-8 text-center">
         <div style={{
           width: "80px", height: "80px", borderRadius: "50%",
-          background: "#1A1A24", border: `2px solid #EF4444`,
+          background: ELEVATED, border: `2px solid #EF4444`,
           display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "20px",
         }}>
           <Brain className="w-10 h-10" style={{ color: "#EF4444" }} />

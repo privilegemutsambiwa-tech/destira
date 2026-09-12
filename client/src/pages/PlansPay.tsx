@@ -96,7 +96,7 @@ export default function PlansPay() {
         </div>
         <button
           onClick={() => setLocation("/discover")}
-          className="mt-6 h-11 px-6 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press hover:bg-[#FF8163] transition-colors"
+          className="mt-6 h-11 px-6 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
           data-testid="button-into-app"
         >
           Into Destira
@@ -119,7 +119,7 @@ export default function PlansPay() {
         <div className="flex gap-3 mt-6">
           <button
             onClick={() => { setPaymentId(null); setStartedAt(null); setInstructions(null); }}
-            className="h-11 px-6 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press hover:bg-[#FF8163] transition-colors"
+            className="h-11 px-6 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
             data-testid="button-retry-pay"
           >
             Try again
@@ -229,7 +229,7 @@ export default function PlansPay() {
           (method === "ecocash" && !/^0?7\d{8}$/.test(phone))
         }
         onClick={pay}
-        className="mt-6 inline-flex items-center justify-center gap-2 h-12 px-7 rounded-full bg-vf-ember text-vf-ink font-bold text-[15px] btn-press hover:bg-[#FF8163] disabled:opacity-40 transition-colors"
+        className="mt-6 inline-flex items-center justify-center gap-2 h-12 px-7 rounded-full bg-vf-ember text-vf-ink font-bold text-[15px] btn-press hover:bg-[var(--vf-ember-soft)] disabled:opacity-40 transition-colors"
         data-testid="button-pay"
       >
         {initiate.isPending && <Loader2 className="w-4 h-4 animate-spin" />}

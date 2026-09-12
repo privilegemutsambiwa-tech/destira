@@ -171,7 +171,7 @@ export function HostVideoRecorder({
           <button
             type="button"
             onClick={askCamera}
-            className="h-9 px-4 rounded-full bg-vf-ember text-vf-ink font-semibold text-[13px] btn-press hover:bg-[#FF8163] transition-colors"
+            className="h-9 px-4 rounded-full bg-vf-ember text-vf-ink font-semibold text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
             data-testid="button-camera"
           >
             {error ? "Try camera again" : "Turn on camera"}
@@ -181,7 +181,7 @@ export function HostVideoRecorder({
           <button
             type="button"
             onClick={start}
-            className="h-9 px-4 rounded-full bg-vf-ember text-vf-ink font-semibold text-[13px] btn-press hover:bg-[#FF8163] transition-colors"
+            className="h-9 px-4 rounded-full bg-vf-ember text-vf-ink font-semibold text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
             data-testid="button-record"
           >
             Start recording

@@ -284,7 +284,7 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                             { onSuccess: () => setEditing(false) },
                           );
                         }}
-                        className="flex-1 h-9 rounded-full bg-vf-ember text-vf-ink font-semibold text-[13px] btn-press hover:bg-[#FF8163] disabled:opacity-40 inline-flex items-center justify-center gap-2"
+                        className="flex-1 h-9 rounded-full bg-vf-ember text-vf-ink font-semibold text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] disabled:opacity-40 inline-flex items-center justify-center gap-2"
                         data-testid="button-save-event"
                       >
                         {updateEvent.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -318,7 +318,7 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                             { onSuccess: () => setCancelOpen(false) },
                           )
                         }
-                        className="flex-1 h-9 rounded-full bg-vf-ember text-vf-ink font-semibold text-[13px] btn-press hover:bg-[#FF8163] disabled:opacity-40 inline-flex items-center justify-center gap-2"
+                        className="flex-1 h-9 rounded-full bg-vf-ember text-vf-ink font-semibold text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] disabled:opacity-40 inline-flex items-center justify-center gap-2"
                         data-testid="button-confirm-cancel-event"
                       >
                         {cancelEvent.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}

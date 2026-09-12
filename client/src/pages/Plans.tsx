@@ -144,7 +144,7 @@ export default function Plans() {
                   disabled={isCurrent}
                   className={`mt-5 h-11 rounded-full text-[13.5px] font-semibold btn-press transition-colors disabled:opacity-40 ${
                     emphasise
-                      ? "bg-vf-ember text-vf-ink hover:bg-[#FF8163]"
+                      ? "bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)]"
                       : "border border-vf-line text-vf-text hover:border-white/25"
                   }`}
                   data-testid={`button-choose-${card.tier}`}

@@ -32,16 +32,17 @@ const PRIVACY_LABELS: Record<string, { icon: any; label: string }> = {
   "invite-only": { icon: Lock, label: "Invite Only" },
 };
 
-// vf-* tokens as literals (this file styles inline, not via Tailwind classes)
-const INK = "#0C0910";
-const SURFACE2 = "#161220";
-const ELEVATED = "rgba(255,255,255,0.05)";
-const LINE = "rgba(255,255,255,0.09)";
-const MUTED = "#A79FB4";
-const FAINT = "#7E7690";
-const TEXT = "#F5F0EA";
-const EMBER = "#FF6B4A";
-const MINT = "#8FE3C7";
+// vf-* tokens, theme-aware — see client/src/index.css (this file styles
+// inline, not via Tailwind classes, so a value only needs to change here once)
+const INK = "hsl(var(--vf-ink))";
+const SURFACE2 = "var(--vf-surface2)";
+const ELEVATED = "var(--vf-elevated)";
+const LINE = "var(--vf-line)";
+const MUTED = "var(--vf-muted)";
+const FAINT = "var(--vf-faint)";
+const TEXT = "hsl(var(--vf-text))";
+const EMBER = "hsl(var(--vf-ember))";
+const MINT = "hsl(var(--vf-mint))";
 const SERIF: React.CSSProperties = { fontFamily: '"Instrument Serif", serif', fontWeight: 400 };
 const MONO: React.CSSProperties = {
   fontFamily: '"DM Mono", ui-monospace, monospace',
@@ -62,7 +63,7 @@ function PillAction({
       className="flex items-center gap-2 btn-press rounded-full disabled:opacity-50"
       style={{
         height: "36px", padding: "0 16px",
-        border: `1px solid ${active ? "rgba(255,107,74,0.5)" : LINE}`,
+        border: `1px solid ${active ? "hsl(var(--vf-ember) / 0.5)" : LINE}`,
         color: active ? EMBER : MUTED,
         background: "transparent",
       }}
@@ -376,21 +377,26 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
               </div>
             )}
             <div
-              className="absolute inset-0 bg-gradient-to-t from-vf-ink via-vf-ink/40 to-transparent"
+              className="absolute inset-0 bg-gradient-to-t from-vf-scrim via-vf-scrim/40 to-transparent"
               aria-hidden="true"
             />
+            {/* On the cover photo's own scrim (from-vf-scrim above, always
+                dark), not the page — this text stays a fixed light color
+                regardless of theme, same reasoning as the "Cover" badge below. */}
             <div className="absolute left-[104px] right-4 bottom-3">
-              <h2 style={{ ...SERIF, color: TEXT, fontSize: "24px", lineHeight: 1.1 }} data-testid="text-group-info-name">
+              <h2 style={{ ...SERIF, color: "#F5F0EA", fontSize: "24px", lineHeight: 1.1 }} data-testid="text-group-info-name">
                 {group?.name}
               </h2>
-              <p style={{ ...MONO, color: MUTED, marginTop: "4px" }} data-testid="text-group-subtitle">
+              <p style={{ ...MONO, color: "rgba(245,240,234,0.75)", marginTop: "4px" }} data-testid="text-group-subtitle">
                 {group?.memberCount || sortedMembers.length} members{privacy.label !== "Open" ? ` · ${privacy.label}` : ""}
               </p>
             </div>
             {isAdmin && (
               <div
                 className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium"
-                style={{ background: "rgba(0,0,0,0.55)", color: TEXT }}
+                // On the cover photo's own dark scrim, not the page — stays a
+                // fixed light color regardless of theme, same as the scrim itself.
+                style={{ background: "rgba(0,0,0,0.55)", color: "#F5F0EA" }}
               >
                 <Pencil className="w-3 h-3" /> Cover
               </div>
@@ -426,12 +432,12 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                 <span
                   key={tag}
                   style={{
-                    background: "rgba(255,107,74,0.12)",
+                    background: "hsl(var(--vf-ember) / 0.12)",
                     color: EMBER,
                     fontSize: "12px",
                     padding: "3px 10px",
                     borderRadius: "100px",
-                    border: "1px solid rgba(255,107,74,0.4)",
+                    border: "1px solid hsl(var(--vf-ember) / 0.4)",
                   }}
                   data-testid={`tag-${tag}`}
                 >
@@ -490,7 +496,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
           )}
 
           <div
-            style={{ background: "rgba(143,227,199,0.05)", border: "1px solid rgba(143,227,199,0.22)", borderRadius: "18px", padding: "16px" }}
+            style={{ background: "hsl(var(--vf-mint) / 0.05)", border: "1px solid hsl(var(--vf-mint) / 0.22)", borderRadius: "18px", padding: "16px" }}
             data-testid="card-twin-in-room"
           >
             <p style={{ ...MONO, color: MINT, marginBottom: "6px" }}>Your twin in this room</p>
@@ -548,7 +554,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                     starredMessages!.map((msg: any) => (
                       <div key={msg.id} className="rounded-lg p-3" style={{ background: ELEVATED }} data-testid={`starred-msg-${msg.id}`}>
                         <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="text-xs font-semibold text-white">{msg.nickname || "Unknown"}</span>
+                          <span className="text-xs font-semibold text-foreground">{msg.nickname || "Unknown"}</span>
                           <span className="text-xs" style={{ color: MUTED }}>
                             {msg.createdAt ? new Date(msg.createdAt).toLocaleDateString() : ""}
                           </span>
@@ -627,14 +633,14 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                   <div key={member.id} className="flex items-center justify-between gap-2 py-2.5" style={{ borderTop: `1px solid ${LINE}` }} data-testid={`member-${member.id}`}>
                     <div className="flex items-center gap-3 min-w-0">
                       <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold text-white"
+                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold text-foreground"
                         style={{ background: ELEVATED, border: `1px solid ${LINE}` }}
                       >
                         {member.nickname?.[0]?.toUpperCase() || "?"}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-medium text-white truncate">{member.nickname || "Anonymous"}</p>
+                          <p className="text-sm font-medium text-foreground truncate">{member.nickname || "Anonymous"}</p>
                           {member.role === "owner" && <Crown className="w-3.5 h-3.5 shrink-0" style={{ color: TEXT }} />}
                           {member.role === "admin" && <Shield className="w-3.5 h-3.5 shrink-0" style={{ color: MUTED }} />}
                         </div>
@@ -686,7 +692,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
             >
               <div className="flex items-center gap-2 mb-3">
                 <Link2 className="w-4 h-4" style={{ color: MUTED }} />
-                <span className="text-sm font-medium text-white">Invite Links</span>
+                <span className="text-sm font-medium text-foreground">Invite Links</span>
               </div>
               <button
                 onClick={handleCreateInvite}
@@ -738,7 +744,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
               <div className="flex items-center justify-between gap-2 mb-4">
                 <div className="flex items-center gap-2">
                   <Settings className="w-4 h-4" style={{ color: MUTED }} />
-                  <span className="text-sm font-medium text-white">Group Settings</span>
+                  <span className="text-sm font-medium text-foreground">Group Settings</span>
                 </div>
                 <button
                   onClick={() => setLocation(`/lounge/group/${groupId}/settings`)}
@@ -756,7 +762,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                   { label: "Members can add others", key: "canMembersAddOthers", value: group?.canMembersAddOthers ?? true, testId: "switch-add-others" },
                 ].map((setting) => (
                   <div key={setting.key} className="flex items-center justify-between gap-2">
-                    <label className="text-sm text-white">{setting.label}</label>
+                    <label className="text-sm text-foreground">{setting.label}</label>
                     <Switch
                       checked={setting.value}
                       onCheckedChange={(v) => handleSettingToggle(setting.key, v)}
@@ -766,7 +772,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                 ))}
                 <div style={{ height: "1px", background: LINE }} />
                 <div className="flex items-center justify-between gap-2">
-                  <label className="text-sm text-white">Posting permission</label>
+                  <label className="text-sm text-foreground">Posting permission</label>
                   <Select
                     value={group?.postingPermission || "everyone"}
                     onValueChange={(v) => handleSettingSelect("postingPermission", v)}
@@ -781,7 +787,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                   </Select>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <label className="text-sm text-white">Media permission</label>
+                  <label className="text-sm text-foreground">Media permission</label>
                   <Select
                     value={group?.mediaPermission || "everyone"}
                     onValueChange={(v) => handleSettingSelect("mediaPermission", v)}
@@ -858,13 +864,13 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-foreground"
                     style={{ background: ELEVATED, border: `1px solid ${LINE}` }}
                   >
                     {(u.displayName || "?")[0].toUpperCase()}
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-white">{u.displayName}</p>
+                    <p className="text-sm font-medium text-foreground">{u.displayName}</p>
                     {u.groupNickname && <p className="text-xs" style={{ color: MUTED }}>@{u.groupNickname}</p>}
                   </div>
                 </div>
@@ -913,7 +919,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                 data-testid={`search-result-${msg.id}`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold text-white">{msg.nickname || "Unknown"}</span>
+                  <span className="text-xs font-semibold text-foreground">{msg.nickname || "Unknown"}</span>
                   <span className="text-xs" style={{ color: MUTED }}>
                     {msg.createdAt ? new Date(msg.createdAt).toLocaleDateString() : ""}
                   </span>

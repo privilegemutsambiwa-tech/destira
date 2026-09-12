@@ -288,7 +288,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
           </button>
         )}
 
-        <div className="absolute bottom-0 left-0 right-0 z-10 p-3 bg-gradient-to-t from-vf-ink/80 to-transparent">
+        <div className="absolute bottom-0 left-0 right-0 z-10 p-3 bg-gradient-to-t from-vf-scrim/80 to-transparent">
           {onInterviewTwin && (
             <button
               className="w-full flex items-center justify-center gap-2 font-semibold mb-3"
@@ -539,7 +539,7 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
         )}
 
         <div
-          className="absolute bottom-0 left-0 right-0 z-10 p-4 flex items-center justify-between bg-gradient-to-t from-vf-ink/80 to-transparent"
+          className="absolute bottom-0 left-0 right-0 z-10 p-4 flex items-center justify-between bg-gradient-to-t from-vf-scrim/80 to-transparent"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-2 text-white text-sm" data-testid="text-own-story-views">

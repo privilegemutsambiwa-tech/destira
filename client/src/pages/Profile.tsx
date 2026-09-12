@@ -62,7 +62,7 @@ function ReferralNudge({ completionScore }: { completionScore: number }) {
       </p>
       <button
         onClick={copy}
-        className="mt-3 inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[#FF8163] transition-colors"
+        className="mt-3 inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
         data-testid="button-nudge-copy"
       >
         Copy invite link
@@ -98,7 +98,7 @@ function YourEventsCard() {
         <SectionLabel>Your events</SectionLabel>
         <button
           onClick={() => setLocation("/events/host")}
-          className="text-[12px] text-vf-ember hover:text-[#FF8163] transition-colors"
+          className="text-[12px] text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors"
           data-testid="button-host-from-profile"
         >
           Host one
@@ -120,7 +120,7 @@ function YourEventsCard() {
                 data-testid={`my-event-${e.id}`}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-[13.5px] text-vf-text truncate group-hover:text-white">{e.title}</span>
+                  <span className="text-[13.5px] text-vf-text truncate group-hover:text-vf-ember">{e.title}</span>
                   {chip && (
                     <span className={`shrink-0 font-mono text-[9.5px] uppercase tracking-[0.12em] border rounded-full px-1.5 py-0.5 ${chip.cls}`}>
                       {chip.label}
@@ -251,7 +251,7 @@ export default function Profile() {
           <p className="mt-2 mb-6 text-vf-muted">Complete your Soul-Mapping to get started.</p>
           <button
             onClick={() => setLocation("/onboarding")}
-            className="font-semibold btn-press px-8 h-12 rounded-full bg-vf-ember text-vf-ink hover:bg-[#FF8163] transition-colors"
+            className="font-semibold btn-press px-8 h-12 rounded-full bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors"
             data-testid="button-start-onboarding"
           >
             Start Soul-Mapping
@@ -356,7 +356,13 @@ export default function Profile() {
               className="absolute inset-x-0 bottom-0 pointer-events-none"
               style={{ height: "55%", background: "linear-gradient(to top, rgba(12,9,16,.9), transparent)" }}
             />
-            <div className="absolute top-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-text/90 bg-vf-ink/45 backdrop-blur px-2.5 py-1 rounded-full border border-white/12" data-testid="chip-twin-readiness">
+            {/* On the cover photo, fixed dark chip + fixed light text
+                regardless of theme, same as the scrim above it. */}
+            <div
+              className="absolute top-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em] backdrop-blur px-2.5 py-1 rounded-full border border-white/12"
+              style={{ color: "rgba(245,240,234,0.9)", background: "rgba(12,9,16,0.45)" }}
+              data-testid="chip-twin-readiness"
+            >
               Twin readiness {completionScore}%
             </div>
           </div>
@@ -392,17 +398,20 @@ export default function Profile() {
               )}
             </div>
 
+            {/* Overlaps the cover's bottom edge (see comment above) — fixed
+                light text regardless of theme, matching the fixed-dark scrim
+                it sits on, not the theme-aware vf-text/vf-muted. */}
             <div className="mt-3 sm:mt-0 sm:pb-2 min-w-0">
-              <h1 className="font-serif font-normal text-vf-text leading-[1.02] text-[clamp(32px,4.2vw,48px)]" data-testid="text-display-name">
+              <h1 className="font-serif font-normal leading-[1.02] text-[clamp(32px,4.2vw,48px)]" style={{ color: "#F5F0EA" }} data-testid="text-display-name">
                 {profile.displayName || user?.firstName}
               </h1>
-              <p className="text-[14px] text-vf-muted mt-1" data-testid="text-meta-line">
+              <p className="text-[14px] mt-1" style={{ color: "rgba(245,240,234,0.75)" }} data-testid="text-meta-line">
                 {metaLine}{profile.isVerified ? " · verified" : ""}
               </p>
               <div className="mt-3 flex items-center gap-4 justify-center sm:justify-start flex-wrap">
                 <button
                   onClick={() => setShowEditDialog(true)}
-                  className="inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press hover:bg-[#FF8163] transition-colors"
+                  className="inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
                   data-testid="button-edit-profile"
                 >
                   Edit profile
@@ -463,7 +472,7 @@ export default function Profile() {
                     <button
                       onClick={saveBio}
                       disabled={updateProfile.isPending}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[#FF8163] transition-colors disabled:opacity-40"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors disabled:opacity-40"
                       data-testid="button-save-bio"
                     >
                       {updateProfile.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -539,7 +548,7 @@ export default function Profile() {
                     <button
                       onClick={savePrompt}
                       disabled={updatePrompts.isPending}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[#FF8163] transition-colors disabled:opacity-40"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors disabled:opacity-40"
                       data-testid="button-save-prompt"
                     >
                       {updatePrompts.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -639,7 +648,7 @@ export default function Profile() {
               </div>
               <button
                 onClick={() => setLocation("/twin-chat?from=/profile")}
-                className="mt-4 inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press hover:bg-[#FF8163] transition-colors"
+                className="mt-4 inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
                 data-testid="button-talk-to-twin"
               >
                 Talk to your twin
@@ -848,7 +857,7 @@ function EditProfileDialog({
           <button
             onClick={handleSave}
             disabled={saving || pristine}
-            className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-6 h-11 text-sm btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-6 h-11 text-sm btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-40 disabled:cursor-not-allowed"
             data-testid="button-save-profile"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}

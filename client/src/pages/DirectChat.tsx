@@ -111,7 +111,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
             type="submit"
             size="icon"
             disabled={!input.trim() || sendMessage.isPending}
-            className="h-12 w-12 rounded-full bg-vf-ember text-vf-ink hover:bg-[#FF8163]"
+            className="h-12 w-12 rounded-full bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)]"
             data-testid="button-send"
           >
             <Send className="w-5 h-5" />

@@ -94,7 +94,7 @@ export function RefusalSheet({
             onClose();
             setLocation(`/plans?feature=${feature}`);
           }}
-          className="mt-5 w-full h-12 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press transition-colors hover:bg-[#FF8163]"
+          className="mt-5 w-full h-12 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
           data-testid={`refusal-cta-${feature}`}
         >
           {copy.kind === "tier" && reqPrice !== "Free" ? `Get ${reqName} · ${reqPrice}/mo` : `See ${reqName}`}

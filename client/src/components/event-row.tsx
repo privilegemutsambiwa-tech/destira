@@ -14,7 +14,7 @@ function formatTime(dateStr: string): string {
 export type ButtonVariant = "solid" | "ghost" | "gold-outline" | "gold-ghost";
 
 export const BUTTON_CLASSES: Record<ButtonVariant, string> = {
-  solid: "bg-vf-ember text-vf-ink hover:bg-[#FF8163]",
+  solid: "bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)]",
   ghost: "border border-vf-line text-vf-soft hover:border-white/25",
   "gold-outline": "border border-vf-gold/40 text-vf-gold hover:bg-vf-gold/[0.08]",
   "gold-ghost": "border border-vf-gold/25 text-vf-gold/80",

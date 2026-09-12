@@ -70,7 +70,7 @@ export default function Lounge() {
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
             <button
-              className="flex items-center gap-2 font-semibold px-4 h-11 rounded-xl btn-press shrink-0 bg-vf-ember text-vf-ink hover:bg-[#FF8163] transition-colors text-sm"
+              className="flex items-center gap-2 font-semibold px-4 h-11 rounded-xl btn-press shrink-0 bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors text-sm"
               data-testid="button-create-group"
             >
               <Plus className="w-4 h-4" />
@@ -236,7 +236,7 @@ function GroupCard({ group, idx, onNavigate, isJoinCard = false }: {
               {privacy.label}
             </span>
             {isJoinCard ? (
-              <button className="text-[12.5px] font-semibold px-3.5 py-1.5 rounded-full btn-press bg-vf-ember text-vf-ink hover:bg-[#FF8163] transition-colors">
+              <button className="text-[12.5px] font-semibold px-3.5 py-1.5 rounded-full btn-press bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors">
                 {group.privacyMode === "request-to-join" ? "Request" : "Join"}
               </button>
             ) : (
@@ -320,7 +320,7 @@ function CreateGroupDialog({ onClose }: { onClose: () => void }) {
         <button
           onClick={handleCreate}
           disabled={!name.trim() || createGroup.isPending}
-          className="px-4 py-2 text-sm font-semibold rounded-[10px] btn-press disabled:opacity-50 bg-vf-ember text-vf-ink hover:bg-[#FF8163] transition-colors"
+          className="px-4 py-2 text-sm font-semibold rounded-[10px] btn-press disabled:opacity-50 bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors"
           data-testid="button-submit-group"
         >
           {createGroup.isPending ? <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> : null}

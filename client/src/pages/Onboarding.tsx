@@ -145,7 +145,7 @@ export default function Onboarding() {
           <div className="flex flex-col gap-3 mt-7">
             <button
               onClick={() => setStep(0)}
-              className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[#FF8163]"
+              className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
               data-testid="button-answer-now"
             >
               Answer them now
@@ -257,7 +257,7 @@ export default function Onboarding() {
           <button
             onClick={goNext}
             disabled={busy}
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-11 px-7 text-[14px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-11 px-7 text-[14px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-50"
             data-testid="button-next"
           >
             {busy && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -378,7 +378,7 @@ function NicknameStep({
         <button
           onClick={onNext}
           disabled={!ok}
-          className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold h-11 px-7 text-[14px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-40"
+          className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold h-11 px-7 text-[14px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-40"
           data-testid="button-nickname-next"
         >
           Continue

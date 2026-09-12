@@ -127,6 +127,13 @@ export default {
           gold: "hsl(var(--vf-gold) / <alpha-value>)", // Ember premium only
           warn: "var(--vf-warn)",
           soft: "var(--vf-soft)", // secondary text on dark cards (lighter than vf-muted)
+          // Deliberately NOT theme-aware — a legibility scrim under text
+          // overlaid on an arbitrary photo/video needs to stay dark
+          // regardless of theme (light-theme still keeps dark chrome around
+          // photo-led surfaces, per the light-theme spec). Using vf-ink here
+          // instead would fade the scrim toward the light ground in light
+          // mode and take the overlaid light-colored caption text with it.
+          scrim: "#0C0910",
         },
       },
       fontFamily: {

@@ -124,7 +124,7 @@ function MeetButton({ onClick, pending }: { onClick: () => void; pending?: boole
     <button
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       disabled={pending}
-      className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 min-h-[44px] text-[13px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-40"
+      className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 min-h-[44px] text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-40"
       data-testid="button-meet"
     >
       {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Meet"}
@@ -272,7 +272,7 @@ export default function Matches() {
                 </p>
                 <button
                   onClick={() => setLocation("/plans?feature=see_who_asked")}
-                  className="mt-3 inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[#FF8163]"
+                  className="mt-3 inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
                   data-testid="button-see-who-asked"
                 >
                   See plans

@@ -310,7 +310,7 @@ export default function EventPreferences() {
           <button
             onClick={() => draft && save.mutate(draft)}
             disabled={pristine || save.isPending}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-40 disabled:cursor-not-allowed"
             data-testid="button-save-prefs"
           >
             {save.isPending && <Loader2 className="w-4 h-4 animate-spin" />}

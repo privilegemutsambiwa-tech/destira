@@ -268,7 +268,7 @@ export default function Events() {
           </button>
           <button
             onClick={() => paywall.guard("host_event", () => setLocation("/events/host"))}
-            className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[#FF8163]"
+            className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
             data-testid="button-host-event"
           >
             {hostGate?.ok === false ? `Host an event · ${hostGate.requiredTierName || "Flame"}` : "Host an event"}
@@ -354,7 +354,7 @@ export default function Events() {
             {count > 0 && (
               <button
                 onClick={() => applyParams({})}
-                className="self-start text-[12.5px] text-vf-ember hover:text-[#FF8163] transition-colors"
+                className="self-start text-[12.5px] text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors"
                 data-testid="button-clear-filters"
               >
                 Clear all
@@ -373,7 +373,7 @@ export default function Events() {
               </div>
               <button
                 onClick={backToFeed}
-                className="text-[13px] text-vf-ember hover:text-[#FF8163] transition-colors"
+                className="text-[13px] text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors"
                 data-testid="button-back-to-feed"
               >
                 Back to your feed

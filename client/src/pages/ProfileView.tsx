@@ -175,11 +175,16 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
           )}
         </div>
 
+        {/* This cluster overlaps the cover photo's bottom edge (the negative
+            margin above), which keeps its scrim fixed-dark regardless of
+            theme — name/age/meta need to stay fixed light to match, not the
+            theme-aware vf-text/vf-muted that would go dark in light mode
+            and disappear against it. */}
         <div className="mt-3 lg:mt-0 lg:pb-2 min-w-0">
-          {meta && <div className={`${EYEBROW} mb-1.5`}>{meta}</div>}
-          <h1 className="font-serif font-normal text-vf-text leading-none tracking-[-0.02em] text-[clamp(30px,6vw,44px)]">
+          {meta && <div className={`${EYEBROW} mb-1.5`} style={{ color: "rgba(245,240,234,0.75)" }}>{meta}</div>}
+          <h1 className="font-serif font-normal leading-none tracking-[-0.02em] text-[clamp(30px,6vw,44px)]" style={{ color: "#F5F0EA" }}>
             {name}
-            {profile.age ? <span className="text-vf-text">, {profile.age}</span> : null}
+            {profile.age ? <span style={{ color: "#F5F0EA" }}>, {profile.age}</span> : null}
           </h1>
           <div className="mt-3.5 flex items-center justify-center lg:justify-start gap-4 flex-wrap">
             <button
@@ -370,7 +375,7 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
                   <span className="font-serif text-vf-text">{transcript.total}</span> lines.{" "}
                   <button
                     onClick={() => paywall.guard("read_transcript", () => {})}
-                    className="text-vf-ember hover:text-[#FF8163] transition-colors"
+                    className="text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors"
                     data-testid="link-read-transcript"
                   >
                     {transcriptGate?.requiredTierName || "Flame"} reads the rest.

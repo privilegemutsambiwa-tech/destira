@@ -45,7 +45,7 @@ export function Gated({
       <div className="mt-3 flex items-center gap-3">
         <button
           onClick={() => setLocation(`/plans?feature=${feature}`)}
-          className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[#FF8163]"
+          className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
           data-testid={`gated-cta-${feature}`}
         >
           See {gate.requiredTierName || copy.requiredTierName}

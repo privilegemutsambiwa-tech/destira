@@ -657,14 +657,14 @@ export default function HostEvent() {
             {step === 0 ? "Cancel" : "Back"}
           </button>
           {step < STEPS.length - 1 ? (
-            <button onClick={next} className="flex-1 h-12 rounded-full bg-vf-ember text-vf-ink font-bold text-[15px] btn-press transition-colors hover:bg-[#FF8163]" data-testid="button-step-next">
+            <button onClick={next} className="flex-1 h-12 rounded-full bg-vf-ember text-vf-ink font-bold text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]" data-testid="button-step-next">
               Next
             </button>
           ) : (
             <button
               onClick={submit}
               disabled={busy}
-              className="flex-1 h-12 rounded-full bg-vf-ember text-vf-ink font-bold text-[15px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-40 inline-flex items-center justify-center gap-2"
+              className="flex-1 h-12 rounded-full bg-vf-ember text-vf-ink font-bold text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-40 inline-flex items-center justify-center gap-2"
               data-testid="button-publish-event"
             >
               {busy && <Loader2 className="w-4 h-4 animate-spin" />}

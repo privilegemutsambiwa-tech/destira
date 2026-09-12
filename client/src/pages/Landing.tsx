@@ -265,7 +265,7 @@ function SignupButton({
   return (
     <button
       onClick={() => setLocation("/signup")}
-      className={`inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-7 h-12 text-[15px] btn-press transition-colors hover:bg-[#FF8163] ${className}`}
+      className={`inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-7 h-12 text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] ${className}`}
       data-testid="button-create-account"
     >
       {label}
@@ -304,7 +304,7 @@ function EmailCapture({ className = "" }: { className?: string }) {
       />
       <button
         type="submit"
-        className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-6 h-12 text-[14.5px] btn-press transition-colors hover:bg-[#FF8163] shrink-0"
+        className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-6 h-12 text-[14.5px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] shrink-0"
         data-testid="button-hero-email-continue"
       >
         Create your twin

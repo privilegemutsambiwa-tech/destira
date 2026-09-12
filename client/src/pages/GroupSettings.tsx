@@ -60,8 +60,8 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
 
   if (isLoading) {
     return (
-      <div className="h-dvh flex items-center justify-center" style={{ background: "#0F0F14" }}>
-        <Loader2 className="w-8 h-8 animate-spin" style={{ color: "#7C3AED" }} />
+      <div className="h-dvh flex items-center justify-center" style={{ background: "hsl(var(--vf-ink))" }}>
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: "hsl(var(--vf-ember))" }} />
       </div>
     );
   }
@@ -93,25 +93,25 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
   const isPending = updateGroup.isPending || updateSettings.isPending;
 
   return (
-    <div className="h-dvh flex flex-col" style={{ background: "#0F0F14" }}>
+    <div className="h-dvh flex flex-col" style={{ background: "hsl(var(--vf-ink))" }}>
       <div
         className="px-4 py-3 flex items-center gap-3 sticky top-0 z-50"
-        style={{ background: "#1A1A24", borderBottom: "1px solid #2E2E42" }}
+        style={{ background: "var(--vf-surface2)", borderBottom: "1px solid var(--vf-line)" }}
       >
         <button
           onClick={() => setLocation(`/lounge/group/${groupId}/info`)}
           className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
-          style={{ color: "#FFFFFF", background: "transparent" }}
+          style={{ color: "hsl(var(--vf-text))", background: "transparent" }}
           data-testid="button-back-settings"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h2 className="font-bold text-white flex-1" style={{ fontSize: "15px" }}>Group Settings</h2>
+        <h2 className="font-bold text-foreground flex-1" style={{ fontSize: "15px" }}>Group Settings</h2>
         <button
           onClick={handleSave}
           disabled={isPending}
           className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold btn-press"
-          style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)", color: "#fff" }}
+          style={{ background: "hsl(var(--vf-ember))", color: "hsl(var(--vf-ink))" }}
           data-testid="button-save-settings"
         >
           {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -121,39 +121,39 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-lg mx-auto w-full">
         <div
-          style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px", padding: "16px" }}
+          style={{ background: "var(--vf-surface2)", border: "1px solid var(--vf-line)", borderRadius: "12px", padding: "16px" }}
         >
-          <p className="text-xs font-semibold uppercase mb-3" style={{ color: "#9090A8", letterSpacing: "0.5px" }}>Basic Info</p>
+          <p className="text-xs font-semibold uppercase mb-3" style={{ color: "var(--vf-muted)", letterSpacing: "0.5px" }}>Basic Info</p>
           <div className="space-y-3">
             <div>
-              <label className="text-sm font-medium text-white block mb-1">Group Name</label>
+              <label className="text-sm font-medium text-foreground block mb-1">Group Name</label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={60}
-                style={{ background: "#242433", border: "1px solid #2E2E42", color: "#FFFFFF" }}
+                style={{ background: "var(--vf-elevated)", border: "1px solid var(--vf-line)", color: "hsl(var(--vf-text))" }}
                 data-testid="input-group-name"
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-white block mb-1">Description</label>
+              <label className="text-sm font-medium text-foreground block mb-1">Description</label>
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
                 className="resize-none"
-                style={{ background: "#242433", border: "1px solid #2E2E42", color: "#FFFFFF" }}
+                style={{ background: "var(--vf-elevated)", border: "1px solid var(--vf-line)", color: "hsl(var(--vf-text))" }}
                 data-testid="input-group-description"
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-white block mb-1">Rules</label>
+              <label className="text-sm font-medium text-foreground block mb-1">Rules</label>
               <Textarea
                 value={rulesText}
                 onChange={(e) => setRulesText(e.target.value)}
                 rows={4}
                 className="resize-none"
-                style={{ background: "#242433", border: "1px solid #2E2E42", color: "#FFFFFF" }}
+                style={{ background: "var(--vf-elevated)", border: "1px solid var(--vf-line)", color: "hsl(var(--vf-text))" }}
                 data-testid="input-group-rules"
               />
             </div>
@@ -161,11 +161,11 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
         </div>
 
         <div
-          style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px", padding: "16px" }}
+          style={{ background: "var(--vf-surface2)", border: "1px solid var(--vf-line)", borderRadius: "12px", padding: "16px" }}
         >
-          <p className="text-xs font-semibold uppercase mb-3" style={{ color: "#9090A8", letterSpacing: "0.5px" }}>Join Mode</p>
+          <p className="text-xs font-semibold uppercase mb-3" style={{ color: "var(--vf-muted)", letterSpacing: "0.5px" }}>Join Mode</p>
           <Select value={privacyMode} onValueChange={setPrivacyMode}>
-            <SelectTrigger style={{ background: "#242433", border: "1px solid #2E2E42", color: "#FFFFFF" }} data-testid="select-privacy-mode">
+            <SelectTrigger style={{ background: "var(--vf-elevated)", border: "1px solid var(--vf-line)", color: "hsl(var(--vf-text))" }} data-testid="select-privacy-mode">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -177,9 +177,9 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
         </div>
 
         <div
-          style={{ background: "#1A1A24", border: "1px solid #2E2E42", borderRadius: "12px", padding: "16px" }}
+          style={{ background: "var(--vf-surface2)", border: "1px solid var(--vf-line)", borderRadius: "12px", padding: "16px" }}
         >
-          <p className="text-xs font-semibold uppercase mb-3" style={{ color: "#9090A8", letterSpacing: "0.5px" }}>Permissions</p>
+          <p className="text-xs font-semibold uppercase mb-3" style={{ color: "var(--vf-muted)", letterSpacing: "0.5px" }}>Permissions</p>
           <div className="space-y-4">
             {[
               { label: "Members can send messages", value: canMembersSendMessages, onChange: setCanMembersSendMessages, testId: "switch-members-send" },
@@ -187,15 +187,15 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
               { label: "Members can add others", value: canMembersAddOthers, onChange: setCanMembersAddOthers, testId: "switch-members-add" },
             ].map((s) => (
               <div key={s.testId} className="flex items-center justify-between gap-2">
-                <label className="text-sm text-white">{s.label}</label>
+                <label className="text-sm text-foreground">{s.label}</label>
                 <Switch checked={s.value} onCheckedChange={s.onChange} data-testid={s.testId} />
               </div>
             ))}
-            <div style={{ height: "1px", background: "#2E2E42" }} />
+            <div style={{ height: "1px", background: "var(--vf-line)" }} />
             <div className="flex items-center justify-between gap-2">
-              <label className="text-sm text-white">Who can post</label>
+              <label className="text-sm text-foreground">Who can post</label>
               <Select value={postingPermission} onValueChange={setPostingPermission}>
-                <SelectTrigger className="w-36" style={{ background: "#242433", border: "1px solid #2E2E42", color: "#FFFFFF" }} data-testid="select-posting-perm">
+                <SelectTrigger className="w-36" style={{ background: "var(--vf-elevated)", border: "1px solid var(--vf-line)", color: "hsl(var(--vf-text))" }} data-testid="select-posting-perm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -205,9 +205,9 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
               </Select>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <label className="text-sm text-white">Who can post media</label>
+              <label className="text-sm text-foreground">Who can post media</label>
               <Select value={mediaPermission} onValueChange={setMediaPermission}>
-                <SelectTrigger className="w-36" style={{ background: "#242433", border: "1px solid #2E2E42", color: "#FFFFFF" }} data-testid="select-media-perm">
+                <SelectTrigger className="w-36" style={{ background: "var(--vf-elevated)", border: "1px solid var(--vf-line)", color: "hsl(var(--vf-text))" }} data-testid="select-media-perm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -217,7 +217,7 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
               </Select>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <label className="text-sm text-white">Max members</label>
+              <label className="text-sm text-foreground">Max members</label>
               <Input
                 type="number"
                 value={maxMembers}
@@ -225,7 +225,7 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
                 className="w-24 text-right"
                 min={2}
                 max={5000}
-                style={{ background: "#242433", border: "1px solid #2E2E42", color: "#FFFFFF" }}
+                style={{ background: "var(--vf-elevated)", border: "1px solid var(--vf-line)", color: "hsl(var(--vf-text))" }}
                 data-testid="input-max-members"
               />
             </div>

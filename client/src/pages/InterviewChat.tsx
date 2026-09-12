@@ -316,7 +316,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
           <button
             onClick={handleRequestMatch}
             disabled={createMatch.isPending}
-            className="shrink-0 rounded-full bg-vf-ember text-vf-ink font-semibold text-sm px-4 h-10 hover:bg-[#FF8163] disabled:opacity-50 transition-colors"
+            className="shrink-0 rounded-full bg-vf-ember text-vf-ink font-semibold text-sm px-4 h-10 hover:bg-[var(--vf-ember-soft)] disabled:opacity-50 transition-colors"
             data-testid="button-request-match"
           >
             Ask to meet {meetName}

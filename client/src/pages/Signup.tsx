@@ -223,7 +223,7 @@ export default function Signup() {
               <button
                 type="submit"
                 disabled={isSigningUp}
-                className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-50"
+                className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-50"
                 data-testid="button-signup-next"
               >
                 {isSigningUp && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -296,7 +296,7 @@ export default function Signup() {
               <button
                 type="submit"
                 disabled={busy}
-                className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[#FF8163] disabled:opacity-50"
+                className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-50"
                 data-testid="button-signup-next"
               >
                 {busy && <Loader2 className="w-4 h-4 animate-spin" />}

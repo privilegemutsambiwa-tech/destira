@@ -216,12 +216,12 @@ function StoriesCarousel() {
               className="p-[2.5px] rounded-full story-ring-active"
               style={{ width: `${STORY_SIZE}px`, height: `${STORY_SIZE}px` }}
             >
-              <div className="w-full h-full rounded-full overflow-hidden" style={{ background: "#161220" }}>
+              <div className="w-full h-full rounded-full overflow-hidden" style={{ background: "var(--vf-surface2)" }}>
                 <Avatar className="w-full h-full">
                   {myPhotoUrl ? (
                     <AvatarImage src={myPhotoUrl} alt={myName} />
                   ) : (
-                    <AvatarFallback style={{ background: "#161220", color: "#F5F0EA", fontSize: "14px" }}>
+                    <AvatarFallback style={{ background: "var(--vf-surface2)", color: "hsl(var(--vf-text))", fontSize: "14px" }}>
                       {myName[0]}
                     </AvatarFallback>
                   )}
@@ -236,7 +236,7 @@ function StoriesCarousel() {
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                color: "#A79FB4",
+                color: "var(--vf-muted)",
                 fontWeight: 600,
               }}
             >
@@ -258,9 +258,9 @@ function StoriesCarousel() {
                 background: "transparent",
               }}
             >
-              <Plus className="w-5 h-5" style={{ color: "#A79FB4" }} />
+              <Plus className="w-5 h-5" style={{ color: "var(--vf-muted)" }} />
             </div>
-            <span style={{ fontSize: "11px", color: "#A79FB4" }}>Add</span>
+            <span style={{ fontSize: "11px", color: "var(--vf-muted)" }}>Add</span>
           </button>
         )}
 
@@ -272,19 +272,19 @@ function StoriesCarousel() {
             data-testid={`story-avatar-${u.userId}`}
           >
             <div className="story-ring-active p-[2.5px] rounded-full" style={{ width: `${STORY_SIZE}px`, height: `${STORY_SIZE}px` }}>
-              <div className="w-full h-full rounded-full overflow-hidden" style={{ background: "#161220" }}>
+              <div className="w-full h-full rounded-full overflow-hidden" style={{ background: "var(--vf-surface2)" }}>
                 <Avatar className="w-full h-full">
                   {u.photoUrl ? (
                     <AvatarImage src={u.photoUrl} alt={u.displayName} />
                   ) : (
-                    <AvatarFallback style={{ background: "rgba(255,255,255,0.05)", color: "#FFFFFF", fontSize: "14px" }}>
+                    <AvatarFallback style={{ background: "var(--vf-elevated)", color: "hsl(var(--vf-text))", fontSize: "14px" }}>
                       {u.displayName[0]}
                     </AvatarFallback>
                   )}
                 </Avatar>
               </div>
             </div>
-            <span style={{ fontSize: "11px", color: "#A79FB4", maxWidth: "56px", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: "11px", color: "var(--vf-muted)", maxWidth: "56px", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {u.displayName.split(" ")[0]}
             </span>
           </button>
@@ -692,7 +692,7 @@ export default function Discover() {
               <CardGallery photos={galleryPhotos} initial={currentProfile.displayName?.[0] || "?"} />
 
               <div
-                className="absolute inset-x-0 bottom-0 pointer-events-none bg-gradient-to-t from-vf-ink to-transparent"
+                className="absolute inset-x-0 bottom-0 pointer-events-none bg-gradient-to-t from-vf-scrim to-transparent"
                 style={{ height: "52%" }}
               />
 
@@ -707,14 +707,17 @@ export default function Discover() {
                 </div>
               )}
 
+              {/* Sits on the photo itself (fixed rgba(0,0,0,.5) chip), not the
+                  page — mint stays the fixed dark-mode shade here rather than
+                  the theme-aware vf-mint, same reasoning as the scrim above. */}
               {isVeryClose && !nearby && (
                 <div
-                  className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md border border-vf-mint/40"
-                  style={{ background: "rgba(0,0,0,0.5)" }}
+                  className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md"
+                  style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(143,227,199,0.4)" }}
                   data-testid="badge-very-close"
                 >
-                  <MapPin className="w-3 h-3 text-vf-mint" />
-                  <span className="text-[11px] font-semibold text-vf-mint">Under 1km</span>
+                  <MapPin className="w-3 h-3" style={{ color: "#8FE3C7" }} />
+                  <span className="text-[11px] font-semibold" style={{ color: "#8FE3C7" }}>Under 1km</span>
                 </div>
               )}
 
@@ -722,7 +725,7 @@ export default function Discover() {
                 <button
                   onClick={() => handleViewCardStory(currentProfile)}
                   className="absolute top-3 left-3 w-11 h-11 rounded-full p-[2px] btn-press"
-                  style={{ background: "#FF6B4A" }}
+                  style={{ background: "hsl(var(--vf-ember))" }}
                   data-testid="card-story-ring"
                   aria-label={`View ${currentProfile.displayName || "their"} story`}
                 >
@@ -800,7 +803,7 @@ export default function Discover() {
                         className={`py-3 ${i > 0 ? "border-t border-vf-line" : ""}`}
                         data-testid={`profile-answer-${i}`}
                       >
-                        <div className="text-[13.5px] text-[#7E7690] mb-1">{a.question}</div>
+                        <div className="text-[13.5px] text-vf-faint mb-1">{a.question}</div>
                         <p className="text-[16px] leading-[1.6] text-vf-text">{a.answer}</p>
                       </div>
                     ))}
@@ -867,7 +870,7 @@ export default function Discover() {
                 <button
                   onClick={handleLike}
                   disabled={createMatch.isPending}
-                  className="flex items-center justify-center w-12 h-12 rounded-full shrink-0 font-semibold btn-press transition-colors bg-vf-ember text-vf-ink hover:bg-[#FF8163]"
+                  className="flex items-center justify-center w-12 h-12 rounded-full shrink-0 font-semibold btn-press transition-colors bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)]"
                   data-testid="button-like"
                   aria-label="Like"
                 >
@@ -1013,7 +1016,7 @@ export default function Discover() {
               </button>
               <button
                 onClick={confirm === "block" ? doBlock : doReport}
-                className="flex-1 h-11 rounded-full text-[14px] font-semibold bg-vf-ember text-vf-ink hover:bg-[#FF8163] transition-colors"
+                className="flex-1 h-11 rounded-full text-[14px] font-semibold bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors"
                 data-testid="button-confirm-action"
               >
                 {confirm === "block" ? "Block" : "Send report"}
