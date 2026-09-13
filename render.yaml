@@ -1,0 +1,52 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploy: Render dashboard -> New -> Blueprint -> point at this repo. Render
+# reads this file and provisions both resources below in one go.
+#
+# Anything with generateValue/fromDatabase is filled in by Render itself.
+# Everything else under envVars either has a sensible default here or must be
+# set by hand in the service's Environment tab after the first deploy (marked
+# below) — real secrets (API keys) don't belong committed to this file.
+services:
+  - type: web
+    name: destira
+    runtime: node
+    plan: starter # free tier spins the service down on idle, which drops all
+      # in-memory sessions (this app doesn't use a session store yet — see
+      # LOCAL_DEV.md) and admin login attempt counters on every wake; fine for
+      # a demo, not for real users signing in and staying signed in.
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: destira-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_TOTP_ENC_KEY
+        generateValue: true
+      - key: PUBLIC_APP_URL
+        value: https://destira.date
+      # Set by hand in the Render dashboard once the service exists — email
+      # is a no-op without these (server/email/resend.ts), never crashes:
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: ADMIN_ALERT_EMAIL
+        sync: false
+      # Optional — without it, AI Twin endpoints fall back to canned text
+      # instead of real Gemini responses (LOCAL_DEV.md):
+      - key: GOOGLE_VERTEX_SA_JSON
+        sync: false
+
+databases:
+  - name: destira-db
+    plan: starter
+    databaseName: destira
+    user: destira
