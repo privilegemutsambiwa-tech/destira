@@ -1,11 +1,21 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
 # Deploy: Render dashboard -> New -> Blueprint -> point at this repo. Render
-# reads this file and provisions both resources below in one go.
+# reads this file and provisions the web service below.
 #
-# Anything with generateValue/fromDatabase is filled in by Render itself.
-# Everything else under envVars either has a sensible default here or must be
-# set by hand in the service's Environment tab after the first deploy (marked
-# below) — real secrets (API keys) don't belong committed to this file.
+# Database is Supabase, not Render's own Postgres — DATABASE_URL is set by
+# hand in the Render dashboard (Environment tab) to Supabase's *pooled*
+# connection string (Project Settings -> Database -> Connection string ->
+# "Transaction" mode, port 6543). Use the pooler, not the direct :5432
+# connection — Supabase's direct-connection limit is low and shared across
+# every client on the project, while the Supavisor pooler (Transaction mode)
+# is built for exactly this "a web app holds a connection pool" case.
+# server/db.ts's node-postgres driver doesn't use named prepared statements,
+# so it's compatible with transaction-mode pooling without extra config.
+#
+# Anything with generateValue is filled in by Render itself. Everything else
+# under envVars either has a sensible default here or must be set by hand in
+# the service's Environment tab after the first deploy (marked below) — real
+# secrets (connection strings, API keys) don't belong committed to this file.
 services:
   - type: web
     name: destira
@@ -20,10 +30,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Set by hand — Supabase's pooled ("Transaction" mode, port 6543)
+      # connection string. See the header comment above.
       - key: DATABASE_URL
-        fromDatabase:
-          name: destira-db
-          property: connectionString
+        sync: false
       - key: SESSION_SECRET
         generateValue: true
       - key: ADMIN_SESSION_SECRET
@@ -44,9 +54,3 @@ services:
       # instead of real Gemini responses (LOCAL_DEV.md):
       - key: GOOGLE_VERTEX_SA_JSON
         sync: false
-
-databases:
-  - name: destira-db
-    plan: starter
-    databaseName: destira
-    user: destira
