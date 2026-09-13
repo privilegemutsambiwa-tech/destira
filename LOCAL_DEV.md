@@ -20,7 +20,7 @@ Accounts persist in `./.localdb/`.
 
 | Area | Before (Replit) | Now (local) |
 | --- | --- | --- |
-| **Database** | Replit/Supabase Postgres via `DATABASE_URL` | Embedded **PGlite** (`@electric-sql/pglite`), data in `./.localdb/` — no install, no daemon. `server/db.ts`, `drizzle.config.ts` |
+| **Database** | Replit/Supabase Postgres via `DATABASE_URL` | Embedded **PGlite** (`@electric-sql/pglite`) when `DATABASE_URL` is unset — no install, no daemon, data in `./.localdb/`. Set `DATABASE_URL` (Render's managed Postgres, Supabase, etc.) to use a real Postgres instead, same as before — `server/db.ts`, `drizzle.config.ts` switch on whether it's set. |
 | **Auth** | Replit Auth (OIDC via `openid-client`) | Real email/password auth: `POST /api/auth/signup`, `POST /api/auth/login`, `GET /api/logout`. scrypt password hashing (`server/replit_integrations/auth/password.ts`), `users.password_hash` column. Same exports (`setupAuth`, `isAuthenticated`) and same `req.user.claims.sub` shape, so route code is unchanged. Legacy `/api/login` now redirects to the `/login` page. |
 | **Sessions** | Postgres via `connect-pg-simple` | In-memory `memorystore`; cookie `secure` only in production |
 | **Stripe** | Auto-init on boot via Replit connector | Skipped unless `ENABLE_STRIPE=1`. Billing routes error until configured. |

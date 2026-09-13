@@ -62,7 +62,15 @@ async function initStripe() {
 
     const stripeSync = await getStripeSync();
 
-    const webhookBaseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
+    // REPLIT_DOMAINS only exists on Replit; PUBLIC_APP_URL is what every other
+    // env var in this app already uses for "the real, public origin" (see
+    // server/admin/team.ts, server/email/index.ts). Stripe itself still goes
+    // through Replit's connector for credentials (server/stripeClient.ts) —
+    // this alone doesn't make ENABLE_STRIPE=1 work off-Replit, it just stops
+    // the webhook URL from being "https://undefined" if someone flips it on.
+    const webhookBaseUrl = process.env.REPLIT_DOMAINS
+      ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+      : process.env.PUBLIC_APP_URL || 'http://localhost:5000';
     try {
       const result = await stripeSync.findOrCreateManagedWebhook(
         `${webhookBaseUrl}/api/stripe/webhook`
@@ -80,7 +88,12 @@ async function initStripe() {
   }
 }
 
-await initStripe();
+// Not awaited: esbuild's CJS output (script/build.ts) can't emit top-level
+// await, and there's nothing downstream in this file that depends on Stripe
+// init finishing first — initStripe() already catches its own errors
+// internally, .catch() here is just a safety net against something throwing
+// before that try block runs.
+initStripe().catch((e) => console.error('Unexpected error initializing Stripe:', e));
 
 app.post(
   '/api/stripe/webhook',
