@@ -1,9 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage, PhotoNotFoundError, PhotoTooSmallError } from "./storage";
+import { storage, PhotoNotFoundError, PhotoTooSmallError, genderMatchesSeeking } from "./storage";
 import { setupAuth, registerAuthRoutes, authStorage, createSessionUser, hashPassword, verifyPassword } from "./replit_integrations/auth";
 import { z } from "zod";
-import { ai } from "./ai";
+import { ai, AI_MODEL } from "./ai";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
 import { sql, eq, and, gt, lt, gte, desc, isNull, isNotNull, inArray } from "drizzle-orm";
@@ -139,15 +139,15 @@ export async function registerRoutes(
     if (!userId) return res.sendStatus(401);
     const { answers } = req.body;
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash-001",
-        contents: [{ role: "user", parts: [{ text: JSON.stringify(answers) }] }],
-        config: {
-          systemInstruction: `You are an expert personality profiler for a dating app called Destira. Based on the user's answers to soul-mapping questions, create a rich, warm, first-person AI Twin persona description. Write in first person as "I'm [the user]'s AI Twin." Include key values, interests, communication style, what they look for in a partner, and personality traits. Keep it to 2-3 paragraphs.`,
-          maxOutputTokens: 8192,
-        },
+      const response = await ai.chat.completions.create({
+        model: AI_MODEL,
+        messages: [
+          { role: "system", content: `You are an expert personality profiler for a dating app called Destira. Based on the user's answers to soul-mapping questions, create a rich, warm, first-person AI Twin persona description. Write in first person as "I'm [the user]'s AI Twin." Include key values, interests, communication style, what they look for in a partner, and personality traits. Keep it to 2-3 paragraphs.` },
+          { role: "user", content: JSON.stringify(answers) },
+        ],
+        max_tokens: 8192,
       });
-      const twinPersona = response.text || "A thoughtful person who values authentic connections.";
+      const twinPersona = response.choices[0]?.message?.content || "A thoughtful person who values authentic connections.";
       res.json({ twinPersona });
     } catch (e) {
       console.error("Twin generation error:", e);
@@ -163,15 +163,15 @@ export async function registerRoutes(
     if (!bio || typeof bio !== "string") return res.status(400).json({ message: "bio is required" });
     try {
       const profile = await storage.getProfile(userId);
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash-001",
-        contents: [{ role: "user", parts: [{ text: bio }] }],
-        config: {
-          systemInstruction: `You are polishing a dating app bio for someone named ${profile?.displayName || "the user"}. Keep their authentic voice and core ideas but make it sparkle — tighten the prose, remove filler, add warmth. Return ONLY the polished bio text, no explanations, no quotes. Max 300 characters.`,
-          maxOutputTokens: 512,
-        },
+      const response = await ai.chat.completions.create({
+        model: AI_MODEL,
+        messages: [
+          { role: "system", content: `You are polishing a dating app bio for someone named ${profile?.displayName || "the user"}. Keep their authentic voice and core ideas but make it sparkle — tighten the prose, remove filler, add warmth. Return ONLY the polished bio text, no explanations, no quotes. Max 300 characters.` },
+          { role: "user", content: bio },
+        ],
+        max_tokens: 512,
       });
-      const polished = (response.text || bio).trim().slice(0, 300);
+      const polished = (response.choices[0]?.message?.content || bio).trim().slice(0, 300);
       res.json({ polished });
     } catch (e) {
       console.error("Polish bio error:", e);
@@ -225,16 +225,16 @@ export async function registerRoutes(
         memoryFacts: memoryFacts.map(f => f.factText),
         memorySummary: memorySummary?.summaryText,
       };
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash-001",
-        contents: [{ role: "user", parts: [{ text: JSON.stringify(contextData) }] }],
-        config: {
-          systemInstruction: `Generate two warm, genuine summaries for a dating profile using all available context (bio, personality answers, Twin memory facts, and conversation themes). Return JSON with: {"aboutSummary": "A 3-4 sentence warm, witty 'About Me' summary that captures their authentic personality and what makes them interesting as a partner", "personalitySummary": "A 3-4 sentence personality passage based on their traits, values, and how they show up in relationships"}. Draw from the memory facts and conversation themes to make it specific and real — avoid generic platitudes.`,
-          responseMimeType: "application/json",
-          maxOutputTokens: 8192,
-        },
+      const response = await ai.chat.completions.create({
+        model: AI_MODEL,
+        messages: [
+          { role: "system", content: `Generate two warm, genuine summaries for a dating profile using all available context (bio, personality answers, Twin memory facts, and conversation themes). Return JSON with: {"aboutSummary": "A 3-4 sentence warm, witty 'About Me' summary that captures their authentic personality and what makes them interesting as a partner", "personalitySummary": "A 3-4 sentence personality passage based on their traits, values, and how they show up in relationships"}. Draw from the memory facts and conversation themes to make it specific and real — avoid generic platitudes.` },
+          { role: "user", content: JSON.stringify(contextData) },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 8192,
       });
-      const summaries = JSON.parse(response.text || "{}");
+      const summaries = JSON.parse(response.choices[0]?.message?.content || "{}");
       await storage.updateProfile(userId, {
         aboutSummary: summaries.aboutSummary,
         personalitySummary: summaries.personalitySummary,
@@ -281,18 +281,21 @@ export async function registerRoutes(
 
       const profile = await storage.getProfile(userId);
       if (profile) {
-        const extraction = await ai.models.generateContent({
-          model: "gemini-1.5-pro-001",
-          contents: [{ role: "user", parts: [{ text: JSON.stringify({ personality: personalityProfile, twinPersona: profile.twinPersona }) }] }],
-          config: {
-            systemInstruction: `Analyze the user's onboarding answers to extract structured personality traits. Return JSON with:
+        const extraction = await ai.chat.completions.create({
+          model: AI_MODEL,
+          messages: [
+            {
+              role: "system",
+              content: `Analyze the user's onboarding answers to extract structured personality traits. Return JSON with:
 {"top_values": ["value1", "value2", ...], "relationship_goals": "...", "boundaries": "...", "humor_style": "...", "communication_style": "...", "attachment_style": "...", "interests": ["interest1", ...], "lifestyle_patterns": ["pattern1", ...], "desired_partner_traits": ["trait1", ...]}
 Fill in what you can determine from the data. Use short, clear phrases. Limit arrays to 5 items max.`,
-            responseMimeType: "application/json",
-            maxOutputTokens: 8192,
-          },
+            },
+            { role: "user", content: JSON.stringify({ personality: personalityProfile, twinPersona: profile.twinPersona }) },
+          ],
+          response_format: { type: "json_object" },
+          max_tokens: 8192,
         });
-        const extracted = JSON.parse(extraction.text || "{}");
+        const extracted = JSON.parse(extraction.choices[0]?.message?.content || "{}");
         const structuredUpdates: Partial<TwinProfileStructured> = {
           ...(extracted.top_values?.length ? { topValues: extracted.top_values } : {}),
           ...(extracted.relationship_goals ? { relationshipGoals: extracted.relationship_goals } : {}),
@@ -1306,22 +1309,25 @@ ${PRIVACY_GUARDRAIL}`;
       const lastFew = recentMessages.slice(-6);
       if (lastFew.length < 2) return;
 
-      const completion = await ai.models.generateContent({
-        model: "gemini-2.0-flash-001",
-        contents: [{ role: "user", parts: [{ text: JSON.stringify(lastFew) }] }],
-        config: {
-          systemInstruction: `You analyze conversations to extract key facts and a brief summary. Return JSON with:
+      const completion = await ai.chat.completions.create({
+        model: AI_MODEL,
+        messages: [
+          {
+            role: "system",
+            content: `You analyze conversations to extract key facts and a brief summary. Return JSON with:
 {"summary": "A 2-3 sentence rolling summary of the conversation themes",
  "facts": ["fact 1", "fact 2", ...],
  "questions_answered_count": 0,
  "structured_updates": {"top_values": [], "interests": [], "relationship_goals": "", "humor_style": "", "communication_style": "", "lifestyle_patterns": [], "desired_partner_traits": [], "boundaries": ""}}
 Only include structured_updates fields if the conversation clearly reveals them. Facts should be specific, memorable insights. Return empty arrays/strings for fields not mentioned. For questions_answered_count: count how many of the user's messages meaningfully answer a personality/relationship question (not small talk).`,
-          responseMimeType: "application/json",
-          maxOutputTokens: 8192,
-        },
+          },
+          { role: "user", content: JSON.stringify(lastFew) },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 8192,
       });
 
-      const result = JSON.parse(completion.text || "{}");
+      const result = JSON.parse(completion.choices[0]?.message?.content || "{}");
 
       if (result.summary) {
         await storage.upsertTwinMemorySummary(userId, result.summary);
@@ -1400,23 +1406,21 @@ Only include structured_updates fields if the conversation clearly reveals them.
 
         res.write(`data: ${JSON.stringify({ type: "typing" })}\n\n`);
 
-        const geminiHistory = history.map((h: any) => ({
-          role: h.role === "assistant" ? "model" : "user",
-          parts: [{ text: h.content }],
+        const chatHistory = history.map((h: any) => ({
+          role: h.role === "assistant" ? "assistant" as const : "user" as const,
+          content: h.content,
         }));
 
-        const stream = await ai.models.generateContentStream({
-          model: "gemini-2.0-flash-001",
-          contents: geminiHistory,
-          config: {
-            systemInstruction: systemPrompt,
-            maxOutputTokens: 8192,
-          },
+        const stream = await ai.chat.completions.create({
+          model: AI_MODEL,
+          messages: [{ role: "system", content: systemPrompt }, ...chatHistory],
+          max_tokens: 8192,
+          stream: true,
         });
 
         let fullResponse = "";
         for await (const chunk of stream) {
-          const delta = chunk.text || "";
+          const delta = chunk.choices[0]?.delta?.content || "";
           if (delta) {
             fullResponse += delta;
             res.write(`data: ${JSON.stringify({ type: "delta", content: delta })}\n\n`);
@@ -1431,25 +1435,29 @@ Only include structured_updates fields if the conversation clearly reveals them.
         res.write(`data: ${JSON.stringify({ type: "done", content: fullResponse })}\n\n`);
         res.end();
       } else {
-        const geminiHistory = history.map((h: any) => ({
-          role: h.role === "assistant" ? "model" : "user",
-          parts: [{ text: h.content }],
+        const chatHistory = history.map((h: any) => ({
+          role: h.role === "assistant" ? "assistant" as const : "user" as const,
+          content: h.content,
         }));
 
-        const completion = await ai.models.generateContent({
-          model: "gemini-2.0-flash-001",
-          contents: geminiHistory,
-          config: {
-            systemInstruction: systemPrompt,
-            maxOutputTokens: 8192,
-          },
+        const completion = await ai.chat.completions.create({
+          model: AI_MODEL,
+          messages: [{ role: "system", content: systemPrompt }, ...chatHistory],
+          max_tokens: 8192,
         });
 
-        let aiResponse = completion.text || "I'd love to tell you more about that in person!";
+        let aiResponse = completion.choices[0]?.message?.content || "I'd love to tell you more about that in person!";
         aiResponse = await finalizeInterviewReply(aiResponse, targetProfile, message);
         history.push({ role: "assistant", content: aiResponse });
         await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
-        logLlmCall({ callType: "interview_chat", userId, usageMetadata: (completion as any).usageMetadata, fallbackInputText: message, fallbackOutputText: aiResponse }).catch(() => {});
+        const usage = completion.usage;
+        logLlmCall({
+          callType: "interview_chat",
+          userId,
+          usageMetadata: usage ? { promptTokenCount: usage.prompt_tokens, candidatesTokenCount: usage.completion_tokens } : undefined,
+          fallbackInputText: message,
+          fallbackOutputText: aiResponse,
+        }).catch(() => {});
         res.json({ response: aiResponse });
       }
     } catch (e) {
@@ -1494,26 +1502,24 @@ Only include structured_updates fields if the conversation clearly reveals them.
 
         res.write(`data: ${JSON.stringify({ type: "typing" })}\n\n`);
 
-        const geminiMsgs = [
+        const chatMsgs = [
           ...memoryMessages.map((m: any) => ({
-            role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: m.content }],
+            role: m.role === "assistant" ? "assistant" as const : "user" as const,
+            content: m.content,
           })),
-          { role: "user" as const, parts: [{ text: message }] },
+          { role: "user" as const, content: message },
         ];
 
-        const stream = await ai.models.generateContentStream({
-          model: "gemini-2.0-flash-001",
-          contents: geminiMsgs,
-          config: {
-            systemInstruction: systemPrompt,
-            maxOutputTokens: 8192,
-          },
+        const stream = await ai.chat.completions.create({
+          model: AI_MODEL,
+          messages: [{ role: "system", content: systemPrompt }, ...chatMsgs],
+          max_tokens: 8192,
+          stream: true,
         });
 
         let fullResponse = "";
         for await (const chunk of stream) {
-          const delta = chunk.text || "";
+          const delta = chunk.choices[0]?.delta?.content || "";
           if (delta) {
             fullResponse += delta;
             res.write(`data: ${JSON.stringify({ type: "delta", content: delta })}\n\n`);
@@ -1529,29 +1535,33 @@ Only include structured_updates fields if the conversation clearly reveals them.
         res.write(`data: ${JSON.stringify({ type: "done", content: fullResponse })}\n\n`);
         res.end();
       } else {
-        const geminiMsgs = [
+        const chatMsgs = [
           ...memoryMessages.map((m: any) => ({
-            role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: m.content }],
+            role: m.role === "assistant" ? "assistant" as const : "user" as const,
+            content: m.content,
           })),
-          { role: "user" as const, parts: [{ text: message }] },
+          { role: "user" as const, content: message },
         ];
 
-        const completion = await ai.models.generateContent({
-          model: "gemini-2.0-flash-001",
-          contents: geminiMsgs,
-          config: {
-            systemInstruction: systemPrompt,
-            maxOutputTokens: 8192,
-          },
+        const completion = await ai.chat.completions.create({
+          model: AI_MODEL,
+          messages: [{ role: "system", content: systemPrompt }, ...chatMsgs],
+          max_tokens: 8192,
         });
 
-        let aiResponse = completion.text || "I hear you. Tell me more about what's on your mind.";
+        let aiResponse = completion.choices[0]?.message?.content || "I hear you. Tell me more about what's on your mind.";
         aiResponse = detectPII(aiResponse);
         await storage.addTwinMemory(userId, aiResponse, "assistant");
 
         extractMemoryAfterChat(userId, [{ role: "user", content: message }, { role: "assistant", content: aiResponse }]).catch(() => {});
-        logLlmCall({ callType: "twin_chat", userId, usageMetadata: (completion as any).usageMetadata, fallbackInputText: message, fallbackOutputText: aiResponse }).catch(() => {});
+        const usage = completion.usage;
+        logLlmCall({
+          callType: "twin_chat",
+          userId,
+          usageMetadata: usage ? { promptTokenCount: usage.prompt_tokens, candidatesTokenCount: usage.completion_tokens } : undefined,
+          fallbackInputText: message,
+          fallbackOutputText: aiResponse,
+        }).catch(() => {});
 
         res.json({ response: aiResponse });
       }
@@ -1730,16 +1740,16 @@ Only include structured_updates fields if the conversation clearly reveals them.
       const structured = await storage.getTwinProfileStructured(userId);
       const answers = await storage.getUserAnswers(userId);
 
-      const completion = await ai.models.generateContent({
-        model: "gemini-1.5-pro-001",
-        contents: [{ role: "user", parts: [{ text: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName, structured: structured || {}, answers: answers.slice(0, 20).map(a => a.answerText) }) }] }],
-        config: {
-          systemInstruction: `Generate an attractive, emotionally intelligent, and dating-appropriate "About Me" section (2-3 paragraphs) for a Destira user. Base this solely on the provided profile data and question answers. Highlight their positive traits, interests, and what they seek in a partner. Ensure it is engaging and encourages connection. Strictly adhere to the privacy guardrail. Do not include any PII, exact locations, or sensitive information.\n\n${PRIVACY_GUARDRAIL}`,
-          maxOutputTokens: 8192,
-        },
+      const completion = await ai.chat.completions.create({
+        model: AI_MODEL,
+        messages: [
+          { role: "system", content: `Generate an attractive, emotionally intelligent, and dating-appropriate "About Me" section (2-3 paragraphs) for a Destira user. Base this solely on the provided profile data and question answers. Highlight their positive traits, interests, and what they seek in a partner. Ensure it is engaging and encourages connection. Strictly adhere to the privacy guardrail. Do not include any PII, exact locations, or sensitive information.\n\n${PRIVACY_GUARDRAIL}` },
+          { role: "user", content: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName, structured: structured || {}, answers: answers.slice(0, 20).map(a => a.answerText) }) },
+        ],
+        max_tokens: 8192,
       });
 
-      let aboutMeText = completion.text || "";
+      let aboutMeText = completion.choices[0]?.message?.content || "";
       aboutMeText = detectPII(aboutMeText);
       await storage.createAuditLog(userId, "generate_about_me", { length: aboutMeText.length });
       res.json({ aboutMeText, version: Date.now() });
@@ -1757,16 +1767,16 @@ Only include structured_updates fields if the conversation clearly reveals them.
       if (!profile) return res.status(404).json({ message: "Profile not found" });
       const structured = await storage.getTwinProfileStructured(userId);
 
-      const completion = await ai.models.generateContent({
-        model: "gemini-1.5-pro-001",
-        contents: [{ role: "user", parts: [{ text: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName, structured: structured || {} }) }] }],
-        config: {
-          systemInstruction: `Generate a concise (2-4 lines) and elegant AI summary for a Destira user's profile. This summary should capture their core personality, key values, and relationship style, designed to entice potential matches. Base it solely on the provided structured profile. Strictly adhere to the privacy guardrail. Do not include any PII or sensitive content.\n\n${PRIVACY_GUARDRAIL}`,
-          maxOutputTokens: 8192,
-        },
+      const completion = await ai.chat.completions.create({
+        model: AI_MODEL,
+        messages: [
+          { role: "system", content: `Generate a concise (2-4 lines) and elegant AI summary for a Destira user's profile. This summary should capture their core personality, key values, and relationship style, designed to entice potential matches. Base it solely on the provided structured profile. Strictly adhere to the privacy guardrail. Do not include any PII or sensitive content.\n\n${PRIVACY_GUARDRAIL}` },
+          { role: "user", content: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName, structured: structured || {} }) },
+        ],
+        max_tokens: 8192,
       });
 
-      let aiSummaryText = completion.text || "";
+      let aiSummaryText = completion.choices[0]?.message?.content || "";
       aiSummaryText = detectPII(aiSummaryText);
       await storage.createAuditLog(userId, "generate_summary", { length: aiSummaryText.length });
       res.json({ aiSummaryText, version: Date.now() });
@@ -1869,17 +1879,19 @@ Only include structured_updates fields if the conversation clearly reveals them.
           const answers = qs
             .filter((q) => q.answered)
             .map((q) => ({ q: q.text, a: q.answerText || (q.selectedOptions || []).join(", ") }));
-          ai.models
-            .generateContent({
-              model: "gemini-2.0-flash-001",
-              contents: [{ role: "user", parts: [{ text: JSON.stringify(answers) }] }],
-              config: {
-                systemInstruction:
-                  `You are an expert personality profiler for a dating app called Destira. From the user's answers, write a warm first-person AI Twin persona ("I'm [name]'s AI Twin."). Cover values, interests, communication style, what they look for in a partner, and personality. 2-3 paragraphs.`,
-                maxOutputTokens: 8192,
-              },
+          ai.chat.completions
+            .create({
+              model: AI_MODEL,
+              messages: [
+                {
+                  role: "system",
+                  content: `You are an expert personality profiler for a dating app called Destira. From the user's answers, write a warm first-person AI Twin persona ("I'm [name]'s AI Twin."). Cover values, interests, communication style, what they look for in a partner, and personality. 2-3 paragraphs.`,
+                },
+                { role: "user", content: JSON.stringify(answers) },
+              ],
+              max_tokens: 8192,
             })
-            .then((r) => storage.updateProfile(userId, { twinPersona: r.text || "" }))
+            .then((r) => storage.updateProfile(userId, { twinPersona: r.choices[0]?.message?.content || "" }))
             .then(() => {
               const map = Object.fromEntries(answers.map((x, i) => [i, x.a]));
               return seedOnboardingIntoTwinMemory(userId, map as Record<string, string>);
@@ -2016,19 +2028,22 @@ Only include structured_updates fields if the conversation clearly reveals them.
       const answers = await storage.getUserAnswers(userId);
       const personality = profile.personalityProfile;
 
-      const completion = await ai.models.generateContent({
-        model: "gemini-1.5-pro-001",
-        contents: [{ role: "user", parts: [{ text: JSON.stringify({ bio: profile.bio, personality, twinPersona: profile.twinPersona, answers: answers.map(a => a.answerText) }) }] }],
-        config: {
-          systemInstruction: `Analyze the user's profile data and question answers to extract structured personality traits. Return JSON with:
+      const completion = await ai.chat.completions.create({
+        model: AI_MODEL,
+        messages: [
+          {
+            role: "system",
+            content: `Analyze the user's profile data and question answers to extract structured personality traits. Return JSON with:
 {"top_values": ["value1", "value2", ...], "relationship_goals": "...", "boundaries": "...", "humor_style": "...", "communication_style": "...", "attachment_style": "...", "interests": ["interest1", ...], "lifestyle_patterns": ["pattern1", ...], "desired_partner_traits": ["trait1", ...]}
 Fill in what you can determine from the data. Use short, clear phrases. Limit arrays to 5 items max.`,
-          responseMimeType: "application/json",
-          maxOutputTokens: 8192,
-        },
+          },
+          { role: "user", content: JSON.stringify({ bio: profile.bio, personality, twinPersona: profile.twinPersona, answers: answers.map(a => a.answerText) }) },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 8192,
       });
 
-      const result = JSON.parse(completion.text || "{}");
+      const result = JSON.parse(completion.choices[0]?.message?.content || "{}");
       const updated = await storage.upsertTwinProfileStructured(userId, {
         topValues: result.top_values || [],
         relationshipGoals: result.relationship_goals || "",
@@ -3451,21 +3466,34 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     try {
       await storage.deleteExpiredStories();
-      const activeStories = await storage.getActiveStories();
-      const enriched = await Promise.all(activeStories.map(async (s: any) => {
+      const requesterProfile = await storage.getProfile(userId);
+      const seekingGenders = (requesterProfile?.seekingGenders ?? []) as string[];
+      const seeAllGenders = seekingGenders.length === 0 || seekingGenders.includes("everyone");
+      const groupedStories = await storage.getActiveStories();
+      const flatStories = groupedStories.flatMap((group: any) =>
+        group.stories.map((s: any) => ({ ...s, userId: group.userId }))
+      );
+      const enrichedAll = await Promise.all(flatStories.map(async (s: any) => {
         const profile = await storage.getProfileWithUser(s.userId);
         const media = await storage.getStoryMedia(s.id);
+        const likes = await storage.getStoryLikes(s.id);
+        const views = await storage.getStoryViews(s.id);
         return {
           ...s,
           displayName: profile?.displayName || "User",
           photoUrl: profile?.coverPhotoUrl || profile?.user?.profileImageUrl || "",
+          gender: profile?.gender ?? null,
           media,
-          likeCount: 0,
-          viewCount: 0,
+          likeCount: likes.length,
+          viewCount: views.length,
         };
       }));
+      const enriched = enrichedAll.filter((s) =>
+        s.userId === userId || seeAllGenders || genderMatchesSeeking(s.gender, seekingGenders)
+      );
       res.json(enriched);
     } catch (e) {
+      console.error("Get stories feed error:", e);
       res.status(500).json({ message: "Failed to get stories feed" });
     }
   });
@@ -3935,11 +3963,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     try {
-      const { maxDistanceKm, ageMinPreference, ageMaxPreference } = req.body;
+      const { maxDistanceKm, ageMinPreference, ageMaxPreference, seekingGenders } = req.body;
       await storage.updateProfile(userId, {
         ...(maxDistanceKm != null && { maxDistanceKm }),
         ...(ageMinPreference != null && { ageMinPreference }),
         ...(ageMaxPreference != null && { ageMaxPreference }),
+        ...(Array.isArray(seekingGenders) && { seekingGenders }),
       });
       res.json({ success: true });
     } catch (err) {

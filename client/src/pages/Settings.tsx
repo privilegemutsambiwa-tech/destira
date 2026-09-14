@@ -4,7 +4,7 @@ import {
   ArrowLeft, User, Brain, Compass, Shield, Bell, Wrench, Crown, HelpCircle,
   AlertTriangle, ChevronRight, LogOut, Trash2, PauseCircle, Eye, EyeOff,
   Volume2, MapPin, MessageSquare, Zap, Check, Lock, Mail, Sliders, FileText,
-  ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2
+  ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2, Users
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme, type ThemePreference } from "@/hooks/use-theme";
@@ -12,6 +12,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
 import { PLAN_CARDS as SETTINGS_PLAN_CARDS, LIMITS as SETTINGS_LIMITS } from "@shared/entitlements";
+import { SEEKING_OPTIONS } from "@shared/essentials";
 import { useCancelSubscription } from "@/hooks/use-payments";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -189,7 +190,7 @@ function SliderInput({ label, value, min, max, onChange, unit = "" }: {
 
 type PanelKey =
   | "change-email" | "change-password"
-  | "twin-tone" | "location" | "age-range" | "block-list" | "proximity"
+  | "twin-tone" | "location" | "age-range" | "seeking-genders" | "block-list" | "proximity"
   | "data-privacy" | "verify" | "billing" | "help" | "contact" | "feedback"
   | "terms" | "privacy-policy" | "clear-memory" | null;
 
@@ -631,6 +632,62 @@ function AgeRangePanel({ onBack, profile }: { onBack: () => void; profile: any }
   );
 }
 
+function SeekingGendersPanel({ onBack, profile }: { onBack: () => void; profile: any }) {
+  const { toast } = useToast();
+  const [selected, setSelected] = useState<string[]>(profile?.seekingGenders ?? []);
+  const saveMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/settings/discovery", { seekingGenders: selected }),
+    onSuccess: () => toast({ title: "Preference saved" }),
+    onError: () => toast({ title: "Failed to save", variant: "destructive" }),
+  });
+
+  const toggle = (value: string) => {
+    if (value === "everyone") {
+      setSelected(["everyone"]);
+      return;
+    }
+    setSelected((prev) => {
+      const withoutEveryone = prev.filter((v) => v !== "everyone");
+      return withoutEveryone.includes(value)
+        ? withoutEveryone.filter((v) => v !== value)
+        : [...withoutEveryone, value];
+    });
+  };
+
+  return (
+    <Panel title="Who You See" onBack={onBack}>
+      <div style={{ margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden", background: CARD }}>
+        {SEEKING_OPTIONS.map((opt, i) => {
+          const active = selected.includes(opt.value);
+          return (
+            <button
+              key={opt.value}
+              onClick={() => toggle(opt.value)}
+              className="w-full flex items-center justify-between"
+              style={{
+                padding: "14px 16px",
+                borderBottom: i < SEEKING_OPTIONS.length - 1 ? `1px solid ${BORDER}` : "none",
+              }}
+              data-testid={`option-seeking-${opt.value}`}
+            >
+              <span className="text-sm" style={{ color: TEXT }}>{opt.label}</span>
+              {active && <Check className="w-4 h-4" style={{ color: EMBER }} />}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-xs px-4 pt-3" style={{ color: MUTED }}>
+        {selected.length === 0 || selected.includes("everyone")
+          ? "You'll see profiles and stories from everyone."
+          : "You'll only see profiles and stories that match your selection, unless you choose Everyone."}
+      </p>
+      <div style={{ padding: "16px" }}>
+        <GradientButton label="Save Preference" onClick={() => saveMutation.mutate()} testId="button-save-seeking-genders" />
+      </div>
+    </Panel>
+  );
+}
+
 function BlockListPanel({ onBack }: { onBack: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -995,7 +1052,7 @@ function HelpPanel({ onBack }: { onBack: () => void }) {
     { q: "How do matches work?", a: "Your twin talks to other people's twins. When a conversation resonates, you get a curated read — with the transcript and a resonance score — and you decide whether to ask to meet. You can like or pass." },
     { q: "What do the paid plans give me?", a: `Free is ${SETTINGS_LIMITS.free.dailyLikes} likes a day and the two-line transcript. Spark ($${(SETTINGS_LIMITS.spark.priceCents / 100).toFixed(2)}) shows you who asked to meet you and raises likes to ${SETTINGS_LIMITS.spark.dailyLikes} a day. Flame ($${(SETTINGS_LIMITS.flame.priceCents / 100).toFixed(2)}) opens the full transcript and lets you host events. Ember ($${(SETTINGS_LIMITS.ember.priceCents / 100).toFixed(2)}) removes the ceilings entirely. See Plans for the full breakdown.` },
     { q: "How do I delete my account?", a: "Go to Settings → Danger Zone → Delete Account, then type DELETE to confirm permanent deletion of all your data." },
-    { q: "Is my data shared with third parties?", a: "We never sell your personal data. AI processing uses Google Vertex AI under strict data agreements. See our Privacy Policy for full details." },
+    { q: "Is my data shared with third parties?", a: "We never sell your personal data. AI processing uses Hive Models (DeepSeek) under strict data agreements. See our Privacy Policy for full details." },
   ];
 
   return (
@@ -1388,7 +1445,7 @@ function PrivacyPolicyPanel({ onBack }: { onBack: () => void }) {
         <p className="text-foreground font-semibold mb-1">How We Use Data</p>
         <p className="mb-4">Your data trains your personal AI Twin and improves match quality. We never sell personal data to third parties.</p>
         <p className="text-foreground font-semibold mb-1">AI Processing</p>
-        <p className="mb-4">AI features use Google Vertex AI (Gemini). Data sent to Gemini is subject to Google's data processing terms.</p>
+        <p className="mb-4">AI features use Hive Models, routed to DeepSeek. Data sent for AI processing is subject to Hive's data processing terms.</p>
         <p className="text-foreground font-semibold mb-1">Data Retention</p>
         <p className="mb-4">You can delete all your data at any time via Settings → Data & Privacy → Delete All Data.</p>
         <p className="text-foreground font-semibold mb-1">Cookies</p>
@@ -1536,6 +1593,7 @@ export default function Settings() {
   if (activePanel === "location") return <LocationPanel onBack={() => setActivePanel(null)} profile={profile} />;
   if (activePanel === "proximity") return <ProximityPanel onBack={() => { setActivePanel(null); if (window.location.hash) history.replaceState(null, "", window.location.pathname); }} profile={profile} />;
   if (activePanel === "age-range") return <AgeRangePanel onBack={() => setActivePanel(null)} profile={profile} />;
+  if (activePanel === "seeking-genders") return <SeekingGendersPanel onBack={() => setActivePanel(null)} profile={profile} />;
   if (activePanel === "block-list") return <BlockListPanel onBack={() => setActivePanel(null)} />;
   if (activePanel === "data-privacy") return <DataPrivacyPanel onBack={() => setActivePanel(null)} />;
   if (activePanel === "verify") return <VerifyPanel onBack={() => setActivePanel(null)} />;
@@ -1585,6 +1643,19 @@ export default function Settings() {
           <ChevronRow icon={MapPin} label="Location Preferences" sublabel={`Within ${profile?.maxDistanceKm ?? 100} km`} onClick={() => setActivePanel("location")} testId="row-location" />
           <ChevronRow icon={Zap} label="Proximity Alerts" sublabel="When someone worth knowing is at the same place" onClick={() => setActivePanel("proximity")} testId="row-proximity" />
           <ChevronRow icon={Sliders} label="Age Range" sublabel={`${profile?.ageMinPreference ?? 18}–${profile?.ageMaxPreference ?? 65} years`} onClick={() => setActivePanel("age-range")} testId="row-age-range" />
+          <ChevronRow
+            icon={Users}
+            label="Who You See"
+            sublabel={
+              !profile?.seekingGenders?.length || profile.seekingGenders.includes("everyone")
+                ? "Everyone"
+                : profile.seekingGenders
+                    .map((v: string) => SEEKING_OPTIONS.find((o) => o.value === v)?.label ?? v)
+                    .join(", ")
+            }
+            onClick={() => setActivePanel("seeking-genders")}
+            testId="row-seeking-genders"
+          />
           <ChevronRow icon={CalendarDays} label="Event Preferences" sublabel="What shows up in your Events feed" onClick={() => setLocation("/settings/events?from=/settings")} testId="row-event-preferences" />
         </div>
 

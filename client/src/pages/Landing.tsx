@@ -3,10 +3,9 @@ import { useRef, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { AlertTriangle } from "lucide-react";
 import { DestiraLockup } from "@/components/brand/logo";
-import { PhotoFrame } from "@/components/brand/photo-frame";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
-import { photos as HERO_PHOTOS, photosByName, type Photo } from "@/lib/photos";
+import { photos as HERO_PHOTOS, type Photo } from "@/lib/photos";
 
 /* ------------------------------------------------------------------ *
  *  Landing — marketing page, route "/" for unauthenticated visitors.
@@ -93,54 +92,71 @@ function Reveal({
   );
 }
 
-const PHOTO_WIDTHS = [640, 960, 1440, 1920] as const;
+// New arrivals (hero-81+, the curated couples batch) show up roughly twice as
+// often as the older set — each priority photo is duplicated in the cycle,
+// spaced a full lap apart so it never repeats back-to-back.
+const NEW_HERO_START = 81;
+const isPriorityPhoto = (name: string) => {
+  const m = /^hero-(\d+)$/.exec(name);
+  return !!m && Number(m[1]) >= NEW_HERO_START;
+};
 
-/** Non-hero imagery (the Turn, Communities, closing) still uses flat slot ids
- *  in client/public/photos/ — ids match docs/photo-manifest.md and the
- *  [data-photo-slot] attributes. The hero rotation uses the generated manifest
- *  in @/lib/photos instead. */
-function photo(slot: string) {
-  return {
-    src: `/photos/${slot}.jpg`,
-    srcSet: PHOTO_WIDTHS.map((w) => `/photos/${slot}-${w}.webp ${w}w`).join(", "),
-  };
+function buildWeightedHeroSet(all: Photo[]): Photo[] {
+  const priority = all.filter((p) => isPriorityPhoto(p.name));
+  const rest = all.filter((p) => !isPriorityPhoto(p.name));
+  const priorityTwice = [...priority, ...priority];
+  const merged: Photo[] = [];
+  const len = Math.max(priorityTwice.length, rest.length);
+  for (let i = 0; i < len; i++) {
+    if (i < priorityTwice.length) merged.push(priorityTwice[i]);
+    if (i < rest.length) merged.push(rest[i]);
+  }
+  return merged;
 }
 
-// The hero cycles through every photo in the generated manifest (hero-1..22,
-// the couples-in-love set). A 404 self-heals out of the rotation.
-const HERO_SET: Photo[] = HERO_PHOTOS;
+// The hero cycles through every photo in the generated manifest, weighted
+// toward the newest batch. A 404 self-heals out of the rotation.
+const HERO_SET: Photo[] = buildWeightedHeroSet(HERO_PHOTOS);
+
+/** Picks a starting index a fraction of the way through HERO_SET so multiple
+ *  rotating sections on the same page desync instead of mirroring each other. */
+const heroOffset = (fraction: number) => Math.floor(HERO_SET.length * fraction);
 
 const HERO_SIZES = "(min-width: 1024px) 45vw, 100vw";
 
-/** Crossfades through a list of manifest photos. Mounts at most two <img> at a
- *  time. Static (first item) under prefers-reduced-motion. Never renders empty. */
+/** Cycles through a list of manifest photos, swapping the image directly (no
+ *  fade) on an interval. Static (first item) under prefers-reduced-motion.
+ *  Never renders empty — a 404'd photo drops itself out of the rotation. */
 function RotatingPhoto({
   slots,
   ratio,
   priority = false,
   className = "",
+  style,
   intervalMs = 4600,
+  startIndex = 0,
+  caption,
 }: {
   slots: Photo[];
   ratio: string;
   priority?: boolean;
   className?: string;
+  style?: React.CSSProperties;
   intervalMs?: number;
+  startIndex?: number;
+  caption?: string;
 }) {
   const reduce = usePrefersReducedMotion();
   const [live, setLive] = useState<Photo[]>(slots);
-  const [i, setI] = useState(0);
-  const [prev, setPrev] = useState<number | null>(null);
+  const [i, setI] = useState(() => (slots.length ? startIndex % slots.length : 0));
 
   useEffect(() => {
     if (reduce || live.length < 2) return;
     const id = window.setInterval(() => {
-      setPrev(i);
       setI((n) => (n + 1) % live.length);
-      window.setTimeout(() => setPrev(null), 900);
     }, intervalMs);
     return () => window.clearInterval(id);
-  }, [reduce, live.length, intervalMs, i]);
+  }, [reduce, live.length, intervalMs]);
 
   const dropPhoto = (name: string) =>
     setLive((cur) => {
@@ -149,39 +165,35 @@ function RotatingPhoto({
     });
 
   const idx = Math.min(i, live.length - 1);
-  const showIdxs = prev !== null && prev !== idx ? [prev, idx] : [idx];
+  const p = live[idx];
 
   return (
     <figure
       className={`relative overflow-hidden ${className}`}
-      style={{ aspectRatio: ratio, borderRadius: "20px" }}
-      data-photo-slot={live[idx]?.name}
+      style={{ aspectRatio: ratio, borderRadius: "20px", ...style }}
+      data-photo-slot={p?.name}
     >
-      {showIdxs.map((n) => {
-        const p = live[n];
-        return (
-          <picture key={p.name}>
-            <source type="image/webp" srcSet={p.webpSrcSet} sizes={HERO_SIZES} />
-            <img
-              src={p.src}
-              srcSet={p.srcSet}
-              sizes={HERO_SIZES}
-              alt=""
-              loading={priority && n === 0 ? "eager" : "lazy"}
-              decoding="async"
-              onError={() => dropPhoto(p.name)}
-              className="absolute inset-0 h-full w-full object-cover transition-opacity duration-[900ms] ease-in-out"
-              style={{
-                opacity: n === idx ? 1 : 0,
-                filter: "saturate(1.05)",
-                backgroundImage: `url("${p.lqip}")`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-              }}
-            />
-          </picture>
-        );
-      })}
+      {p && (
+        <picture>
+          <source type="image/webp" srcSet={p.webpSrcSet} sizes={HERO_SIZES} />
+          <img
+            src={p.src}
+            srcSet={p.srcSet}
+            sizes={HERO_SIZES}
+            alt=""
+            loading={priority ? "eager" : "lazy"}
+            decoding="async"
+            onError={() => dropPhoto(p.name)}
+            className="absolute inset-0 h-full w-full object-cover"
+            style={{
+              filter: "saturate(1.05)",
+              backgroundImage: `url("${p.lqip}")`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }}
+          />
+        </picture>
+      )}
       <span
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
@@ -192,7 +204,76 @@ function RotatingPhoto({
         className="pointer-events-none absolute inset-0"
         style={{ borderRadius: "20px", boxShadow: "inset 0 0 0 1px rgba(255,255,255,.09)" }}
       />
+      {caption && (
+        <>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-vf-scrim/85 to-transparent"
+            style={{ height: "45%" }}
+          />
+          <figcaption
+            className="absolute bottom-4 left-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em]"
+            style={{ color: "rgba(245,240,234,0.9)" }}
+          >
+            {caption}
+          </figcaption>
+        </>
+      )}
     </figure>
+  );
+}
+
+/** Full-bleed rotating backdrop (the Closing section). Same no-fade swap as
+ *  RotatingPhoto, but a bare absolute-fill <img> — the section around it
+ *  supplies its own scrim/gradient overlays. */
+function RotatingBackdrop({
+  slots,
+  startIndex = 0,
+  intervalMs = 5200,
+  objectPosition = "center 40%",
+}: {
+  slots: Photo[];
+  startIndex?: number;
+  intervalMs?: number;
+  objectPosition?: string;
+}) {
+  const reduce = usePrefersReducedMotion();
+  const [live, setLive] = useState<Photo[]>(slots);
+  const [i, setI] = useState(() => (slots.length ? startIndex % slots.length : 0));
+
+  useEffect(() => {
+    if (reduce || live.length < 2) return;
+    const id = window.setInterval(() => {
+      setI((n) => (n + 1) % live.length);
+    }, intervalMs);
+    return () => window.clearInterval(id);
+  }, [reduce, live.length, intervalMs]);
+
+  const dropPhoto = (name: string) =>
+    setLive((cur) => {
+      const next = cur.filter((p) => p.name !== name);
+      return next.length ? next : cur;
+    });
+
+  const idx = Math.min(i, live.length - 1);
+  const p = live[idx];
+  if (!p) return null;
+
+  return (
+    <picture>
+      <source type="image/webp" srcSet={p.webpSrcSet} sizes="100vw" />
+      <img
+        src={p.src}
+        srcSet={p.srcSet}
+        sizes="100vw"
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onError={() => dropPhoto(p.name)}
+        className="absolute inset-0 h-full w-full object-cover"
+        style={{ objectPosition }}
+      />
+    </picture>
   );
 }
 
@@ -650,12 +731,10 @@ export default function Landing() {
                 className="absolute w-[46%] rotate-[-3deg] transition-transform duration-500 ease-out motion-safe:group-hover:rotate-[-1.5deg]"
                 style={{ bottom: "-8%", left: "-14%", zIndex: 3, boxShadow: "0 0 0 4px #0C0910", borderRadius: "20px" }}
               >
-                <PhotoFrame
-                  slot="hero-secondary"
-                  {...photo("hero-secondary")}
-                  alt="A couple holding hands across a restaurant table on a date"
+                <RotatingPhoto
+                  slots={HERO_SET}
                   ratio="1/1"
-                  treatment="warm"
+                  startIndex={heroOffset(1 / 6)}
                   caption="THURSDAY · THE LISTENING ROOM"
                 />
               </div>
@@ -761,12 +840,10 @@ export default function Landing() {
           <Reveal delay={120}>
             <TwinTranscript />
             <div className="mt-4">
-              <PhotoFrame
-                slot="turn"
-                {...photo("turn")}
-                alt="A couple sharing a bottle of wine across a table, leaning in toward each other"
+              <RotatingPhoto
+                slots={HERO_SET}
                 ratio="16/9"
-                treatment="plain"
+                startIndex={heroOffset(2 / 6)}
                 caption="NINETY SECONDS OF TWIN CONVERSATION, THEN AN ACTUAL EVENING"
               />
             </div>
@@ -1081,31 +1158,25 @@ export default function Landing() {
 
           <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-5">
             {[
-              ["Late Practice", "412 members · musicians with day jobs", "hero-1", "Two people close together in an everyday moment"],
-              ["Sunday Trail", "1,208 members · 6am starts, no excuses", "hero-2", "Two people close together in an everyday moment"],
-              ["Table for Six", "330 members · long dinners, dating with intent", "hero-7", "Two people close together in an everyday moment"],
-            ].map(([name, meta, slot, alt], i) => {
-              const p = photosByName[slot];
-              return (
-                <Reveal key={name} delay={i * 80}>
-                  <div className="rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden">
-                    <PhotoFrame
-                      slot={slot}
-                      src={p?.src}
-                      srcSet={p?.srcSet}
-                      alt={alt}
-                      ratio="3/2"
-                      treatment="warm"
-                      style={{ borderRadius: 0 }}
-                    />
-                    <div className="p-5">
-                      <div className="text-[16px] text-vf-text">{name}</div>
-                      <div className="text-[13px] text-vf-muted mt-1">{meta}</div>
-                    </div>
+              ["Late Practice", "412 members · musicians with day jobs", 3 / 6],
+              ["Sunday Trail", "1,208 members · 6am starts, no excuses", 4 / 6],
+              ["Table for Six", "330 members · long dinners, dating with intent", 5 / 6],
+            ].map(([name, meta, offset], i) => (
+              <Reveal key={name as string} delay={i * 80}>
+                <div className="rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden">
+                  <RotatingPhoto
+                    slots={HERO_SET}
+                    ratio="3/2"
+                    startIndex={heroOffset(offset as number)}
+                    style={{ borderRadius: 0 }}
+                  />
+                  <div className="p-5">
+                    <div className="text-[16px] text-vf-text">{name}</div>
+                    <div className="text-[13px] text-vf-muted mt-1">{meta}</div>
                   </div>
-                </Reveal>
-              );
-            })}
+                </div>
+              </Reveal>
+            ))}
           </div>
         </div>
       </section>
@@ -1182,18 +1253,9 @@ export default function Landing() {
         aria-labelledby="closing-heading"
         data-testid="section-closing"
       >
-        {/* full-bleed backdrop: a night-street embrace */}
+        {/* full-bleed backdrop: rotates through the same weighted set */}
         <div className="absolute inset-0" aria-hidden="true" data-photo-slot="closing-fullbleed">
-          <img
-            src="/photos/closing.jpg"
-            srcSet={PHOTO_WIDTHS.map((w) => `/photos/closing-${w}.webp ${w}w`).join(", ")}
-            sizes="100vw"
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="absolute inset-0 h-full w-full object-cover"
-            style={{ objectPosition: "center 40%" }}
-          />
+          <RotatingBackdrop slots={HERO_SET} startIndex={heroOffset(11 / 12)} />
           {/* legibility scrim + top/bottom fade into the page */}
           <div
             className="absolute inset-0"

@@ -1,9 +1,11 @@
-import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
 
-// Single shared Vertex AI client. Credentials come from GOOGLE_VERTEX_SA_JSON;
-// without it, calls throw and callers fall back to canned behaviour.
-export const ai = new GoogleGenAI({
-  vertexai: true,
-  project: "gen-lang-client-0303273462",
-  location: "us-central1",
+// Single shared LLM client. Hive Models' OpenAI-compatible endpoint, routed
+// to DeepSeek. Credentials come from DEEPSEEK_API_KEY; without it, calls
+// throw and callers fall back to canned behaviour.
+export const ai = new OpenAI({
+  baseURL: "https://api.thehive.ai/api/v3/",
+  apiKey: process.env.DEEPSEEK_API_KEY,
 });
+
+export const AI_MODEL = "deepseek-ai/deepseek-v4.1-flash";

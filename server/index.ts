@@ -5,31 +5,10 @@ import { createServer } from "http";
 import { runMigrations } from 'stripe-replit-sync';
 import { getStripeSync } from './stripeClient';
 import { WebhookHandlers } from './webhookHandlers';
-import { writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
 
-function initVertexCredentials() {
-  const saJson = process.env.GOOGLE_VERTEX_SA_JSON;
-  if (!saJson) {
-    console.warn("GOOGLE_VERTEX_SA_JSON not set — Vertex AI calls will fail");
-    return;
-  }
-  try {
-    const parsed = JSON.parse(saJson);
-    if (parsed.type !== "service_account") {
-      throw new Error("GOOGLE_VERTEX_SA_JSON is not a service account credential");
-    }
-    const credPath = join(tmpdir(), "vertex-sa.json");
-    writeFileSync(credPath, JSON.stringify(parsed), { encoding: "utf8", mode: 0o600 });
-    process.env.GOOGLE_APPLICATION_CREDENTIALS = credPath;
-    console.log("Vertex AI credentials initialized");
-  } catch (e) {
-    console.error("Failed to initialize Vertex AI credentials:", e);
-  }
+if (!process.env.DEEPSEEK_API_KEY) {
+  console.warn("DEEPSEEK_API_KEY not set — AI Twin calls will fail");
 }
-
-initVertexCredentials();
 
 const app = express();
 const httpServer = createServer(app);

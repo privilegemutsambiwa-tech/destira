@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
+import { DestiraMark } from "@/components/brand/logo";
 import { useEffect, lazy, Suspense } from "react";
 
 // Code-split and NOT linked from anywhere in the member app (no nav item, no
@@ -54,7 +55,7 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
   if (isLoading) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-background">
-        <img src="/brand/logo.png" alt="Destira" className="w-16 h-16 rounded-md object-cover animate-pulse" />
+        <DestiraMark size={64} variant="tile" className="animate-pulse" />
       </div>
     );
   }
@@ -83,7 +84,7 @@ function AuthenticatedHome() {
 
   return (
     <div className="min-h-dvh flex items-center justify-center bg-background">
-      <img src="/brand/logo.png" alt="Destira" className="w-16 h-16 rounded-md object-cover animate-pulse" />
+      <DestiraMark size={64} variant="tile" className="animate-pulse" />
     </div>
   );
 }
@@ -94,7 +95,7 @@ function Router() {
   if (isLoading) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-background">
-        <img src="/brand/logo.png" alt="Destira" className="w-16 h-16 rounded-md object-cover animate-pulse" />
+        <DestiraMark size={64} variant="tile" className="animate-pulse" />
       </div>
     );
   }

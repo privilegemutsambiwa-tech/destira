@@ -24,7 +24,7 @@ Accounts persist in `./.localdb/`.
 | **Auth** | Replit Auth (OIDC via `openid-client`) | Real email/password auth: `POST /api/auth/signup`, `POST /api/auth/login`, `GET /api/logout`. scrypt password hashing (`server/replit_integrations/auth/password.ts`), `users.password_hash` column. Same exports (`setupAuth`, `isAuthenticated`) and same `req.user.claims.sub` shape, so route code is unchanged. Legacy `/api/login` now redirects to the `/login` page. |
 | **Sessions** | Postgres via `connect-pg-simple` | In-memory `memorystore`; cookie `secure` only in production |
 | **Stripe** | Auto-init on boot via Replit connector | Skipped unless `ENABLE_STRIPE=1`. Billing routes error until configured. |
-| **Vertex AI** | Service account from `GOOGLE_VERTEX_SA_JSON` | Optional. Without it, AI Twin endpoints return canned fallback text (they already had try/catch fallbacks). |
+| **AI Twin** | Google Vertex AI, service account from `GOOGLE_VERTEX_SA_JSON` | Hive Models' OpenAI-compatible endpoint routed to DeepSeek, key from `DEEPSEEK_API_KEY`. Optional. Without it, AI Twin endpoints return canned fallback text (they already had try/catch fallbacks). |
 | **Listen host** | `0.0.0.0` + `reusePort` | Dev binds `::` (dual-stack) so both `localhost` and `127.0.0.1` work; `reusePort` dropped on Windows (caused a libuv assert). Override with `HOST`. |
 | **Config** | Replit-injected env | `.env` (git-ignored), loaded via `tsx --env-file`. |
 
@@ -34,7 +34,7 @@ Created for you, git-ignored. Defaults work out of the box. Optional:
 
 - `HOST=127.0.0.1` — restrict the bind address.
 - `ENABLE_STRIPE=1` + the Replit Stripe connector env — turn billing back on.
-- `GOOGLE_VERTEX_SA_JSON={...}` (single line) — real Gemini responses.
+- `DEEPSEEK_API_KEY=...` — real AI Twin responses via Hive Models (DeepSeek).
 
 ## Reset the database
 

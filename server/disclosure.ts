@@ -9,7 +9,7 @@
 //   3. scrubReply / judgeReply  — check the generated reply; a leak is blocked,
 //      not logged and sent.
 
-import { ai } from "./ai";
+import { ai, AI_MODEL } from "./ai";
 import {
   DISCLOSURE_CATEGORIES,
   DISCLOSURE_CATEGORY_KEYS,
@@ -221,7 +221,7 @@ export function needsJudge(
   return false;
 }
 
-/** One gemini-flash call. Returns true if the reply discloses something it
+/** One DeepSeek call. Returns true if the reply discloses something it
  *  shouldn't. Fails CLOSED-safe (on error, assume a leak and refuse). */
 export async function judgeReply(
   reply: string,
@@ -237,12 +237,16 @@ export async function judgeReply(
       : "") +
     `. Reply with JSON {"leak": true|false}. leak=true if the message reveals any forbidden item or gives specifics on a forbidden topic.`;
   try {
-    const r = await ai.models.generateContent({
-      model: "gemini-2.0-flash-001",
-      contents: [{ role: "user", parts: [{ text: reply.slice(0, 2000) }] }],
-      config: { systemInstruction: sys, responseMimeType: "application/json", maxOutputTokens: 20 },
+    const r = await ai.chat.completions.create({
+      model: AI_MODEL,
+      messages: [
+        { role: "system", content: sys },
+        { role: "user", content: reply.slice(0, 2000) },
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 20,
     });
-    const parsed = JSON.parse(r.text || "{}");
+    const parsed = JSON.parse(r.choices[0]?.message?.content || "{}");
     return parsed.leak === true;
   } catch {
     return true;
@@ -262,17 +266,16 @@ export async function classifySensitivity(texts: string[]): Promise<(string[] | 
     `Return JSON {"items":[{"i":0,"cats":["religion"]}, ...]} — cats is [] when the snippet reveals none of them. ` +
     `Only tag a category when the snippet actually states something in it, not merely mentions the topic.`;
   try {
-    const r = await ai.models.generateContent({
-      model: "gemini-2.0-flash-001",
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: texts.map((t, i) => `${i}. ${t}`).join("\n").slice(0, 12000) }],
-        },
+    const r = await ai.chat.completions.create({
+      model: AI_MODEL,
+      messages: [
+        { role: "system", content: sys },
+        { role: "user", content: texts.map((t, i) => `${i}. ${t}`).join("\n").slice(0, 12000) },
       ],
-      config: { systemInstruction: sys, responseMimeType: "application/json", maxOutputTokens: 2048 },
+      response_format: { type: "json_object" },
+      max_tokens: 2048,
     });
-    const parsed = JSON.parse(r.text || "{}");
+    const parsed = JSON.parse(r.choices[0]?.message?.content || "{}");
     const byIndex = new Map<number, string[]>();
     for (const it of parsed.items || []) {
       if (typeof it?.i === "number") {

@@ -24,7 +24,7 @@ Current tokens (`tailwind.config.ts` → `theme.extend.colors.vf`):
 - **Frontend**: React + Vite + TypeScript, wouter routing, TanStack Query, shadcn/ui, Tailwind CSS, Framer Motion
 - **Backend**: Express.js + TypeScript
 - **Database**: PostgreSQL (Neon via Replit) + Stripe schema (managed by stripe-replit-sync)
-- **AI**: Google Gemini via Vertex AI (project: gen-lang-client-0303273462, us-central1) — models: gemini-2.0-flash-001 (chat/extraction), gemini-1.5-pro-001 (profile generation). Credentials from GOOGLE_VERTEX_SA_JSON secret (service account: globalintercessors@gen-lang-client-0303273462.iam.gserviceaccount.com)
+- **AI**: DeepSeek (deepseek-ai/deepseek-v4.1-flash) via Hive Models' OpenAI-compatible endpoint (https://api.thehive.ai/api/v3/), used for chat, extraction, and profile generation. Credentials from DEEPSEEK_API_KEY secret
 - **Auth**: Replit Auth (OIDC)
 - **Payments**: Stripe (via Replit Stripe Integration + stripe-replit-sync)
 

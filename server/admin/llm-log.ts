@@ -5,15 +5,15 @@
 // produces is real; a per-call-type breakdown is a deliberate v2, not built
 // here — see the build report.
 //
-// Cost is ESTIMATED: from the response's usageMetadata when the SDK returns
-// one, else a rough chars/4 approximation, always at the published per-token
-// rate in GEMINI_*_PER_1M_TOKENS_USD (defaults below). Every number this
+// Cost is ESTIMATED: from the response's usage when the SDK returns one,
+// else a rough chars/4 approximation, always at the published per-token
+// rate in DEEPSEEK_*_PER_1M_TOKENS_USD (defaults below). Every number this
 // produces downstream is labelled "estimated" — never presented as a bill.
 import { db } from "../db";
 import { llmCallLog } from "@shared/schema";
 
-const INPUT_PER_1M = Number(process.env.GEMINI_INPUT_PER_1M_TOKENS_USD || "0.075");
-const OUTPUT_PER_1M = Number(process.env.GEMINI_OUTPUT_PER_1M_TOKENS_USD || "0.30");
+const INPUT_PER_1M = Number(process.env.DEEPSEEK_INPUT_PER_1M_TOKENS_USD || "0.075");
+const OUTPUT_PER_1M = Number(process.env.DEEPSEEK_OUTPUT_PER_1M_TOKENS_USD || "0.30");
 
 export async function logLlmCall(opts: {
   callType: string;

@@ -82,6 +82,20 @@ async function applyPhotoRoleTx(
   return { displaced };
 }
 
+// Maps a profile's singular `gender` value to the plural `seekingGenders`
+// value used in preferences, so discovery can filter one against the other.
+const GENDER_TO_SEEKING: Record<string, string> = {
+  woman: "women",
+  man: "men",
+  "non-binary": "non-binary",
+};
+
+export function genderMatchesSeeking(gender: string | null, seekingGenders: string[]): boolean {
+  if (!gender) return false;
+  const seekingValue = GENDER_TO_SEEKING[gender];
+  return seekingValue ? seekingGenders.includes(seekingValue) : false;
+}
+
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -340,6 +354,8 @@ export class DatabaseStorage implements IStorage {
     const maxDistanceKm = requesterProfile?.maxDistanceKm ?? null;
     const ageMin = requesterProfile?.ageMinPreference ?? null;
     const ageMax = requesterProfile?.ageMaxPreference ?? null;
+    const seekingGenders = (requesterProfile?.seekingGenders ?? []) as string[];
+    const seeAllGenders = seekingGenders.length === 0 || seekingGenders.includes("everyone");
 
     const blockedByRequester = await db.select({ blockedId: blockedUsers.blockedId })
       .from(blockedUsers)
@@ -409,6 +425,7 @@ export class DatabaseStorage implements IStorage {
         if (ageMax !== null && row.age !== null && row.age > ageMax) return false;
         return true;
       })
+      .filter(row => seeAllGenders || genderMatchesSeeking(row.gender, seekingGenders))
       .map(({ _lat, _lng, ...rest }) => {
         if (!rest.showDistance) {
           return { ...rest, locationName: null, locationUpdatedAt: null, distanceKm: null, isNearbyNow: false };

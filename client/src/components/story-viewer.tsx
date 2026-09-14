@@ -98,7 +98,10 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
     mutationFn: async (storyId: number) => {
       await apiRequest("POST", `/api/stories/${storyId}/like`);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/stories"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stories/feed"] });
+    },
   });
 
   const commentMutation = useMutation({
@@ -108,6 +111,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
     onSuccess: () => {
       setCommentText("");
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stories/feed"] });
     },
   });
 
@@ -606,6 +610,7 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
       }
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stories/feed"] });
       reset();
       onStoryAdded?.();
     } catch {
@@ -631,6 +636,7 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
       }
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stories/feed"] });
       reset();
       onStoryAdded?.();
     } catch {

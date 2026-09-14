@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
-    "@google/genai": "^1.46.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.31",
     "@radix-ui/react-accordion": "^1.2.4",

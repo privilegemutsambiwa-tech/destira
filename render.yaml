@@ -51,6 +51,6 @@ services:
       - key: ADMIN_ALERT_EMAIL
         sync: false
       # Optional — without it, AI Twin endpoints fall back to canned text
-      # instead of real Gemini responses (LOCAL_DEV.md):
-      - key: GOOGLE_VERTEX_SA_JSON
+      # instead of real DeepSeek (Hive Models) responses (LOCAL_DEV.md):
+      - key: DEEPSEEK_API_KEY
         sync: false
