@@ -30,6 +30,8 @@ import EventDetail from "@/pages/EventDetail";
 import EventPreferences from "@/pages/EventPreferences";
 import HostEvent from "@/pages/HostEvent";
 import PhotoManager from "@/pages/PhotoManager";
+import ProfilePreview from "@/pages/ProfilePreview";
+import ProfilePreviewFrame from "@/pages/ProfilePreviewFrame";
 import DirectChat from "@/pages/DirectChat";
 import TwinChat from "@/pages/TwinChat";
 import TwinDisclosure from "@/pages/TwinDisclosure";
@@ -120,6 +122,12 @@ function Router() {
       </Route>
       <Route path="/photos">
         <ProtectedRoute component={PhotoManager} />
+      </Route>
+      <Route path="/profile/preview">
+        <ProtectedRoute component={ProfilePreview} />
+      </Route>
+      <Route path="/profile/preview/frame">
+        <ProtectedRoute component={ProfilePreviewFrame} />
       </Route>
       <Route path="/matches">
         <ProtectedRoute component={Matches} />

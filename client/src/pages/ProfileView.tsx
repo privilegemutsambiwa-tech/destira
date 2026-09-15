@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import type React from "react";
+import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Loader2 } from "lucide-react";
+import { Loader2, Pencil } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
-import { useProfile, usePhotos, usePublicAnswers, useProfileGroups } from "@/hooks/use-profiles";
+import { useProfile, usePhotos, usePublicAnswers, useProfileGroups, useUpdateProfile } from "@/hooks/use-profiles";
 import { useTwinReadiness } from "@/hooks/use-onboarding";
 import { useGate } from "@/hooks/use-gate";
 import { usePaywall } from "@/hooks/use-paywall";
@@ -15,7 +16,32 @@ import {
   useUnmatch,
 } from "@/hooks/use-interactions";
 import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 import { resonanceRead, twinTranscript, vouches, overlap, distanceKm } from "@/lib/profile-derived";
+
+/** Small mono "Edit" affordance for an editable region in the preview. Quiet
+ *  by default (visible-but-unobtrusive on touch, no hover to reveal it),
+ *  full opacity on hover/focus on desktop. Never a bare icon — always labelled. */
+function EditAffordance({ onClick, label = "Edit" }: { onClick: () => void; label?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className="inline-flex items-center gap-1 rounded-full border border-vf-line bg-vf-surface/90 backdrop-blur px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-vf-muted opacity-60 hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+      data-testid="button-preview-edit"
+    >
+      <Pencil className="w-3 h-3" />
+      {label}
+    </button>
+  );
+}
+
+/** In preview mode the preview bar (rendered by ProfilePreview.tsx) is the
+ *  only chrome — the real app nav would be redundant and confusing next to
+ *  it. Real /u/:userId visits keep the normal LayoutShell. */
+function ViewShell({ preview, children }: { preview: boolean; children: React.ReactNode }) {
+  if (preview) return <div className="px-4 py-6 sm:px-6">{children}</div>;
+  return <LayoutShell>{children}</LayoutShell>;
+}
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 
@@ -32,10 +58,21 @@ function relAge(iso?: string): string {
   return `${Math.floor(days / 7)} weeks ago`;
 }
 
-export default function ProfileView({ params }: { params: { userId: string } }) {
-  const userId = params.userId;
+interface ProfileViewProps {
+  /** Real route: wouter passes the URL param this way. */
+  params?: { userId: string };
+  /** Preview mount: caller passes the id directly instead. */
+  userId?: string;
+  /** True only when mounted by /profile/preview to show your own profile
+   *  as the genuine /u/:userId component, with an editing layer on top. */
+  preview?: boolean;
+}
+
+export default function ProfileView({ params, userId: userIdProp, preview = false }: ProfileViewProps) {
+  const userId = userIdProp ?? params?.userId ?? "";
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const updateProfile = useUpdateProfile();
 
   const { data: profile, isLoading, isError } = useProfile(userId);
   const { data: mine } = useProfile();
@@ -50,6 +87,10 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
   const startInterview = useStartInterview();
   const unmatch = useUnmatch();
 
+  const [editingBio, setEditingBio] = useState(false);
+  const [bioDraft, setBioDraft] = useState("");
+  const [bioSaveState, setBioSaveState] = useState<"idle" | "saved" | "error">("idle");
+
   const match = useMemo(() => {
     const ask = (outgoing?.asks || []).find((a: any) => a.toUserId === userId);
     if (ask) return { role: "asked" as const, matchId: ask.matchId, status: ask.status, createdAt: ask.createdAt };
@@ -60,23 +101,23 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
 
   if (isLoading) {
     return (
-      <LayoutShell>
+      <ViewShell preview={preview}>
         <div className="h-[60vh] flex items-center justify-center">
           <Loader2 className="w-8 h-8 animate-spin text-vf-mint" />
         </div>
-      </LayoutShell>
+      </ViewShell>
     );
   }
   if (isError || !profile) {
     return (
-      <LayoutShell>
+      <ViewShell preview={preview}>
         <div className="py-20 text-center">
           <p className="font-serif text-vf-text mb-2" style={{ fontSize: "22px" }}>That profile isn't here.</p>
           <button onClick={() => setLocation("/matches")} className="text-sm font-medium text-vf-ember">
             Back to Interest
           </button>
         </div>
-      </LayoutShell>
+      </ViewShell>
     );
   }
 
@@ -141,7 +182,21 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
   };
   const report = () => toast({ title: "Thanks — we'll take a look." });
 
+  const openBioEdit = () => { setBioDraft(bioText); setBioSaveState("idle"); setEditingBio(true); };
+  const saveBio = async () => {
+    try {
+      await updateProfile.mutateAsync({ userId, data: { aboutMe: bioDraft, bio: bioDraft } });
+      setEditingBio(false);
+      setBioSaveState("saved");
+      window.setTimeout(() => setBioSaveState("idle"), 2500);
+    } catch {
+      setBioSaveState("error");
+    }
+  };
+
   // ── blocks ─────────────────────────────────────────────────────────────
+
+  const hasCover = !!coverUrl;
 
   const Header = (
     <div>
@@ -151,17 +206,33 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
       >
         {coverUrl ? (
           <img src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: coverPos }} />
-        ) : null}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(to top, rgba(12,9,16,.9) 0%, rgba(12,9,16,.15) 55%, rgba(12,9,16,.35) 100%)",
-          }}
-        />
+        ) : (
+          // Real no-cover state — flat warm surface + a mono label, not a
+          // scrim over nothing (that read as a broken image / grey wash).
+          <div
+            className="absolute inset-0 flex items-end p-4"
+            style={{ background: "linear-gradient(160deg, rgba(255,107,74,.10), var(--vf-surface2) 65%)" }}
+          >
+            <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
+              No cover photo yet
+            </span>
+          </div>
+        )}
+        {hasCover && (
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(to top, rgba(12,9,16,.9) 0%, rgba(12,9,16,.15) 55%, rgba(12,9,16,.35) 100%)",
+            }}
+          />
+        )}
       </div>
 
-      <div className="flex flex-col items-center text-center px-4 -mt-[62px] lg:flex-row lg:items-end lg:text-left lg:px-7 lg:-mt-[104px] lg:gap-6">
+      <div
+        className="flex flex-col items-center text-center px-4 -mt-[62px] lg:flex-row lg:items-end lg:text-left lg:px-7 lg:-mt-[104px] lg:gap-6"
+        style={!hasCover ? { marginTop: 0 } : undefined}
+      >
         <div
           className="shrink-0 overflow-hidden bg-vf-surface2 w-[120px] lg:w-[196px]"
           style={{ aspectRatio: "4 / 5", borderRadius: "12px", boxShadow: "0 18px 50px rgba(0,0,0,.55)", outline: "4px solid #0C0910" }}
@@ -169,40 +240,58 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
           {portraitUrl ? (
             <img src={portraitUrl} alt={name} className="h-full w-full object-cover" />
           ) : (
-            <div className="h-full w-full flex items-center justify-center">
-              <span className="font-serif text-4xl text-vf-muted">{name[0]?.toUpperCase()}</span>
+            <div className="h-full w-full flex items-center justify-center" style={{ background: "var(--vf-ember)" }}>
+              <span className="font-serif text-4xl leading-none text-vf-ink" style={{ transform: "translateY(-0.06em)" }}>
+                {name[0]?.toUpperCase()}
+              </span>
             </div>
           )}
         </div>
 
         {/* This cluster overlaps the cover photo's bottom edge (the negative
-            margin above), which keeps its scrim fixed-dark regardless of
-            theme — name/age/meta need to stay fixed light to match, not the
-            theme-aware vf-text/vf-muted that would go dark in light mode
-            and disappear against it. */}
+            margin above) only when there IS a cover — its scrim stays
+            fixed-dark regardless of theme, so name/age/meta stay fixed light
+            to match. With no cover there's no overlap and no dark scrim, so
+            this falls through to the theme-aware colors below instead. */}
         <div className="mt-3 lg:mt-0 lg:pb-2 min-w-0">
-          {meta && <div className={`${EYEBROW} mb-1.5`} style={{ color: "rgba(245,240,234,0.75)" }}>{meta}</div>}
-          <h1 className="font-serif font-normal leading-none tracking-[-0.02em] text-[clamp(30px,6vw,44px)]" style={{ color: "#F5F0EA" }}>
-            {name}
-            {profile.age ? <span style={{ color: "#F5F0EA" }}>, {profile.age}</span> : null}
-          </h1>
-          <div className="mt-3.5 flex items-center justify-center lg:justify-start gap-4 flex-wrap">
-            <button
-              onClick={openTwin}
-              disabled={startInterview.isPending}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-vf-mint/35 bg-vf-mint/10 text-vf-mint text-[14px] font-medium px-5 min-h-[44px] transition-colors hover:bg-vf-mint/15 disabled:opacity-50"
-              data-testid="button-chat-twin"
+          {meta && (
+            <div
+              className={`${EYEBROW} mb-1.5`}
+              style={hasCover ? { color: "rgba(245,240,234,0.75)" } : undefined}
             >
-              {startInterview.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              Chat with {her ? "her" : "their"} twin
-            </button>
-            <button onClick={report} className="text-[13px] text-vf-muted hover:text-vf-text transition-colors" data-testid="link-report">
-              Report
-            </button>
-            <button onClick={block} className="text-[13px] text-vf-muted hover:text-vf-text transition-colors" data-testid="link-block">
-              Block
-            </button>
-          </div>
+              {meta}
+            </div>
+          )}
+          <h1
+            className="font-serif font-normal leading-none tracking-[-0.02em] text-[clamp(30px,6vw,44px)]"
+            style={hasCover ? { color: "#F5F0EA" } : { color: "var(--vf-text)" }}
+          >
+            {name}
+            {profile.age ? <span style={hasCover ? { color: "#F5F0EA" } : undefined}>, {profile.age}</span> : null}
+          </h1>
+          {preview ? (
+            <div className="mt-3.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
+              What a visitor would do from here — chat with your twin, report, block
+            </div>
+          ) : (
+            <div className="mt-3.5 flex items-center justify-center lg:justify-start gap-4 flex-wrap">
+              <button
+                onClick={openTwin}
+                disabled={startInterview.isPending}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-vf-mint/35 bg-vf-mint/10 text-vf-mint text-[14px] font-medium px-5 min-h-[44px] transition-colors hover:bg-vf-mint/15 disabled:opacity-50"
+                data-testid="button-chat-twin"
+              >
+                {startInterview.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                Chat with {her ? "her" : "their"} twin
+              </button>
+              <button onClick={report} className="text-[13px] text-vf-muted hover:text-vf-text transition-colors" data-testid="link-report">
+                Report
+              </button>
+              <button onClick={block} className="text-[13px] text-vf-muted hover:text-vf-text transition-colors" data-testid="link-block">
+                Block
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -262,41 +351,148 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
     );
   })();
 
-  const PullQuote = bioText ? (
-    <section>
-      <div className={`${EYEBROW} mb-3`}>In {her ? "her" : "their"} words</div>
-      <p className="font-serif text-vf-text max-w-[38ch]" style={{ fontSize: "27px", lineHeight: 1.3 }}>
-        {bioText}
-      </p>
-    </section>
-  ) : null;
+  const PullQuote = (() => {
+    if (!preview && !bioText) return null;
 
-  const TwoAnswers = answers.length ? (
-    <section>
-      <div className={`${EYEBROW} mb-1`}>Two things {her ? "she" : "they"} answered</div>
-      {answers.slice(0, 2).map((a, i) => (
-        <div key={i} className="border-t border-vf-line pt-4 mt-4 first:mt-2">
-          <div className="text-[13.5px] text-vf-faint mb-1.5">{a.question}</div>
-          <p className="text-[16px] text-vf-text" style={{ lineHeight: 1.6 }}>{a.answer}</p>
-        </div>
-      ))}
-    </section>
-  ) : null;
-
-  const PhotoGrid = galleryPhotos.length ? (
-    <section>
-      <div className="mb-3 flex items-baseline gap-1.5">
-        <span className={EYEBROW}>Photos</span>
-        <span className="font-serif text-vf-text text-[15px] leading-none">· {galleryPhotos.length}</span>
-      </div>
-      <div className="grid grid-cols-3 gap-2.5">
-        {galleryPhotos.slice(0, 9).map((p: any) => (
-          <div key={p.id} className="overflow-hidden bg-vf-surface2" style={{ aspectRatio: "4 / 5", borderRadius: "12px" }}>
-            <img src={p.photoUrl} alt="" className="h-full w-full object-cover" />
+    if (preview && editingBio) {
+      return (
+        <section>
+          <div className={`${EYEBROW} mb-3`}>In your words</div>
+          <Textarea
+            value={bioDraft}
+            onChange={(e) => setBioDraft(e.target.value.slice(0, 400))}
+            rows={4}
+            autoFocus
+            placeholder="What someone should know before your twin does the talking."
+            className="text-[16px] leading-[1.6] text-vf-text resize-none bg-vf-surface2 border-vf-line rounded-[12px]"
+            data-testid="input-preview-bio"
+          />
+          <div className="flex items-center gap-3 mt-2.5">
+            <button
+              onClick={saveBio}
+              disabled={updateProfile.isPending}
+              className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors disabled:opacity-40"
+              data-testid="button-save-preview-bio"
+            >
+              {updateProfile.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Save
+            </button>
+            <button onClick={() => setEditingBio(false)} className="text-[13px] text-vf-muted hover:text-vf-text">
+              Cancel
+            </button>
           </div>
-        ))}
-      </div>
-    </section>
+        </section>
+      );
+    }
+
+    return (
+      <section className="relative group">
+        {preview && (
+          <div className="absolute -top-1 right-0 flex items-center gap-2">
+            {bioSaveState === "saved" && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-mint" data-testid="text-bio-saved">
+                Saved
+              </span>
+            )}
+            {bioSaveState === "error" && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-warn" data-testid="text-bio-error">
+                Couldn't save
+              </span>
+            )}
+            <EditAffordance onClick={openBioEdit} />
+          </div>
+        )}
+        <div className={`${EYEBROW} mb-3`}>In {preview ? "your" : her ? "her" : "their"} words</div>
+        {bioText ? (
+          <p className="font-serif text-vf-text max-w-[38ch]" style={{ fontSize: "27px", lineHeight: 1.3 }}>
+            {bioText}
+          </p>
+        ) : (
+          <p className="text-[15px] text-vf-muted leading-[1.5]">Your profile has no words on it yet.</p>
+        )}
+      </section>
+    );
+  })();
+
+  const TwoAnswers = (() => {
+    if (!preview && !answers.length) return null;
+    return (
+      <section className="relative group">
+        {preview && <div className="absolute -top-1 right-0"><EditAffordance onClick={() => setLocation("/onboarding")} /></div>}
+        <div className={`${EYEBROW} mb-1`}>{preview ? "Two things you answered" : `Two things ${her ? "she" : "they"} answered`}</div>
+        {answers.length ? (
+          answers.slice(0, 2).map((a, i) => (
+            <div key={i} className="border-t border-vf-line pt-4 mt-4 first:mt-2">
+              <div className="text-[13.5px] text-vf-faint mb-1.5">{a.question}</div>
+              <p className="text-[16px] text-vf-text" style={{ lineHeight: 1.6 }}>{a.answer}</p>
+            </div>
+          ))
+        ) : (
+          <p className="text-[14px] text-vf-muted mt-2 leading-[1.5]">
+            Zero — nothing you've answered publicly shows here yet.
+          </p>
+        )}
+      </section>
+    );
+  })();
+
+  const PhotoGrid = (() => {
+    if (!preview && !galleryPhotos.length) return null;
+    return (
+      <section className="relative group">
+        {preview && <div className="absolute -top-1 right-0"><EditAffordance onClick={() => setLocation("/photos")} /></div>}
+        <div className="mb-3 flex items-baseline gap-1.5">
+          <span className={EYEBROW}>Photos</span>
+          {galleryPhotos.length > 0 && (
+            <span className="font-serif text-vf-text text-[15px] leading-none">· {galleryPhotos.length}</span>
+          )}
+        </div>
+        {galleryPhotos.length ? (
+          <div className="grid grid-cols-3 gap-2.5">
+            {galleryPhotos.slice(0, 9).map((p: any) => (
+              <div key={p.id} className="overflow-hidden bg-vf-surface2" style={{ aspectRatio: "4 / 5", borderRadius: "12px" }}>
+                <img src={p.photoUrl} alt="" className="h-full w-full object-cover" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[14px] text-vf-muted leading-[1.5]">No gallery photos beyond your cover and portrait.</p>
+        )}
+      </section>
+    );
+  })();
+
+  const missingPortrait = !portraitUrl;
+  const PreviewTruths = preview ? (
+    <div className="rounded-[16px] border border-vf-line bg-vf-surface2 p-4 flex flex-col gap-2.5" data-testid="section-preview-truths">
+      {missingPortrait && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[13.5px] text-vf-muted">Everyone sees a letter where your face would be.</p>
+          <button
+            onClick={() => setLocation("/photos")}
+            className="shrink-0 text-[13px] text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors"
+            data-testid="link-preview-add-photo"
+          >
+            Add a photo
+          </button>
+        </div>
+      )}
+      {!profile.isVerified && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[13.5px] text-vf-muted">Not verified — the tick strangers look for isn't there.</p>
+          <button
+            onClick={() => setLocation("/settings")}
+            className="shrink-0 text-[13px] text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors"
+            data-testid="link-preview-verify"
+          >
+            Verify
+          </button>
+        </div>
+      )}
+      {!missingPortrait && profile.isVerified && (
+        <p className="text-[13.5px] text-vf-mint">Your photo and verification are both in good shape.</p>
+      )}
+    </div>
   ) : null;
 
   const VouchList = vouchList.length ? (
@@ -331,16 +527,21 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
 
   const ResonanceCard = (
     <div className="bg-vf-surface2 rounded-[20px]" style={{ padding: "22px" }}>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4" style={preview ? { opacity: 0.5 } : undefined}>
         <ResonanceDial score={read.score} size={92} />
         <div>
           <div className={EYEBROW}>Resonance read</div>
           <p className="text-[14px] text-vf-soft mt-1.5" style={{ lineHeight: 1.5 }}>{read.summary}</p>
         </div>
       </div>
-      <div className="mt-5">
+      <div className="mt-5" style={preview ? { opacity: 0.5 } : undefined}>
         <ResonanceAxes axes={read.axes} />
       </div>
+      {preview && (
+        <p className="mt-4 pt-4 border-t border-vf-line text-[12.5px] text-vf-faint leading-[1.5]">
+          This read is specific to whoever's looking — there's no truthful version of it to preview for yourself. Shown blurred.
+        </p>
+      )}
     </div>
   );
 
@@ -419,10 +620,11 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
   ) : null;
 
   return (
-    <LayoutShell>
+    <ViewShell preview={preview}>
       <div className="flex flex-col gap-8">
         {Header}
         {StatusStrip}
+        {PreviewTruths}
 
         {/* desktop: two columns */}
         <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_340px] gap-10 items-start">
@@ -453,6 +655,6 @@ export default function ProfileView({ params }: { params: { userId: string } }) 
         </div>
       </div>
       {paywall.sheet}
-    </LayoutShell>
+    </ViewShell>
   );
 }

@@ -263,6 +263,7 @@ export default function Profile() {
 
   const prompts: ProfilePrompt[] = Array.isArray(profile.prompts) ? profile.prompts : [];
   const hasStories = (ownStories?.length ?? 0) > 0;
+  const hasCover = !!(cover?.photoUrl || profile.coverPhotoUrl);
   const bio = profile.aboutMe || profile.bio || "";
   const metaLine = [
     profile.age ? String(profile.age) : null,
@@ -282,7 +283,7 @@ export default function Profile() {
     }
   };
   // §D: drafts a starting point INTO the editor. Never auto-saves, never
-  // overwrites â€” only offered while the editor is empty.
+  // overwrites — only offered while the editor is empty.
   const draftBio = async () => {
     setBioDrafting(true);
     try {
@@ -334,7 +335,7 @@ export default function Profile() {
       <div className="flex flex-col gap-8">
         <ReferralNudge completionScore={completionScore} />
 
-        {/* â”€â”€ HEADER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── HEADER ────────────────────────────────────────────────── */}
         <header className="relative">
           <div className="relative overflow-hidden rounded-[24px] aspect-[16/9] sm:aspect-[21/9] bg-vf-surface2">
             {cover?.photoUrl ? (
@@ -347,28 +348,49 @@ export default function Profile() {
             ) : profile.coverPhotoUrl ? (
               <img src={profile.coverPhotoUrl} alt="" className="w-full h-full object-cover" />
             ) : (
+              // Real no-cover state: a flat warm surface (no mint — mint is the
+              // twin layer only, never decoration), with a mono label instead of
+              // the scrim-over-nothing "grey wash" this used to render as.
               <div
-                className="w-full h-full"
-                style={{ background: "radial-gradient(120% 140% at 30% 0%, rgba(143,227,199,.12), transparent 60%), var(--vf-surface2)" }}
+                className="w-full h-full flex items-end justify-start p-4"
+                style={{ background: "linear-gradient(160deg, rgba(255,107,74,.10), var(--vf-surface2) 65%)" }}
+              >
+                <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
+                  No cover photo — this is what strangers see first
+                </span>
+              </div>
+            )}
+            {hasCover && (
+              <div
+                className="absolute inset-x-0 bottom-0 pointer-events-none"
+                style={{ height: "55%", background: "linear-gradient(to top, rgba(12,9,16,.9), transparent)" }}
               />
             )}
-            <div
-              className="absolute inset-x-0 bottom-0 pointer-events-none"
-              style={{ height: "55%", background: "linear-gradient(to top, rgba(12,9,16,.9), transparent)" }}
-            />
             {/* On the cover photo, fixed dark chip + fixed light text
-                regardless of theme, same as the scrim above it. */}
+                regardless of theme, same as the scrim above it; off the
+                photo, themed like the rest of the (now non-scrimmed) card. */}
             <div
-              className="absolute top-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em] backdrop-blur px-2.5 py-1 rounded-full border border-white/12"
-              style={{ color: "rgba(245,240,234,0.9)", background: "rgba(12,9,16,0.45)" }}
-              data-testid="chip-twin-readiness"
+              className={
+                hasCover
+                  ? "absolute top-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em] backdrop-blur px-2.5 py-1 rounded-full border"
+                  : "absolute top-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em] backdrop-blur px-2.5 py-1 rounded-full border border-vf-line text-vf-muted bg-vf-surface/70"
+              }
+              style={
+                hasCover
+                  ? { color: "rgba(245,240,234,0.9)", background: "rgba(12,9,16,0.45)", borderColor: "rgba(255,255,255,.12)" }
+                  : undefined
+              }
+              data-testid="chip-profile-completeness"
             >
-              Twin readiness {completionScore}%
+              Profile completeness {completionScore}%
             </div>
           </div>
 
           {/* portrait + name, overlapping the cover's bottom edge */}
-          <div className="flex flex-col items-center text-center -mt-7 sm:flex-row sm:items-end sm:text-left sm:-mt-8 sm:pl-9 sm:gap-5">
+          <div
+            className="flex flex-col items-center text-center -mt-7 sm:flex-row sm:items-end sm:text-left sm:-mt-8 sm:pl-9 sm:gap-5"
+            style={!hasCover ? { marginTop: 0 } : undefined}
+          >
             <div
               className="relative overflow-hidden rounded-[20px] bg-vf-surface2 shrink-0"
               style={{ width: "clamp(120px,14vw,168px)", aspectRatio: "4 / 5", border: "4px solid #0C0910" }}
@@ -382,9 +404,12 @@ export default function Profile() {
                   style={{ objectPosition: focalPos(portrait.portraitFocalX, portrait.portraitFocalY) }}
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <span className="font-serif text-3xl text-vf-text">
-                    {(profile.displayName || user?.firstName || "?")[0]}
+                <div className="w-full h-full flex items-center justify-center" style={{ background: "var(--vf-ember)" }}>
+                  <span
+                    className="font-serif text-4xl leading-none text-vf-ink"
+                    style={{ transform: "translateY(-0.06em)" }}
+                  >
+                    {(profile.displayName || user?.firstName || "?")[0]?.toUpperCase()}
                   </span>
                 </div>
               )}
@@ -430,13 +455,42 @@ export default function Profile() {
                 >
                   Settings
                 </button>
+                <button
+                  onClick={() => setLocation("/profile/preview")}
+                  className="text-[13px] text-vf-muted hover:text-vf-text transition-colors"
+                  data-testid="button-how-others-see-you"
+                >
+                  How others see you
+                </button>
               </div>
             </div>
           </div>
         </header>
 
-        {/* story creator entry (kept compact â€” stories are a separate feature) */}
-        <div className="-mt-2">
+        {/* Surfaced here — right where the completeness figure lives — because
+            a thin profile is exactly when "what does this actually look like"
+            is most useful to know. */}
+        {completionScore < 50 && (
+          <div
+            className="rounded-[14px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-center justify-between gap-3"
+            data-testid="nudge-preview-thin-profile"
+          >
+            <p className="text-[13.5px] text-vf-muted">Your profile is thin — see what strangers actually get.</p>
+            <button
+              onClick={() => setLocation("/profile/preview")}
+              className="shrink-0 text-[13px] text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors"
+              data-testid="link-nudge-preview"
+            >
+              How others see you
+            </button>
+          </div>
+        )}
+
+        {/* story creator entry (kept compact — stories are a separate feature).
+            No negative margin here: the header above already overlaps its own
+            cover photo via -mt-7/-mt-8, and stacking a second pull-up caused
+            this to clip into (or scroll partly under) the button row above it. */}
+        <div className="mt-2">
           <AddStoryButton
             onStoryAdded={() => { setShowStoryCreator(false); queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] }); }}
             open={showStoryCreator}
@@ -444,9 +498,9 @@ export default function Profile() {
           />
         </div>
 
-        {/* â”€â”€ BODY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── BODY ──────────────────────────────────────────────────── */}
         <div className="grid gap-6 lg:gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)]">
-          {/* LEFT â€” you */}
+          {/* LEFT — you */}
           <div className="flex flex-col gap-9">
             {/* In your words */}
             <section>
@@ -486,7 +540,7 @@ export default function Profile() {
                         className="text-[13px] text-vf-mint hover:text-vf-text transition-colors ml-auto"
                         data-testid="button-draft-bio"
                       >
-                        {bioDrafting ? "Draftingâ€¦" : "Ask your twin for a starting point"}
+                        {bioDrafting ? "Drafting…" : "Ask your twin for a starting point"}
                       </button>
                     )}
                   </div>
@@ -501,28 +555,43 @@ export default function Profile() {
             {/* Prompts */}
             <section>
               <SectionLabel>Prompts</SectionLabel>
-              <div className="mt-3 rounded-[16px] border border-vf-line bg-vf-surface2">
-                {prompts.map((p, i) => (
+              {prompts.length === 0 ? (
+                // An empty section shouldn't look like a filled one — plain
+                // text, no card, when there's nothing here yet.
+                <div className="mt-3">
+                  <p className="text-[14px] text-vf-muted">Nothing answered yet — your twin has nothing of yours to quote.</p>
                   <button
-                    key={i}
-                    onClick={() => setPromptEditor({ index: i, q: p.q, a: p.a })}
-                    className={`w-full text-left p-4 ${i > 0 ? "border-t border-vf-line" : ""}`}
-                    data-testid={`prompt-${i}`}
-                  >
-                    <div className="text-[12.5px] text-vf-muted">{p.q}</div>
-                    <div className="text-[15px] text-vf-text mt-1 leading-[1.5]">{p.a}</div>
-                  </button>
-                ))}
-                {prompts.length < 3 && (
-                  <button
-                    onClick={() => setPromptEditor({ index: prompts.length, q: PROMPT_BANK[0], a: "" })}
-                    className={`w-full text-left p-4 border-dashed border-vf-line ${prompts.length > 0 ? "border-t" : "border"} rounded-[16px]`}
+                    onClick={() => setPromptEditor({ index: 0, q: PROMPT_BANK[0], a: "" })}
+                    className="mt-2 text-[13px] text-vf-mint hover:text-vf-text transition-colors"
                     data-testid="prompt-add"
                   >
-                    <div className="text-[13.5px] text-vf-muted">Answer one more â€” your twin quotes these</div>
+                    Answer one
                   </button>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="mt-3 rounded-[16px] border border-vf-line bg-vf-surface2">
+                  {prompts.map((p, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setPromptEditor({ index: i, q: p.q, a: p.a })}
+                      className={`w-full text-left p-4 ${i > 0 ? "border-t border-vf-line" : ""}`}
+                      data-testid={`prompt-${i}`}
+                    >
+                      <div className="text-[12.5px] text-vf-muted">{p.q}</div>
+                      <div className="text-[15px] text-vf-text mt-1 leading-[1.5]">{p.a}</div>
+                    </button>
+                  ))}
+                  {prompts.length < 3 && (
+                    <button
+                      onClick={() => setPromptEditor({ index: prompts.length, q: PROMPT_BANK[0], a: "" })}
+                      className="w-full text-left p-4 border-t border-dashed border-vf-line"
+                      data-testid="prompt-add"
+                    >
+                      <div className="text-[13.5px] text-vf-muted">Answer one more — your twin quotes these</div>
+                    </button>
+                  )}
+                </div>
+              )}
 
               {promptEditor && (
                 <div className="mt-3 rounded-[16px] border border-vf-line bg-vf-surface2 p-4 flex flex-col gap-3" data-testid="prompt-editor">
@@ -633,7 +702,7 @@ export default function Profile() {
             <YourEventsCard />
           </div>
 
-          {/* RIGHT â€” your twin and your state */}
+          {/* RIGHT — your twin and your state */}
           <div className="flex flex-col gap-9">
             {/* Your twin */}
             <section>
@@ -657,7 +726,7 @@ export default function Profile() {
                 <div className="h-1 rounded-full bg-vf-text/10 overflow-hidden">
                   <div className="h-full bg-vf-mint transition-all duration-500" style={{ width: `${answeredPct}%` }} data-testid="bar-twin-training" />
                 </div>
-                <p className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mt-2">{answered} of 100 answered</p>
+                <p className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mt-2">{answered} of 100 · conversation depth, not Soul-Mapping</p>
               </div>
             </section>
 
@@ -673,7 +742,7 @@ export default function Profile() {
                   ))}
                 </div>
               ) : (
-                <p className="text-[14px] text-vf-muted mt-3">Nothing yet â€” a few conversations fill this in.</p>
+                <p className="text-[14px] text-vf-muted mt-3">Nothing yet — a few conversations fill this in.</p>
               )}
               <button
                 onClick={() => setLocation("/twin-chat?from=/profile")}

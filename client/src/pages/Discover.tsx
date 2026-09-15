@@ -28,7 +28,7 @@ function formatDistance(km: number): string {
 // soul-mapping answers instead (see Onboarding.tsx). There's no backend
 // compatibility scoring yet (docs/redesign-handoff.md §4.2 is deferred), so
 // the resonance dial only renders when a profile actually has numeric trait
-// data â€” no invented numbers for the common case.
+// data — no invented numbers for the common case.
 function getResonance(personalityProfile: unknown): { score: number; axes: { label: string; value: number }[] } | null {
   if (!personalityProfile || typeof personalityProfile !== "object") return null;
   const numeric = Object.entries(personalityProfile as Record<string, unknown>).filter(
@@ -322,7 +322,7 @@ function StoriesCarousel() {
   );
 }
 
-// One read a day, so there is no feed to filter â€” the only scope that has
+// One read a day, so there is no feed to filter — the only scope that has
 // backend support today is distance. "Within 20km" toggles between the
 // distance-sorted view and everyone.
 type FilterChip = "all" | "nearby";

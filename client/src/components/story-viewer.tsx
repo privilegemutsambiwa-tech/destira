@@ -780,7 +780,7 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
               disabled={isUploading}
               data-testid="button-post-photo-story"
             >
-              {isUploading ? "Postingâ€¦" : "Post Story"}
+              {isUploading ? "Posting…" : "Post Story"}
             </button>
             <button className="w-full text-sm font-medium" style={{ color: "#A79FB4" }} onClick={reset} data-testid="button-cancel-photo-story">
               Cancel
@@ -824,7 +824,7 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
               disabled={isUploading || !textContent.trim()}
               data-testid="button-post-text-story"
             >
-              {isUploading ? "Postingâ€¦" : "Post Story"}
+              {isUploading ? "Posting…" : "Post Story"}
             </button>
             <button className="w-full text-sm font-medium" style={{ color: "#A79FB4" }} onClick={reset} data-testid="button-cancel-text-story">
               Cancel
