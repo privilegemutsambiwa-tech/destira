@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { PLAN_CARDS, priceLabel } from "@shared/entitlements";
+import { PLAN_CARDS, BILLING_PERIODS, PERIOD_LABEL, priceLabel, periodPriceCents, type BillingPeriod } from "@shared/entitlements";
 import {
   useInitiatePayment,
   usePaymentStatus,
@@ -12,6 +12,7 @@ import {
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 const RESEND_AFTER_MS = 45_000;
+const RENEWAL_WINDOW: Record<BillingPeriod, string> = { weekly: "a week", monthly: "a month", sixMonth: "six months" };
 
 const METHODS: { id: PayMethod; label: string; sub: string }[] = [
   { id: "ecocash", label: "EcoCash", sub: "Pay from your EcoCash wallet. A prompt comes to your phone." },
@@ -27,9 +28,14 @@ export default function PlansPay() {
   const tierParam = params.get("tier");
   const returnRef = params.get("ref");
   const sourceFeature = params.get("feature") || undefined;
+  const periodParam = params.get("period");
+  const period: BillingPeriod = (BILLING_PERIODS as readonly string[]).includes(periodParam as string)
+    ? (periodParam as BillingPeriod)
+    : "monthly";
 
   const card = useMemo(() => PLAN_CARDS.find((c) => c.tier === tierParam), [tierParam]);
   const tier = card?.tier as "spark" | "flame" | "ember" | undefined;
+  const priceCents = tier ? periodPriceCents(tier, period) : 0;
 
   const [method, setMethod] = useState<PayMethod | null>(null);
   const [phone, setPhone] = useState("");
@@ -61,7 +67,7 @@ export default function PlansPay() {
   const pay = () => {
     setStartedAt(Date.now());
     initiate.mutate(
-      { tier, method: method!, phone: method === "ecocash" ? phone : undefined, sourceFeature },
+      { tier, period, method: method!, phone: method === "ecocash" ? phone : undefined, sourceFeature },
       {
         onSuccess: (r) => {
           setPaymentId(r.paymentId);
@@ -77,6 +83,12 @@ export default function PlansPay() {
 
   // ── confirmed ──
   if (status?.status === "paid") {
+    const paidPeriod: BillingPeriod = (BILLING_PERIODS as readonly string[]).includes(status.period as string)
+      ? (status.period as BillingPeriod)
+      : period;
+    const paidPriceCents = periodPriceCents(tier, paidPeriod);
+    const isAutoRenewing = status.provider === "stripe";
+    const renewalWindow = RENEWAL_WINDOW[paidPeriod];
     return (
       <Shell>
         <div className={EYEBROW}>Done</div>
@@ -84,7 +96,10 @@ export default function PlansPay() {
           You're on {card.name}.
         </h1>
         <p className="text-[14px] text-vf-muted mt-3">
-          {priceLabel(card.priceCents)} / month, in US dollars. Renews in about a month — cancel any time from Settings.
+          {priceLabel(paidPriceCents)} / {PERIOD_LABEL[paidPeriod]}, in US dollars.{" "}
+          {isAutoRenewing
+            ? `Renews automatically in about ${renewalWindow} — cancel any time from Settings.`
+            : `We'll remind you before it ends in about ${renewalWindow} — pay again to keep it going, cancel any time from Settings.`}
         </p>
         <div className="mt-5 rounded-[16px] border border-vf-line bg-vf-surface2 p-4">
           <div className={`${EYEBROW} mb-2`}>Live now</div>
@@ -182,7 +197,9 @@ export default function PlansPay() {
       <button onClick={() => setLocation("/plans")} className="text-[13px] text-vf-muted hover:text-vf-text transition-colors">
         ← Plans
       </button>
-      <div className={`${EYEBROW} mt-6`}>{card.name} · {priceLabel(card.priceCents)} / mo · USD</div>
+      <div className={`${EYEBROW} mt-6`}>
+        {card.name} · {priceLabel(priceCents)} / {period === "monthly" ? "mo" : PERIOD_LABEL[period]} · USD
+      </div>
       <h1 className="font-serif font-normal text-vf-text mt-3 text-[28px] leading-[1.12]">How do you want to pay?</h1>
 
       <div className="flex flex-col gap-2.5 mt-6">
@@ -233,10 +250,11 @@ export default function PlansPay() {
         data-testid="button-pay"
       >
         {initiate.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-        {method === "ecocash" ? "Send me the prompt" : `Pay ${priceLabel(card.priceCents)}`}
+        {method === "ecocash" ? "Send me the prompt" : `Pay ${priceLabel(priceCents)}`}
       </button>
       <p className="text-[11.5px] text-vf-faint mt-3">
-        You'll see the exact amount before anything is charged. Cancel any time from Settings.
+        You'll see the exact amount before anything is charged. This pays for {RENEWAL_WINDOW[period]}, not an
+        ongoing charge — cancel any time from Settings.
       </p>
     </Shell>
   );

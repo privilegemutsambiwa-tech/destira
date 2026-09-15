@@ -2957,13 +2957,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     const parsed = initiatePaymentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid payment request" });
-    const { tier, method, phone, sourceFeature } = parsed.data;
+    const { tier, period, method, phone, sourceFeature } = parsed.data;
     if (method === "ecocash" && !/^0?7\d{8}$/.test((phone || "").replace(/\D/g, ""))) {
       return res.status(400).json({ message: "Enter the EcoCash number as 07XX XXX XXX." });
     }
     try {
       const email = (req as any).user?.claims?.email || (await storage.getProfile(userId))?.displayName;
-      const result = await payments.initiatePayment(userId, tier, method, phone, typeof email === "string" ? email : undefined, sourceFeature);
+      const result = await payments.initiatePayment(userId, tier, period, method, phone, typeof email === "string" ? email : undefined, sourceFeature);
       res.json(result);
     } catch (e: any) {
       console.error("Payment initiate error:", e);
@@ -2987,6 +2987,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         id: row.id,
         status: row.status,
         tier: row.tier,
+        period: row.period,
         amount: row.amount,
         provider: row.provider,
         phoneNumberMasked: row.phoneNumberMasked,

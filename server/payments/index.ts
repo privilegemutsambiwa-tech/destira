@@ -4,7 +4,7 @@
 
 import { db } from "../db";
 import { payments, subscriptions, profiles } from "@shared/schema";
-import { LIMITS } from "@shared/entitlements";
+import { periodPriceCents, PERIOD_DAYS, type BillingPeriod } from "@shared/entitlements";
 import { and, eq, gte, lt, isNull, or } from "drizzle-orm";
 import { MockProvider } from "./mock";
 import { PaynowProvider, paynowConfigured } from "./paynow";
@@ -21,23 +21,24 @@ export function providerFor(method: PaymentMethod): { provider: PaymentProvider;
   return { provider: paynow, name: method === "card" ? "paynow_card" : method === "ecocash_card" ? "paynow_card" : "paynow_ecocash" };
 }
 
-export function priceCentsFor(tier: "spark" | "flame" | "ember"): number {
-  return LIMITS[tier].priceCents;
+export function priceCentsFor(tier: "spark" | "flame" | "ember", period: BillingPeriod = "monthly"): number {
+  return periodPriceCents(tier, period);
 }
 
-// A retried initiate for the same (user, tier) inside 15 min returns the
-// existing pending row — a double-tap gets charged once.
+// A retried initiate for the same (user, tier, period) inside 15 min returns
+// the existing pending row — a double-tap gets charged once.
 export async function initiatePayment(
   userId: string,
   tier: "spark" | "flame" | "ember",
+  period: BillingPeriod,
   method: PaymentMethod,
   phone: string | undefined,
   authEmail: string | undefined,
   sourceFeature?: string,
 ) {
-  const amountCents = priceCentsFor(tier);
+  const amountCents = priceCentsFor(tier, period);
   const windowStart = new Date(Date.now() - 15 * 60 * 1000);
-  const key = `${userId}:${tier}:${method}`;
+  const key = `${userId}:${tier}:${period}:${method}`;
 
   const [existing] = await db
     .select()
@@ -53,6 +54,7 @@ export async function initiatePayment(
     .values({
       userId,
       tier,
+      period,
       amount: amountCents,
       currency: "usd",
       status: "pending",
@@ -174,9 +176,11 @@ export async function activateFromPayment(paymentId: number): Promise<void> {
   const [pay] = await db.select().from(payments).where(eq(payments.id, paymentId));
   if (!pay || pay.status === "paid") return;
   const tier = pay.tier as "spark" | "flame" | "ember";
+  const period = (pay.period || "monthly") as BillingPeriod;
+  const durationMs = PERIOD_DAYS[period] * 24 * 60 * 60 * 1000;
 
   const now = new Date();
-  const periodEnd = new Date(now.getTime() + 31 * 24 * 60 * 60 * 1000);
+  const periodEnd = new Date(now.getTime() + durationMs);
 
   const [existingSub] = await db.select().from(subscriptions).where(eq(subscriptions.userId, pay.userId));
   let subId: number;
@@ -189,12 +193,13 @@ export async function activateFromPayment(paymentId: number): Promise<void> {
       .update(subscriptions)
       .set({
         tier,
+        period,
         status: "active",
         cancelAtPeriodEnd: false,
         provider: pay.provider,
         providerReference: pay.providerReference,
         currentPeriodStart: now,
-        currentPeriodEnd: new Date(base.getTime() + 31 * 24 * 60 * 60 * 1000),
+        currentPeriodEnd: new Date(base.getTime() + durationMs),
         updatedAt: now,
       })
       .where(eq(subscriptions.id, existingSub.id))
@@ -206,6 +211,7 @@ export async function activateFromPayment(paymentId: number): Promise<void> {
       .values({
         userId: pay.userId,
         tier,
+        period,
         status: "active",
         provider: pay.provider,
         providerReference: pay.providerReference,

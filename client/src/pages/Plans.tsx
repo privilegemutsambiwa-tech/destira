@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { X } from "lucide-react";
 import { useSubscription } from "@/hooks/use-interactions";
@@ -6,14 +7,20 @@ import {
   PLAN_CARDS,
   LIMITS,
   TIERS,
+  BILLING_PERIODS,
+  PERIOD_LABEL,
   priceLabel,
   limitLabel,
   tierRank,
   gateCopy,
+  periodPriceCents,
+  periodPerMonthCents,
+  periodSavingsPct,
   FEATURES,
   type PlanCard,
   type Feature,
   type Tier,
+  type BillingPeriod,
 } from "@shared/entitlements";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
@@ -51,6 +58,12 @@ const COMPARE_ROWS: { label: string; values: Record<Tier, string> }[] = [
   },
 ];
 
+const PERIOD_TAB_LABEL: Record<BillingPeriod, string> = {
+  weekly: "Weekly",
+  monthly: "Monthly",
+  sixMonth: "6 months",
+};
+
 export default function Plans() {
   const [, setLocation] = useLocation();
   const search = useSearch();
@@ -58,6 +71,10 @@ export default function Plans() {
   const currentTier = (sub?.tier as string) || "free";
   const params = new URLSearchParams(search);
   const intro = params.get("intro") === "1";
+
+  // Monthly is the default no matter what — never pre-select the period that
+  // maximises revenue, that's a dark pattern.
+  const [period, setPeriod] = useState<BillingPeriod>("monthly");
 
   // Arrived here from a specific refusal? Acknowledge it.
   const featureParam = params.get("feature");
@@ -72,7 +89,7 @@ export default function Plans() {
   const choose = (card: PlanCard) => {
     if (card.tier === "free") return close();
     const featureQs = feature ? `&feature=${feature}` : "";
-    setLocation(`/plans/pay?tier=${card.tier}${featureQs}`);
+    setLocation(`/plans/pay?tier=${card.tier}&period=${period}${featureQs}`);
   };
 
   return (
@@ -116,7 +133,29 @@ export default function Plans() {
           )}
         </div>
 
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 inline-flex rounded-full border border-vf-line p-1 gap-1" role="group" aria-label="Billing period">
+          {BILLING_PERIODS.map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`h-9 px-4 rounded-full text-[12.5px] font-mono uppercase tracking-[0.1em] transition-colors ${
+                period === p ? "bg-vf-ember text-vf-ink" : "text-vf-muted hover:text-vf-text"
+              }`}
+              data-testid={`button-period-${p}`}
+            >
+              {PERIOD_TAB_LABEL[p]}
+            </button>
+          ))}
+        </div>
+
+        {period === "weekly" && (
+          <p className="text-[12px] text-vf-faint mt-3 max-w-[46ch]">
+            EcoCash doesn't support auto-renewing charges yet, so a weekly plan means a new prompt to approve
+            each week — we'll remind you before it lapses.
+          </p>
+        )}
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {PLAN_CARDS.map((card) => {
             const isCurrent = card.tier === currentTier;
             const rec = !!card.recommended;
@@ -124,6 +163,9 @@ export default function Plans() {
             const unlocks = ctx != null && rank >= unlockRank;
             const isCheapestUnlock = ctx != null && card.tier === ctx.requiredTier;
             const emphasise = isCheapestUnlock || (!ctx && rec);
+            const priceCents = card.tier === "free" ? 0 : periodPriceCents(card.tier, period);
+            const perMonthCents = card.tier === "free" ? null : periodPerMonthCents(card.tier, period);
+            const savingsPct = card.tier === "free" ? null : periodSavingsPct(card.tier, period);
 
             return (
               <div
@@ -148,9 +190,14 @@ export default function Plans() {
                 </div>
 
                 <div className="mt-3 flex items-baseline gap-1.5">
-                  <span className="font-serif text-vf-text text-[32px] leading-none">{priceLabel(card.priceCents)}</span>
-                  {card.priceCents > 0 && <span className="text-[13px] text-vf-faint">/ mo</span>}
+                  <span className="font-serif text-vf-text text-[32px] leading-none">{priceLabel(priceCents)}</span>
+                  {priceCents > 0 && <span className="text-[13px] text-vf-faint">/ {period === "monthly" ? "mo" : PERIOD_LABEL[period]}</span>}
                 </div>
+                {perMonthCents != null && savingsPct != null && (
+                  <p className="text-[11.5px] text-vf-faint mt-1">
+                    {priceLabel(perMonthCents)} a month · save {savingsPct}%
+                  </p>
+                )}
 
                 {ctx && (
                   <p

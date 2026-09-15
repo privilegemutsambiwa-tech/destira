@@ -301,6 +301,7 @@ export const subscriptions = pgTable("subscriptions", {
   provider: text("provider").default("mock"),
   providerReference: varchar("provider_reference"),
   tier: text("tier").notNull(),
+  period: text("period").notNull().default("monthly"), // weekly | monthly | sixMonth
   status: text("status").notNull().default("active"), // active | cancelled | expired
   cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false),
   currentPeriodStart: timestamp("current_period_start"),
@@ -314,6 +315,7 @@ export const payments = pgTable("payments", {
   userId: varchar("user_id").notNull().references(() => users.id),
   subscriptionId: integer("subscription_id").references(() => subscriptions.id),
   tier: varchar("tier"),                 // plan bought — server-resolved, never client amount
+  period: text("period").notNull().default("monthly"), // weekly | monthly | sixMonth — server-resolved
   amount: integer("amount").notNull(),   // integer cents, server-resolved
   currency: varchar("currency", { length: 3 }).notNull().default("usd"),
   status: text("status").notNull().default("pending"), // pending | paid | failed | cancelled | expired
@@ -337,6 +339,7 @@ export const PAYMENT_METHODS = ["ecocash", "ecocash_card", "card"] as const;
 export const paymentMethodEnum = z.enum(PAYMENT_METHODS);
 export const initiatePaymentSchema = z.object({
   tier: z.enum(["spark", "flame", "ember"]),
+  period: z.enum(["weekly", "monthly", "sixMonth"]).default("monthly"),
   method: paymentMethodEnum,
   phone: z.string().trim().max(20).optional(),
   sourceFeature: z.string().max(60).optional(),

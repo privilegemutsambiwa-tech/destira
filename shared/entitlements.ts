@@ -181,6 +181,61 @@ export function limitLabel(n: number | null): string {
   return n == null ? "Unlimited" : String(n);
 }
 
+// ── Billing periods ──
+// Monthly is the only period that has ever actually billed anyone — it's the
+// default everywhere and the one already-settled price. Weekly and 6-month
+// are priced FROM the monthly price, never independently, so they can't
+// drift out of the ladder above.
+
+export const BILLING_PERIODS = ["weekly", "monthly", "sixMonth"] as const;
+export type BillingPeriod = (typeof BILLING_PERIODS)[number];
+
+export const PERIOD_LABEL: Record<BillingPeriod, string> = {
+  weekly: "week",
+  monthly: "month",
+  sixMonth: "6 months",
+};
+
+/** Whole days a period covers — used for currentPeriodEnd math. */
+export const PERIOD_DAYS: Record<BillingPeriod, number> = {
+  weekly: 7,
+  monthly: 31,
+  sixMonth: 186, // 31 * 6 — matches the existing 31-day monthly convention
+};
+
+// Weekly ≈ 1.5x the "fair" per-week slice of the monthly price — clearly
+// worse value than paying monthly, but the absolute number stays small and
+// repeatable (this matters for EcoCash, where weekly is a realistic amount,
+// not a trap). 6-month is priced to land on a consistent ~17% saving vs.
+// paying monthly six times, computed below, never hardcoded into copy.
+const PAID_TIERS = ["spark", "flame", "ember"] as const;
+export const PERIOD_PRICE_CENTS: Record<(typeof PAID_TIERS)[number], Record<BillingPeriod, number>> = {
+  spark: { weekly: 179, monthly: LIMITS.spark.priceCents, sixMonth: 2499 },
+  flame: { weekly: 349, monthly: LIMITS.flame.priceCents, sixMonth: 4999 },
+  ember: { weekly: 699, monthly: LIMITS.ember.priceCents, sixMonth: 9999 },
+};
+
+export function periodPriceCents(tier: Tier, period: BillingPeriod): number {
+  if (tier === "free") return 0;
+  return PERIOD_PRICE_CENTS[tier][period];
+}
+
+/** The per-month figure to show under a longer-than-monthly price. Null for
+ *  weekly/monthly, which don't need an equivalent shown. */
+export function periodPerMonthCents(tier: Tier, period: BillingPeriod): number | null {
+  if (period !== "sixMonth" || tier === "free") return null;
+  return Math.round(periodPriceCents(tier, period) / 6);
+}
+
+/** Honest saving vs. paying the monthly price six times over, rounded to a
+ *  whole percent. Null when there's nothing to compare (weekly/monthly). */
+export function periodSavingsPct(tier: Tier, period: BillingPeriod): number | null {
+  if (period !== "sixMonth" || tier === "free") return null;
+  const sixMonths = periodPriceCents(tier, "monthly") * 6;
+  const actual = periodPriceCents(tier, period);
+  return Math.round((1 - actual / sixMonths) * 100);
+}
+
 // ── ONE source for what a locked feature says, in context ──
 //
 // Every gate refusal — the moment-of-tap sheet, the inline <Gated> card, and

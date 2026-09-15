@@ -15,7 +15,13 @@ export interface InitiateResult {
 
 export function useInitiatePayment() {
   return useMutation({
-    mutationFn: async (input: { tier: "spark" | "flame" | "ember"; method: PayMethod; phone?: string; sourceFeature?: string }) => {
+    mutationFn: async (input: {
+      tier: "spark" | "flame" | "ember";
+      period: "weekly" | "monthly" | "sixMonth";
+      method: PayMethod;
+      phone?: string;
+      sourceFeature?: string;
+    }) => {
       const res = await fetch("/api/payments/initiate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -33,6 +39,7 @@ export interface PaymentStatusRow {
   id: number;
   status: PayStatus;
   tier: string;
+  period: "weekly" | "monthly" | "sixMonth";
   amount: number;
   provider: string;
   phoneNumberMasked: string | null;

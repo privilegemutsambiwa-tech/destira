@@ -11,8 +11,9 @@ import { useTheme, type ThemePreference } from "@/hooks/use-theme";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
-import { PLAN_CARDS as SETTINGS_PLAN_CARDS, LIMITS as SETTINGS_LIMITS } from "@shared/entitlements";
+import { PLAN_CARDS as SETTINGS_PLAN_CARDS, LIMITS as SETTINGS_LIMITS, PERIOD_LABEL, type BillingPeriod } from "@shared/entitlements";
 import { SEEKING_OPTIONS } from "@shared/essentials";
+import { useSubscription } from "@/hooks/use-interactions";
 import { useCancelSubscription } from "@/hooks/use-payments";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -959,14 +960,29 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const cancelSub = useCancelSubscription();
+  const { data: sub } = useSubscription();
   const raw = profile?.subscriptionTier ?? "free";
   const tier: "free" | "spark" | "flame" | "ember" =
     raw === "plus" ? "flame" : raw === "vip" ? "ember" : (["spark", "flame", "ember"].includes(raw) ? raw : "free");
   const card = SETTINGS_PLAN_CARDS.find((c) => c.tier === tier) ?? SETTINGS_PLAN_CARDS[0];
+  const period: BillingPeriod = (sub?.period as BillingPeriod) ?? "monthly";
+  const renewsAt: string | null = sub?.currentPeriodEnd ?? null;
+  const autoRenews = sub?.provider === "stripe";
   const tierInfo = {
     label: card.name,
     price: card.priceCents === 0 ? "$0" : `$${(card.priceCents / 100).toFixed(2)}`,
-    cycle: card.priceCents === 0 ? "No billing" : "Billed monthly, USD",
+    cycle:
+      card.priceCents === 0
+        ? "No billing"
+        : `Billed every ${PERIOD_LABEL[period]}, USD`,
+    renewal:
+      card.priceCents === 0
+        ? null
+        : renewsAt
+          ? autoRenews
+            ? `Renews automatically on ${new Date(renewsAt).toLocaleDateString()}`
+            : `Pay again by ${new Date(renewsAt).toLocaleDateString()} to keep it — we'll remind you first`
+          : null,
     details: card.gets.slice(0, 3).join(" · "),
   };
 
@@ -984,6 +1000,9 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
           </div>
         </div>
         <p className="text-sm" style={{ color: MUTED }}>{tierInfo.details}</p>
+        {tierInfo.renewal && (
+          <p className="text-xs mt-2" style={{ color: MUTED }}>{tierInfo.renewal}</p>
+        )}
       </div>
 
       {tier === "free" && (
