@@ -1724,14 +1724,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserStories(userId: string): Promise<Story[]> {
-    await db.delete(stories).where(lte(stories.expiresAt, new Date()));
+    await this.deleteExpiredStories();
     return db.select().from(stories)
       .where(and(eq(stories.userId, userId), gt(stories.expiresAt, new Date())))
       .orderBy(desc(stories.createdAt));
   }
 
   async deleteExpiredStories(): Promise<void> {
-    await db.delete(stories).where(lte(stories.expiresAt, new Date()));
+    const expired = await db.select({ id: stories.id }).from(stories)
+      .where(lte(stories.expiresAt, new Date()));
+    if (expired.length === 0) return;
+    const expiredIds = expired.map((s) => s.id);
+    await db.delete(storyMedia).where(inArray(storyMedia.storyId, expiredIds));
+    await db.delete(storyLikes).where(inArray(storyLikes.storyId, expiredIds));
+    await db.delete(storyComments).where(inArray(storyComments.storyId, expiredIds));
+    await db.delete(storyViews).where(inArray(storyViews.storyId, expiredIds));
+    await db.delete(stories).where(inArray(stories.id, expiredIds));
   }
 
   async addStoryMedia(storyId: number, type: string, url: string | null, caption?: string, textContent?: string): Promise<StoryMedia> {

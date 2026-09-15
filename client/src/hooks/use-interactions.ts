@@ -260,7 +260,10 @@ export function useCreateGroup() {
         body: JSON.stringify(data),
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to create group");
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || "Failed to create group");
+      }
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups"] }),

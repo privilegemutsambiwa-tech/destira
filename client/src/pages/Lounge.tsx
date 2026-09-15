@@ -264,8 +264,9 @@ function CreateGroupDialog({ onClose }: { onClose: () => void }) {
       await createGroup.mutateAsync({ name, description, privacyMode });
       toast({ title: "Group created!", description: `"${name}" is ready for conversations.` });
       onClose();
-    } catch {
-      toast({ title: "Error", description: "Failed to create group.", variant: "destructive" });
+    } catch (err) {
+      const description = err instanceof Error ? err.message : "Failed to create group.";
+      toast({ title: "Error", description, variant: "destructive" });
     }
   };
 
