@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { useTwinMemory, useTwinStructuredProfile, useExtractTwinProfile } from "@/hooks/use-interactions";
 import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
+import { useAuth } from "@/hooks/use-auth";
+import { useProfile, usePhotos } from "@/hooks/use-profiles";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -54,7 +56,30 @@ function StatusIndicator({ status }: { status: MessageStatus }) {
   return <CheckCheck className="w-3 h-3 text-vf-ember" />;
 }
 
-function TypingIndicator() {
+// Small round twin avatar — the user's cover photo when they have one,
+// falling back to the same mint gradient dot used everywhere else.
+function TwinAvatar({ url, size = 20 }: { url: string | null; size?: number }) {
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt=""
+        className="rounded-full object-cover shrink-0"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-full shrink-0 flex items-center justify-center"
+      style={{ width: size, height: size, background: "radial-gradient(circle at 35% 30%, var(--vf-mint-vivid), #2E7F6B)" }}
+    >
+      <Brain className="text-vf-ink" style={{ width: size * 0.55, height: size * 0.55 }} />
+    </div>
+  );
+}
+
+function TypingIndicator({ twinName, avatarUrl }: { twinName: string; avatarUrl: string | null }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -64,9 +89,9 @@ function TypingIndicator() {
       data-testid="typing-indicator"
     >
       <div className="max-w-[80%]">
-        <div className="flex items-center gap-1 ml-3 mb-1">
-          <Brain className="w-3 h-3 text-vf-mint" />
-          <span className="text-xs text-vf-mint font-medium">Your Twin</span>
+        <div className="flex items-center gap-1.5 ml-3 mb-1">
+          <TwinAvatar url={avatarUrl} size={14} />
+          <span className="text-xs text-vf-mint font-medium">{twinName}</span>
         </div>
         <div className="rounded-[18px] rounded-bl-[6px] border border-vf-mint/25 bg-vf-mint/10 px-4 py-3 flex items-center gap-2.5">
           <div className="flex items-center gap-1.5">
@@ -207,7 +232,23 @@ export default function TwinChat() {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [trainingOptOut, setTrainingOptOut] = useState(false);
   const { data: memory } = useTwinMemory();
+  const { user } = useAuth();
+  const { data: profile } = useProfile();
+  const { data: ownPhotos } = usePhotos(user?.id);
   const [woLocation, setLocation] = useLocation();
+
+  const twinName = useMemo(() => {
+    const rawName = (profile as any)?.displayName || user?.firstName || "";
+    const firstName = rawName.trim().split(/\s+/)[0];
+    return firstName ? `${firstName}'s Twin` : "Your Twin";
+  }, [profile, user]);
+
+  const twinAvatarUrl: string | null = useMemo(() => {
+    const coverPhoto = (profile as any)?.coverPhotoUrl;
+    if (coverPhoto) return coverPhoto;
+    const photos = ownPhotos || [];
+    return photos.find((p: any) => p.isMainProfilePhoto)?.photoUrl || photos[0]?.photoUrl || user?.profileImageUrl || null;
+  }, [profile, ownPhotos, user]);
 
   const backRoute = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -468,14 +509,20 @@ export default function TwinChat() {
         </Button>
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="relative w-9 h-9 shrink-0">
-            <div
-              className="absolute inset-0 rounded-full animate-[vf-breathe_5s_ease-in-out_infinite]"
-              style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint-vivid), #2E7F6B)" }}
-            />
+            <div className="absolute inset-0 rounded-full overflow-hidden animate-[vf-breathe_5s_ease-in-out_infinite]">
+              {twinAvatarUrl ? (
+                <img src={twinAvatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div
+                  className="w-full h-full"
+                  style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint-vivid), #2E7F6B)" }}
+                />
+              )}
+            </div>
           </div>
           <div className="min-w-0">
             <h2 className="font-serif text-base text-vf-text truncate" data-testid="text-twin-title">
-              Your Twin
+              {twinName}
             </h2>
             <p className="text-xs text-vf-mint">Self-reflection &amp; growth</p>
           </div>
@@ -551,9 +598,9 @@ export default function TwinChat() {
                   >
                     <div className="max-w-[80%]">
                       {!isMe && (
-                        <div className="flex items-center gap-1 ml-3 mb-1">
-                          <Brain className="w-3 h-3 text-vf-mint" />
-                          <span className="text-xs text-vf-mint font-medium">Your Twin</span>
+                        <div className="flex items-center gap-1.5 ml-3 mb-1">
+                          <TwinAvatar url={twinAvatarUrl} size={14} />
+                          <span className="text-xs text-vf-mint font-medium">{twinName}</span>
                         </div>
                       )}
                       <div
@@ -582,7 +629,7 @@ export default function TwinChat() {
                 );
               })}
 
-              {isTyping && <TypingIndicator key="typing" />}
+              {isTyping && <TypingIndicator key="typing" twinName={twinName} avatarUrl={twinAvatarUrl} />}
             </AnimatePresence>
 
             {quickReplies.length > 0 && !isStreaming && messages.length > 0 && (
