@@ -24,12 +24,12 @@ export interface TierLimits {
   transcriptLines: number | null;
   /** see the names/profiles of people who asked to meet you (not just the count) */
   seeWhoAsked: boolean;
-  /** Lounge messages you can post per day; null = unlimited */
-  loungePostsPerDay: number | null;
-  /** groups you can be a member of */
+  /** groups you can be a member of; null = unlimited. This is the Lounge lever —
+   *  posting inside a room you're in is never metered, only how many rooms
+   *  you're in at once. */
   groupsMax: number | null;
-  /** groups you can create */
-  groupsCreatedMax: number;
+  /** groups you can create; null = unlimited */
+  groupsCreatedMax: number | null;
   /** host your own events */
   canHostEvent: boolean;
 }
@@ -37,33 +37,30 @@ export interface TierLimits {
 export const LIMITS: Record<Tier, TierLimits> = {
   free: {
     priceCents: 0,
-    dailyLikes: 15,
+    dailyLikes: 30,
     weeklyInterviews: 3,
     transcriptLines: 2,
     seeWhoAsked: false,
-    loungePostsPerDay: 1,
     groupsMax: 3,
     groupsCreatedMax: 0,
     canHostEvent: false,
   },
   spark: {
     priceCents: 499,
-    dailyLikes: 40,
+    dailyLikes: 80,
     weeklyInterviews: 15,
     transcriptLines: 2,
     seeWhoAsked: true,
-    loungePostsPerDay: 10,
     groupsMax: 8,
     groupsCreatedMax: 0,
     canHostEvent: false,
   },
   flame: {
     priceCents: 999,
-    dailyLikes: 100,
+    dailyLikes: 200,
     weeklyInterviews: 40,
     transcriptLines: null,
     seeWhoAsked: true,
-    loungePostsPerDay: null,
     groupsMax: 20,
     groupsCreatedMax: 3,
     canHostEvent: true,
@@ -74,9 +71,8 @@ export const LIMITS: Record<Tier, TierLimits> = {
     weeklyInterviews: null,
     transcriptLines: null,
     seeWhoAsked: true,
-    loungePostsPerDay: null,
     groupsMax: null,
-    groupsCreatedMax: 999,
+    groupsCreatedMax: null,
     canHostEvent: true,
   },
 };
@@ -87,7 +83,6 @@ export const FEATURES = [
   "start_interview",
   "read_transcript",
   "see_who_asked",
-  "lounge_post",
   "join_group",
   "create_group",
   "host_event",
@@ -101,7 +96,6 @@ export const FEATURE_MIN_TIER: Record<Feature, Tier> = {
   start_interview: "free",
   read_transcript: "flame", // full transcript
   see_who_asked: "spark",
-  lounge_post: "free",
   join_group: "free",
   create_group: "flame",
   host_event: "flame",
@@ -124,40 +118,57 @@ export const PLAN_CARDS: PlanCard[] = [
   {
     tier: "free",
     name: "Free",
-    priceCents: 0,
+    priceCents: LIMITS.free.priceCents,
     pitch: "Enough room to feel the twin work before anything asks for money.",
     gets: [
-      "15 likes a day",
-      "3 twin interviews a week",
+      `${LIMITS.free.dailyLikes} likes a day`,
+      `${LIMITS.free.weeklyInterviews} twin interviews a week`,
       "The full Discover feed",
-      "Read the Lounge, one post a day",
+      `Join up to ${LIMITS.free.groupsMax} rooms in the Lounge`,
       "Browse events",
     ],
-    notYet: ["Transcripts stop at two lines", "Can't see who asked to meet you", "Can't host events"],
+    notYet: [`Transcripts stop at ${LIMITS.free.transcriptLines} lines`, "Can't see who asked to meet you", "Can't host events"],
   },
   {
     tier: "spark",
     name: "Spark",
-    priceCents: 499,
+    priceCents: LIMITS.spark.priceCents,
     pitch: "You can finally see who asked to meet you, not just that someone did.",
-    gets: ["Names and profiles of everyone who asked you", "40 likes a day", "15 interviews a week", "10 Lounge posts a day", "Up to 8 groups"],
-    notYet: ["Transcripts still stop at two lines", "Can't host events"],
+    gets: [
+      "Names and profiles of everyone who asked you",
+      `${LIMITS.spark.dailyLikes} likes a day`,
+      `${LIMITS.spark.weeklyInterviews} interviews a week`,
+      `Up to ${LIMITS.spark.groupsMax} rooms in the Lounge`,
+    ],
+    notYet: [`Transcripts still stop at ${LIMITS.spark.transcriptLines} lines`, "Can't host events"],
   },
   {
     tier: "flame",
     name: "Flame",
-    priceCents: 999,
+    priceCents: LIMITS.flame.priceCents,
     pitch: "Read the whole conversation your twins had, and start hosting your own events.",
-    gets: ["The full twin‑to‑twin transcript, every time", "Host your own events", "100 likes a day", "40 interviews a week", "Unlimited Lounge posts", "Up to 20 groups, create 3"],
-    notYet: ["Likes, interviews and groups still have a ceiling"],
+    gets: [
+      "The full twin‑to‑twin transcript, every time",
+      "Host your own events",
+      `${LIMITS.flame.dailyLikes} likes a day`,
+      `${LIMITS.flame.weeklyInterviews} interviews a week`,
+      `Up to ${LIMITS.flame.groupsMax} rooms, create up to ${LIMITS.flame.groupsCreatedMax}`,
+    ],
+    notYet: ["Likes, interviews and rooms still have a ceiling"],
     recommended: true,
   },
   {
     tier: "ember",
     name: "Ember",
-    priceCents: 1999,
-    pitch: "Nothing counts down — unlimited likes, interviews, groups and events.",
-    gets: ["Unlimited likes", "Unlimited interviews", "Unlimited groups, hosted or joined", "Everything in Flame"],
+    priceCents: LIMITS.ember.priceCents,
+    pitch: "Nothing counts down — unlimited likes, interviews, rooms and events.",
+    gets: [
+      "Unlimited likes",
+      "Unlimited interviews",
+      "Unlimited rooms, hosted or joined",
+      "The full transcript, every time",
+      "Host your own events",
+    ],
     notYet: [],
   },
 ];
@@ -196,7 +207,6 @@ function nextTierForLimit(fromTier: Tier, key: keyof TierLimits): Tier {
 const LIMIT_KEY: Partial<Record<Feature, keyof TierLimits>> = {
   daily_likes: "dailyLikes",
   start_interview: "weeklyInterviews",
-  lounge_post: "loungePostsPerDay",
   join_group: "groupsMax",
 };
 
@@ -205,9 +215,8 @@ const ACTION: Record<Feature, string> = {
   start_interview: "Starting another interview",
   read_transcript: "Reading the full transcript",
   see_who_asked: "Seeing who asked to meet you",
-  lounge_post: "Posting in the Lounge",
-  join_group: "Joining another group",
-  create_group: "Creating a group",
+  join_group: "Joining another room",
+  create_group: "Creating a room",
   host_event: "Hosting an event",
   proximity_identity: "Opening a nearby profile",
 };
@@ -246,16 +255,15 @@ export function gateCopy(feature: Feature, s: GateCopyState = {}): GateCopy {
     const noun =
       feature === "daily_likes" ? "likes"
       : feature === "start_interview" ? "interviews"
-      : feature === "lounge_post" ? "Lounge posts"
-      : "groups";
+      : "rooms";
     const per =
-      feature === "daily_likes" || feature === "lounge_post" ? "today"
+      feature === "daily_likes" ? "today"
       : feature === "start_interview" ? "this week"
       : "";
 
     let line: string;
     if (feature === "join_group") {
-      line = `You're in ${limit} groups, the most on ${TIER_NAME[curTier]}. ${nextName} takes you to ${nextVal ?? "no limit"}.`;
+      line = `You're in ${limit} rooms, the most on ${TIER_NAME[curTier]}. ${nextName} takes you to ${nextVal ?? "no limit"}.`;
     } else {
       const head =
         limit === 1
@@ -287,9 +295,9 @@ export function gateCopy(feature: Feature, s: GateCopyState = {}): GateCopy {
 
   const LINES: Partial<Record<Feature, string>> = {
     host_event: `You can't host events on ${curName}. ${reqName} opens it up${priced}. You can still go to anything you're invited to.`,
-    read_transcript: `Transcripts stop at two lines on ${curName}. ${reqName} opens the whole conversation your twins had${priced}.`,
+    read_transcript: `Transcripts stop at ${LIMITS[curTier].transcriptLines} lines on ${curName}. ${reqName} opens the whole conversation your twins had${priced}.`,
     see_who_asked: `You can see that someone asked, but not who. ${reqName} shows you the names and profiles${priced}.`,
-    create_group: `Creating groups starts on ${reqName}${priced}. You can still join up to ${LIMITS[curTier].groupsMax ?? "several"} on ${curName}.`,
+    create_group: `Creating a room starts on ${reqName}${priced}. You can still join up to ${LIMITS[curTier].groupsMax ?? "several"} on ${curName}.`,
     proximity_identity: `Your twin can tell you someone's nearby, but opening their profile needs ${reqName}${priced}.`,
   };
 

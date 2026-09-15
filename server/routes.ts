@@ -2285,6 +2285,19 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (!member || (member.role !== "owner" && member.role !== "admin")) {
         return res.status(403).json({ message: "Not authorized" });
       }
+      if (status === "approved") {
+        const pending = await storage.getJoinRequests(groupId);
+        const target = pending.find((r) => r.id === requestId);
+        if (target) {
+          const gj = await gate.checkGate(target.userId, "join_group");
+          if (!gj.ok) {
+            return res.status(403).json({
+              groupCapped: true,
+              message: `They're in ${gj.used} rooms already, the most their plan allows. They'll need to leave one before joining this one.`,
+            });
+          }
+        }
+      }
       const processed = await storage.processJoinRequest(requestId, userId, status);
       if (status === "approved") {
         const joinerProfile = await storage.getProfile(processed.userId);
@@ -2342,6 +2355,11 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       }
       const isMember = await storage.isGroupMember(link.groupId, userId);
       if (isMember) return res.status(409).json({ message: "Already a member", groupId: link.groupId });
+
+      const gj = await gate.checkGate(userId, "join_group");
+      if (!gj.ok) {
+        return res.status(403).json(gate.gateBody(gj, "join_group"));
+      }
 
       const inviteGroup = await storage.getGroup(link.groupId);
       if (inviteGroup?.privacyMode === "request-to-join") {
@@ -2464,10 +2482,6 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (group?.postingPermission === "admins_only" && member.role === "member") {
         return res.status(403).json({ message: "Only admins can post in this group" });
       }
-
-      // Free-tier Lounge posting is metered per day (an admin/owner posting the
-      // event details is not — they're managing, not chatting).
-      if (member.role === "member" && (await gate.denyIfGated(res, userId, "lounge_post"))) return;
 
       if ((contentType === "image" || contentType === "video") && group?.mediaPermission === "admin_only" && member.role === "member") {
         return res.status(403).json({ message: "Only admins can post media in this group" });
@@ -2686,6 +2700,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       }
       const alreadyMember = await storage.isGroupMember(groupId, targetUserId);
       if (alreadyMember) return res.status(409).json({ message: "Already a member" });
+      const gj = await gate.checkGate(targetUserId, "join_group");
+      if (!gj.ok) {
+        return res.status(403).json({
+          groupCapped: true,
+          message: `They're in ${gj.used} rooms already, the most their plan allows. They'll need to leave one before joining this one.`,
+        });
+      }
       const targetProfile = await storage.getProfile(targetUserId);
       const nickname = targetProfile?.groupNickname || targetProfile?.displayName || "Anonymous";
       const member = await storage.joinGroup(groupId, targetUserId, nickname);

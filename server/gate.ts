@@ -10,7 +10,7 @@
 // they're back on Flame+.
 
 import { db } from "./db";
-import { subscriptions, profiles, interviews, groupMembers, groups, groupMessages, dailyLikeCounts } from "@shared/schema";
+import { subscriptions, profiles, interviews, groupMembers, groups, dailyLikeCounts } from "@shared/schema";
 import { and, eq, gte, count } from "drizzle-orm";
 import { LIMITS, tierRank, FEATURE_MIN_TIER, gateCopy, type Tier, type Feature } from "@shared/entitlements";
 
@@ -113,12 +113,6 @@ async function usage(userId: string, feature: Feature): Promise<number> {
         .from(groups)
         .where(eq(groups.ownerId, userId))
         .then((r) => Number(r[0]?.n ?? 0));
-    case "lounge_post":
-      return db
-        .select({ n: count() })
-        .from(groupMessages)
-        .where(and(eq(groupMessages.userId, userId), gte(groupMessages.createdAt, new Date(new Date().setHours(0, 0, 0, 0)))))
-        .then((r) => Number(r[0]?.n ?? 0));
     default:
       return 0;
   }
@@ -126,8 +120,9 @@ async function usage(userId: string, feature: Feature): Promise<number> {
 
 // Pure booleans (see_who_asked, full read_transcript, host_event) gate on tier.
 // create_group is a "can, up to N" — a boolean floor AND a count cap (Flame = 3).
-// The rest (likes, interviews, group membership, lounge posts) are metered on a
-// count vs the tier limit.
+// The rest (likes, interviews, room membership) are metered on a count vs the
+// tier limit. Lounge posting itself is never metered — only how many rooms
+// you're in at once (join_group / groupsMax).
 export async function checkGate(
   userId: string,
   feature: Feature,
@@ -135,7 +130,7 @@ export async function checkGate(
 ): Promise<GateResult> {
   const tier = await getEffectiveTier(userId);
   const limits = LIMITS[tier];
-  const dailyReset = feature === "daily_likes" || feature === "lounge_post";
+  const dailyReset = feature === "daily_likes";
 
   const boolMap: Partial<Record<Feature, boolean>> = {
     see_who_asked: limits.seeWhoAsked,
@@ -157,7 +152,8 @@ export async function checkGate(
   }
 
   if (feature === "create_group") {
-    const cap = limits.groupsCreatedMax; // 0 / 0 / 3 / 999
+    const cap = limits.groupsCreatedMax; // 0 / 0 / 3 / null (unlimited)
+    if (cap == null) return { ok: true, tier, limit: null };
     if (cap <= 0) {
       return {
         ok: false,
@@ -175,7 +171,7 @@ export async function checkGate(
       limit: cap,
       used: owned,
       requiredTier: nextTierUp(tier),
-      message: `You've created ${cap} groups — that's the ${TIER_LABEL(tier)} limit. ${TIER_LABEL(nextTierUp(tier))} lifts it.`,
+      message: `You've created ${cap} rooms — that's the ${TIER_LABEL(tier)} limit. ${TIER_LABEL(nextTierUp(tier))} lifts it.`,
     };
   }
 
@@ -186,9 +182,7 @@ export async function checkGate(
         ? limits.weeklyInterviews
         : feature === "join_group"
           ? limits.groupsMax
-          : feature === "lounge_post"
-            ? limits.loungePostsPerDay
-            : null;
+          : null;
 
   if (limit == null) return { ok: true, tier, limit: null };
   const used = opts.countOverride ?? (await usage(userId, feature));

@@ -4,15 +4,52 @@ import { useSubscription } from "@/hooks/use-interactions";
 import { DestiraLockup } from "@/components/brand/logo";
 import {
   PLAN_CARDS,
+  LIMITS,
+  TIERS,
   priceLabel,
+  limitLabel,
   tierRank,
   gateCopy,
   FEATURES,
   type PlanCard,
   type Feature,
+  type Tier,
 } from "@shared/entitlements";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
+
+const COMPARE_ROWS: { label: string; values: Record<Tier, string> }[] = [
+  {
+    label: "Likes a day",
+    values: Object.fromEntries(TIERS.map((t) => [t, limitLabel(LIMITS[t].dailyLikes)])) as Record<Tier, string>,
+  },
+  {
+    label: "Interviews a week",
+    values: Object.fromEntries(TIERS.map((t) => [t, limitLabel(LIMITS[t].weeklyInterviews)])) as Record<Tier, string>,
+  },
+  {
+    label: "Transcript",
+    values: Object.fromEntries(
+      TIERS.map((t) => [t, LIMITS[t].transcriptLines == null ? "Full" : `${LIMITS[t].transcriptLines} lines`]),
+    ) as Record<Tier, string>,
+  },
+  {
+    label: "Rooms you can join",
+    values: Object.fromEntries(TIERS.map((t) => [t, limitLabel(LIMITS[t].groupsMax)])) as Record<Tier, string>,
+  },
+  {
+    label: "Rooms you can create",
+    values: Object.fromEntries(TIERS.map((t) => [t, limitLabel(LIMITS[t].groupsCreatedMax)])) as Record<Tier, string>,
+  },
+  {
+    label: "See who asked",
+    values: Object.fromEntries(TIERS.map((t) => [t, LIMITS[t].seeWhoAsked ? "Yes" : "—"])) as Record<Tier, string>,
+  },
+  {
+    label: "Host events",
+    values: Object.fromEntries(TIERS.map((t) => [t, LIMITS[t].canHostEvent ? "Yes" : "—"])) as Record<Tier, string>,
+  },
+];
 
 export default function Plans() {
   const [, setLocation] = useLocation();
@@ -62,18 +99,18 @@ export default function Plans() {
                 {ctx.line}
               </h1>
               <p className="text-[14px] text-vf-muted leading-[1.6] mt-4">
-                Prices are in US dollars, per month. Cancel any time — one tap, no exit fee.
+                Prices are in US dollars. Cancel any time — one tap, no exit fee.
               </p>
             </>
           ) : (
             <>
               <div className={EYEBROW}>Plans</div>
               <h1 className="font-serif font-normal text-vf-text mt-3 text-[clamp(30px,4.5vw,46px)] leading-[1.06] tracking-[-0.02em]">
-                Free is the real thing. Paying buys room and the transcript.
+                More room to explore. Better odds of finding your person.
               </h1>
               <p className="text-[14px] text-vf-muted leading-[1.6] mt-4">
-                Prices are in US dollars, per month. Nothing here buys you placement or a match —
-                the twin does the introducing, and that part isn't for sale.
+                Prices are in US dollars. Nothing here buys you placement or a match —
+                your twin does the introducing, and that part isn't for sale.
               </p>
             </>
           )}
@@ -97,18 +134,21 @@ export default function Plans() {
                 data-testid={`plan-${card.tier}`}
               >
                 <div className="flex items-center justify-between min-h-[16px]">
-                  <div className={EYEBROW}>{card.name}</div>
+                  <div className="flex items-baseline gap-2">
+                    <div className={card.tier === "ember" ? "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold" : EYEBROW}>
+                      {card.name}
+                    </div>
+                    {isCurrent && <span className="text-[10.5px] text-vf-faint">your plan</span>}
+                  </div>
                   {isCheapestUnlock ? (
-                    <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-vf-ember">Unlocks this</span>
+                    <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-vf-ember">Opens this up</span>
                   ) : rec && !ctx ? (
                     <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-vf-ember">Most pick this</span>
-                  ) : isCurrent ? (
-                    <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-vf-faint">You're here</span>
                   ) : null}
                 </div>
 
                 <div className="mt-3 flex items-baseline gap-1.5">
-                  <span className="font-serif text-vf-text text-[34px] leading-none">{priceLabel(card.priceCents)}</span>
+                  <span className="font-serif text-vf-text text-[32px] leading-none">{priceLabel(card.priceCents)}</span>
                   {card.priceCents > 0 && <span className="text-[13px] text-vf-faint">/ mo</span>}
                 </div>
 
@@ -130,11 +170,14 @@ export default function Plans() {
                 </ul>
 
                 {card.notYet.length > 0 && (
-                  <ul className="mt-3 pt-3 border-t border-vf-line flex flex-col gap-1.5 text-[12px] text-vf-faint">
-                    {card.notYet.map((n) => (
-                      <li key={n} className="leading-[1.4]">Not yet: {n}</li>
-                    ))}
-                  </ul>
+                  <div className="mt-3 pt-3 border-t border-vf-line">
+                    <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-vf-faint">Not on this plan</div>
+                    <ul className="mt-1.5 flex flex-col gap-1.5 text-[12px] text-vf-faint">
+                      {card.notYet.map((n) => (
+                        <li key={n} className="leading-[1.4]">{n}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
 
                 <div className="flex-1" />
@@ -160,6 +203,54 @@ export default function Plans() {
               </div>
             );
           })}
+        </div>
+
+        <div className="mt-12">
+          <div className={EYEBROW}>Compare</div>
+
+          {/* ≥640px: a real grid table, no horizontal scroll needed at this width. */}
+          <div className="hidden sm:block mt-4 rounded-[16px] border border-vf-line overflow-hidden">
+            <div className="grid grid-cols-[1.3fr_1fr_1fr_1fr_1fr]">
+              <div className="p-3" />
+              {PLAN_CARDS.map((card) => (
+                <div key={card.tier} className={`p-3 text-center ${EYEBROW}`}>
+                  {card.name}
+                </div>
+              ))}
+              {COMPARE_ROWS.map((row, i) => (
+                <div key={row.label} className="contents">
+                  <div className={`p-3 text-[13px] text-vf-muted border-t border-vf-line ${i === 0 ? "border-t-0" : ""}`}>
+                    {row.label}
+                  </div>
+                  {PLAN_CARDS.map((card) => (
+                    <div
+                      key={card.tier}
+                      className={`p-3 text-center font-serif text-[15px] text-vf-text border-t border-vf-line ${i === 0 ? "border-t-0" : ""}`}
+                    >
+                      {row.values[card.tier]}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* <640px: one stacked block per tier — a table would need to scroll sideways here, so this doesn't try to be one. */}
+          <div className="sm:hidden mt-4 flex flex-col gap-3">
+            {PLAN_CARDS.map((card) => (
+              <div key={card.tier} className="rounded-[16px] border border-vf-line p-4">
+                <div className={EYEBROW}>{card.name}</div>
+                <dl className="mt-2 flex flex-col gap-1.5">
+                  {COMPARE_ROWS.map((row) => (
+                    <div key={row.label} className="flex items-baseline justify-between gap-3">
+                      <dt className="text-[12.5px] text-vf-muted">{row.label}</dt>
+                      <dd className="font-serif text-[14px] text-vf-text">{row.values[card.tier]}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ))}
+          </div>
         </div>
 
         <p className="text-[12px] text-vf-faint mt-8 leading-[1.5]">
