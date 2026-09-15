@@ -6,6 +6,7 @@ import OpenAI from "openai";
 export const ai = new OpenAI({
   baseURL: "https://api-cdn.thehive.ai/api/v3",
   apiKey: process.env.DEEPSEEK_API_KEY,
+  defaultHeaders: { Accept: "text/event-stream" },
 });
 
 export const AI_MODEL = "deepseek-ai/deepseek-v4.1-flash";

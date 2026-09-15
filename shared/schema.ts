@@ -438,7 +438,7 @@ export const stories = pgTable("stories", {
 
 export const storyMedia = pgTable("story_media", {
   id: serial("id").primaryKey(),
-  storyId: integer("story_id").notNull().references(() => stories.id),
+  storyId: integer("story_id").notNull().references(() => stories.id, { onDelete: "cascade" }),
   type: text("type").notNull().default("image"),
   url: text("url"),
   textContent: text("text_content"),
@@ -448,14 +448,14 @@ export const storyMedia = pgTable("story_media", {
 
 export const storyLikes = pgTable("story_likes", {
   id: serial("id").primaryKey(),
-  storyId: integer("story_id").notNull().references(() => stories.id),
+  storyId: integer("story_id").notNull().references(() => stories.id, { onDelete: "cascade" }),
   userId: varchar("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const storyComments = pgTable("story_comments", {
   id: serial("id").primaryKey(),
-  storyId: integer("story_id").notNull().references(() => stories.id),
+  storyId: integer("story_id").notNull().references(() => stories.id, { onDelete: "cascade" }),
   userId: varchar("user_id").notNull().references(() => users.id),
   text: text("text").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -463,7 +463,7 @@ export const storyComments = pgTable("story_comments", {
 
 export const storyViews = pgTable("story_views", {
   id: serial("id").primaryKey(),
-  storyId: integer("story_id").notNull().references(() => stories.id),
+  storyId: integer("story_id").notNull().references(() => stories.id, { onDelete: "cascade" }),
   userId: varchar("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });

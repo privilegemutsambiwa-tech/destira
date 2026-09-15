@@ -1098,7 +1098,8 @@ IMPORTANT PRIVACY GUARDRAIL: Under NO circumstances reveal any of the following:
     return cleaned;
   }
 
-  async function buildTwinSystemPrompt(userId: string, profile: any): Promise<string> {
+  async function buildTwinSystemPrompt(userId: string, profile: any | null | undefined): Promise<string> {
+    profile = profile || {};
     const structuredProfile = await storage.getTwinProfileStructured(userId);
     const memorySummary = await storage.getTwinMemorySummary(userId);
     const memoryFacts = await storage.getTwinMemoryFacts(userId, 20);
@@ -1175,6 +1176,13 @@ IMPORTANT PRIVACY GUARDRAIL: Under NO circumstances reveal any of the following:
     const progressTowardHundred = Math.min(questionsAnswered, 100);
     const remainingToFull = Math.max(0, 100 - progressTowardHundred);
 
+    // True once we have *something* concrete about the user — a written persona,
+    // structured traits, onboarding answers, or facts learned from prior chats.
+    // When none of that exists yet (brand-new user, hasn't touched onboarding),
+    // the twin is starting completely cold and needs stronger discovery framing
+    // than the steady-state "weave in a question" nudge below.
+    const hasAnyProfileSignal = !!(profile.twinPersona || structuredSection || onboardingSection || memoryFacts.length);
+
     let questionWeavingSection = "";
     if (progressTowardHundred < 100) {
       const unansweredFromBank = questionsAnswered < ALL_TWIN_QUESTIONS.length
@@ -1188,8 +1196,15 @@ IMPORTANT PRIVACY GUARDRAIL: Under NO circumstances reveal any of the following:
 
 QUESTION WEAVING (IMPORTANT):
 CONTEXT: The user has answered ${progressTowardHundred} out of 100 personality questions. There are ${remainingToFull} remaining to fully train the Twin. You are still learning about them.
-Every 2-3 exchanges, naturally weave in ONE personality/relationship question as part of the conversation flow. Never ask them as a list or label them. Make them feel like a natural follow-up thought, e.g. "That reminds me — I've been curious..." or "Speaking of that, what's..." or "Quick thought...". Pick whichever fits the conversation context best. Occasionally (every 10+ exchanges) you may gently mention that chatting helps train your Twin memory.${bankSection}`;
+This must never feel like an interview, a questionnaire, or a rigid onboarding flow — you are not administering a survey. Every 2-3 exchanges, naturally weave in ONE personality/relationship question as part of the conversation flow. Never ask them as a list or label them. Make them feel like a natural follow-up thought, e.g. "That reminds me — I've been curious..." or "Speaking of that, what's..." or "Quick thought...". Pick whichever fits the conversation context best. Occasionally (every 10+ exchanges) you may gently mention that chatting helps train your Twin memory.${bankSection}`;
     }
+
+    const discoveryModeSection = !hasAnyProfileSignal
+      ? `
+
+FIRST CONVERSATION — GETTING TO KNOW THEM:
+You don't know this person yet — no profile, no onboarding answers, nothing. Don't mention that or treat it as a gap to fill. Introduce yourself warmly and briefly as their Twin, then just talk like a curious, empathetic new match would: ask about their day, their vibe, what they're into — whatever fits what they just said. Let their values, boundaries, humor, communication style, and interests surface naturally over the course of real conversation, one organic thread at a time, never as a checklist or back-to-back questions. It should feel like getting to know a person, not filling out a form.`
+      : "";
 
     return `You are the user's personal AI Twin on Destira, a dating app. You chat like a real friend on WhatsApp - warm, concise, and human.
 
@@ -1204,9 +1219,9 @@ CONVERSATION RULES (CRITICAL):
 
 TONE: You are ${toneStyle}, with ${verbosity} verbosity, ${emojiUsage} emoji usage, and ${formality} formality.
 
-Your role: Help the user reflect on dating, relationships, and self-understanding. You learn from conversations and their profile data.${questionWeavingSection}
+Your role: Help the user reflect on dating, relationships, and self-understanding. You learn from conversations and their profile data.${discoveryModeSection}${questionWeavingSection}
 
-${profile.twinPersona || "You are friendly, open, and genuine."}${structuredSection}${onboardingSection}${memorySection}
+${profile.twinPersona || "You are friendly, open, and genuine — still getting to know this person."}${structuredSection}${onboardingSection}${memorySection}
 
 ${PRIVACY_GUARDRAIL}`;
   }
@@ -1470,10 +1485,10 @@ Only include structured_updates fields if the conversation clearly reveals them.
     if (!checkAIRateLimit(userId)) return res.status(429).json({ message: "Too many requests. Please wait a moment." });
     const { message, stream: useStream } = req.body;
     try {
+      // No gate on profile/twinPersona/onboarding completeness — buildTwinSystemPrompt
+      // fills in sensible defaults and steers the twin to get to know the user
+      // conversationally when this data is thin or missing.
       const profile = await storage.getProfile(userId);
-      if (!profile || !profile.twinPersona) {
-        return res.status(400).json({ message: "Complete onboarding first" });
-      }
       const memory = await storage.getTwinMemory(userId, 20);
       const memoryMessages = memory.reverse().map(m => ({
         role: m.role as "user" | "assistant",
@@ -1554,7 +1569,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         res.json({ response: aiResponse });
       }
     } catch (e) {
-      console.error("Twin self-chat error:", e);
+      console.error("Twin Chat Error:", e);
       const fallback = "I'm here for you. Let's talk about what's on your mind.";
       await storage.addTwinMemory(userId, fallback, "assistant");
       if (useStream) {
