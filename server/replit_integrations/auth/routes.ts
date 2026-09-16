@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { authStorage } from "./storage";
 import { isAuthenticated, createSessionUser } from "./replitAuth";
 import { hashPassword, verifyPassword } from "./password";
+import { supabaseAuthClient } from "./supabase";
 import type { User } from "@shared/models/auth";
 import * as referrals from "../../referrals";
 
@@ -172,6 +173,66 @@ export function registerAuthRoutes(app: Express): void {
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ message: "Failed to log in" });
+    }
+  });
+
+  // Completes a Google sign-in: the client already ran Supabase's OAuth
+  // flow and got a Supabase session back. Here we verify that session's
+  // access token against Supabase (proves it's real, not just any string
+  // the client sent), then create-or-link our own user record by email and
+  // establish our own session cookie exactly like /login and /signup do.
+  app.post("/api/auth/google-callback", async (req: any, res) => {
+    try {
+      const { access_token } = req.body || {};
+      if (typeof access_token !== "string" || !access_token) {
+        return res.status(400).json({ message: "Missing access token" });
+      }
+      if (!supabaseAuthClient) {
+        return res.status(500).json({ message: "Google sign-in is not configured" });
+      }
+
+      const { data, error } = await supabaseAuthClient.auth.getUser(access_token);
+      if (error || !data?.user?.email) {
+        return res.status(401).json({ message: "Could not verify Google sign-in" });
+      }
+
+      const normalizedEmail = data.user.email.trim().toLowerCase();
+      const meta = (data.user.user_metadata ?? {}) as Record<string, unknown>;
+      const fullName = typeof meta.full_name === "string" ? meta.full_name : typeof meta.name === "string" ? meta.name : "";
+      const avatarUrl = typeof meta.avatar_url === "string" ? meta.avatar_url : typeof meta.picture === "string" ? meta.picture : undefined;
+
+      let firstName: string | undefined;
+      let lastName: string | undefined;
+      if (fullName.trim()) {
+        const parts = fullName.trim().split(/\s+/);
+        firstName = parts.shift();
+        lastName = parts.length ? parts.join(" ") : undefined;
+      }
+
+      let user = await authStorage.getUserByEmail(normalizedEmail);
+      if (user) {
+        if (avatarUrl && !user.profileImageUrl) {
+          user = await authStorage.updateUser(user.id, { profileImageUrl: avatarUrl });
+        }
+      } else {
+        user = await authStorage.createUser({
+          email: normalizedEmail,
+          firstName,
+          lastName,
+          profileImageUrl: avatarUrl,
+        });
+      }
+
+      req.login(createSessionUser(user), (err: any) => {
+        if (err) {
+          console.error("[google-callback] req.login failed:", err);
+          return res.status(500).json({ message: "Signed in with Google, but session setup failed." });
+        }
+        res.json(sanitizeUser(user));
+      });
+    } catch (error) {
+      console.error("Google callback error:", error);
+      res.status(500).json({ message: "Google sign-in failed" });
     }
   });
 }

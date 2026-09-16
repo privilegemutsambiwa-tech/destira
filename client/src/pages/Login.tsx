@@ -1,9 +1,12 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
 import { DestiraLockup } from "@/components/brand/logo";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/lib/supabase";
+import { consumePendingInvite } from "@/lib/pending-invite";
 
 const INPUT =
   "w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-11 text-sm text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow";
@@ -17,10 +20,17 @@ export default function Login() {
   const [company, setCompany] = useState(""); // honeypot
   const [error, setError] = useState<string | null>(null);
   const [demoLoading, setDemoLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const goHome = () => {
+    const pendingInvite = consumePendingInvite();
+    setLocation(pendingInvite ? `/join/${pendingInvite}` : "/");
+  };
 
   useEffect(() => {
-    if (!isLoading && user) setLocation("/");
-  }, [user, isLoading, setLocation]);
+    if (!isLoading && user) goHome();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, isLoading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,9 +42,24 @@ export default function Login() {
     }
     try {
       await login({ email: email.trim(), password });
-      setLocation("/");
+      goHome();
     } catch {
       setError("Email or password is wrong.");
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError(null);
+    setGoogleLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (error) throw error;
+    } catch {
+      setError("Couldn't start Google sign-in. Try again.");
+      setGoogleLoading(false);
     }
   };
 
@@ -131,6 +156,23 @@ export default function Login() {
               {isLoggingIn ? "Logging in…" : "Log in"}
             </button>
           </form>
+
+          <div className="my-4 flex items-center gap-3" aria-hidden="true">
+            <div className="h-px flex-1 bg-vf-line" />
+            <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">or</span>
+            <div className="h-px flex-1 bg-vf-line" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={googleLoading}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-full border border-vf-line text-vf-text hover:border-vf-text/25 h-11 text-sm font-medium transition-colors disabled:opacity-50"
+            data-testid="button-google-login"
+          >
+            {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FcGoogle className="w-4 h-4" />}
+            {googleLoading ? "Redirecting…" : "Continue with Google"}
+          </button>
 
           <button
             onClick={handleDemo}

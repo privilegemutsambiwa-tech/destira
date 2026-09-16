@@ -27,6 +27,11 @@ export default defineConfig({
     },
   },
   root: path.resolve(import.meta.dirname, "client"),
+  // The project's single .env file lives at the repo root, not under
+  // client/ (Vite's default envDir is `root`). Point it there so
+  // VITE_-prefixed vars in the same .env the server reads via
+  // `tsx --env-file=.env` are also picked up by import.meta.env.
+  envDir: import.meta.dirname,
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,

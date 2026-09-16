@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
 import { DestiraLockup } from "@/components/brand/logo";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/lib/supabase";
 import { ageFromDob, MIN_AGE } from "@shared/essentials";
+import { consumePendingInvite } from "@/lib/pending-invite";
 
 const INPUT =
   "w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-11 text-sm text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow";
@@ -54,6 +57,7 @@ export default function Signup() {
   const [company, setCompany] = useState(""); // honeypot
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const { step, email, name, dob, city } = progress;
   const patch = (p: Partial<Progress>) => setProgress((cur) => ({ ...cur, ...p }));
@@ -92,7 +96,23 @@ export default function Signup() {
     } catch {
       /* noop */
     }
-    setLocation("/");
+    const pendingInvite = consumePendingInvite();
+    setLocation(pendingInvite ? `/join/${pendingInvite}` : "/");
+  };
+
+  const handleGoogleSignup = async () => {
+    setError(null);
+    setGoogleLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (error) throw error;
+    } catch {
+      setError("Couldn't start Google sign-in. Try again.");
+      setGoogleLoading(false);
+    }
   };
 
   const patchProfile = async (body: Record<string, unknown>) => {
@@ -228,6 +248,23 @@ export default function Signup() {
               >
                 {isSigningUp && <Loader2 className="w-4 h-4 animate-spin" />}
                 {isSigningUp ? "Creating account…" : "Continue"}
+              </button>
+
+              <div className="flex items-center gap-3" aria-hidden="true">
+                <div className="h-px flex-1 bg-vf-line" />
+                <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">or</span>
+                <div className="h-px flex-1 bg-vf-line" />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGoogleSignup}
+                disabled={googleLoading}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-full border border-vf-line text-vf-text hover:border-vf-text/25 h-11 text-sm font-medium transition-colors disabled:opacity-50"
+                data-testid="button-google-signup"
+              >
+                {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FcGoogle className="w-4 h-4" />}
+                {googleLoading ? "Redirecting…" : "Continue with Google"}
               </button>
             </form>
           )}

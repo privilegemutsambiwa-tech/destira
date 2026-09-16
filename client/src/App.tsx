@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
 import { DestiraMark } from "@/components/brand/logo";
+import { consumePendingInvite } from "@/lib/pending-invite";
 import { useEffect, lazy, Suspense } from "react";
 
 // Code-split and NOT linked from anywhere in the member app (no nav item, no
@@ -17,6 +18,7 @@ import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
+import AuthCallback from "@/pages/AuthCallback";
 import Onboarding from "@/pages/Onboarding";
 import Profile from "@/pages/Profile";
 import ProfileView from "@/pages/ProfileView";
@@ -73,7 +75,17 @@ function AuthenticatedHome() {
 
   useEffect(() => {
     if (!isLoading) {
-      if (!profile || !profile.gender) {
+      // A fallback checkpoint for a pending group invite — Login/Signup's
+      // own redirects (client/src/lib/pending-invite.ts) are the primary
+      // path, but a page refresh mid-flow could land here first. Takes
+      // priority over onboarding: joining a group doesn't need a finished
+      // profile, and the whole point is not dropping this person on
+      // Discover (or essentials/onboarding) instead of the group they came
+      // from a WhatsApp forward to actually join.
+      const pendingInvite = consumePendingInvite();
+      if (pendingInvite) {
+        setLocation(`/join/${pendingInvite}`);
+      } else if (!profile || !profile.gender) {
         // Matching essentials come first — before the soul-mapping questions.
         setLocation("/essentials");
       } else if (!profile.onboardingCompleted) {
@@ -107,6 +119,7 @@ function Router() {
       <Route path="/" component={user ? AuthenticatedHome : Landing} />
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/auth/callback" component={AuthCallback} />
 
       <Route path="/essentials">
         <ProtectedRoute component={Essentials} />
