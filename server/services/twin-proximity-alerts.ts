@@ -101,6 +101,8 @@ export function placePhrase(placeType: string, name: string): { label: string; w
       return { label: name, where: "in this building" };
     case "mall":
       return { label: name, where: `at ${name}` };
+    case "suburb":
+      return { label: name, where: `in ${name}` };
     default:
       return { label: name, where: `at ${name}` };
   }

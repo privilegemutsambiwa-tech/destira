@@ -4541,6 +4541,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     await eventsService.seedSuburbCentroids();
     await eventsService.seedPlaces();
     await eventsService.seedProximityPlaces();
+    await eventsService.seedNeighborhoodPlaces();
     await eventsService.seedEvents();
     await eventsService.backfillSeedEventsV2();
     console.log("Demo events + suburb centroids + places seeded.");

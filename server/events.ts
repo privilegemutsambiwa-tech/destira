@@ -725,7 +725,9 @@ export async function listContactViews(
 }
 
 // Real Harare + Bulawayo venues — a host matching one of these gets the
-// frictionless (venue_verified) path. Idempotent.
+// frictionless (venue_verified) path. Upserted by name (see upsertPlace) so a
+// radius/coordinate tweak here also reaches a database that already ran this
+// seed once — not just fresh installs.
 const REAL_PLACES: Array<{
   name: string; addressLine: string; suburb: string; city: string;
   lat: string; lng: string; verified: boolean;
@@ -746,68 +748,113 @@ const REAL_PLACES: Array<{
   { name: "Kelvin's Restaurant", addressLine: "Kumalo Shopping Centre", suburb: "Kumalo", city: "Bulawayo", lat: "-20.150000", lng: "28.600000", verified: true },
 ];
 
+// Small real venues (cafes, clubs) — a slightly generous radius over the
+// building footprint so "resolved" doesn't miss someone at the next table
+// because their GPS fix drifted 100m, without being so wide it swallows the
+// block next door.
+const REAL_PLACE_RADIUS_M = 180;
+
+// Insert a place the first time it's seen; on every later run, update its
+// coordinates/radius/type/name to match the current seed data instead of
+// leaving old rows stuck at whatever was seeded originally. Matched by name,
+// since `places` has no unique constraint to upsert against in SQL.
+async function upsertPlace(p: {
+  name: string; addressLine: string; suburb: string; city: string;
+  lat: string; lng: string; placeType?: string; radiusM: number; verified: boolean;
+}): Promise<void> {
+  const [existing] = await db.select({ id: places.id }).from(places).where(eq(places.name, p.name)).limit(1);
+  const values = {
+    addressLine: p.addressLine,
+    suburb: p.suburb,
+    city: p.city,
+    lat: p.lat,
+    lng: p.lng,
+    placeType: p.placeType ?? "venue",
+    radiusM: p.radiusM,
+    verifiedAt: p.verified ? new Date() : null,
+  };
+  if (existing) {
+    await db.update(places).set(values).where(eq(places.id, existing.id));
+  } else {
+    await db.insert(places).values({ name: p.name, ...values });
+  }
+}
+
 export async function seedPlaces(): Promise<void> {
-  const existing = await db.select({ id: places.id }).from(places).limit(1);
-  if (existing.length > 0) return;
-  const now = new Date();
-  await db.insert(places).values(
-    REAL_PLACES.map((p) => ({
-      name: p.name,
-      addressLine: p.addressLine,
-      suburb: p.suburb,
-      city: p.city,
-      lat: p.lat,
-      lng: p.lng,
-      verifiedAt: p.verified ? now : null,
-    })),
-  );
+  for (const p of REAL_PLACES) {
+    await upsertPlace({ ...p, radiusM: REAL_PLACE_RADIUS_M });
+  }
 }
 
 // Proximity gazetteer: campuses, malls, office parks, transit ranks. Curated on
 // purpose — "someone at UZ" is only uncanny if it's a real named place, not a
-// reverse-geocoded road. Grows via user-declared "I'm at…" places. Idempotent
-// via a sentinel row.
+// reverse-geocoded road. Grows via user-declared "I'm at…" places.
+//
+// Radii here are deliberately generous relative to the footprint of each
+// place type — the original 80–400m band meant a real user in Harare rarely
+// actually landed inside one, so proximity alerts almost never fired even
+// for people genuinely nearby. Widening trades a little precision (someone
+// across the road from a mall may register as "at" it) for the feature
+// actually doing its job. Upserted by name — see upsertPlace — so widening a
+// radius here also reaches a database that already ran this seed.
 const PROXIMITY_PLACES: Array<{
   name: string; addressLine: string; suburb: string; city: string;
   lat: string; lng: string; placeType: string; radiusM: number;
 }> = [
-  { name: "University of Zimbabwe", addressLine: "630 Churchill Ave, Mount Pleasant", suburb: "Mount Pleasant", city: "Harare", lat: "-17.784200", lng: "31.052900", placeType: "campus", radiusM: 400 },
-  { name: "Harare Institute of Technology", addressLine: "Ganges Rd, Belvedere", suburb: "Belvedere", city: "Harare", lat: "-17.848000", lng: "31.010000", placeType: "campus", radiusM: 300 },
-  { name: "Africa University", addressLine: "Old Mutare Rd", suburb: "Mutare", city: "Mutare", lat: "-18.878000", lng: "32.640000", placeType: "campus", radiusM: 400 },
-  { name: "National University of Science & Technology", addressLine: "Cnr Gwanda Rd & Cecil Ave", suburb: "Ascot", city: "Bulawayo", lat: "-20.176000", lng: "28.635000", placeType: "campus", radiusM: 400 },
-  { name: "Midlands State University", addressLine: "Senga Rd", suburb: "Senga", city: "Gweru", lat: "-19.520000", lng: "29.830000", placeType: "campus", radiusM: 400 },
-  { name: "Sam Levy's Village", addressLine: "Borrowdale Rd", suburb: "Borrowdale", city: "Harare", lat: "-17.749800", lng: "31.083500", placeType: "mall", radiusM: 150 },
-  { name: "Westgate Shopping Centre", addressLine: "Bulawayo Rd", suburb: "Westgate", city: "Harare", lat: "-17.777000", lng: "30.973000", placeType: "mall", radiusM: 150 },
-  { name: "Eastgate Mall", addressLine: "Robert Mugabe Rd", suburb: "CBD", city: "Harare", lat: "-17.829000", lng: "31.052000", placeType: "mall", radiusM: 120 },
-  { name: "Joina City", addressLine: "Cnr Jason Moyo Ave & Julius Nyerere Way", suburb: "CBD", city: "Harare", lat: "-17.831000", lng: "31.047000", placeType: "mall", radiusM: 100 },
-  { name: "Avondale Shopping Centre", addressLine: "King George Rd", suburb: "Avondale", city: "Harare", lat: "-17.797500", lng: "31.038500", placeType: "mall", radiusM: 120 },
-  { name: "Arundel Village", addressLine: "Quorn Ave", suburb: "Mount Pleasant", city: "Harare", lat: "-17.773000", lng: "31.058000", placeType: "mall", radiusM: 120 },
-  { name: "Bradfield Shopping Centre", addressLine: "Percy Ibbotson Ave", suburb: "Bradfield", city: "Bulawayo", lat: "-20.170000", lng: "28.600000", placeType: "mall", radiusM: 120 },
-  { name: "Msasa Industrial Park", addressLine: "Mutare Rd", suburb: "Msasa", city: "Harare", lat: "-17.845000", lng: "31.115000", placeType: "office", radiusM: 200 },
-  { name: "Newlands Office Park", addressLine: "Enterprise Rd", suburb: "Newlands", city: "Harare", lat: "-17.796000", lng: "31.075000", placeType: "office", radiusM: 120 },
-  { name: "Eastgate / Rezende St taxi rank", addressLine: "Rezende St", suburb: "CBD", city: "Harare", lat: "-17.830500", lng: "31.051000", placeType: "transit", radiusM: 80 },
-  { name: "Fourth Street Bus Terminus", addressLine: "Fourth St", suburb: "CBD", city: "Harare", lat: "-17.826000", lng: "31.049000", placeType: "transit", radiusM: 100 },
-  { name: "Mbare Musika", addressLine: "Chaminuka Rd", suburb: "Mbare", city: "Harare", lat: "-17.855000", lng: "31.033000", placeType: "transit", radiusM: 150 },
-  { name: "Renkini Bus Terminus", addressLine: "6th Ave Extension", suburb: "CBD", city: "Bulawayo", lat: "-20.163000", lng: "28.585000", placeType: "transit", radiusM: 120 },
+  { name: "University of Zimbabwe", addressLine: "630 Churchill Ave, Mount Pleasant", suburb: "Mount Pleasant", city: "Harare", lat: "-17.784200", lng: "31.052900", placeType: "campus", radiusM: 600 },
+  { name: "Harare Institute of Technology", addressLine: "Ganges Rd, Belvedere", suburb: "Belvedere", city: "Harare", lat: "-17.848000", lng: "31.010000", placeType: "campus", radiusM: 500 },
+  { name: "Africa University", addressLine: "Old Mutare Rd", suburb: "Mutare", city: "Mutare", lat: "-18.878000", lng: "32.640000", placeType: "campus", radiusM: 600 },
+  { name: "National University of Science & Technology", addressLine: "Cnr Gwanda Rd & Cecil Ave", suburb: "Ascot", city: "Bulawayo", lat: "-20.176000", lng: "28.635000", placeType: "campus", radiusM: 600 },
+  { name: "Midlands State University", addressLine: "Senga Rd", suburb: "Senga", city: "Gweru", lat: "-19.520000", lng: "29.830000", placeType: "campus", radiusM: 600 },
+  { name: "Sam Levy's Village", addressLine: "Borrowdale Rd", suburb: "Borrowdale", city: "Harare", lat: "-17.749800", lng: "31.083500", placeType: "mall", radiusM: 250 },
+  { name: "Westgate Shopping Centre", addressLine: "Bulawayo Rd", suburb: "Westgate", city: "Harare", lat: "-17.777000", lng: "30.973000", placeType: "mall", radiusM: 250 },
+  { name: "Eastgate Mall", addressLine: "Robert Mugabe Rd", suburb: "CBD", city: "Harare", lat: "-17.829000", lng: "31.052000", placeType: "mall", radiusM: 200 },
+  { name: "Joina City", addressLine: "Cnr Jason Moyo Ave & Julius Nyerere Way", suburb: "CBD", city: "Harare", lat: "-17.831000", lng: "31.047000", placeType: "mall", radiusM: 180 },
+  { name: "Avondale Shopping Centre", addressLine: "King George Rd", suburb: "Avondale", city: "Harare", lat: "-17.797500", lng: "31.038500", placeType: "mall", radiusM: 200 },
+  { name: "Arundel Village", addressLine: "Quorn Ave", suburb: "Mount Pleasant", city: "Harare", lat: "-17.773000", lng: "31.058000", placeType: "mall", radiusM: 200 },
+  { name: "Bradfield Shopping Centre", addressLine: "Percy Ibbotson Ave", suburb: "Bradfield", city: "Bulawayo", lat: "-20.170000", lng: "28.600000", placeType: "mall", radiusM: 200 },
+  { name: "Msasa Industrial Park", addressLine: "Mutare Rd", suburb: "Msasa", city: "Harare", lat: "-17.845000", lng: "31.115000", placeType: "office", radiusM: 350 },
+  { name: "Newlands Office Park", addressLine: "Enterprise Rd", suburb: "Newlands", city: "Harare", lat: "-17.796000", lng: "31.075000", placeType: "office", radiusM: 250 },
+  { name: "Eastgate / Rezende St taxi rank", addressLine: "Rezende St", suburb: "CBD", city: "Harare", lat: "-17.830500", lng: "31.051000", placeType: "transit", radiusM: 200 },
+  { name: "Fourth Street Bus Terminus", addressLine: "Fourth St", suburb: "CBD", city: "Harare", lat: "-17.826000", lng: "31.049000", placeType: "transit", radiusM: 200 },
+  { name: "Mbare Musika", addressLine: "Chaminuka Rd", suburb: "Mbare", city: "Harare", lat: "-17.855000", lng: "31.033000", placeType: "transit", radiusM: 300 },
+  { name: "Renkini Bus Terminus", addressLine: "6th Ave Extension", suburb: "CBD", city: "Bulawayo", lat: "-20.163000", lng: "28.585000", placeType: "transit", radiusM: 250 },
 ];
 
 export async function seedProximityPlaces(): Promise<void> {
-  const [sentinel] = await db.select({ id: places.id }).from(places).where(eq(places.name, "University of Zimbabwe")).limit(1);
-  if (sentinel) return;
-  const now = new Date();
-  await db.insert(places).values(
-    PROXIMITY_PLACES.map((p) => ({
-      name: p.name,
-      addressLine: p.addressLine,
-      suburb: p.suburb,
-      city: p.city,
-      lat: p.lat,
-      lng: p.lng,
-      placeType: p.placeType,
-      radiusM: p.radiusM,
-      verifiedAt: now,
-    })),
-  );
+  for (const p of PROXIMITY_PLACES) {
+    await upsertPlace({ ...p, verified: true });
+  }
+}
+
+// Neighborhood-level coverage. The gazetteer above skews heavily toward the
+// affluent northern suburbs and a handful of CBD landmarks — it has zero
+// points anywhere near Chitungwiza or Harare's high-density southwestern
+// suburbs, despite those holding a huge share of the population. These are
+// suburb-centroid accuracy (not a single building), so the radius is large
+// on purpose: this is "someone's in this neighborhood right now," a coarser
+// claim than "someone's at this specific mall." Coordinates from public
+// gazetteer sources (Wikipedia / GPS lookup sites), verified before adding —
+// see the PR description for sources.
+const NEIGHBORHOOD_PLACES: Array<{
+  name: string; addressLine: string; suburb: string; city: string;
+  lat: string; lng: string;
+}> = [
+  { name: "Chitungwiza Town Centre", addressLine: "Chitungwiza", suburb: "Chitungwiza", city: "Chitungwiza", lat: "-17.993890", lng: "31.048060" },
+  { name: "Highfield", addressLine: "Highfield", suburb: "Highfield", city: "Harare", lat: "-17.895300", lng: "30.990800" },
+  { name: "Glen View", addressLine: "Glen View", suburb: "Glen View", city: "Harare", lat: "-17.902700", lng: "30.944200" },
+  { name: "Kuwadzana", addressLine: "Kuwadzana", suburb: "Kuwadzana", city: "Harare", lat: "-17.833300", lng: "30.933300" },
+  { name: "Epworth", addressLine: "Epworth", suburb: "Epworth", city: "Harare", lat: "-17.890000", lng: "31.147500" },
+  { name: "Nkulumane", addressLine: "Nkulumane", suburb: "Nkulumane", city: "Bulawayo", lat: "-20.186700", lng: "28.510400" },
+  { name: "Sakubva", addressLine: "Sakubva", suburb: "Sakubva", city: "Mutare", lat: "-18.983300", lng: "32.650000" },
+  { name: "Gweru CBD", addressLine: "Gweru CBD", suburb: "CBD", city: "Gweru", lat: "-19.450000", lng: "29.816700" },
+];
+const NEIGHBORHOOD_RADIUS_M = 800;
+
+export async function seedNeighborhoodPlaces(): Promise<void> {
+  for (const p of NEIGHBORHOOD_PLACES) {
+    await upsertPlace({ ...p, placeType: "suburb", radiusM: NEIGHBORHOOD_RADIUS_M, verified: true });
+  }
 }
 
 // Idempotent, mirrors storage.seedDemoData()'s "if any exist, skip" pattern.
