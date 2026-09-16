@@ -25,6 +25,19 @@ export const client = databaseUrl
     })
   : new PGlite(process.env.PGLITE_DATA_DIR || path.join(process.cwd(), ".localdb"));
 
+// node-postgres pools emit 'error' when a hosted pooler (e.g. Supabase's)
+// drops an idle connection — with no listener, that's an unhandled 'error'
+// event, which Node treats as fatal and kills the whole process. This one
+// Pool is shared by Drizzle and both connect-pg-simple session stores
+// (replitAuth.ts, admin/session.ts), so a single handler here covers all of
+// them; pg-pool itself already drops the dead client and reconnects on the
+// next query.
+if (databaseUrl) {
+  (client as Pool).on("error", (err) => {
+    console.error("[pg pool] idle client error (non-fatal):", err.message);
+  });
+}
+
 export const db = (databaseUrl ? drizzlePg(client as Pool, { schema }) : drizzlePglite(client as PGlite, { schema })) as ReturnType<
   typeof drizzlePg<typeof schema>
 >;
