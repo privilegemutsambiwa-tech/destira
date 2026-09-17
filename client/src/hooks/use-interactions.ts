@@ -1062,6 +1062,7 @@ export function useFeedStories() {
 }
 
 export function useCreateStory() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (formData: FormData) => {
       const res = await fetch("/api/stories", {

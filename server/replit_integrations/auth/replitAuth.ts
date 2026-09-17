@@ -17,10 +17,30 @@
 
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import pgSession from "connect-pg-simple";
 import passport from "passport";
 import type { Express, RequestHandler } from "express";
+import { client as dbClient } from "../../db";
+import { Pool } from "pg";
 
 const MemoryStore = createMemoryStore(session);
+
+// Production (DATABASE_URL set): connect-pg-simple against the `express_sessions`
+// table (shared/models/auth.ts's `sessions` table — managed by connect-pg-simple,
+// not Drizzle migrations), on the same Postgres `client` server/db.ts already
+// opened. Sessions survive a restart and are shared across instances, matching
+// the admin session store's approach (server/admin/session.ts). Local dev
+// (PGlite, no DATABASE_URL): connect-pg-simple needs a real `pg` connection,
+// which PGlite isn't, so dev keeps the in-memory store.
+const SESSION_TABLE = "express_sessions";
+const memberSessionStore = process.env.DATABASE_URL
+  ? new (pgSession(session))({
+      pool: dbClient as Pool,
+      tableName: SESSION_TABLE,
+      createTableIfMissing: true,
+      pruneSessionInterval: 60 * 15,
+    })
+  : new MemoryStore({ checkPeriod: 7 * 24 * 60 * 60 * 1000 });
 
 // Sessions here aren't OAuth tokens with a real expiry, so we set a
 // far-future "exp" — this keeps any token-freshness checks elsewhere in the
@@ -68,7 +88,7 @@ export function getSession() {
 
   return session({
     secret: process.env.SESSION_SECRET || "local-dev-insecure-secret",
-    store: new MemoryStore({ checkPeriod: sessionTtl }),
+    store: memberSessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
