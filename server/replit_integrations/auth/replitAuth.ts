@@ -37,7 +37,13 @@ const memberSessionStore = process.env.DATABASE_URL
   ? new (pgSession(session))({
       pool: dbClient as Pool,
       tableName: SESSION_TABLE,
-      createTableIfMissing: true,
+      // false, not true: createTableIfMissing reads connect-pg-simple's
+      // bundled table.sql from disk relative to the module, but esbuild
+      // flattens everything into dist/index.cjs without that file --
+      // ENOENT on every boot in production, table present or not. The
+      // table already exists (created once, by hand); Drizzle doesn't
+      // manage it (see shared/models/auth.ts).
+      createTableIfMissing: false,
       pruneSessionInterval: 60 * 15,
     })
   : new MemoryStore({ checkPeriod: 7 * 24 * 60 * 60 * 1000 });

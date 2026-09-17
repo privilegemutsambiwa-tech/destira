@@ -64,7 +64,13 @@ function withAll(store: InstanceType<ReturnType<typeof pgSession>>, pool: Pool, 
 const ADMIN_SESSION_TABLE = "admin_session";
 export const adminSessionStore = process.env.DATABASE_URL
   ? withAll(
-      new (pgSession(session))({ pool: dbClient as Pool, tableName: ADMIN_SESSION_TABLE, createTableIfMissing: true, pruneSessionInterval: 60 * 15 }),
+      // false, not true: createTableIfMissing reads connect-pg-simple's
+      // bundled table.sql from disk relative to the module, but esbuild
+      // flattens everything into dist/index.cjs without that file --
+      // ENOENT on every boot in production, table present or not. The
+      // table now exists (created once, by hand, same shape as
+      // express_sessions: sid/sess jsonb/expire + an expire index).
+      new (pgSession(session))({ pool: dbClient as Pool, tableName: ADMIN_SESSION_TABLE, createTableIfMissing: false, pruneSessionInterval: 60 * 15 }),
       dbClient as Pool,
       ADMIN_SESSION_TABLE,
     )
