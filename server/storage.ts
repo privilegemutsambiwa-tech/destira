@@ -118,6 +118,7 @@ export interface IStorage {
   getMatch(id: number): Promise<Match | undefined>;
   updateMatchStatus(id: number, status: string): Promise<Match>;
   getMatchBetweenUsers(user1Id: string, user2Id: string): Promise<Match | undefined>;
+  getActiveMatchBetweenUsers(user1Id: string, user2Id: string): Promise<Match | undefined>;
   getMatchesWithProfiles(userId: string): Promise<any[]>;
   softDeleteChat(matchId: number, userId: string): Promise<Match>;
   unmatch(matchId: number): Promise<Match>;
@@ -670,6 +671,23 @@ export class DatabaseStorage implements IStorage {
     const [match] = await db.select().from(matches).where(
       and(
         eq(matches.status, "matched"),
+        or(
+          and(eq(matches.user1Id, user1Id), eq(matches.user2Id, user2Id)),
+          and(eq(matches.user1Id, user2Id), eq(matches.user2Id, user1Id))
+        )
+      )
+    );
+    return match;
+  }
+
+  // Unlike getMatchBetweenUsers (matched only), this also catches a pending
+  // request already sitting between the pair — used to stop a repeated
+  // "like" from inserting a second pending row that'd double them up on the
+  // incoming-likes page.
+  async getActiveMatchBetweenUsers(user1Id: string, user2Id: string): Promise<Match | undefined> {
+    const [match] = await db.select().from(matches).where(
+      and(
+        or(eq(matches.status, "matched"), eq(matches.status, "pending")),
         or(
           and(eq(matches.user1Id, user1Id), eq(matches.user2Id, user2Id)),
           and(eq(matches.user1Id, user2Id), eq(matches.user2Id, user1Id))

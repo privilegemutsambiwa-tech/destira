@@ -38,6 +38,7 @@ import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } f
 import * as referralsService from "./referrals";
 import { referralClaimSchema } from "@shared/schema";
 import * as disclosure from "./disclosure";
+import * as groupInvite from "./group-invite";
 import { registerAdminConsole } from "./admin";
 import * as emailTemplates from "./email/templates";
 import { setAdminLockoutHook } from "./admin/auth";
@@ -1042,7 +1043,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const g = await gate.checkGate(userId, "daily_likes", { countOverride: currentLikes });
       if (!g.ok) return res.status(403).json(gate.gateBody(g, "daily_likes"));
 
-      const existing = await storage.getMatchBetweenUsers(userId, targetId);
+      const existing = await storage.getActiveMatchBetweenUsers(userId, targetId);
       if (existing) {
         return res.status(409).json({ message: "Match request already exists", match: existing });
       }
@@ -2053,7 +2054,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
       const existing = await storage.getUserAnswer(userId, questionId);
       if (existing) return res.status(400).json({ message: "Already answered" });
 
-      const userAnswer = await storage.submitAnswer(userId, questionId, answer, null, null, isPrivate);
+      const userAnswer = await storage.submitAnswer(userId, questionId, answer, null, undefined, isPrivate);
 
       storage.upsertTwinProfileStructured(userId, {}).catch(() => {});
 
@@ -2415,13 +2416,22 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const isMember = await storage.isGroupMember(link.groupId, userId);
       if (isMember) return res.status(409).json({ message: "Already a member", groupId: link.groupId });
 
+      const inviteGroup = await storage.getGroup(link.groupId);
+      if (!inviteGroup) return res.status(404).json({ message: "Invalid or expired invite link" });
+
+      if (typeof inviteGroup.maxMembers === "number") {
+        const currentCount = (await storage.getGroupMembers(link.groupId)).length;
+        if (currentCount >= inviteGroup.maxMembers) {
+          return res.status(409).json({ message: "group_full", groupName: inviteGroup.name });
+        }
+      }
+
       const gj = await gate.checkGate(userId, "join_group");
       if (!gj.ok) {
         return res.status(403).json(gate.gateBody(gj, "join_group"));
       }
 
-      const inviteGroup = await storage.getGroup(link.groupId);
-      if (inviteGroup?.privacyMode === "request-to-join") {
+      if (inviteGroup.privacyMode === "request-to-join") {
         const joinRequest = await storage.createJoinRequest(link.groupId, userId);
         return res.json({ status: "requested", groupId: link.groupId, groupName: inviteGroup.name, request: joinRequest });
       }
@@ -2432,9 +2442,89 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const fallbackNickname = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
       const inviteNickname = inviteJoinerProfile?.groupNickname || fallbackNickname;
       const member = await storage.joinGroup(link.groupId, userId, inviteNickname);
-      res.json({ ...member, groupId: link.groupId, groupName: inviteGroup?.name || "" });
+      res.json({ ...member, groupId: link.groupId, groupName: inviteGroup.name });
     } catch (e) {
       res.status(500).json({ message: "Failed to join via invite" });
+    }
+  });
+
+  // Server-rendered OG/share preview for a group invite. Registered here so
+  // it's matched (registerRoutes runs before setupVite/serveStatic in
+  // server/index.ts) ahead of both the dev Vite catch-all and the prod
+  // static-file catch-all — path-based, not UA-sniffed: deterministic for
+  // curl, Facebook's debugger, and a real browser alike. Real users get the
+  // exact same SPA shell after this, just with a richer <head> already in
+  // place before React even boots.
+  app.get("/join/:token", async (req, res, next) => {
+    try {
+      const rawParam = req.params.token || "";
+      const dashIdx = rawParam.indexOf("-");
+      const token = dashIdx > 0 ? rawParam.slice(dashIdx + 1) : rawParam;
+      const resolution = await groupInvite.resolveInvite(token);
+      const meta = groupInvite.ogMetaFor(req, resolution, rawParam);
+
+      const templatePath =
+        process.env.NODE_ENV === "production"
+          ? path.resolve(__dirname, "public", "index.html")
+          : path.resolve(process.cwd(), "client", "index.html");
+      const template = fs.readFileSync(templatePath, "utf-8");
+      const html = groupInvite.renderInviteHtml(template, meta);
+      res.status(200).set({ "Content-Type": "text/html" }).send(html);
+    } catch (e) {
+      console.error("Invite OG render error:", e);
+      next(); // fall through to the normal SPA shell rather than 500
+    }
+  });
+
+  // Public (auth optional) — the join page's own data fetch. Same
+  // token-resolution as the OG route above it in group-invite.ts, so what a
+  // crawler is told and what this page shows can never drift apart.
+  app.get("/api/groups/join-by-invite/:token/preview", async (req, res) => {
+    const userId = getUserId(req);
+    try {
+      const resolution = await groupInvite.resolveInvite(req.params.token);
+      if (!resolution.valid || !resolution.group) {
+        return res.json({ valid: false, reason: resolution.reason ?? "invalid" });
+      }
+      const { group, memberCount, isFull, approvalRequired } = resolution;
+      const isMember = userId ? await storage.isGroupMember(group.id, userId) : false;
+      res.json({
+        valid: true,
+        groupId: group.id,
+        name: group.name,
+        description: group.description,
+        photoUrl: groupInvite.groupHeroPhotoUrl(group),
+        memberCount,
+        categoryTags: group.categoryTags ?? [],
+        approvalRequired,
+        isFull,
+        isMember,
+        createdAt: group.createdAt,
+      });
+    } catch (e) {
+      console.error("Invite preview error:", e);
+      res.status(500).json({ valid: false, reason: "invalid" });
+    }
+  });
+
+  // Public share-card image for a group's invite (og:image target). Cached
+  // to disk by group id + content hash — see group-invite.ts. The hash in
+  // the URL both cache-busts on change and makes the URL itself immutable,
+  // which is friendlier to crawlers that cache aggressively per-URL.
+  app.get("/api/groups/:id/share-card/:hash.jpg", async (req, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      const group = await storage.getGroup(groupId);
+      if (!group) return res.status(404).end();
+      const members = await storage.getGroupMembers(groupId);
+      const jpg = await groupInvite.getOrRenderShareCard(group, members.length);
+      if (!jpg) return res.redirect(302, "/brand/og-default.png");
+      res.setHeader("Content-Type", "image/jpeg");
+      res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+      res.send(jpg);
+    } catch (e) {
+      console.error("Share card error:", e);
+      res.redirect(302, "/brand/og-default.png");
     }
   });
 
@@ -3023,8 +3113,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const parsed = initiatePaymentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid payment request" });
     const { tier, period, method, phone, sourceFeature } = parsed.data;
-    if (method === "ecocash" && !/^0?7\d{8}$/.test((phone || "").replace(/\D/g, ""))) {
-      return res.status(400).json({ message: "Enter the EcoCash number as 07XX XXX XXX." });
+    if ((method === "ecocash" || method === "onemoney" || method === "innbucks") && !/^0?7\d{8}$/.test((phone || "").replace(/\D/g, ""))) {
+      return res.status(400).json({ message: "Enter the wallet number as 07XX XXX XXX." });
     }
     try {
       const email = (req as any).user?.claims?.email || (await storage.getProfile(userId))?.displayName;
@@ -3313,7 +3403,16 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     try {
       const canSee = (await gate.checkGate(userId, "see_who_asked")).ok;
       const userMatches = await storage.getMatchesWithProfiles(userId);
-      const pending = userMatches.filter((m: any) => m.status === "pending" && !m.isRequester);
+      const pendingRaw = userMatches.filter((m: any) => m.status === "pending" && !m.isRequester);
+
+      // Old data (or a race before the create-match dedupe) can leave more
+      // than one pending row for the same pair — collapse to one per person,
+      // keeping their most recent ask, so nobody shows up twice.
+      const byRequester = new Map<string, any>();
+      for (const m of pendingRaw.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())) {
+        if (!byRequester.has(m.user1Id)) byRequester.set(m.user1Id, m);
+      }
+      const pending = [...byRequester.values()];
 
       // Below Spark you get the COUNT, not the people — no names, no photos, no
       // userId (so the row can't be opened). Never a fake blur.
