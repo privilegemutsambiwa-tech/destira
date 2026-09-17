@@ -13,6 +13,16 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import sharp from "sharp";
+import {
+  UPLOAD_DIR,
+  putObject,
+  getObjectBuffer,
+  deleteObject,
+  getSignedUrl,
+  generateFilename,
+  isObjectStorageEnabled,
+  keyFromUploadUrl,
+} from "./storage/objectStorage";
 import type { TwinProfileStructured } from "@shared/schema";
 import * as eventsService from "./events";
 import * as eventsFeed from "./events-feed";
@@ -66,20 +76,11 @@ setInterval(() => {
   }
 }, 300000);
 
-const UPLOAD_DIR = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
-
+// Buffers in memory rather than writing to local disk — putObject() below
+// sends that buffer to Supabase Storage (or local disk as a dev fallback,
+// see server/storage/objectStorage.ts) instead of multer writing it itself.
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-    filename: (_req, file, cb) => {
-      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      const ext = path.extname(file.originalname) || ".jpg";
-      cb(null, `${uniqueSuffix}${ext}`);
-    },
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -87,6 +88,26 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(new Error("Only JPEG, PNG, WebP, and GIF images are allowed"));
+    }
+  },
+});
+
+// Separate instance for host-video: that route takes a `video` field
+// (recorded webm/mp4, up to 60s) alongside a `poster` image field, which the
+// image-only fileFilter above would reject outright. 50MB covers a 60s
+// in-app recording at a reasonable bitrate with headroom.
+const uploadVideo = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed =
+      file.fieldname === "poster"
+        ? ["image/jpeg", "image/png", "image/webp"]
+        : ["video/webm", "video/mp4"];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported ${file.fieldname} type: ${file.mimetype}`));
     }
   },
 });
@@ -818,31 +839,60 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
-  app.use("/uploads", (await import("express")).default.static(UPLOAD_DIR));
+  // The bucket (server/storage/objectStorage.ts) is private, so every fetch —
+  // whether it ends up served from Supabase Storage or the local dev
+  // fallback — goes through here rather than a public static mount. This
+  // only gates "is someone logged in at all"; per-resource visibility (e.g.
+  // a private profile's photos) is enforced where URLs are handed out, e.g.
+  // GET /api/photos/:userId below.
+  app.get("/uploads/*key", async (req: any, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const parts = req.params.key;
+    const key = Array.isArray(parts) ? parts.join("/") : String(parts ?? "");
+    if (!key || key.includes("..")) return res.sendStatus(400);
+
+    if (isObjectStorageEnabled) {
+      const url = await getSignedUrl(key);
+      if (!url) return res.sendStatus(404);
+      return res.redirect(url);
+    }
+    res.sendFile(path.join(UPLOAD_DIR, key), (err: unknown) => {
+      if (err) res.sendStatus(404);
+    });
+  });
 
   app.post("/api/uploads/image", upload.single("image"), async (req: any, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     if (!req.file) return res.status(400).json({ message: "No image file provided" });
 
-    const filename: string = req.file.filename;
+    const filename: string = generateFilename(req.file.originalname);
     const url = `/uploads/${filename}`;
-    const abs = path.join(UPLOAD_DIR, filename);
     const base = filename.replace(/\.[^.]+$/, "");
     let variants: { w800?: string; w1600?: string } | undefined;
 
-    // Strip EXIF (incl. GPS) from the stored original and generate the webp
-    // derivatives Discover / profile galleries actually render. sharp drops all
-    // metadata unless withMetadata() is called. Best-effort: on any failure the
-    // untouched original still serves.
+    // Strip EXIF (incl. GPS) before storing the original — done entirely in
+    // memory from the upload buffer, then handed to putObject() (Supabase
+    // Storage, or the local dev fallback). sharp drops all metadata unless
+    // withMetadata() is called. Best-effort: on any failure the untouched
+    // original still gets stored and serves.
     try {
-      const buf = await fs.promises.readFile(abs);
-      const cleaned = await sharp(buf).rotate().toBuffer();
-      await fs.promises.writeFile(abs, cleaned);
+      const cleaned = await sharp(req.file.buffer).rotate().toBuffer();
+      await putObject(filename, cleaned, req.file.mimetype);
+    } catch (e) {
+      console.error("[uploads] EXIF strip failed, storing original:", e);
+      await putObject(filename, req.file.buffer, req.file.mimetype);
+    }
 
+    // Webp derivatives Discover / profile galleries actually render. Kept
+    // separate from the block above so a failure here never overwrites the
+    // already-stored original with something worse.
+    try {
       const mk = async (w: number, q: number) => {
         const name = `${base}.w${w}.webp`;
-        await sharp(buf).rotate().resize({ width: w, withoutEnlargement: true }).webp({ quality: q }).toFile(path.join(UPLOAD_DIR, name));
+        const resized = await sharp(req.file.buffer).rotate().resize({ width: w, withoutEnlargement: true }).webp({ quality: q }).toBuffer();
+        await putObject(name, resized, "image/webp");
         return `/uploads/${name}`;
       };
       variants = { w800: await mk(800, 78), w1600: await mk(1600, 80) };
@@ -938,8 +988,17 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     try {
-      await storage.deleteUserPhoto(userId, parseInt(req.params.id));
+      const photo = await storage.deleteUserPhoto(userId, parseInt(req.params.id));
       res.json({ success: true });
+      // Bucket cleanup happens after the response — a failure here shouldn't
+      // turn a successful delete into a 500, it just leaves an orphaned
+      // object for a future sweep.
+      if (photo) {
+        const keys = [photo.photoUrl, photo.variants?.w800, photo.variants?.w1600]
+          .map(keyFromUploadUrl)
+          .filter((k): k is string => k !== null);
+        await Promise.allSettled(keys.map((k) => deleteObject(k)));
+      }
     } catch (e) {
       res.status(500).json({ message: "Failed to delete photo" });
     }
@@ -2621,7 +2680,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         return res.status(403).json({ message: "Not authorized" });
       }
       if (!req.file) return res.status(400).json({ message: "No image provided" });
-      const url = `/uploads/${req.file.filename}`;
+      const filename = generateFilename(req.file.originalname);
+      await putObject(filename, req.file.buffer, req.file.mimetype);
+      const url = `/uploads/${filename}`;
       await storage.updateGroup(groupId, { groupPhotoUrl: url });
       res.json({ url });
     } catch (e) {
@@ -2640,7 +2701,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         return res.status(403).json({ message: "Not authorized" });
       }
       if (!req.file) return res.status(400).json({ message: "No image provided" });
-      const url = `/uploads/${req.file.filename}`;
+      const filename = generateFilename(req.file.originalname);
+      await putObject(filename, req.file.buffer, req.file.mimetype);
+      const url = `/uploads/${filename}`;
       await storage.updateGroup(groupId, { iconUrl: url });
       res.json({ url });
     } catch (e) {
@@ -2659,7 +2722,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         return res.status(403).json({ message: "Not authorized" });
       }
       if (!req.file) return res.status(400).json({ message: "No image provided" });
-      const url = `/uploads/${req.file.filename}`;
+      const filename = generateFilename(req.file.originalname);
+      await putObject(filename, req.file.buffer, req.file.mimetype);
+      const url = `/uploads/${filename}`;
       await storage.updateGroup(groupId, { bannerUrl: url });
       res.json({ url });
     } catch (e) {
@@ -3450,7 +3515,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       
       let mediaUrl = "";
       if (req.file) {
-        mediaUrl = `/uploads/${req.file.filename}`;
+        const filename = generateFilename(req.file.originalname);
+        await putObject(filename, req.file.buffer, req.file.mimetype);
+        mediaUrl = `/uploads/${filename}`;
       } else if (req.body.mediaUrl) {
         mediaUrl = req.body.mediaUrl;
       }
@@ -4297,31 +4364,27 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   });
 
   // Venue photos. EXIF (incl. GPS) is stripped by re-encoding through sharp —
-  // sharp drops all metadata unless withMetadata() is called. The original file
-  // is deleted; only the 480/960/1600 webp variants are kept.
+  // sharp drops all metadata unless withMetadata() is called. Only the
+  // 480/960/1600 webp variants are stored; the original buffer is never
+  // written anywhere.
   app.post("/api/events/:id/photos", upload.single("image"), async (req: any, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     const eventId = parseInt(req.params.id, 10);
     if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
     if (!req.file) return res.status(400).json({ message: "No image file provided" });
-    const src = req.file.path as string;
+    const buf = req.file.buffer as Buffer;
     try {
-      const base = (req.file.filename as string).replace(/\.[^.]+$/, "");
-      const meta = await sharp(src).rotate().metadata();
+      const base = generateFilename(req.file.originalname).replace(/\.[^.]+$/, "");
+      const meta = await sharp(buf).rotate().metadata();
       const longEdge = Math.max(meta.width ?? 0, meta.height ?? 0);
       if (longEdge < 1000) {
-        fs.unlink(src, () => {});
         return res.status(422).json({ message: `That image is ${longEdge}px on the long edge — venue photos need at least 1000px.` });
       }
       for (const w of [480, 960, 1600]) {
-        await sharp(src)
-          .rotate()
-          .resize({ width: w, withoutEnlargement: true })
-          .webp({ quality: 82 })
-          .toFile(path.join(UPLOAD_DIR, `${base}-${w}.webp`));
+        const resized = await sharp(buf).rotate().resize({ width: w, withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
+        await putObject(`${base}-${w}.webp`, resized, "image/webp");
       }
-      fs.unlink(src, () => {});
       const caption = typeof req.body?.caption === "string" ? req.body.caption : null;
       const photo = await eventsService.addEventPhoto(eventId, userId, {
         url: `/uploads/${base}-1600.webp`,
@@ -4331,7 +4394,6 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       });
       res.status(201).json(photo);
     } catch (e) {
-      fs.unlink(src, () => {});
       if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
       if (e instanceof eventsService.NotEventHostError) return res.status(403).json({ message: e.message });
       if (e instanceof eventsService.PhotoLimitError) return res.status(422).json({ message: e.message });
@@ -4347,8 +4409,15 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const photoId = parseInt(req.params.photoId, 10);
     if (Number.isNaN(eventId) || Number.isNaN(photoId)) return res.status(400).json({ message: "Invalid id" });
     try {
-      await eventsService.deleteEventPhoto(eventId, photoId, userId);
+      const photo = await eventsService.deleteEventPhoto(eventId, photoId, userId);
       res.json({ success: true });
+      // Only the -1600 variant is tracked in the DB row (see POST above),
+      // but upload wrote -480/-960 siblings too — clean up all three.
+      const key1600 = keyFromUploadUrl(photo?.url);
+      if (key1600 && key1600.endsWith("-1600.webp")) {
+        const base = key1600.slice(0, -"-1600.webp".length);
+        await Promise.allSettled([480, 960, 1600].map((w) => deleteObject(`${base}-${w}.webp`)));
+      }
     } catch (e) {
       if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
       if (e instanceof eventsService.NotEventHostError) return res.status(403).json({ message: e.message });
@@ -4362,7 +4431,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   // exists on the client; there is no server transcode (no ffmpeg).
   app.post(
     "/api/events/:id/host-video",
-    upload.fields([{ name: "video", maxCount: 1 }, { name: "poster", maxCount: 1 }]),
+    uploadVideo.fields([{ name: "video", maxCount: 1 }, { name: "poster", maxCount: 1 }]),
     async (req: any, res) => {
       const userId = getUserId(req);
       if (!userId) return res.sendStatus(401);
@@ -4376,9 +4445,16 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         return res.status(422).json({ message: "The video needs to be between 10 and 60 seconds." });
       }
       try {
+        const videoFilename = generateFilename(video.originalname, ".webm");
+        await putObject(videoFilename, video.buffer, video.mimetype);
+        let posterFilename = "";
+        if (poster) {
+          posterFilename = generateFilename(poster.originalname);
+          await putObject(posterFilename, poster.buffer, poster.mimetype);
+        }
         const updated = await eventsService.setHostVideo(eventId, userId, {
-          url: `/uploads/${video.filename}`,
-          posterUrl: poster ? `/uploads/${poster.filename}` : "",
+          url: `/uploads/${videoFilename}`,
+          posterUrl: posterFilename ? `/uploads/${posterFilename}` : "",
           durationSec,
         });
         res.status(201).json({ hostVideoStatus: updated.hostVideoStatus });

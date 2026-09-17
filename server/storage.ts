@@ -175,7 +175,7 @@ export interface IStorage {
 
   getUserPhotos(userId: string): Promise<UserPhoto[]>;
   addUserPhoto(userId: string, photoUrl: string, orderIndex: number, opts?: { isMain?: boolean; width?: number; height?: number; variants?: { w800?: string; w1600?: string } }): Promise<UserPhoto>;
-  deleteUserPhoto(userId: string, id: number): Promise<void>;
+  deleteUserPhoto(userId: string, id: number): Promise<UserPhoto | undefined>;
   reorderUserPhotos(userId: string, photoIds: number[]): Promise<void>;
   setPhotoRole(userId: string, photoId: number, role: PhotoRole): Promise<{ photoId: number; role: PhotoRole; displaced: { id: number; role: PhotoRole } | null }>;
   setPhotoFocal(userId: string, photoId: number, target: "cover" | "portrait", x: number, y: number): Promise<UserPhoto>;
@@ -1086,13 +1086,13 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async deleteUserPhoto(userId: string, id: number): Promise<void> {
-    await db.transaction(async (tx) => {
+  async deleteUserPhoto(userId: string, id: number): Promise<UserPhoto | undefined> {
+    return await db.transaction(async (tx) => {
       const [photo] = await tx
         .select()
         .from(userPhotos)
         .where(and(eq(userPhotos.id, id), eq(userPhotos.userId, userId)));
-      if (!photo) return;
+      if (!photo) return undefined;
       await tx.delete(userPhotos).where(eq(userPhotos.id, id));
 
       // Deleting the cover shouldn't silently drop the user out of Discover:
@@ -1112,6 +1112,7 @@ export class DatabaseStorage implements IStorage {
           await tx.update(profiles).set({ coverPhotoUrl: null }).where(eq(profiles.userId, userId));
         }
       }
+      return photo;
     });
   }
 

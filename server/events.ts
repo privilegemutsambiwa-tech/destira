@@ -627,9 +627,13 @@ export async function addEventPhoto(
   return row;
 }
 
-export async function deleteEventPhoto(eventId: number, photoId: number, hostUserId: string): Promise<void> {
+export async function deleteEventPhoto(eventId: number, photoId: number, hostUserId: string): Promise<EventPhoto | undefined> {
   await requireHost(eventId, hostUserId);
-  await db.delete(eventPhotos).where(and(eq(eventPhotos.id, photoId), eq(eventPhotos.eventId, eventId)));
+  const [deleted] = await db
+    .delete(eventPhotos)
+    .where(and(eq(eventPhotos.id, photoId), eq(eventPhotos.eventId, eventId)))
+    .returning();
+  return deleted;
 }
 
 // The host video is RECORDED IN-APP only — there is no file-upload path. The
