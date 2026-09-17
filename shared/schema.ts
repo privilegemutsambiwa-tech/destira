@@ -623,17 +623,26 @@ export type ReminderDismissal = typeof reminderDismissals.$inferSelect;
 //   'curated' - seatCount required; joining creates a 'requested' row, never
 //               'going' directly - the host (or a future resonance-based
 //               allocator) promotes requests
-// ── Events v2 taxonomy — fixed, closed lists. Hosts pick from these; a
-// free-text `kind` would destroy filtering within a month.
-export const EVENT_KINDS = [
-  "music", "food", "outdoors", "sport", "film", "books", "art", "faith",
-  "games", "making", "learning", "dancing", "volunteering", "nightlife", "wellness",
-] as const;
-export const EVENT_VIBES = ["quiet", "loud", "active", "seated", "outdoors", "late", "early"] as const;
-export const EVENT_PLACE_TYPES = ["home", "bar", "restaurant", "outdoors", "venue", "studio", "sports"] as const;
-export const EVENT_TIME_WINDOWS = ["morning", "afternoon", "evening", "late"] as const;
-export const EVENT_ACCESS_NEEDS = ["step-free", "seated", "quiet-space"] as const;
-export const EVENT_VISIBILITY = ["public", "group", "invite"] as const;
+// ── Events v2 taxonomy — moved to event-taxonomy.ts (no drizzle/pg imports,
+// so client pages that need these plain arrays don't drag the admin tables
+// into their bundle along with them). Re-exported here so existing server
+// code importing them from "@shared/schema" keeps working unchanged.
+export {
+  EVENT_KINDS,
+  EVENT_VIBES,
+  EVENT_PLACE_TYPES,
+  EVENT_TIME_WINDOWS,
+  EVENT_ACCESS_NEEDS,
+  EVENT_VISIBILITY,
+} from "./event-taxonomy";
+import {
+  EVENT_KINDS,
+  EVENT_VIBES,
+  EVENT_PLACE_TYPES,
+  EVENT_TIME_WINDOWS,
+  EVENT_ACCESS_NEEDS,
+  EVENT_VISIBILITY,
+} from "./event-taxonomy";
 
 // ── Events v3 — venue media, contribution, safety ──
 // Location tier is ALWAYS server-computed from placeId / address / the private

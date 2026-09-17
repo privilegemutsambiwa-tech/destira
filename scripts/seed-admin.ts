@@ -9,20 +9,69 @@
 // existing user, it doesn't create one. Refuses to seed a second owner unless
 // --force is passed, so "oops, ran it twice" can't quietly grant two owners.
 //
-// STOP THE DEV SERVER FIRST. PGlite (this project's local embedded Postgres)
-// is single-writer; running this alongside a live `npm run dev` produced a
-// stale read on the very next login attempt in testing (self-resolved by
-// restarting the server — no data loss observed, but don't rely on that).
+// DATABASE_URL is required. This script promotes an account to admin — it
+// must never silently fall back to the local PGlite dev database because
+// you forgot to export DATABASE_URL in this shell, believing you were
+// seeding production. Pass --allow-local if you genuinely want to test this
+// against your local PGlite database; otherwise it refuses to run. It always
+// prints which database it's about to write to, before writing anything.
+//
+// Re-running for an email that's an ACTIVE admin is a no-op (prints and
+// exits — no duplicate row, no changes). Re-running for an email you
+// PREVIOUSLY REVOKED does NOT silently restore them — pass --reactivate
+// explicitly, so "ran this again out of habit" can't quietly undo a
+// revocation you meant to stick.
+//
+// STOP THE DEV SERVER FIRST if running locally with --allow-local. PGlite
+// (this project's local embedded Postgres) is single-writer; running this
+// alongside a live `npm run dev` produced a stale read on the very next
+// login attempt in testing (self-resolved by restarting the server — no
+// data loss observed, but don't rely on that). Doesn't apply against a real
+// DATABASE_URL — Postgres handles concurrent writers fine.
 
-import { db } from "../server/db";
-import { adminUsers, users } from "@shared/schema";
-import { eq, and, isNull } from "drizzle-orm";
 import { ADMIN_ROLES, type AdminRole } from "@shared/admin";
+
+function maskedConnectionInfo(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.protocol}//${u.hostname}:${u.port || "5432"}${u.pathname}`;
+  } catch {
+    return "(unparseable DATABASE_URL — check it's a valid postgres connection string)";
+  }
+}
 
 async function main() {
   const email = (process.env.SEED_ADMIN_EMAIL || "").trim().toLowerCase();
   const role = (process.env.SEED_ADMIN_ROLE || "owner") as AdminRole;
   const force = process.argv.includes("--force");
+  const allowLocal = process.argv.includes("--allow-local");
+  const reactivate = process.argv.includes("--reactivate");
+
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    if (!allowLocal) {
+      console.error(
+        "DATABASE_URL is not set.\n\n" +
+          "Refusing to run — this script grants admin access and must never silently fall back\n" +
+          "to the local PGlite dev database because DATABASE_URL wasn't exported in this shell.\n\n" +
+          "  - Seeding PRODUCTION: set DATABASE_URL to the production connection string, then re-run.\n" +
+          "  - Deliberately testing locally: re-run with --allow-local.\n",
+      );
+      process.exit(1);
+    }
+    console.log(
+      `>>> Connecting to the LOCAL PGlite dev database at ${process.env.PGLITE_DATA_DIR || "./.localdb"} (--allow-local was passed).`,
+    );
+  } else {
+    console.log(`>>> Connecting to ${maskedConnectionInfo(databaseUrl)}`);
+  }
+
+  // Imported after the guard above, not at module top-level — server/db.ts
+  // opens a connection (Pool or PGlite) as a side effect of import, and that
+  // must not happen before the guard has had a chance to refuse.
+  const { db } = await import("../server/db");
+  const { adminUsers, users } = await import("@shared/schema");
+  const { eq, and, isNull } = await import("drizzle-orm");
 
   if (!email) {
     console.error("Set SEED_ADMIN_EMAIL to the email of an existing Destira account.");
@@ -42,6 +91,14 @@ async function main() {
   const [existing] = await db.select().from(adminUsers).where(eq(adminUsers.userId, user.id));
   if (existing && !existing.revokedAt) {
     console.error(`${email} is already an active admin (role: ${existing.role}). Nothing to do.`);
+    process.exit(1);
+  }
+  if (existing && existing.revokedAt && !reactivate) {
+    console.error(
+      `${email}'s admin access was revoked on ${existing.revokedAt.toISOString()}` +
+        (existing.revokedReason ? ` (reason: ${existing.revokedReason})` : "") +
+        `.\nThis script won't silently undo that. Re-run with --reactivate if you mean to restore them.`,
+    );
     process.exit(1);
   }
 

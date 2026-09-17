@@ -1,6 +1,7 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
+import { checkAdminRoutes } from "../scripts/check-admin-routes";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -33,6 +34,13 @@ const allowlist = [
 ];
 
 async function buildAll() {
+  // There's no CI in this repo — this is the only thing that runs on every
+  // deploy. Fails the build (not just a console warning) if any /api/admin
+  // route bypasses requireAdmin(). Called directly, not spawned as a
+  // subprocess — `execFileSync("npx", ...)` hit ENOENT on Windows since it
+  // doesn't resolve npx's .cmd shim without a shell.
+  checkAdminRoutes();
+
   await rm("dist", { recursive: true, force: true });
 
   console.log("building client...");

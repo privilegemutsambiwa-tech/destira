@@ -10,8 +10,8 @@ import {
   EVENT_PLACE_TYPES,
   EVENT_TIME_WINDOWS,
   EVENT_ACCESS_NEEDS,
-  type EventPreferences as Prefs,
-} from "@shared/schema";
+} from "@shared/event-taxonomy";
+import { type EventPreferences as Prefs } from "@shared/schema";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 

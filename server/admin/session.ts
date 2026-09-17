@@ -4,7 +4,10 @@
 // admin cookie is never read on a member route or vice versa.
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import pgSession from "connect-pg-simple";
 import type { Express, Request, RequestHandler } from "express";
+import { client as dbClient } from "../db";
+import { Pool } from "pg";
 
 const MemoryStore = createMemoryStore(session);
 
@@ -26,13 +29,46 @@ declare module "express-session" {
   }
 }
 
+// connect-pg-simple implements get/set/destroy/touch but NOT all() — express-
+// session's base Store class leaves that to the implementation, and
+// connect-pg-simple never added it (its README only advertises get/set/
+// destroy/touch). listAdminSessions() below (My Account's "active sessions"
+// list, and "sign out everywhere") depends on all() with the same shape
+// memorystore's all() returns — fn(err, { [sid]: SessionData }) — so it's
+// added here rather than silently breaking that feature on the switch.
+function withAll(store: InstanceType<ReturnType<typeof pgSession>>, pool: Pool, tableName: string) {
+  (store as any).all = function (fn: (err: Error | null, result?: Record<string, session.SessionData>) => void) {
+    pool
+      .query(`SELECT sid, sess FROM "${tableName}" WHERE expire > now()`)
+      .then((res) => {
+        const result: Record<string, session.SessionData> = {};
+        for (const row of res.rows) result[row.sid] = row.sess as session.SessionData;
+        fn(null, result);
+      })
+      .catch((err) => fn(err));
+  };
+  return store;
+}
+
 // A single store instance, not a new one per adminSessionMiddleware() call
 // (which only happens once at mount time anyway) — exported so
 // server/admin/account.ts can enumerate/destroy a given admin's sessions.
-// In-process only, same as the rest of this session system: sessions don't
-// survive a restart and aren't visible across instances if this ever scales
-// out beyond one Node process.
-export const adminSessionStore = new MemoryStore({ checkPeriod: IDLE_MS });
+//
+// Production (DATABASE_URL set): connect-pg-simple, in its own `admin_session`
+// table (createTableIfMissing — no migration to write by hand) on the SAME
+// Postgres `client` server/db.ts already opened. Sessions survive a restart
+// and are visible across instances, unlike the in-memory store this replaced.
+// Local dev (PGlite, no DATABASE_URL): connect-pg-simple needs a real `pg`
+// connection, which PGlite isn't, so dev keeps the in-memory store — fine for
+// a single local process that's never expected to survive a restart anyway.
+const ADMIN_SESSION_TABLE = "admin_session";
+export const adminSessionStore = process.env.DATABASE_URL
+  ? withAll(
+      new (pgSession(session))({ pool: dbClient as Pool, tableName: ADMIN_SESSION_TABLE, createTableIfMissing: true, pruneSessionInterval: 60 * 15 }),
+      dbClient as Pool,
+      ADMIN_SESSION_TABLE,
+    )
+  : new MemoryStore({ checkPeriod: IDLE_MS });
 
 export function adminSessionMiddleware(): RequestHandler {
   if (
@@ -82,7 +118,10 @@ export function touchSessionMeta(req: Request) {
  *  My Account's "active sessions" list and "sign out everywhere" both need. */
 export function listAdminSessions(adminUserId: string): Promise<{ sid: string; ip?: string; userAgent?: string; lastSeenAt?: number; loginAt?: number; current?: boolean }[]> {
   return new Promise((resolve, reject) => {
-    adminSessionStore.all((err, sessions) => {
+    // Both branches of adminSessionStore always define `all` (memorystore
+    // natively, the pg-backed store via withAll above) — express-session's
+    // base Store type just declares it optional.
+    adminSessionStore.all!((err, sessions) => {
       if (err) return reject(err);
       const all = (sessions as unknown as Record<string, session.SessionData>) || {};
       const rows = Object.entries(all)

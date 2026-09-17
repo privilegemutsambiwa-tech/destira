@@ -16,7 +16,7 @@ import { useGroups } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useGate } from "@/hooks/use-gate";
 import { usePaywall } from "@/hooks/use-paywall";
-import { EVENT_KINDS, EVENT_PLACE_TYPES } from "@shared/schema";
+import { EVENT_KINDS, EVENT_PLACE_TYPES } from "@shared/event-taxonomy";
 import { Loader2, Search, X } from "lucide-react";
 
 const DISTANCES = [5, 10, 25, 50] as const;

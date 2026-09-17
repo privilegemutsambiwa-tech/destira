@@ -15,7 +15,7 @@ import {
   type Place,
 } from "@/hooks/use-events";
 import { HostVideoRecorder, type RecordedVideo } from "@/components/host-video-recorder";
-import { EVENT_KINDS, EVENT_VIBES, EVENT_PLACE_TYPES, EVENT_ACCESS_NEEDS } from "@shared/schema";
+import { EVENT_KINDS, EVENT_VIBES, EVENT_PLACE_TYPES, EVENT_ACCESS_NEEDS } from "@shared/event-taxonomy";
 
 const KNOWN_SUBURBS = [
   "Avondale", "Borrowdale", "Mount Pleasant", "Newlands", "Milton Park",
