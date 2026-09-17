@@ -5,7 +5,6 @@
 // actually grants.
 import { readFileSync, existsSync, mkdirSync } from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import satori from "satori";
 import sharp from "sharp";
 import crypto from "crypto";
@@ -13,12 +12,13 @@ import type { Request } from "express";
 import { storage } from "./storage";
 import type { Group } from "@shared/schema";
 
-// __dirname doesn't exist in native ESM (dev, via tsx) — only in the
-// esbuild-bundled CJS the production build produces (dist/index.cjs). This
-// works in both: import.meta.url is always available in ESM source, and
-// esbuild rewrites it correctly when bundling to CJS.
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FONTS_DIR = path.resolve(__dirname, "assets", "fonts");
+// cwd-relative, not __dirname-relative — same reasoning as CACHE_DIR below
+// and photoDataUri()'s /uploads and /photos paths. __dirname doesn't exist
+// in native ESM (dev, via tsx), and esbuild rewrites import.meta to an empty
+// object in its CJS output (production), so fileURLToPath(import.meta.url)
+// throws at module load there — crashing the whole server on boot, not just
+// this feature. process.cwd() is the repo root in both dev and on Render.
+const FONTS_DIR = path.join(process.cwd(), "server", "assets", "fonts");
 const CACHE_DIR = path.join(process.cwd(), "uploads", "share-cards");
 const CARD_W = 1200;
 const CARD_H = 630;
