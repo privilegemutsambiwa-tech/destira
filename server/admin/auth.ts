@@ -20,6 +20,14 @@ import { ADMIN_SESSION_ABSOLUTE_MS, touchSessionMeta } from "./session";
 import { auditAdmin } from "./audit";
 import { adminRoleRank, meetsAdminRole, type AdminRole } from "@shared/admin";
 
+// otplib's default window is 0 — zero tolerance for the time a code spends
+// between being generated on the phone and the verify request landing here.
+// A code is only valid for a 30s step, so any normal typing/network latency
+// near a step boundary rejected an otherwise-correct code as "Wrong code".
+// window: 1 accepts the adjacent (previous/next) 30s step too, the standard
+// tolerance for TOTP apps like Google/Microsoft/Authy.
+authenticator.options = { window: 1 };
+
 const RECOVERY_CODE_COUNT = 10;
 const RECOVERY_CODE_SHAPE = /^[A-Z0-9]{4}-[A-Z0-9]{4}$/i;
 
