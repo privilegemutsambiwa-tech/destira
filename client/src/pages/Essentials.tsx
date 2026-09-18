@@ -361,7 +361,7 @@ export default function Essentials() {
                 await save({ ageMinPreference: ageMinNum, ageMaxPreference: ageMaxNum });
                 next();
               }}
-              disabled={!!ageError}
+              disabled={!!ageError || saving}
               className="flex-1 h-12 rounded-full bg-vf-ember text-vf-ink font-medium text-[14px] disabled:opacity-50 disabled:cursor-not-allowed"
               data-testid="button-age-continue"
             >
