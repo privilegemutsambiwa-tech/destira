@@ -137,9 +137,10 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
     try {
       const link = await createInvite.mutateAsync();
       const url = makeInviteUrl(link.token);
-      navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(url);
       toast({ title: "Invite link copied!" });
-    } catch {
+    } catch (err) {
+      console.error("[Invite Error]", err);
       toast({ title: "Error", description: "Failed to create invite link.", variant: "destructive" });
     }
   };
@@ -245,21 +246,38 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   };
 
   const handleShare = async () => {
+    // Generate the invite link first, and keep this failure distinct from any
+    // navigator.share failure below — otherwise a share-sheet error (e.g. the
+    // user dismissing it) gets misreported as "failed to generate" even though
+    // the link was created fine.
+    let inviteUrl: string;
     try {
       const linkRes = await createInvite.mutateAsync();
-      const inviteUrl = makeInviteUrl(linkRes.token);
-      const shareData = { title: group?.name || "Group", text: `Join "${group?.name}" on Destira`, url: inviteUrl };
+      inviteUrl = makeInviteUrl(linkRes.token);
+    } catch (err) {
+      console.error("[Invite Error]", err);
+      toast({ title: "Error", description: "Failed to generate invite link.", variant: "destructive" });
+      return;
+    }
+
+    const shareData = { title: group?.name || "Group", text: `Join "${group?.name}" on Destira`, url: inviteUrl };
+    try {
       if (navigator.share) {
-        await navigator.share(shareData).catch(() => {
-          setShareLink(inviteUrl);
-          setShareDialogOpen(true);
-        });
+        await navigator.share(shareData);
       } else {
         setShareLink(inviteUrl);
         setShareDialogOpen(true);
       }
-    } catch {
-      toast({ title: "Error", description: "Failed to generate invite link.", variant: "destructive" });
+    } catch (err) {
+      // navigator.share can reject (or, in some browsers, throw synchronously)
+      // with AbortError when the user simply dismisses the native share sheet —
+      // that's an intentional cancel, not an error, so don't toast for it.
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
+      console.error("[Invite Error]", err);
+      setShareLink(inviteUrl);
+      setShareDialogOpen(true);
     }
   };
 
@@ -267,7 +285,8 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
     try {
       await navigator.clipboard.writeText(shareLink);
       toast({ title: "Invite link copied!" });
-    } catch {
+    } catch (err) {
+      console.error("[Invite Error]", err);
       toast({ title: "Error", description: "Could not copy link.", variant: "destructive" });
     }
   };

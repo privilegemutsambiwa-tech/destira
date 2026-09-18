@@ -43,7 +43,7 @@ import { registerAdminConsole } from "./admin";
 import * as emailTemplates from "./email/templates";
 import { setAdminLockoutHook } from "./admin/auth";
 import { trackActivity } from "./admin/activity";
-import { requestOutcomeMiddleware } from "./admin/error-rate";
+import { requestOutcomeMiddleware, recordRequestOutcome } from "./admin/error-rate";
 import { logLlmCall } from "./admin/llm-log";
 import { runNightlyRollup, backfillRecentMetrics } from "./admin/metrics-rollup";
 import { sendDailyDigest, sendWeeklyDigest } from "./email/digest";
@@ -130,6 +130,24 @@ export async function registerRoutes(
     if (!req.isAuthenticated()) return null;
     return (req.user as any).claims.sub;
   }
+
+  // A render crash caught by a client ErrorBoundary would otherwise be
+  // invisible — no server request ever fails, so nothing shows up anywhere.
+  // This logs it server-side and counts it in the admin overview's error
+  // rate (recordRequestOutcome(500)) even though the response to the client
+  // itself is a clean 204, not a failure.
+  app.post("/api/client-errors", (req, res) => {
+    const { message, stack, componentStack, url } = req.body || {};
+    console.error("[client-error]", {
+      userId: getUserId(req),
+      url,
+      message,
+      stack,
+      componentStack,
+    });
+    recordRequestOutcome(500);
+    res.sendStatus(204);
+  });
 
   app.get("/api/profiles/me", async (req, res) => {
     const userId = getUserId(req);
@@ -2378,8 +2396,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     const groupId = parseInt(req.params.id);
     try {
+      const group = await storage.getGroup(groupId);
+      if (!group) return res.status(404).json({ message: "Group not found" });
       const member = await storage.getGroupMember(groupId, userId);
-      if (!member || (member.role !== "owner" && member.role !== "admin")) {
+      const isOwner = group.ownerId === userId;
+      const isAdmin = member?.role === "owner" || member?.role === "admin";
+      const memberCanInvite = !!member && (group.canMembersAddOthers || group.privacyMode === "open");
+      if (!isOwner && !isAdmin && !memberCanInvite) {
         return res.status(403).json({ message: "Not authorized" });
       }
       const token = crypto.randomBytes(16).toString("hex");

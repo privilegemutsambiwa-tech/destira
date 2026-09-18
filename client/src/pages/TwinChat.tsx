@@ -264,7 +264,12 @@ export default function TwinChat() {
   const memoryData = memory as any;
   const memoryMessages = memoryData?.messages || (Array.isArray(memory) ? memory : []);
   const memoryFacts = memoryData?.facts || [];
-  const memorySummary = memoryData?.summary || null;
+  // /api/twin/memory's `summary` is the twin_memory_summary row
+  // ({id, userId, summaryText, updatedAt}), not a bare string — render the
+  // text field, not the row.
+  const rawSummary = memoryData?.summary;
+  const memorySummary: string | null =
+    typeof rawSummary === "string" ? rawSummary : rawSummary?.summaryText || null;
 
   useEffect(() => {
     if (memoryMessages.length > 0 && !initialized) {

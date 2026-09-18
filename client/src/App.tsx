@@ -5,9 +5,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
-import { DestiraMark } from "@/components/brand/logo";
+import { DestiraLockup } from "@/components/brand/logo";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { consumePendingInvite } from "@/lib/pending-invite";
-import { useEffect, lazy, Suspense } from "react";
+import { useEffect, useLayoutEffect, lazy, Suspense } from "react";
 
 // Code-split and NOT linked from anywhere in the member app (no nav item, no
 // Settings row) — reachable only by knowing the exact path. Own session
@@ -46,9 +47,24 @@ import GroupSettings from "@/pages/GroupSettings";
 import JoinGroup from "@/pages/JoinGroup";
 import Settings from "@/pages/Settings";
 
+// Same lockup as the pre-paint splash in index.html, for the in-app auth/
+// profile loading checkpoints below — real two-ring mark, not the <28px
+// tile glyph (that was the same bug as the app icons, just inside React).
+function AppLoading() {
+  return (
+    <div className="min-h-dvh flex items-center justify-center bg-background">
+      <DestiraLockup
+        orientation="stacked"
+        size={64}
+        className="motion-safe:animate-[vf-breathe_3.2s_ease-in-out_infinite]"
+      />
+    </div>
+  );
+}
+
 function ProtectedRoute({ component: Component, ...rest }: any) {
   const { user, isLoading } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -57,16 +73,20 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
   }, [user, isLoading, setLocation]);
 
   if (isLoading) {
-    return (
-      <div className="min-h-dvh flex items-center justify-center bg-background">
-        <DestiraMark size={64} variant="tile" className="animate-pulse" />
-      </div>
-    );
+    return <AppLoading />;
   }
 
   if (!user) return null;
 
-  return <Component {...rest} />;
+  // Per-screen, not just app-wide: a crash in one screen's render must not
+  // blank every screen reachable from it. Keyed on the route so navigating
+  // away (even back to the same broken screen via a fresh mount) clears a
+  // previously caught error instead of it sticking around.
+  return (
+    <ErrorBoundary resetKey={location}>
+      <Component {...rest} />
+    </ErrorBoundary>
+  );
 }
 
 function AuthenticatedHome() {
@@ -96,22 +116,14 @@ function AuthenticatedHome() {
     }
   }, [profile, isLoading, setLocation]);
 
-  return (
-    <div className="min-h-dvh flex items-center justify-center bg-background">
-      <DestiraMark size={64} variant="tile" className="animate-pulse" />
-    </div>
-  );
+  return <AppLoading />;
 }
 
 function Router() {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="min-h-dvh flex items-center justify-center bg-background">
-        <DestiraMark size={64} variant="tile" className="animate-pulse" />
-      </div>
-    );
+    return <AppLoading />;
   }
 
   return (
@@ -211,6 +223,17 @@ function Router() {
 }
 
 function App() {
+  // Drops the inline pre-paint splash (client/index.html) the instant this
+  // component's first commit is ready to paint — useLayoutEffect, not
+  // useEffect, so removal happens in the same frame as the real UI's first
+  // paint instead of one frame after it (which would show a flash of the
+  // splash sitting over already-rendered content). Runs for both the member
+  // app and /console below; either one being ready to paint is "the app can
+  // paint" as far as the splash cares.
+  useLayoutEffect(() => {
+    document.getElementById("vf-splash")?.remove();
+  }, []);
+
   // No theme effect here — the app is dark-only for now (index.css's :root
   // holds the dark palette unconditionally, no .dark class needed), so
   // there's nothing to apply after mount. The old version of this
@@ -225,9 +248,11 @@ function App() {
   // two surfaces that don't share a session.
   if (typeof window !== "undefined" && window.location.pathname.startsWith("/console")) {
     return (
-      <Suspense fallback={null}>
-        <AdminConsoleRoot />
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={null}>
+          <AdminConsoleRoot />
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 
@@ -235,7 +260,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <Router />
+        <ErrorBoundary>
+          <Router />
+        </ErrorBoundary>
       </TooltipProvider>
     </QueryClientProvider>
   );

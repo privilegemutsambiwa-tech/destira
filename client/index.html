@@ -39,6 +39,8 @@
       })();
     </script>
     <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/brand/destira-favicon-16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/brand/destira-favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/brand/destira-icon-192.png" />
     <link rel="apple-touch-icon" href="/brand/destira-icon-180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -47,8 +49,79 @@
          handshake ahead of that fetch. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Pre-paint splash styles. Inline and self-contained on purpose — this
+         has to render before index.css (which blocks on a Google Fonts
+         @import) even reaches the network, so it can't depend on any of the
+         app's own stylesheet. Colors and the breathe curve are copied from
+         index.css's --vf-ink/--vf-text/--vf-muted tokens and the vf-breathe
+         keyframe, not re-derived — keep them in lockstep by hand. -->
+    <style>
+      #vf-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #0C0910;
+        padding-bottom: 8%; /* pulls the block slightly above true center */
+      }
+      #vf-splash-mark {
+        animation: vf-splash-breathe 3.2s ease-in-out infinite;
+        transform-origin: center;
+      }
+      #vf-splash-word {
+        margin-top: 20px;
+        font-family: "Instrument Serif", Georgia, "Times New Roman", serif;
+        font-weight: 400;
+        font-size: 44px;
+        line-height: 1;
+        letter-spacing: -0.015em;
+        color: #F5F0EA;
+      }
+      #vf-splash-tag {
+        margin-top: 14px;
+        font-family: "DM Mono", "Courier New", monospace;
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #A79FB4;
+      }
+      @keyframes vf-splash-breathe {
+        0%, 100% { transform: scale(1); opacity: .78; }
+        50% { transform: scale(1.06); opacity: 1; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #vf-splash-mark { animation: none; }
+      }
+      @media (prefers-color-scheme: light) {
+        html:not([data-theme]) #vf-splash { background: #FBF8F5; }
+        html:not([data-theme]) #vf-splash-word { color: #1A1418; }
+        html:not([data-theme]) #vf-splash-tag { color: #6B5F68; }
+      }
+      html[data-theme="light"] #vf-splash { background: #FBF8F5; }
+      html[data-theme="light"] #vf-splash-word { color: #1A1418; }
+      html[data-theme="light"] #vf-splash-tag { color: #6B5F68; }
+    </style>
   </head>
   <body>
+    <!-- Removed in App.tsx's first layout effect, the instant React can
+         paint the real UI — see the comment there for why. If you're
+         seeing this for more than a second or two, the app's JS bundle is
+         too slow to arrive, not this element. -->
+    <div id="vf-splash">
+      <svg id="vf-splash-mark" width="128" height="102" viewBox="26 17 108 86" role="img" aria-label="Destira">
+        <defs><clipPath id="vfSplashLens"><circle cx="96" cy="60" r="34"/></clipPath></defs>
+        <g transform="rotate(-15 80 60)">
+          <circle cx="96" cy="60" r="34" fill="none" stroke="#8FE3C7" stroke-width="6"/>
+          <circle cx="64" cy="60" r="34" fill="none" stroke="#FF6B4A" stroke-width="6"/>
+          <g clip-path="url(#vfSplashLens)"><circle cx="64" cy="60" r="34" fill="#F5F0EA"/></g>
+        </g>
+      </svg>
+      <div id="vf-splash-word">destira</div>
+      <div id="vf-splash-tag">resonance over photographs</div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
