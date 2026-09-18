@@ -74,6 +74,8 @@ export default function Essentials() {
   const [intent, setIntent] = useState<string>("");
   const [ageMin, setAgeMin] = useState(MIN_AGE);
   const [ageMax, setAgeMax] = useState(60);
+  const [ageMinText, setAgeMinText] = useState(String(MIN_AGE));
+  const [ageMaxText, setAgeMaxText] = useState("60");
   const [ageTouched, setAgeTouched] = useState(false);
   const [area, setArea] = useState("");
   const [areaQuery, setAreaQuery] = useState("");
@@ -94,13 +96,19 @@ export default function Essentials() {
     if (Array.isArray(profile.seekingGenders)) setSeeking(profile.seekingGenders);
     if (profile.datingIntent) setIntent(profile.datingIntent);
     if (profile.ageMinPreference || profile.ageMaxPreference) {
-      setAgeMin(profile.ageMinPreference ?? MIN_AGE);
-      setAgeMax(profile.ageMaxPreference ?? 60);
+      const min = profile.ageMinPreference ?? MIN_AGE;
+      const max = profile.ageMaxPreference ?? 60;
+      setAgeMin(min);
+      setAgeMax(max);
+      setAgeMinText(String(min));
+      setAgeMaxText(String(max));
       setAgeTouched(true);
     } else if (ownAge) {
       const d = defaultAgeRange(ownAge);
       setAgeMin(d.min);
       setAgeMax(d.max);
+      setAgeMinText(String(d.min));
+      setAgeMaxText(String(d.max));
     }
     if (profile.location) setArea(profile.location);
     seeded.current = true;
@@ -304,12 +312,17 @@ export default function Essentials() {
             <input
               type="number"
               inputMode="numeric"
-              value={ageMin}
+              value={ageMinText}
               min={MIN_AGE}
               max={ageMax}
               onChange={(e) => {
                 setAgeTouched(true);
-                setAgeMin(Math.max(MIN_AGE, Math.min(Number(e.target.value) || MIN_AGE, ageMax)));
+                setAgeMinText(e.target.value);
+              }}
+              onBlur={() => {
+                const clamped = Math.max(MIN_AGE, Math.min(Number(ageMinText) || MIN_AGE, ageMax));
+                setAgeMin(clamped);
+                setAgeMinText(String(clamped));
               }}
               className="w-20 rounded-[12px] border border-vf-line bg-vf-text/5 px-3 h-12 text-center text-[20px] font-serif text-vf-text outline-none focus:border-vf-ember/60"
               data-testid="input-age-min"
@@ -318,12 +331,17 @@ export default function Essentials() {
             <input
               type="number"
               inputMode="numeric"
-              value={ageMax}
+              value={ageMaxText}
               min={ageMin}
               max={MAX_AGE}
               onChange={(e) => {
                 setAgeTouched(true);
-                setAgeMax(Math.min(MAX_AGE, Math.max(Number(e.target.value) || MAX_AGE, ageMin)));
+                setAgeMaxText(e.target.value);
+              }}
+              onBlur={() => {
+                const clamped = Math.min(MAX_AGE, Math.max(Number(ageMaxText) || MAX_AGE, ageMin));
+                setAgeMax(clamped);
+                setAgeMaxText(String(clamped));
               }}
               className="w-20 rounded-[12px] border border-vf-line bg-vf-text/5 px-3 h-12 text-center text-[20px] font-serif text-vf-text outline-none focus:border-vf-ember/60"
               data-testid="input-age-max"
@@ -335,7 +353,9 @@ export default function Essentials() {
           <div className="flex items-center gap-4">
             <button
               onClick={async () => {
-                await save({ ageMinPreference: ageMin, ageMaxPreference: ageMax });
+                const min = Math.max(MIN_AGE, Math.min(Number(ageMinText) || MIN_AGE, MAX_AGE));
+                const max = Math.min(MAX_AGE, Math.max(Number(ageMaxText) || MAX_AGE, min));
+                await save({ ageMinPreference: min, ageMaxPreference: max });
                 next();
               }}
               className="flex-1 h-12 rounded-full bg-vf-ember text-vf-ink font-medium text-[14px]"
