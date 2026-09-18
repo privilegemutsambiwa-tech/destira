@@ -163,3 +163,21 @@ export function DestiraLockup({ orientation = "horizontal", size, variant = "col
     </span>
   );
 }
+
+/** The one app-wide loading screen — full-bleed, real two-ring mark, breathing.
+ *  Used for every in-app "waiting on auth/profile" checkpoint (App.tsx's
+ *  route guards, AuthCallback) so there's a single place that decides what
+ *  "Destira is loading" looks like, instead of each call site reaching for
+ *  DestiraMark variant="tile" (the <28px glyph — wrong at this size, and the
+ *  exact bug that had the wrong icon showing everywhere else too). */
+export function DestiraLoadingScreen() {
+  return (
+    <div className="min-h-dvh flex items-center justify-center bg-background">
+      <DestiraLockup
+        orientation="stacked"
+        size={64}
+        className="motion-safe:animate-[vf-breathe_3.2s_ease-in-out_infinite]"
+      />
+    </div>
+  );
+}

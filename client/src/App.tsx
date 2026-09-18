@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
-import { DestiraLockup } from "@/components/brand/logo";
+import { DestiraLoadingScreen } from "@/components/brand/logo";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { consumePendingInvite } from "@/lib/pending-invite";
 import { useEffect, useLayoutEffect, lazy, Suspense } from "react";
@@ -47,21 +47,6 @@ import GroupSettings from "@/pages/GroupSettings";
 import JoinGroup from "@/pages/JoinGroup";
 import Settings from "@/pages/Settings";
 
-// Same lockup as the pre-paint splash in index.html, for the in-app auth/
-// profile loading checkpoints below — real two-ring mark, not the <28px
-// tile glyph (that was the same bug as the app icons, just inside React).
-function AppLoading() {
-  return (
-    <div className="min-h-dvh flex items-center justify-center bg-background">
-      <DestiraLockup
-        orientation="stacked"
-        size={64}
-        className="motion-safe:animate-[vf-breathe_3.2s_ease-in-out_infinite]"
-      />
-    </div>
-  );
-}
-
 function ProtectedRoute({ component: Component, ...rest }: any) {
   const { user, isLoading } = useAuth();
   const [location, setLocation] = useLocation();
@@ -73,7 +58,7 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
   }, [user, isLoading, setLocation]);
 
   if (isLoading) {
-    return <AppLoading />;
+    return <DestiraLoadingScreen />;
   }
 
   if (!user) return null;
@@ -116,14 +101,14 @@ function AuthenticatedHome() {
     }
   }, [profile, isLoading, setLocation]);
 
-  return <AppLoading />;
+  return <DestiraLoadingScreen />;
 }
 
 function Router() {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
-    return <AppLoading />;
+    return <DestiraLoadingScreen />;
   }
 
   return (
