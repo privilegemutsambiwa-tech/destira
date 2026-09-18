@@ -2448,33 +2448,15 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
-  // Server-rendered OG/share preview for a group invite. Registered here so
-  // it's matched (registerRoutes runs before setupVite/serveStatic in
-  // server/index.ts) ahead of both the dev Vite catch-all and the prod
-  // static-file catch-all — path-based, not UA-sniffed: deterministic for
-  // curl, Facebook's debugger, and a real browser alike. Real users get the
-  // exact same SPA shell after this, just with a richer <head> already in
-  // place before React even boots.
-  app.get("/join/:token", async (req, res, next) => {
-    try {
-      const rawParam = req.params.token || "";
-      const dashIdx = rawParam.indexOf("-");
-      const token = dashIdx > 0 ? rawParam.slice(dashIdx + 1) : rawParam;
-      const resolution = await groupInvite.resolveInvite(token);
-      const meta = groupInvite.ogMetaFor(req, resolution, rawParam);
-
-      const templatePath =
-        process.env.NODE_ENV === "production"
-          ? path.resolve(__dirname, "public", "index.html")
-          : path.resolve(process.cwd(), "client", "index.html");
-      const template = fs.readFileSync(templatePath, "utf-8");
-      const html = groupInvite.renderInviteHtml(template, meta);
-      res.status(200).set({ "Content-Type": "text/html" }).send(html);
-    } catch (e) {
-      console.error("Invite OG render error:", e);
-      next(); // fall through to the normal SPA shell rather than 500
-    }
-  });
+  // The /join/:token OG/share-preview HTML itself is handled in
+  // server/vite.ts (dev) and server/static.ts (prod) — NOT here. Both of
+  // those already read/produce the page's index.html on every request
+  // (Vite's own transformIndexHtml in dev, the built file in prod); this
+  // used to duplicate that by reading client/index.html directly, which
+  // skips Vite's transform and — in dev — drops the @vitejs/plugin-react
+  // preamble it injects, which breaks React mounting entirely (blank page).
+  // Enriching the HTML those two already produce, instead of generating a
+  // competing copy, is both correct and avoids a second rendering stack.
 
   // Public (auth optional) — the join page's own data fetch. Same
   // token-resolution as the OG route above it in group-invite.ts, so what a
@@ -2482,7 +2464,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   app.get("/api/groups/join-by-invite/:token/preview", async (req, res) => {
     const userId = getUserId(req);
     try {
-      const resolution = await groupInvite.resolveInvite(req.params.token);
+      // The client sends the full "<groupId>-<token>" composite (same shape
+      // as the URL param everywhere else — see the POST join handler and
+      // the /join/:token OG route above), so it needs the same stripping.
+      const rawParam = req.params.token || "";
+      const dashIdx = rawParam.indexOf("-");
+      const token = dashIdx > 0 ? rawParam.slice(dashIdx + 1) : rawParam;
+      const resolution = await groupInvite.resolveInvite(token);
       if (!resolution.valid || !resolution.group) {
         return res.json({ valid: false, reason: resolution.reason ?? "invalid" });
       }
@@ -4731,8 +4719,6 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       .sweepStaleLocations()
       .then((n) => n > 0 && console.log(`[proximity] swept ${n} stale ping(s)`))
       .catch((e) => console.error("[proximity] sweep failed:", e));
-  sweep();
-  setInterval(sweep, 10 * 60 * 1000);
 
   // Payments taken but never confirmed by the gateway — the "user paid, got
   // nothing" case. Checked every 5 min; alerts once per payment (see
@@ -4742,8 +4728,6 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       .sweepStuckPayments()
       .then((n) => n > 0 && console.log(`[payments] ${n} stuck payment(s) alerted`))
       .catch((e) => console.error("[payments] stuck sweep failed:", e));
-  sweepPayments();
-  setInterval(sweepPayments, 5 * 60 * 1000);
 
   // Metrics: backfill the trailing 30 days once on boot (so the console
   // isn't blank the first time it's opened), then a real nightly rollup +
@@ -4751,7 +4735,21 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   // other periodic job in this file; "nightly" here means "roughly once a
   // day, whenever the process happened to boot," which is an acceptable
   // trade for a single-process local/small-scale deploy.
-  backfillRecentMetrics(30).catch((e) => console.error("[metrics] initial backfill failed:", e));
+  const initialBackfill = () =>
+    backfillRecentMetrics(30).catch((e) => console.error("[metrics] initial backfill failed:", e));
+
+  // Staggered, not simultaneous: firing all three of these (plus the 30-day
+  // metrics backfill, the heaviest) in the same tick as app.listen() means
+  // they compete with the pool for connections at the exact moment the
+  // first real requests arrive — on a high-latency connection this queued
+  // real traffic behind them for 10s+. Spacing them out gives early
+  // requests a clear run at the pool; the jobs themselves don't care when
+  // in the first minute they run.
+  sweep();
+  setInterval(sweep, 10 * 60 * 1000);
+  setTimeout(sweepPayments, 5_000);
+  setInterval(sweepPayments, 5 * 60 * 1000);
+  setTimeout(initialBackfill, 12_000);
   setInterval(() => {
     runNightlyRollup()
       .then(() => sendDailyDigest())

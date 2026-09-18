@@ -12,6 +12,31 @@ import type { Request } from "express";
 import { storage } from "./storage";
 import type { Group } from "@shared/schema";
 
+const JOIN_PATH = /^\/join\/([^/?]+)/;
+
+/** Enriches an already-rendered page with a group invite's OG tags, when the
+ *  URL is a /join/:token link — applied on top of Vite's own transform (dev,
+ *  see server/vite.ts) or the built file (prod, see server/static.ts) rather
+ *  than generating a competing render. Lives here, not in vite.ts, so
+ *  server/static.ts (which runs in production) never has to import
+ *  server/vite.ts — that file imports the `vite` package itself, a
+ *  devDependency not installed in production. */
+export async function withInviteMeta(url: string, req: Request, page: string): Promise<string> {
+  const match = JOIN_PATH.exec(url);
+  if (!match) return page;
+  try {
+    const rawParam = decodeURIComponent(match[1]);
+    const dashIdx = rawParam.indexOf("-");
+    const token = dashIdx > 0 ? rawParam.slice(dashIdx + 1) : rawParam;
+    const resolution = await resolveInvite(token);
+    const meta = ogMetaFor(req, resolution, rawParam);
+    return renderInviteHtml(page, meta);
+  } catch (e) {
+    console.error("Invite OG render error:", e);
+    return page; // the plain SPA shell is a fine fallback — never 500 a real visitor over this
+  }
+}
+
 // cwd-relative, not __dirname-relative — same reasoning as CACHE_DIR below
 // and photoDataUri()'s /uploads and /photos paths. __dirname doesn't exist
 // in native ESM (dev, via tsx), and esbuild rewrites import.meta to an empty

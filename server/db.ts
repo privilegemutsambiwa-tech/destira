@@ -22,6 +22,26 @@ export const client = databaseUrl
       // matches the common "just give me DATABASE_URL" pattern rather than
       // requiring the caller to also manage a CA bundle for a single app DB.
       ssl: process.env.PGSSL_DISABLE === "1" ? false : { rejectUnauthorized: false },
+      // Conservative: this app runs as a single process (WEB_CONCURRENCY=1),
+      // so it never needs many concurrent connections, and hosted poolers
+      // (e.g. Supabase's) cap total connections per project across every
+      // client — staying small here leaves headroom for other consumers.
+      // Bumped 5 -> 8: at 5, the boot-time background jobs (proximity sweep,
+      // payments sweep, metrics backfill — see server/routes.ts) could
+      // exhaust the whole pool simultaneously and queue a real request
+      // behind them for 10s+ on a high-latency connection. 8 leaves real
+      // traffic a connection even if every boot job is mid-query at once;
+      // see also the startup stagger in routes.ts, which reduces how often
+      // that pile-up happens in the first place.
+      max: 8,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000,
+      // Bounds query EXECUTION time server-side, separate from
+      // connectionTimeoutMillis (which only bounds acquiring a connection).
+      // Without this, a genuinely stuck query holds its pool slot
+      // indefinitely instead of failing fast.
+      statement_timeout: 15_000,
+      query_timeout: 15_000,
     })
   : new PGlite(process.env.PGLITE_DATA_DIR || path.join(process.cwd(), ".localdb"));
 
