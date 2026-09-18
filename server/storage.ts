@@ -379,10 +379,19 @@ export class DatabaseStorage implements IStorage {
     const blockedOfRequester = await db.select({ blockerId: blockedUsers.blockerId })
       .from(blockedUsers)
       .where(eq(blockedUsers.blockedId, excludeUserId));
+
+    // Anyone already evaluated (liked, matched, rejected, or unmatched) never
+    // reappears in the feed — a matches row between the pair means the
+    // requester has already been shown this candidate and acted on them.
+    const evaluatedMatches = await db.select({ user1Id: matches.user1Id, user2Id: matches.user2Id })
+      .from(matches)
+      .where(or(eq(matches.user1Id, excludeUserId), eq(matches.user2Id, excludeUserId)));
+
     const excludedIds = new Set([
       excludeUserId,
       ...blockedByRequester.map(r => r.blockedId),
       ...blockedOfRequester.map(r => r.blockerId),
+      ...evaluatedMatches.map(m => m.user1Id === excludeUserId ? m.user2Id : m.user1Id),
     ]);
 
     const baseCondition = and(

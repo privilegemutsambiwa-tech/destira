@@ -24,12 +24,14 @@ export interface CompletionUsage {
 // Hive and buffers the deltas into one result.
 export async function completeText(
   messages: ChatMessage[],
-  opts: { maxTokens?: number; json?: boolean } = {},
+  opts: { maxTokens?: number; json?: boolean; presencePenalty?: number; frequencyPenalty?: number } = {},
 ): Promise<{ text: string; usage?: CompletionUsage }> {
   const stream = await ai.chat.completions.create({
     model: AI_MODEL,
     messages,
     max_tokens: opts.maxTokens,
+    presence_penalty: opts.presencePenalty,
+    frequency_penalty: opts.frequencyPenalty,
     response_format: opts.json ? { type: "json_object" } : undefined,
     stream: true,
   });

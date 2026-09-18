@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect, useCallback } from "react";
+﻿import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
@@ -432,6 +432,12 @@ export default function Discover() {
   const paywall = usePaywall();
   const [confirm, setConfirm] = useState<"block" | "report" | null>(null);
   const [reportReason, setReportReason] = useState("");
+  // Guards against a double-tap firing two Like/Pass actions on the same card
+  // before the deck advances — isActingRef blocks re-entrancy synchronously
+  // (state updates aren't visible until the next render), isActing state just
+  // drives the disabled prop so the buttons visibly lock while it settles.
+  const isActingRef = useRef(false);
+  const [isActing, setIsActing] = useState(false);
   const { data: rawProfiles, isLoading } = useDiscoverProfiles(filter, userLat, userLng);
   const { data: feedStories } = useFeedStories();
   const startInterview = useStartInterview();
@@ -456,6 +462,11 @@ export default function Discover() {
     setFilter(params.get("filter") === "nearby" ? "nearby" : "all");
     setCurrentIdx(0);
   }, [woLocation]);
+
+  useEffect(() => {
+    isActingRef.current = false;
+    setIsActing(false);
+  }, [currentIdx]);
 
   useEffect(() => {
     if (navigator.geolocation && localStorage.getItem("location_permission_asked") === "asked") {
@@ -584,7 +595,12 @@ export default function Discover() {
     }
   };
 
-  const handlePass = () => handleNext();
+  const handlePass = () => {
+    if (isActingRef.current) return;
+    isActingRef.current = true;
+    setIsActing(true);
+    handleNext();
+  };
 
   const doBlock = async () => {
     if (!currentProfile?.userId) return;
@@ -615,9 +631,25 @@ export default function Discover() {
   // Refuse before attempting when the daily cap is already reached — the sheet
   // says the number, the reset time, and the next tier. The server still
   // enforces on /api/likes.
-  const handleLike = () => paywall.guard("daily_likes", doLike);
+  const handleLike = () => {
+    if (isActingRef.current) return;
+    isActingRef.current = true;
+    setIsActing(true);
+    const likedProfile = currentProfile;
+    paywall.guard("daily_likes", () => {
+      // Optimistic: the card leaves the deck the instant the tap lands, like a
+      // swipe — the actual like request finishes in the background.
+      handleNext();
+      doLike(likedProfile);
+    }).finally(() => {
+      // Covers the path that never advances the deck (gate refused) — the
+      // currentIdx effect already resets this pair once handleNext runs above.
+      isActingRef.current = false;
+      setIsActing(false);
+    });
+  };
 
-  const doLike = async () => {
+  const doLike = async (targetProfile: typeof currentProfile) => {
     try {
       await fetch("/api/likes", {
         method: "POST",
@@ -629,16 +661,14 @@ export default function Discover() {
       // non-critical, continue with like
     }
     try {
-      await createMatch.mutateAsync(currentProfile.userId);
+      await createMatch.mutateAsync(targetProfile.userId);
       toast({
         title: "Liked!",
-        description: `${currentProfile.displayName} will be notified.`,
+        description: `${targetProfile.displayName} will be notified.`,
       });
-      handleNext();
     } catch (err) {
       if (err instanceof Error && err.message?.includes("already exists")) {
         toast({ title: "Already Connected", description: "You already have a match request with this person." });
-        handleNext();
       } else if (err instanceof Error && err.message?.includes("upgradeRequired")) {
         paywall.guard("daily_likes", () => {});
       } else {
@@ -865,7 +895,8 @@ export default function Discover() {
               <div className="flex gap-2.5 flex-wrap mt-auto pt-2">
                 <button
                   onClick={handlePass}
-                  className="flex items-center justify-center w-12 h-12 rounded-full border border-vf-text/14 text-vf-faint hover:text-vf-text hover:border-vf-text/25 transition-colors btn-press shrink-0"
+                  disabled={isActing}
+                  className="flex items-center justify-center w-12 h-12 rounded-full border border-vf-text/14 text-vf-faint hover:text-vf-text hover:border-vf-text/25 transition-colors btn-press shrink-0 disabled:opacity-50"
                   data-testid="button-pass"
                   aria-label="Pass"
                 >
@@ -882,8 +913,8 @@ export default function Discover() {
                 </button>
                 <button
                   onClick={handleLike}
-                  disabled={createMatch.isPending}
-                  className="flex items-center justify-center w-12 h-12 rounded-full shrink-0 font-semibold btn-press transition-colors bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)]"
+                  disabled={isActing || createMatch.isPending}
+                  className="flex items-center justify-center w-12 h-12 rounded-full shrink-0 font-semibold btn-press transition-colors bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] disabled:opacity-50"
                   data-testid="button-like"
                   aria-label="Like"
                 >

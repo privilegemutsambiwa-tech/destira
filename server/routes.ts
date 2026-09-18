@@ -1630,6 +1630,8 @@ Only include structured_updates fields if the conversation clearly reveals them.
           model: AI_MODEL,
           messages: [{ role: "system", content: systemPrompt }, ...chatMsgs],
           max_tokens: 8192,
+          presence_penalty: 0.3,
+          frequency_penalty: 0.3,
           stream: true,
         });
 
@@ -1661,7 +1663,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
 
         const completion = await completeText(
           [{ role: "system", content: systemPrompt }, ...chatMsgs],
-          { maxTokens: 8192 },
+          { maxTokens: 8192, presencePenalty: 0.3, frequencyPenalty: 0.3 },
         );
 
         let aiResponse = completion.text || "I hear you. Tell me more about what's on your mind.";
@@ -3483,15 +3485,24 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     try {
       const userMatches = await storage.getMatchesWithProfiles(userId);
-      const asks = userMatches
-        .filter((m: any) => m.isRequester && m.status !== "unmatched")
-        .map((m: any) => ({
-          matchId: m.id,
-          toUserId: m.isRequester ? m.user2Id : m.user1Id,
-          profile: m.otherProfile ? { ...m.otherProfile, blurred: false } : null,
-          status: m.status,
-          createdAt: m.createdAt,
-        }));
+      const outgoingRaw = userMatches.filter((m: any) => m.isRequester && m.status !== "unmatched");
+
+      // Defensively collapse to one row per recipient — legacy data (or a race
+      // before /api/matches' active-match check) can leave more than one
+      // outgoing row for the same person, and they should only render once.
+      const byRecipient = new Map<string, any>();
+      for (const m of outgoingRaw.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())) {
+        const toUserId = m.isRequester ? m.user2Id : m.user1Id;
+        if (!byRecipient.has(toUserId)) byRecipient.set(toUserId, m);
+      }
+
+      const asks = [...byRecipient.values()].map((m: any) => ({
+        matchId: m.id,
+        toUserId: m.isRequester ? m.user2Id : m.user1Id,
+        profile: m.otherProfile ? { ...m.otherProfile, blurred: false } : null,
+        status: m.status,
+        createdAt: m.createdAt,
+      }));
 
       res.json({ asks, totalCount: asks.length });
     } catch (e) {
