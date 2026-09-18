@@ -96,6 +96,13 @@ export function genderMatchesSeeking(gender: string | null, seekingGenders: stri
   return seekingValue ? seekingGenders.includes(seekingValue) : false;
 }
 
+// "everyone" is an explicit opt-in, not a stand-in for "no preference set" —
+// an empty/missing seekingGenders is handled separately (and strictly) by
+// callers, never treated as implicitly meaning everyone.
+function seekingIncludesGender(seekingGenders: string[], gender: string | null): boolean {
+  return seekingGenders.includes("everyone") || genderMatchesSeeking(gender, seekingGenders);
+}
+
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -355,8 +362,16 @@ export class DatabaseStorage implements IStorage {
     const maxDistanceKm = requesterProfile?.maxDistanceKm ?? null;
     const ageMin = requesterProfile?.ageMinPreference ?? null;
     const ageMax = requesterProfile?.ageMaxPreference ?? null;
-    const seekingGenders = (requesterProfile?.seekingGenders ?? []) as string[];
-    const seeAllGenders = seekingGenders.length === 0 || seekingGenders.includes("everyone");
+    const requesterGender = requesterProfile?.gender ?? null;
+    const requesterSeekingGenders = (requesterProfile?.seekingGenders ?? []) as string[];
+
+    // Matching is reciprocal and requires both sides to have stated a gender
+    // and a non-empty seekingGenders — a requester with no preferences set
+    // can't have candidates matched against them, so they get an empty feed
+    // rather than being shown everyone.
+    if (!requesterGender || requesterSeekingGenders.length === 0) {
+      return [];
+    }
 
     const blockedByRequester = await db.select({ blockedId: blockedUsers.blockedId })
       .from(blockedUsers)
@@ -374,7 +389,8 @@ export class DatabaseStorage implements IStorage {
       ne(profiles.userId, excludeUserId),
       eq(profiles.onboardingCompleted, true),
       eq(profiles.isPublic, true),
-      isNotNull(profiles.gender)
+      isNotNull(profiles.gender),
+      isNotNull(profiles.seekingGenders)
     );
 
     const filterCondition = filter === "online"
@@ -428,14 +444,19 @@ export class DatabaseStorage implements IStorage {
         if (ageMax !== null && row.age !== null && row.age > ageMax) return false;
         return true;
       })
-      .filter(row => seeAllGenders || genderMatchesSeeking(row.gender, seekingGenders))
       .filter(row => {
-        // Reciprocal check: the candidate must also be open to the requester's
-        // gender, so a match is never one-sided (e.g. a man seeking women only
-        // shows up to women who are themselves seeking men).
-        const candidateSeeking = (row.seekingGenders ?? []) as string[];
-        const candidateSeesEveryone = candidateSeeking.length === 0 || candidateSeeking.includes("everyone");
-        return candidateSeesEveryone || genderMatchesSeeking(requesterProfile?.gender ?? null, candidateSeeking);
+        // Strict, reciprocal gender matching. A candidate missing either half
+        // of its own preferences is excluded outright (never treated as
+        // "open to anyone"); otherwise both directions must independently
+        // match — the candidate's gender against what the requester is
+        // seeking, and the requester's gender against what the candidate is
+        // seeking — so a match is never one-sided (e.g. a man seeking women
+        // only shows up to women who are themselves seeking men).
+        const candidateSeekingGenders = (row.seekingGenders ?? []) as string[];
+        if (!row.gender || candidateSeekingGenders.length === 0) return false;
+        if (!seekingIncludesGender(requesterSeekingGenders, row.gender)) return false;
+        if (!seekingIncludesGender(candidateSeekingGenders, requesterGender)) return false;
+        return true;
       })
       .map(({ _lat, _lng, seekingGenders: _candidateSeeking, ...rest }) => {
         if (!rest.showDistance) {
