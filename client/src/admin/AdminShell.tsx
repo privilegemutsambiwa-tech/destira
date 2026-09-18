@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { Menu, LogOut } from "lucide-react";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { adminGet, adminPost, AdminApiError } from "./api";
 import "./admin.css";
 
@@ -71,6 +73,20 @@ export function usePrefersReducedMotion(): boolean {
     return () => mq.removeEventListener("change", onChange);
   }, []);
   return reduced;
+}
+
+/** Below this, the desktop sidebar gives way to the drawer nav — matches
+ *  Tailwind's `md` breakpoint so it lines up with the rest of the app. */
+function useIsMobile(breakpoint = 768): boolean {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    setIsMobile(mq.matches);
+    const onChange = () => setIsMobile(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [breakpoint]);
+  return isMobile;
 }
 
 const NAV = [
@@ -273,6 +289,8 @@ type OverviewSnapshot = {
 
 export function AdminShell({ role, email, children }: { role: string; email?: string | null; children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
+  const isMobile = useIsMobile();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Same query key AdminOverview.tsx uses — one shared QueryClient means
   // this dedupes into the same request/cache entry, not a second poll.
@@ -288,6 +306,11 @@ export function AdminShell({ role, email, children }: { role: string; email?: st
     window.location.reload();
   };
 
+  const isReportsRoute = location === "/console/reports" || location.startsWith("/console/reports/");
+  const activeNavItem = [...NAV, ...TEAM_NAV].find((item) => location === item.href || (item.href === "/console/reports" && isReportsRoute));
+  const pageTitle = activeNavItem?.label ?? "Console";
+  const initials = (email || role || "?").slice(0, 2).toUpperCase();
+
   const attention = overview
     ? ([
         overview.safetyReportsOpen > 0 ? { label: "safety-category open", n: overview.safetyReportsOpen } : null,
@@ -298,7 +321,135 @@ export function AdminShell({ role, email, children }: { role: string; email?: st
 
   return (
     <div className="console-root" style={{ minHeight: "100vh", background: INK, color: TEXT, fontFamily: '"DM Sans", sans-serif' }}>
+      {isMobile && (
+        <header
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 20,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 14px",
+            background: INK,
+            borderBottom: `1px solid ${LINE}`,
+            boxSizing: "border-box",
+          }}
+          data-testid="admin-mobile-header"
+        >
+          <button
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Open navigation"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, flexShrink: 0, borderRadius: 6, border: `1px solid ${LINE}`, background: "transparent", color: TEXT, cursor: "pointer" }}
+            data-testid="admin-mobile-menu-toggle"
+          >
+            <Menu size={18} />
+          </button>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={LABEL}>Destira Console</div>
+            <div style={{ ...MONO, fontSize: 13, color: TEXT, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pageTitle}</div>
+          </div>
+          <div
+            title={email ?? undefined}
+            style={{ ...MONO, width: 30, height: 30, flexShrink: 0, borderRadius: "50%", background: "rgba(255,255,255,.06)", border: `1px solid ${LINE}`, color: MUTED, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            {initials}
+          </div>
+          <button
+            onClick={signOut}
+            aria-label="Sign out"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, flexShrink: 0, borderRadius: 6, border: `1px solid ${LINE}`, background: "transparent", color: MUTED, cursor: "pointer" }}
+            data-testid="admin-mobile-sign-out"
+          >
+            <LogOut size={16} />
+          </button>
+        </header>
+      )}
+      <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+        <SheetContent side="left" className="p-0 border-none w-[82%] sm:max-w-xs" style={{ background: SURFACE, color: TEXT }}>
+          <SheetTitle className="sr-only">Console navigation</SheetTitle>
+          <SheetDescription className="sr-only">Jump to a section of the admin console</SheetDescription>
+          <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 20, height: "100%", overflowY: "auto", boxSizing: "border-box" }}>
+            <div>
+              <div style={LABEL}>Destira</div>
+              <div style={{ ...MONO, fontSize: 13, color: TEXT, marginTop: 2 }}>console</div>
+            </div>
+            <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {NAV.map((item) => {
+                const active = location === item.href || (item.href === "/console/reports" && isReportsRoute);
+                const badgeN = item.badgeKey && overview ? overview[item.badgeKey] : undefined;
+                return (
+                  <Link key={item.href} href={item.href}>
+                    <div
+                      onClick={() => setMobileNavOpen(false)}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: 6,
+                        fontSize: 14,
+                        cursor: "pointer",
+                        background: active ? "rgba(255,255,255,.06)" : "transparent",
+                        color: active ? TEXT : MUTED,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                      data-testid={`admin-mobile-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                    >
+                      <span>{item.label}</span>
+                      {badgeN != null && <span style={{ ...MONO, fontSize: 11, color: badgeN > 0 ? ALERT : FAINT }}>{badgeN}</span>}
+                    </div>
+                  </Link>
+                );
+              })}
+              {(role === "owner" || role === "admin") && (
+                <>
+                  <div style={{ borderTop: `1px solid ${LINE}`, margin: "8px 0" }} />
+                  {TEAM_NAV.map((item) => {
+                    const active = location === item.href;
+                    return (
+                      <Link key={item.href} href={item.href}>
+                        <div
+                          onClick={() => setMobileNavOpen(false)}
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: 6,
+                            fontSize: 14,
+                            cursor: "pointer",
+                            background: active ? "rgba(255,255,255,.06)" : "transparent",
+                            color: active ? TEXT : MUTED,
+                          }}
+                          data-testid={`admin-mobile-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                        >
+                          {item.label}
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </>
+              )}
+            </nav>
+            <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+              <div>
+                <div style={{ ...LABEL, color: FAINT }}>Role: {role}</div>
+                {email && (
+                  <div style={{ ...MONO, fontSize: 11, color: FAINT, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={email}>
+                    {email}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={signOut}
+                style={{ height: 34, borderRadius: 6, border: `1px solid ${LINE}`, background: "transparent", color: MUTED, fontSize: 12.5, cursor: "pointer" }}
+                data-testid="admin-mobile-sign-out-drawer"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
       <div style={{ display: "flex", minHeight: "100vh" }}>
+        {!isMobile && (
         <aside style={{ width: 200, flexShrink: 0, borderRight: `1px solid ${LINE}`, padding: 18, display: "flex", flexDirection: "column", gap: 20 }}>
           <div>
             <div style={LABEL}>Destira</div>
@@ -393,7 +544,8 @@ export function AdminShell({ role, email, children }: { role: string; email?: st
             </button>
           </div>
         </aside>
-        <main style={{ flex: 1, minWidth: 0, padding: "20px 28px", overflowX: "auto" }}>
+        )}
+        <main style={{ flex: 1, minWidth: 0, width: "100%", padding: isMobile ? "16px" : "20px 28px", overflowX: "auto" }}>
           <StepUpProvider>{children}</StepUpProvider>
         </main>
       </div>

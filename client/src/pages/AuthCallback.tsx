@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
-import { DestiraMark } from "@/components/brand/logo";
+import { DestiraLoadingScreen } from "@/components/brand/logo";
 import { consumePendingInvite } from "@/lib/pending-invite";
 import type { User } from "@shared/models/auth";
 
@@ -74,9 +74,5 @@ export default function AuthCallback() {
     );
   }
 
-  return (
-    <div className="min-h-dvh flex items-center justify-center bg-background">
-      <DestiraMark size={64} variant="tile" className="animate-pulse" />
-    </div>
-  );
+  return <DestiraLoadingScreen />;
 }

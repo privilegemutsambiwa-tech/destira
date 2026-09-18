@@ -15,6 +15,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { StoryViewer, OwnStoryViewer, AddStoryButton } from "@/components/story-viewer";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { useProfile } from "@/hooks/use-profiles";
 import type { User } from "@shared/models/auth";
 
 function formatDistance(km: number): string {
@@ -437,6 +438,18 @@ export default function Discover() {
   const createMatch = useCreateMatch();
   const [woLocation, setLocation] = useLocation();
   const { toast } = useToast();
+  const { data: ownProfile, isLoading: isOwnProfileLoading } = useProfile();
+
+  // Mandatory-onboarding gate: gender and who they're seeking must be set
+  // before Discover shows anyone (this also catches Google sign-ins and any
+  // direct-URL navigation that skipped the essentials step).
+  const needsEssentials =
+    !isOwnProfileLoading &&
+    (!ownProfile || !ownProfile.gender || !Array.isArray(ownProfile.seekingGenders) || ownProfile.seekingGenders.length === 0);
+
+  useEffect(() => {
+    if (needsEssentials) setLocation("/essentials");
+  }, [needsEssentials, setLocation]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -487,7 +500,7 @@ export default function Discover() {
     });
   }, [storiesByUserId]);
 
-  if (isLoading) {
+  if (isLoading || isOwnProfileLoading || needsEssentials) {
     return (
       <LayoutShell>
         <div className="h-[60vh] flex items-center justify-center">

@@ -22,7 +22,7 @@ import {
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import type { PhotoRole } from "@shared/schema";
-import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lte, inArray } from "drizzle-orm";
+import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lte, inArray, isNotNull } from "drizzle-orm";
 
 export class PhotoNotFoundError extends Error {
   constructor() { super("Photo not found"); }
@@ -373,7 +373,8 @@ export class DatabaseStorage implements IStorage {
     const baseCondition = and(
       ne(profiles.userId, excludeUserId),
       eq(profiles.onboardingCompleted, true),
-      eq(profiles.isPublic, true)
+      eq(profiles.isPublic, true),
+      isNotNull(profiles.gender)
     );
 
     const filterCondition = filter === "online"
@@ -393,6 +394,7 @@ export class DatabaseStorage implements IStorage {
         aboutMe: profiles.aboutMe,
         age: profiles.age,
         gender: profiles.gender,
+        seekingGenders: profiles.seekingGenders,
         location: profiles.location,
         personalityProfile: profiles.personalityProfile,
         twinPersona: profiles.twinPersona,
@@ -427,7 +429,15 @@ export class DatabaseStorage implements IStorage {
         return true;
       })
       .filter(row => seeAllGenders || genderMatchesSeeking(row.gender, seekingGenders))
-      .map(({ _lat, _lng, ...rest }) => {
+      .filter(row => {
+        // Reciprocal check: the candidate must also be open to the requester's
+        // gender, so a match is never one-sided (e.g. a man seeking women only
+        // shows up to women who are themselves seeking men).
+        const candidateSeeking = (row.seekingGenders ?? []) as string[];
+        const candidateSeesEveryone = candidateSeeking.length === 0 || candidateSeeking.includes("everyone");
+        return candidateSeesEveryone || genderMatchesSeeking(requesterProfile?.gender ?? null, candidateSeeking);
+      })
+      .map(({ _lat, _lng, seekingGenders: _candidateSeeking, ...rest }) => {
         if (!rest.showDistance) {
           return { ...rest, locationName: null, locationUpdatedAt: null, distanceKm: null, isNearbyNow: false };
         }

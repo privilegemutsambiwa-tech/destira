@@ -263,16 +263,15 @@ export default function Essentials() {
           <div className="mt-6 flex items-center gap-4">
             <button
               onClick={async () => {
-                if (seeking.length) await save({ seekingGenders: seeking });
+                if (!seeking.length) return;
+                await save({ seekingGenders: seeking });
                 next();
               }}
-              className="flex-1 h-12 rounded-full bg-vf-ember text-vf-ink font-medium text-[14px]"
+              disabled={!seeking.length || saving}
+              className="flex-1 h-12 rounded-full bg-vf-ember text-vf-ink font-medium text-[14px] disabled:opacity-50"
               data-testid="button-seeking-continue"
             >
               Continue
-            </button>
-            <button onClick={next} className="text-[13px] text-vf-faint hover:text-vf-text" data-testid="button-seeking-skip">
-              Skip
             </button>
           </div>
         </div>
@@ -362,9 +361,6 @@ export default function Essentials() {
               data-testid="button-age-continue"
             >
               Continue
-            </button>
-            <button onClick={next} className="text-[13px] text-vf-faint hover:text-vf-text" data-testid="button-age-skip">
-              Skip
             </button>
           </div>
         </div>

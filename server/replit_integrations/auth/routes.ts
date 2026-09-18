@@ -5,6 +5,16 @@ import { hashPassword, verifyPassword } from "./password";
 import { supabaseAuthClient } from "./supabase";
 import type { User } from "@shared/models/auth";
 import * as referrals from "../../referrals";
+import { storage } from "../../storage";
+
+// A profile only counts as onboarded once the mandatory matching fields —
+// gender and who they're seeking — are actually filled in. Used to decide
+// whether a Google sign-in should land on Discover or get routed back into
+// profile setup first.
+async function checkIsOnboarded(userId: string): Promise<boolean> {
+  const profile = await storage.getProfile(userId);
+  return !!profile?.gender && Array.isArray(profile.seekingGenders) && profile.seekingGenders.length > 0;
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -223,12 +233,14 @@ export function registerAuthRoutes(app: Express): void {
         });
       }
 
+      const isOnboarded = await checkIsOnboarded(user.id);
+
       req.login(createSessionUser(user), (err: any) => {
         if (err) {
           console.error("[google-callback] req.login failed:", err);
           return res.status(500).json({ message: "Signed in with Google, but session setup failed." });
         }
-        res.json(sanitizeUser(user));
+        res.json({ ...sanitizeUser(user), isOnboarded });
       });
     } catch (error) {
       console.error("Google callback error:", error);
