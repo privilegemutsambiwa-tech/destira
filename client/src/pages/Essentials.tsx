@@ -12,6 +12,7 @@ import {
   MAX_AGE,
   defaultAgeRange,
   ageFromDob,
+  ageFieldError,
 } from "@shared/essentials";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
@@ -72,10 +73,8 @@ export default function Essentials() {
   const [selfDescribe, setSelfDescribe] = useState("");
   const [seeking, setSeeking] = useState<string[]>([]);
   const [intent, setIntent] = useState<string>("");
-  const [ageMin, setAgeMin] = useState(MIN_AGE);
-  const [ageMax, setAgeMax] = useState(60);
   const [ageMinText, setAgeMinText] = useState(String(MIN_AGE));
-  const [ageMaxText, setAgeMaxText] = useState("60");
+  const [ageMaxText, setAgeMaxText] = useState("35");
   const [ageTouched, setAgeTouched] = useState(false);
   const [area, setArea] = useState("");
   const [areaQuery, setAreaQuery] = useState("");
@@ -97,16 +96,12 @@ export default function Essentials() {
     if (profile.datingIntent) setIntent(profile.datingIntent);
     if (profile.ageMinPreference || profile.ageMaxPreference) {
       const min = profile.ageMinPreference ?? MIN_AGE;
-      const max = profile.ageMaxPreference ?? 60;
-      setAgeMin(min);
-      setAgeMax(max);
+      const max = profile.ageMaxPreference ?? 35;
       setAgeMinText(String(min));
       setAgeMaxText(String(max));
       setAgeTouched(true);
     } else if (ownAge) {
       const d = defaultAgeRange(ownAge);
-      setAgeMin(d.min);
-      setAgeMax(d.max);
       setAgeMinText(String(d.min));
       setAgeMaxText(String(d.max));
     }
@@ -171,6 +166,15 @@ export default function Essentials() {
     await save({ datingIntent: v });
     next();
   };
+
+  const ageMinNum = Number(ageMinText);
+  const ageMaxNum = Number(ageMaxText);
+  const ageMinFieldError = ageFieldError("Minimum age", ageMinText);
+  const ageMaxFieldError = ageFieldError("Maximum age", ageMaxText);
+  const ageRangeInvalid = !ageMinFieldError && !ageMaxFieldError && ageMaxNum < ageMinNum;
+  const ageMinInvalid = !!ageMinFieldError;
+  const ageMaxInvalid = !!ageMaxFieldError || ageRangeInvalid;
+  const ageError = ageMinFieldError || ageMaxFieldError || (ageRangeInvalid ? "Maximum age must be greater than or equal to minimum age" : null);
 
   if (isLoading) {
     return (
@@ -307,23 +311,20 @@ export default function Essentials() {
           <h1 className="font-serif font-normal text-[28px] leading-[1.15] text-vf-text mt-3 mb-6">
             Open to ages
           </h1>
-          <div className="flex items-center justify-center gap-4 mb-6">
+          <div className="flex items-center justify-center gap-4 mb-3">
             <input
               type="number"
               inputMode="numeric"
               value={ageMinText}
               min={MIN_AGE}
-              max={ageMax}
+              max={MAX_AGE}
               onChange={(e) => {
                 setAgeTouched(true);
                 setAgeMinText(e.target.value);
               }}
-              onBlur={() => {
-                const clamped = Math.max(MIN_AGE, Math.min(Number(ageMinText) || MIN_AGE, ageMax));
-                setAgeMin(clamped);
-                setAgeMinText(String(clamped));
-              }}
-              className="w-20 rounded-[12px] border border-vf-line bg-vf-text/5 px-3 h-12 text-center text-[20px] font-serif text-vf-text outline-none focus:border-vf-ember/60"
+              className={`w-20 rounded-[12px] border bg-vf-text/5 px-3 h-12 text-center text-[20px] font-serif text-vf-text outline-none focus:border-vf-ember/60 ${
+                ageMinInvalid ? "border-red-500/70" : "border-vf-line"
+              }`}
               data-testid="input-age-min"
             />
             <span className="text-vf-faint">to</span>
@@ -331,33 +332,37 @@ export default function Essentials() {
               type="number"
               inputMode="numeric"
               value={ageMaxText}
-              min={ageMin}
+              min={MIN_AGE}
               max={MAX_AGE}
               onChange={(e) => {
                 setAgeTouched(true);
                 setAgeMaxText(e.target.value);
               }}
-              onBlur={() => {
-                const clamped = Math.min(MAX_AGE, Math.max(Number(ageMaxText) || MAX_AGE, ageMin));
-                setAgeMax(clamped);
-                setAgeMaxText(String(clamped));
-              }}
-              className="w-20 rounded-[12px] border border-vf-line bg-vf-text/5 px-3 h-12 text-center text-[20px] font-serif text-vf-text outline-none focus:border-vf-ember/60"
+              className={`w-20 rounded-[12px] border bg-vf-text/5 px-3 h-12 text-center text-[20px] font-serif text-vf-text outline-none focus:border-vf-ember/60 ${
+                ageMaxInvalid || ageRangeInvalid ? "border-red-500/70" : "border-vf-line"
+              }`}
               data-testid="input-age-max"
             />
           </div>
-          {ownAge && !ageTouched && (
-            <p className="text-[12.5px] text-vf-faint text-center mb-6">Set from your age — change if you like.</p>
+          {ageError ? (
+            <p className="text-[12.5px] text-red-500 text-center mb-6" data-testid="age-range-error">
+              {ageError}
+            </p>
+          ) : (
+            ownAge &&
+            !ageTouched && (
+              <p className="text-[12.5px] text-vf-faint text-center mb-6">Set from your age — change if you like.</p>
+            )
           )}
           <div className="flex items-center gap-4">
             <button
               onClick={async () => {
-                const min = Math.max(MIN_AGE, Math.min(Number(ageMinText) || MIN_AGE, MAX_AGE));
-                const max = Math.min(MAX_AGE, Math.max(Number(ageMaxText) || MAX_AGE, min));
-                await save({ ageMinPreference: min, ageMaxPreference: max });
+                if (ageError) return;
+                await save({ ageMinPreference: ageMinNum, ageMaxPreference: ageMaxNum });
                 next();
               }}
-              className="flex-1 h-12 rounded-full bg-vf-ember text-vf-ink font-medium text-[14px]"
+              disabled={!!ageError}
+              className="flex-1 h-12 rounded-full bg-vf-ember text-vf-ink font-medium text-[14px] disabled:opacity-50 disabled:cursor-not-allowed"
               data-testid="button-age-continue"
             >
               Continue

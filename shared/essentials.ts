@@ -58,3 +58,17 @@ export function defaultAgeRange(age: number): { min: number; max: number } {
     max: Math.min(MAX_AGE, age + 7),
   };
 }
+
+/** Validates one age-preference field's raw text input. Returns a specific,
+ *  displayable reason it's invalid, or null if it's a whole number within
+ *  [MIN_AGE, MAX_AGE] — shared by onboarding (Essentials) and Settings so
+ *  "min age" and "max age" are judged by the same rule everywhere. */
+export function ageFieldError(label: string, text: string): string | null {
+  const trimmed = text.trim();
+  if (trimmed === "") return `${label} is required`;
+  const num = Number(trimmed);
+  if (!Number.isFinite(num)) return `${label} must be a number`;
+  if (num < MIN_AGE) return `${label} must be at least ${MIN_AGE}`;
+  if (num > MAX_AGE) return `${label} can't be more than ${MAX_AGE}`;
+  return null;
+}

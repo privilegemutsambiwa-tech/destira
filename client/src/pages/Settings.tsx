@@ -12,7 +12,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
 import { PLAN_CARDS as SETTINGS_PLAN_CARDS, LIMITS as SETTINGS_LIMITS, PERIOD_LABEL, type BillingPeriod } from "@shared/entitlements";
-import { SEEKING_OPTIONS } from "@shared/essentials";
+import { SEEKING_OPTIONS, ageFieldError } from "@shared/essentials";
 import { useSubscription } from "@/hooks/use-interactions";
 import { useCancelSubscription } from "@/hooks/use-payments";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -212,19 +212,22 @@ function Panel({ title, onBack, children }: { title: string; onBack: () => void;
   );
 }
 
-function GradientButton({ label, onClick, testId, danger }: {
-  label: string; onClick: () => void; testId?: string; danger?: boolean;
+function GradientButton({ label, onClick, testId, danger, disabled }: {
+  label: string; onClick: () => void; testId?: string; danger?: boolean; disabled?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       data-testid={testId}
       className="w-full py-3 text-sm"
       style={{
         background: danger ? "#EF4444" : EMBER,
         color: danger ? "#FFFFFF" : INK,
         fontWeight: 600,
-        borderRadius: "12px", border: "none", cursor: "pointer",
+        borderRadius: "12px", border: "none",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
       }}
     >
       {label}
@@ -610,24 +613,86 @@ function ProximityPanel({ onBack, profile }: { onBack: () => void; profile: any 
 
 function AgeRangePanel({ onBack, profile }: { onBack: () => void; profile: any }) {
   const { toast } = useToast();
-  const [ageMin, setAgeMin] = useState(profile?.ageMinPreference ?? 18);
-  const [ageMax, setAgeMax] = useState(profile?.ageMaxPreference ?? 65);
+  const queryClient = useQueryClient();
+  const [ageMinText, setAgeMinText] = useState(String(profile?.ageMinPreference ?? 18));
+  const [ageMaxText, setAgeMaxText] = useState(String(profile?.ageMaxPreference ?? 35));
+
+  const ageMinNum = Number(ageMinText);
+  const ageMaxNum = Number(ageMaxText);
+  const ageMinFieldError = ageFieldError("Minimum age", ageMinText);
+  const ageMaxFieldError = ageFieldError("Maximum age", ageMaxText);
+  const rangeInvalid = !ageMinFieldError && !ageMaxFieldError && ageMaxNum < ageMinNum;
+  const minInvalid = !!ageMinFieldError;
+  const maxInvalid = !!ageMaxFieldError;
+  const ageError = ageMinFieldError || ageMaxFieldError || (rangeInvalid ? "Maximum age must be greater than or equal to minimum age" : null);
+
   const saveMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/settings/discovery", { ageMinPreference: ageMin, ageMaxPreference: ageMax }),
-    onSuccess: () => toast({ title: "Age range saved" }),
-    onError: () => toast({ title: "Failed to save", variant: "destructive" }),
+    mutationFn: () =>
+      apiRequest("POST", "/api/settings/discovery", { ageMinPreference: ageMinNum, ageMaxPreference: ageMaxNum }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      // Re-sync from what was actually sent, so this stays correct even if
+      // the panel is unmounted/remounted before the refetch above resolves.
+      setAgeMinText(String(ageMinNum));
+      setAgeMaxText(String(ageMaxNum));
+      toast({ title: "Age range saved" });
+    },
+    onError: (e: any) => toast({ title: e?.message || "Failed to save", variant: "destructive" }),
   });
+
   return (
     <Panel title="Age Range" onBack={onBack}>
-      <div style={{ margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden", background: CARD }}>
-        <SliderInput label="Minimum Age" value={ageMin} min={18} max={ageMax - 1} onChange={(v) => setAgeMin(v)} />
-        <SliderInput label="Maximum Age" value={ageMax} min={ageMin + 1} max={65} onChange={(v) => setAgeMax(v)} />
+      <div
+        style={{ margin: "16px 16px 0", borderRadius: "16px", background: CARD, padding: "20px 16px" }}
+        className="flex items-center justify-center gap-4"
+      >
+        <label className="flex flex-col items-center gap-2">
+          <span className="text-xs" style={{ color: MUTED }}>Minimum Age</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={18}
+            max={99}
+            value={ageMinText}
+            onChange={(e) => setAgeMinText(e.target.value)}
+            className="w-20 h-11 rounded-xl text-center text-base outline-none"
+            style={{ background: ELEVATED, border: `1px solid ${minInvalid ? "#EF4444" : BORDER}`, color: TEXT }}
+            data-testid="input-age-min"
+          />
+        </label>
+        <span className="mt-5" style={{ color: MUTED }}>to</span>
+        <label className="flex flex-col items-center gap-2">
+          <span className="text-xs" style={{ color: MUTED }}>Maximum Age</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={18}
+            max={99}
+            value={ageMaxText}
+            onChange={(e) => setAgeMaxText(e.target.value)}
+            className="w-20 h-11 rounded-xl text-center text-base outline-none"
+            style={{ background: ELEVATED, border: `1px solid ${maxInvalid || rangeInvalid ? "#EF4444" : BORDER}`, color: TEXT }}
+            data-testid="input-age-max"
+          />
+        </label>
       </div>
-      <p className="text-xs px-4 pt-3" style={{ color: MUTED }}>
-        Show profiles for people aged {ageMin}–{ageMax}.
-      </p>
+      {ageError ? (
+        <p className="text-xs px-4 pt-3" style={{ color: "#EF4444" }} data-testid="age-range-error">
+          {ageError}
+        </p>
+      ) : (
+        <p className="text-xs px-4 pt-3" style={{ color: MUTED }}>
+          Show profiles for people aged {ageMinNum}–{ageMaxNum}.
+        </p>
+      )}
       <div style={{ padding: "16px" }}>
-        <GradientButton label="Save Age Range" onClick={() => saveMutation.mutate()} testId="button-save-age-range" />
+        <GradientButton
+          label="Save Age Range"
+          onClick={() => saveMutation.mutate()}
+          disabled={!!ageError || saveMutation.isPending}
+          testId="button-save-age-range"
+        />
       </div>
     </Panel>
   );

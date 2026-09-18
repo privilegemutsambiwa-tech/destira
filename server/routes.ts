@@ -350,6 +350,32 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   }
 
+  // ageMinPreference / ageMaxPreference must each be >= MIN_AGE, and — once
+  // both sides are known (this request's body, falling back to whatever is
+  // already stored) — max must be >= min. Returns an error message, or null
+  // if the pair (or absence of one) is fine. Shared by every route that can
+  // write these two fields, so a client can't bypass the check by hitting a
+  // different endpoint than the one a given page happens to use.
+  function validateAgePreferences(
+    body: { ageMinPreference?: unknown; ageMaxPreference?: unknown },
+    existing?: { ageMinPreference?: number | null; ageMaxPreference?: number | null } | null
+  ): string | null {
+    const { ageMinPreference, ageMaxPreference } = body;
+    if (ageMinPreference == null && ageMaxPreference == null) return null;
+    if (ageMinPreference != null && (typeof ageMinPreference !== "number" || !Number.isFinite(ageMinPreference) || ageMinPreference < MIN_AGE)) {
+      return `Minimum age must be at least ${MIN_AGE}`;
+    }
+    if (ageMaxPreference != null && (typeof ageMaxPreference !== "number" || !Number.isFinite(ageMaxPreference) || ageMaxPreference < MIN_AGE)) {
+      return `Maximum age must be at least ${MIN_AGE}`;
+    }
+    const effectiveMin = (ageMinPreference as number | undefined) ?? existing?.ageMinPreference ?? MIN_AGE;
+    const effectiveMax = (ageMaxPreference as number | undefined) ?? existing?.ageMaxPreference ?? MIN_AGE;
+    if (effectiveMax < effectiveMin) {
+      return "Maximum age must be greater than or equal to minimum age";
+    }
+    return null;
+  }
+
   app.post("/api/profiles", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -363,6 +389,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
     try {
       const existing = await storage.getProfile(userId);
+      const ageError = validateAgePreferences(req.body, existing);
+      if (ageError) return res.status(400).json({ message: ageError });
       const isCompletingOnboarding = req.body.onboardingCompleted && req.body.personalityProfile;
       const onboardingCount = isCompletingOnboarding
         ? Object.values(req.body.personalityProfile as Record<string, string>).filter(
@@ -424,6 +452,11 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         if (derived == null) return res.status(400).json({ message: "Enter a valid date of birth." });
         if (derived < MIN_AGE) return res.status(422).json({ message: "You need to be 18 or older." });
         safeUpdate.age = derived;
+      }
+      if (safeUpdate.ageMinPreference != null || safeUpdate.ageMaxPreference != null) {
+        const existing = await storage.getProfile(userId);
+        const ageError = validateAgePreferences(safeUpdate, existing);
+        if (ageError) return res.status(400).json({ message: ageError });
       }
       if (safeUpdate.groupNickname) {
         const nick = safeUpdate.groupNickname.trim();
@@ -4160,6 +4193,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     try {
       const { maxDistanceKm, ageMinPreference, ageMaxPreference, seekingGenders } = req.body;
+
+      if (ageMinPreference != null || ageMaxPreference != null) {
+        const existing = await storage.getProfile(userId);
+        const ageError = validateAgePreferences(req.body, existing);
+        if (ageError) return res.status(400).json({ message: ageError });
+      }
+
       await storage.updateProfile(userId, {
         ...(maxDistanceKm != null && { maxDistanceKm }),
         ...(ageMinPreference != null && { ageMinPreference }),
