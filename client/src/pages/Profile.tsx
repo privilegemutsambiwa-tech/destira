@@ -1069,6 +1069,11 @@ function EditProfileDialog({
               className={`${inputClass} resize-none`}
               data-testid="input-bio-dialog"
             />
+            <RefineWithAI
+              value={bio}
+              fieldType="bio"
+              onApply={(text) => setBio(text.slice(0, BIO_MAX))}
+            />
           </div>
 
           <div className="space-y-2">
