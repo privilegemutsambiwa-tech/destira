@@ -9,7 +9,7 @@ const THEME_COLOR: Record<"light" | "dark", string> = { dark: "#0C0910", light: 
 // this hook is what changes the theme thereafter and keeps it applied to
 // data-theme, the theme-color meta tag, and localStorage.
 function resolveSystemTheme(): "light" | "dark" {
-  if (typeof window === "undefined" || !window.matchMedia) return "dark";
+  if (typeof window === "undefined" || !window.matchMedia) return "light";
   return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
@@ -32,7 +32,9 @@ function readStoredPreference(): ThemePreference {
   } catch {
     /* localStorage unavailable */
   }
-  return "system";
+  // No preference saved yet — light is the app default, not the OS setting.
+  // "system" stays available as an explicit choice in Settings.
+  return "light";
 }
 
 /** The Settings toggle (and anything else) reads/sets theme through this —

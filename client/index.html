@@ -3,38 +3,50 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#0C0910" id="meta-theme-color" />
+    <meta name="theme-color" content="#FBF8F5" id="meta-theme-color" />
     <title>Destira</title>
-    <!-- Sets data-theme before first paint — no flash of the wrong theme, and
-         critically no flash of light for a dark-preferring user (the one that
-         actually hurts) — plus the <meta name="theme-color"> above, which a
-         media-attribute pair can't cover once the user has explicitly
-         overridden the OS preference in-app. Synchronous, blocking, in
-         <head>, on purpose: this has to run before the browser's first
-         frame, not just before CSS loads. Kept in lockstep with
-         client/src/hooks/use-theme.ts, the only other place that reads/
-         writes destira-theme or this meta tag. -->
+    <!-- Sets data-theme before first paint — no flash of the wrong theme.
+         Light is the app's official default: an unset/invalid preference
+         resolves straight to light, not the OS setting. Only an explicit
+         "system" choice (made in Settings) still follows
+         prefers-color-scheme. Plus the <meta name="theme-color"> above,
+         which a media-attribute pair can't cover once the user has
+         explicitly overridden the OS preference in-app. Synchronous,
+         blocking, in <head>, on purpose: this has to run before the
+         browser's first frame, not just before CSS loads. Kept in lockstep
+         with client/src/hooks/use-theme.ts, the only other place that
+         reads/writes destira-theme or this meta tag. -->
     <script>
       (function () {
         var THEME_COLOR = { dark: "#0C0910", light: "#FBF8F5" };
+        // localStorage can throw (private mode / disabled) — read defensively
+        // so a failure here still lands on the light default below, not on
+        // index.css's bare-:root dark fallback.
+        var v = null;
         try {
-          var v = localStorage.getItem("destira-theme");
-          var resolved;
-          if (v === "light" || v === "dark") {
-            document.documentElement.setAttribute("data-theme", v);
-            resolved = v;
-          } else {
-            // "system" (or unset/invalid) sets no attribute — index.css's
-            // :root:not([data-theme]) + prefers-color-scheme handles the CSS
-            // side; this just needs the same answer for the meta tag below.
-            resolved = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-          }
+          v = localStorage.getItem("destira-theme");
+        } catch (e) {
+          /* unavailable — v stays null, treated as "no preference saved" */
+        }
+        var resolved;
+        if (v === "light" || v === "dark") {
+          document.documentElement.setAttribute("data-theme", v);
+          resolved = v;
+        } else if (v === "system") {
+          // Explicit "system" sets no attribute — index.css's
+          // :root:not([data-theme]) + prefers-color-scheme handles the CSS
+          // side; this just needs the same answer for the meta tag below.
+          resolved = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        } else {
+          // No preference saved yet — light, the app default, not the OS setting.
+          document.documentElement.setAttribute("data-theme", "light");
+          resolved = "light";
+        }
+        try {
           var meta = document.getElementById("meta-theme-color");
           if (meta) meta.setAttribute("content", THEME_COLOR[resolved]);
         } catch (e) {
-          /* localStorage/matchMedia unavailable (private mode, old browser)
-             — falls back to the dark default already in the meta tag and
-             the OS-preference CSS path. */
+          /* ignore — meta tag already has the light default in markup */
         }
       })();
     </script>
