@@ -151,20 +151,10 @@ export function overlap(
   return Array.from(new Set(chips));
 }
 
-/** Haversine on stored lat/lng. null when either side lacks coordinates or the
- *  other person has distance hidden. */
-export function distanceKm(mine: any, theirs: any): number | null {
-  if (theirs?.showDistance === false) return null;
-  const aLat = Number(mine?.locationLat);
-  const aLng = Number(mine?.locationLng);
-  const bLat = Number(theirs?.locationLat);
-  const bLng = Number(theirs?.locationLng);
-  if ([aLat, aLng, bLat, bLng].some((n) => !Number.isFinite(n))) return null;
-  const R = 6371;
-  const dLat = ((bLat - aLat) * Math.PI) / 180;
-  const dLng = ((bLng - aLng) * Math.PI) / 180;
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+/** The server computes this (see storage.getProfileWithUser) so raw GPS
+ *  coordinates never have to be sent to the client at all. null when the
+ *  other person has distance hidden, or the server couldn't place either
+ *  side. `mine` is unused but kept in the signature for call-site stability. */
+export function distanceKm(_mine: any, theirs: any): number | null {
+  return typeof theirs?.distanceKm === "number" ? theirs.distanceKm : null;
 }

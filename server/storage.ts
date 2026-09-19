@@ -116,7 +116,7 @@ export interface IStorage {
   createProfile(profile: InsertProfile & { userId: string }): Promise<Profile>;
   updateProfile(userId: string, updates: Partial<InsertProfile>): Promise<Profile>;
   getDiscoverableProfiles(excludeUserId: string, filter?: string, userLat?: number, userLng?: number): Promise<any[]>;
-  getProfileWithUser(userId: string): Promise<any>;
+  getProfileWithUser(userId: string, viewerId?: string): Promise<any>;
   getPublicAnswers(userId: string, limit?: number): Promise<Array<{ question: string; answer: string }>>;
   getGroupsForUser(targetUserId: string, viewerUserId: string): Promise<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean }>>;
 
@@ -476,13 +476,17 @@ export class DatabaseStorage implements IStorage {
         }
         const pLat = _lat ? parseFloat(String(_lat)) : null;
         const pLng = _lng ? parseFloat(String(_lng)) : null;
-        const distanceKm = (userLat !== undefined && userLng !== undefined && pLat !== null && pLng !== null)
+        const rawDistanceKm = (userLat !== undefined && userLng !== undefined && pLat !== null && pLng !== null)
           ? haversineKm(userLat, userLng, pLat, pLng)
           : null;
-        if (maxDistanceKm !== null && distanceKm !== null && distanceKm > maxDistanceKm) return null;
+        if (maxDistanceKm !== null && rawDistanceKm !== null && rawDistanceKm > maxDistanceKm) return null;
         const isNearby = rest.locationUpdatedAt
           ? Date.now() - new Date(rest.locationUpdatedAt).getTime() < 30 * 60 * 1000
           : false;
+        // Only the rounded distance and coarse location leave this function —
+        // _lat/_lng (raw GPS) are destructured out above and never reach the
+        // returned object.
+        const distanceKm = rawDistanceKm !== null ? Math.round(rawDistanceKm) : null;
         return { ...rest, distanceKm, isNearbyNow: isNearby };
       })
       .filter((row): row is NonNullable<typeof row> => row !== null);
@@ -601,7 +605,11 @@ export class DatabaseStorage implements IStorage {
   }
 
 
-  async getProfileWithUser(userId: string): Promise<any> {
+  // viewerId is who's asking, so we can hand back a computed distanceKm
+  // instead of raw coordinates. Raw locationLat/locationLng NEVER leave this
+  // function — they're read into _lat/_lng below purely to compute the
+  // distance server-side, then dropped before the object is returned.
+  async getProfileWithUser(userId: string, viewerId?: string): Promise<any> {
     const [result] = await db
       .select({
         id: profiles.id,
@@ -613,8 +621,8 @@ export class DatabaseStorage implements IStorage {
         gender: profiles.gender,
         location: profiles.location,
         locationName: profiles.locationName,
-        locationLat: profiles.locationLat,
-        locationLng: profiles.locationLng,
+        _lat: profiles.locationLat,
+        _lng: profiles.locationLng,
         showDistance: profiles.showDistance,
         personalityProfile: profiles.personalityProfile,
         twinPersona: profiles.twinPersona,
@@ -637,18 +645,38 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(users, eq(profiles.userId, users.id))
       .where(eq(profiles.userId, userId));
     if (!result) return result;
+
+    const { _lat, _lng, showDistance, ...rest } = result;
+    let distanceKm: number | null = null;
+    if (showDistance && viewerId && viewerId !== userId) {
+      const pLat = _lat ? parseFloat(String(_lat)) : null;
+      const pLng = _lng ? parseFloat(String(_lng)) : null;
+      const viewer = await this.getProfile(viewerId);
+      const vLat = viewer?.locationLat ? parseFloat(String(viewer.locationLat)) : null;
+      const vLng = viewer?.locationLng ? parseFloat(String(viewer.locationLng)) : null;
+      if (pLat !== null && pLng !== null && vLat !== null && vLng !== null) {
+        distanceKm = Math.round(haversineKm(vLat, vLng, pLat, pLng));
+      }
+    }
+
     // Resolve the avatar the same way Discover does, so Matches / interview
     // threads don't fall back to a monogram when the 'cover' role is unset.
     // Private profiles keep their existing coverPhotoUrl untouched.
     const resolved = await this.resolveProfilePhotos([
       {
-        userId: result.userId,
-        isPublic: result.isPublic,
-        coverPhotoUrl: result.coverPhotoUrl ?? null,
-        profileImageUrl: result.user?.profileImageUrl ?? null,
+        userId: rest.userId,
+        isPublic: rest.isPublic,
+        coverPhotoUrl: rest.coverPhotoUrl ?? null,
+        profileImageUrl: rest.user?.profileImageUrl ?? null,
       },
     ]);
-    return { ...result, coverPhotoUrl: resolved.get(result.userId) ?? result.coverPhotoUrl ?? null };
+    return {
+      ...rest,
+      showDistance,
+      distanceKm,
+      locationName: showDistance ? rest.locationName : null,
+      coverPhotoUrl: resolved.get(rest.userId) ?? rest.coverPhotoUrl ?? null,
+    };
   }
 
   async getPublicAnswers(userId: string, limit = 5): Promise<Array<{ question: string; answer: string }>> {
@@ -748,7 +776,7 @@ export class DatabaseStorage implements IStorage {
       if (isUser1 && match.user1DeletedChat) continue;
       if (!isUser1 && match.user2DeletedChat) continue;
       const otherUserId = isUser1 ? match.user2Id : match.user1Id;
-      const otherProfile = await this.getProfileWithUser(otherUserId);
+      const otherProfile = await this.getProfileWithUser(otherUserId, userId);
       result.push({
         ...match,
         otherProfile: otherProfile || null,
@@ -817,7 +845,7 @@ export class DatabaseStorage implements IStorage {
     const userInterviews = await this.getInterviews(userId);
     const result = [];
     for (const interview of userInterviews) {
-      const targetProfile = await this.getProfileWithUser(interview.targetId);
+      const targetProfile = await this.getProfileWithUser(interview.targetId, userId);
       result.push({
         ...interview,
         targetProfile: targetProfile || null,

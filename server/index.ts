@@ -1,4 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -12,6 +14,40 @@ if (!process.env.DEEPSEEK_API_KEY) {
 
 const app = express();
 const httpServer = createServer(app);
+
+// Standard security headers (X-Content-Type-Options, X-Frame-Options,
+// Strict-Transport-Security, etc.) on every response. CSP is left off: this
+// app serves a React SPA plus third-party embeds (Stripe, Supabase-hosted
+// images) that would need bespoke directives to keep working, and that's out
+// of scope for this pass — the headers below don't require that tuning.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }),
+);
+
+// Per-IP throttles: /api/auth/* against credential-stuffing / brute-force
+// login attempts (on top of the per-email lockout in replit_integrations/
+// auth/routes.ts), and /api/twin/* against hammering the LLM (on top of the
+// per-user checkAIRateLimit in routes.ts) — both act before the request ever
+// reaches a route handler, unauthenticated or not.
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please try again later." },
+});
+const twinRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please wait a moment." },
+});
+app.use("/api/auth", authRateLimiter);
+app.use("/api/twin", twinRateLimiter);
 
 declare module "http" {
   interface IncomingMessage {

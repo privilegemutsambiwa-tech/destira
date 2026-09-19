@@ -131,6 +131,27 @@ export async function registerRoutes(
     return (req.user as any).claims.sub;
   }
 
+  // Reactions and polls are keyed off a bare group-message id with no group
+  // id in the URL, so without this a member of ANY group could read/react to
+  // a message in a group they never joined just by guessing/incrementing the
+  // id. Resolves the message, then requires the caller to actually be a
+  // member of the group it belongs to.
+  async function requireGroupMessageAccess(messageId: number, userId: string) {
+    const message = await storage.getGroupMessage(messageId);
+    if (!message) return { ok: false as const, status: 404, body: { message: "Message not found" } };
+    const member = await storage.getGroupMember(message.groupId, userId);
+    if (!member) return { ok: false as const, status: 403, body: { message: "Not authorized" } };
+    return { ok: true as const, message };
+  }
+
+  // Raw GPS coordinates never need to leave the server, even for a user's own
+  // profile — the client only ever needs the coarse locationName / a computed
+  // distanceKm. Used on every route that serializes a full Profile row.
+  function stripRawLocation<T extends Record<string, any>>(profile: T): Omit<T, "locationLat" | "locationLng"> {
+    const { locationLat, locationLng, ...safe } = profile;
+    return safe;
+  }
+
   // A render crash caught by a client ErrorBoundary would otherwise be
   // invisible — no server request ever fails, so nothing shows up anywhere.
   // This logs it server-side and counts it in the admin overview's error
@@ -154,7 +175,7 @@ export async function registerRoutes(
     if (!userId) return res.sendStatus(401);
     const profile = await storage.getProfile(userId);
     if (!profile) return res.status(404).json({ message: "Profile not found" });
-    res.json(profile);
+    res.json(stripRawLocation(profile));
   });
 
   app.get("/api/profiles/discover", async (req, res) => {
@@ -474,7 +495,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
           seedOnboardingIntoTwinMemory(userId, req.body.personalityProfile).catch(() => {});
         }
         referralsService.checkQualification(userId).catch(() => {});
-        return res.json(updated);
+        return res.json(stripRawLocation(updated));
       }
       // New profiles pick up whatever tier is already active for this user
       // (the signup trial, or a payment made before onboarding finished) so
@@ -488,7 +509,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         seedOnboardingIntoTwinMemory(userId, req.body.personalityProfile).catch(() => {});
       }
       referralsService.checkQualification(userId).catch(() => {});
-      res.status(201).json(profile);
+      res.status(201).json(stripRawLocation(profile));
     } catch (err) {
       console.error("Profile create error:", err);
       if (err instanceof z.ZodError) {
@@ -527,7 +548,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         safeUpdate.groupNickname = nick;
       }
       const updated = await storage.updateProfile(userId, safeUpdate);
-      res.json(updated);
+      res.json(stripRawLocation(updated));
     } catch (err) {
       res.status(500).json({ message: "Error updating profile" });
     }
@@ -559,7 +580,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   app.get("/api/profiles/:userId", async (req, res) => {
     const viewerId = getUserId(req);
     if (!viewerId) return res.sendStatus(401);
-    const profile = await storage.getProfileWithUser(req.params.userId);
+    const profile = await storage.getProfileWithUser(req.params.userId, viewerId);
     if (!profile) return res.status(404).json({ message: "Profile not found" });
     res.json(profile);
   });
@@ -2788,9 +2809,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   });
 
   app.get("/api/polls/:pollId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
     try {
       const result = await storage.getPoll(parseInt(req.params.pollId));
       if (!result) return res.status(404).json({ message: "Poll not found" });
+      const member = await storage.getGroupMember(result.poll.groupId, userId);
+      if (!member) return res.status(403).json({ message: "Not authorized" });
       res.json(result);
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch poll" });
@@ -2798,8 +2823,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   });
 
   app.get("/api/messages/:messageId/poll", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
     try {
-      const result = await storage.getPollByMessageId(parseInt(req.params.messageId));
+      const access = await requireGroupMessageAccess(parseInt(req.params.messageId), userId);
+      if (!access.ok) return res.status(access.status).json(access.body);
+      const result = await storage.getPollByMessageId(access.message.id);
       if (!result) return res.status(404).json({ message: "Poll not found" });
       res.json(result);
     } catch (e) {
@@ -2812,7 +2841,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     const { optionId } = req.body;
     try {
-      const vote = await storage.votePoll(parseInt(req.params.pollId), optionId, userId);
+      const pollId = parseInt(req.params.pollId);
+      const poll = await storage.getPoll(pollId);
+      if (!poll) return res.status(404).json({ message: "Poll not found" });
+      const member = await storage.getGroupMember(poll.poll.groupId, userId);
+      if (!member) return res.status(403).json({ message: "Not authorized" });
+      const vote = await storage.votePoll(pollId, optionId, userId);
       res.status(201).json(vote);
     } catch (e) {
       res.status(500).json({ message: "Failed to vote" });
@@ -2837,7 +2871,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     const { reaction } = req.body;
     try {
-      const r = await storage.addReaction(parseInt(req.params.messageId), userId, reaction);
+      const access = await requireGroupMessageAccess(parseInt(req.params.messageId), userId);
+      if (!access.ok) return res.status(access.status).json(access.body);
+      const r = await storage.addReaction(access.message.id, userId, reaction);
       res.status(201).json(r);
     } catch (e) {
       res.status(500).json({ message: "Failed to add reaction" });
@@ -2849,7 +2885,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     const { reaction } = req.body;
     try {
-      await storage.removeReaction(parseInt(req.params.messageId), userId, reaction);
+      const access = await requireGroupMessageAccess(parseInt(req.params.messageId), userId);
+      if (!access.ok) return res.status(access.status).json(access.body);
+      await storage.removeReaction(access.message.id, userId, reaction);
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ message: "Failed to remove reaction" });
@@ -2857,8 +2895,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   });
 
   app.get("/api/messages/:messageId/reactions", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
     try {
-      const reactions = await storage.getReactions(parseInt(req.params.messageId));
+      const access = await requireGroupMessageAccess(parseInt(req.params.messageId), userId);
+      if (!access.ok) return res.status(access.status).json(access.body);
+      const reactions = await storage.getReactions(access.message.id);
       res.json(reactions);
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch reactions" });
