@@ -68,8 +68,17 @@ export function useUpdateProfile() {
       if (!res.ok) throw new Error("Failed to update profile");
       return res.json();
     },
-    onSuccess: () => {
+    // `useProfile(userId)` (e.g. the /profile/preview view of your own
+    // profile) reads from ["/api/profiles", userId], a DIFFERENT cache entry
+    // than ["/api/profiles/me"] — invalidating only the latter left preview
+    // edits looking like they hadn't saved. Update the specific-id cache
+    // directly for an instant reflect, then invalidate everything a save
+    // could affect (own profile, that same by-id view, and Discover cards).
+    onSuccess: (updated, variables) => {
+      queryClient.setQueryData(["/api/profiles", variables.userId], (old: any) => (old ? { ...old, ...updated } : updated));
       queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles", variables.userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/discover"] });
     },
   });
 }
@@ -117,9 +126,11 @@ export function usePhotos(userId?: string) {
   });
 }
 
-/** Another user's public soul-mapping text answers (for /u/:userId). */
+/** Another user's public soul-mapping text answers (for /u/:userId). Each
+ *  answer carries the `questionId` it's actually joined to server-side —
+ *  editing code must key off that, never off array position. */
 export function usePublicAnswers(userId?: string) {
-  return useQuery<Array<{ question: string; answer: string }>>({
+  return useQuery<Array<{ questionId: number; question: string; answer: string }>>({
     queryKey: ["/api/profiles", userId, "answers"],
     enabled: !!userId,
     queryFn: async () => {

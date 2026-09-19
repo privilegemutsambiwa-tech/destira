@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { RefineWithAI } from "@/components/refine-with-ai";
 import { useCheckNickname } from "@/hooks/use-interactions";
 import {
   useOnboarding,
@@ -235,14 +236,25 @@ export default function Onboarding() {
             })}
           </div>
         ) : (
-          <textarea
-            value={text[q.id] ?? ""}
-            onChange={(e) => setText((t) => ({ ...t, [q.id]: e.target.value }))}
-            placeholder="In your own words…"
-            className="mt-7 w-full min-h-[140px] bg-transparent border-0 border-b-2 border-vf-line focus:border-vf-ember rounded-none outline-none text-[16px] leading-[1.6] text-vf-text placeholder:text-vf-faint resize-none px-0"
-            autoFocus
-            data-testid="input-answer"
-          />
+          <>
+            <textarea
+              value={text[q.id] ?? ""}
+              onChange={(e) => setText((t) => ({ ...t, [q.id]: e.target.value }))}
+              placeholder="In your own words…"
+              className="mt-7 w-full min-h-[140px] bg-transparent border-0 border-b-2 border-vf-line focus:border-vf-ember rounded-none outline-none text-[16px] leading-[1.6] text-vf-text placeholder:text-vf-faint resize-none px-0"
+              autoFocus
+              data-testid="input-answer"
+            />
+            <div className="mt-3">
+              <RefineWithAI
+                key={`refine-onboarding-${q.id}`}
+                value={text[q.id] ?? ""}
+                fieldType="answer"
+                promptContext={q.text}
+                onApply={(refined) => setText((t) => ({ ...t, [q.id]: refined }))}
+              />
+            </div>
+          </>
         )}
 
         <div className="flex items-center justify-between mt-8">

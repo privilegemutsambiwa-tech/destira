@@ -1,12 +1,14 @@
 import type React from "react";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Pencil } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
+import { RefineWithAI } from "@/components/refine-with-ai";
 import { useProfile, usePhotos, usePublicAnswers, useProfileGroups, useUpdateProfile } from "@/hooks/use-profiles";
-import { useTwinReadiness } from "@/hooks/use-onboarding";
+import { useTwinReadiness, useSaveOnboardingAnswer } from "@/hooks/use-onboarding";
 import { useGate } from "@/hooks/use-gate";
 import { usePaywall } from "@/hooks/use-paywall";
 import {
@@ -72,7 +74,9 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const userId = userIdProp ?? params?.userId ?? "";
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const updateProfile = useUpdateProfile();
+  const saveAnswer = useSaveOnboardingAnswer();
 
   const { data: profile, isLoading, isError } = useProfile(userId);
   const { data: mine } = useProfile();
@@ -90,6 +94,10 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const [editingBio, setEditingBio] = useState(false);
   const [bioDraft, setBioDraft] = useState("");
   const [bioSaveState, setBioSaveState] = useState<"idle" | "saved" | "error">("idle");
+
+  const [editingAnswers, setEditingAnswers] = useState(false);
+  const [answerDrafts, setAnswerDrafts] = useState<Record<number, string>>({});
+  const [savingAnswerId, setSavingAnswerId] = useState<number | null>(null);
 
   const match = useMemo(() => {
     const ask = (outgoing?.asks || []).find((a: any) => a.toUserId === userId);
@@ -150,7 +158,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const openTwin = () =>
     paywall.guard("start_interview", () =>
       startInterview.mutate(userId, {
-        onSuccess: (iv: any) => { if (iv?.id) setLocation(`/interviews/${iv.id}/chat`); },
+        onSuccess: (iv: any) => { if (iv?.id) setLocation(`/interviews/${iv.id}/chat?from=/u/${userId}`); },
         onError: (err: any) => {
           const msg = String(err?.message || "");
           if (msg.includes("upgradeRequired") || msg.toLowerCase().includes("week")) {
@@ -184,13 +192,40 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
 
   const openBioEdit = () => { setBioDraft(bioText); setBioSaveState("idle"); setEditingBio(true); };
   const saveBio = async () => {
+    const text = bioDraft.trim();
     try {
-      await updateProfile.mutateAsync({ userId, data: { aboutMe: bioDraft, bio: bioDraft } });
+      await updateProfile.mutateAsync({ userId, data: { aboutMe: text, bio: text } });
       setEditingBio(false);
       setBioSaveState("saved");
       window.setTimeout(() => setBioSaveState("idle"), 2500);
     } catch {
       setBioSaveState("error");
+    }
+  };
+
+  const openAnswersEdit = () => {
+    setAnswerDrafts(Object.fromEntries(answers.slice(0, 2).map((a) => [a.questionId, a.answer])));
+    setEditingAnswers(true);
+  };
+  const saveOneAnswer = async (questionId: number) => {
+    const text = (answerDrafts[questionId] ?? "").trim();
+    if (!text) return;
+    setSavingAnswerId(questionId);
+    try {
+      await saveAnswer.mutateAsync({ questionId, answerText: text });
+      // usePublicAnswers reads a cache key the onboarding-answer mutation
+      // doesn't know about — update it directly so the preview reflects the
+      // edit immediately instead of waiting on an unrelated refetch.
+      queryClient.setQueryData(
+        ["/api/profiles", userId, "answers"],
+        (old: Array<{ questionId: number; question: string; answer: string }> | undefined) =>
+          (old ?? []).map((a) => (a.questionId === questionId ? { ...a, answer: text } : a)),
+      );
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles", userId, "answers"] });
+    } catch {
+      toast({ title: "Couldn't save that answer", variant: "destructive" });
+    } finally {
+      setSavingAnswerId(null);
     }
   };
 
@@ -306,7 +341,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
             <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint">You're talking</div>
             <p className="text-[13.5px] text-vf-muted mt-0.5">This went somewhere.</p>
           </div>
-          <button onClick={() => setLocation(`/chat/${match.matchId}`)} className="text-[13px] font-medium text-vf-mint hover:text-vf-text shrink-0">
+          <button onClick={() => setLocation(`/chat/${match.matchId}?from=/u/${userId}`)} className="text-[13px] font-medium text-vf-mint hover:text-vf-text shrink-0">
             Open chat →
           </button>
         </div>
@@ -367,6 +402,13 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
             className="text-[16px] leading-[1.6] text-vf-text resize-none bg-vf-surface2 border-vf-line rounded-[12px]"
             data-testid="input-preview-bio"
           />
+          <div className="mt-2.5">
+            <RefineWithAI
+              value={bioDraft}
+              fieldType="bio"
+              onApply={(text) => setBioDraft(text.slice(0, 400))}
+            />
+          </div>
           <div className="flex items-center gap-3 mt-2.5">
             <button
               onClick={saveBio}
@@ -418,13 +460,59 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     if (!preview && !answers.length) return null;
     return (
       <section className="relative group">
-        {preview && <div className="absolute -top-1 right-0"><EditAffordance onClick={() => setLocation("/onboarding")} /></div>}
+        {preview && (
+          <div className="absolute -top-1 right-0">
+            {editingAnswers ? (
+              <button
+                onClick={() => setEditingAnswers(false)}
+                className="inline-flex items-center gap-1 rounded-full border border-vf-line bg-vf-surface/90 backdrop-blur px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-vf-muted hover:text-vf-text transition-colors"
+                data-testid="button-done-editing-answers"
+              >
+                Done
+              </button>
+            ) : (
+              <EditAffordance onClick={openAnswersEdit} />
+            )}
+          </div>
+        )}
         <div className={`${EYEBROW} mb-1`}>{preview ? "Two things you answered" : `Two things ${her ? "she" : "they"} answered`}</div>
         {answers.length ? (
-          answers.slice(0, 2).map((a, i) => (
-            <div key={i} className="border-t border-vf-line pt-4 mt-4 first:mt-2">
+          // Keyed and joined by questionId — the real FK the answer belongs
+          // to — never by array position, so an edit can never land on the
+          // wrong prompt.
+          answers.slice(0, 2).map((a) => (
+            <div key={a.questionId} className="border-t border-vf-line pt-4 mt-4 first:mt-2">
               <div className="text-[13.5px] text-vf-faint mb-1.5">{a.question}</div>
-              <p className="text-[16px] text-vf-text" style={{ lineHeight: 1.6 }}>{a.answer}</p>
+              {preview && editingAnswers ? (
+                <div className="flex flex-col gap-2">
+                  <Textarea
+                    value={answerDrafts[a.questionId] ?? a.answer}
+                    onChange={(e) => setAnswerDrafts((d) => ({ ...d, [a.questionId]: e.target.value.slice(0, 400) }))}
+                    rows={3}
+                    className="text-[15px] leading-[1.5] text-vf-text resize-none bg-vf-surface2 border-vf-line rounded-[12px]"
+                    data-testid={`input-preview-answer-${a.questionId}`}
+                  />
+                  <RefineWithAI
+                    value={answerDrafts[a.questionId] ?? a.answer}
+                    fieldType="answer"
+                    promptContext={a.question}
+                    onApply={(text) => setAnswerDrafts((d) => ({ ...d, [a.questionId]: text.slice(0, 400) }))}
+                  />
+                  <div>
+                    <button
+                      onClick={() => saveOneAnswer(a.questionId)}
+                      disabled={savingAnswerId === a.questionId}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors disabled:opacity-40"
+                      data-testid={`button-save-answer-${a.questionId}`}
+                    >
+                      {savingAnswerId === a.questionId && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      Save
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[16px] text-vf-text" style={{ lineHeight: 1.6 }}>{a.answer}</p>
+              )}
             </div>
           ))
         ) : (
