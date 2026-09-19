@@ -46,3 +46,23 @@ export async function completeText(
   }
   return { text, usage };
 }
+
+const WRAPPER_PREFIXES = [
+  /^(sure[,!]?\s*)?here'?s (your |the )?(refined|polished|revised) (text|version|bio|answer)[:\-]?\s*/i,
+  /^(refined|polished|revised) (text|version)[:\-]?\s*/i,
+];
+const MATCHING_QUOTES: Record<string, string> = { '"': '"', "'": "'", "“": "”", "‘": "’" };
+
+// Models wrap output in quotes, "Here's your refined text:", or a markdown
+// fence despite being told not to. Strip that here rather than trusting the
+// prompt.
+export function stripAiWrapper(raw: string): string {
+  let out = raw.trim();
+  out = out.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
+  for (const re of WRAPPER_PREFIXES) out = out.replace(re, "");
+  out = out.trim();
+  if (out.length >= 2 && MATCHING_QUOTES[out[0]] === out[out.length - 1]) {
+    out = out.slice(1, -1).trim();
+  }
+  return out;
+}
