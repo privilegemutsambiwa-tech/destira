@@ -300,13 +300,22 @@ function TwinTonePanel({ onBack, profile }: { onBack: () => void; profile: any }
 
 function LocationPanel({ onBack, profile }: { onBack: () => void; profile: any }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [maxDist, setMaxDist] = useState(profile?.maxDistanceKm ?? 100);
   const [currentLocation, setCurrentLocation] = useState<string>(profile?.locationName ?? "");
   const [refreshing, setRefreshing] = useState(false);
 
   const saveMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/settings/discovery", { maxDistanceKm: maxDist }),
-    onSuccess: () => toast({ title: "Location preferences saved" }),
+    mutationFn: () => apiRequest("POST", "/api/settings/discovery", { maxDistanceKm: Number(maxDist) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/discover"] });
+      // Re-sync from what was actually sent, so this stays correct even if
+      // the panel is unmounted/remounted before the refetch above resolves.
+      setMaxDist(Number(maxDist));
+      toast({ title: "Location preferences saved" });
+    },
     onError: () => toast({ title: "Failed to save", variant: "destructive" }),
   });
 
@@ -361,7 +370,12 @@ function LocationPanel({ onBack, profile }: { onBack: () => void; profile: any }
         Only show profiles within {maxDist} km of your current location.
       </p>
       <div style={{ padding: "16px" }}>
-        <GradientButton label="Save Preferences" onClick={() => saveMutation.mutate()} testId="button-save-location" />
+        <GradientButton
+          label={saveMutation.isPending ? "Saving..." : "Save Preferences"}
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending}
+          testId="button-save-location"
+        />
       </div>
     </Panel>
   );
@@ -700,10 +714,19 @@ function AgeRangePanel({ onBack, profile }: { onBack: () => void; profile: any }
 
 function SeekingGendersPanel({ onBack, profile }: { onBack: () => void; profile: any }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string[]>(profile?.seekingGenders ?? []);
   const saveMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/settings/discovery", { seekingGenders: selected }),
-    onSuccess: () => toast({ title: "Preference saved" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/discover"] });
+      // Re-sync from what was actually sent, so this stays correct even if
+      // the panel is unmounted/remounted before the refetch above resolves.
+      setSelected(selected);
+      toast({ title: "Preference saved" });
+    },
     onError: () => toast({ title: "Failed to save", variant: "destructive" }),
   });
 
@@ -748,7 +771,12 @@ function SeekingGendersPanel({ onBack, profile }: { onBack: () => void; profile:
           : "You'll only see profiles and stories that match your selection, unless you choose Everyone."}
       </p>
       <div style={{ padding: "16px" }}>
-        <GradientButton label="Save Preference" onClick={() => saveMutation.mutate()} testId="button-save-seeking-genders" />
+        <GradientButton
+          label={saveMutation.isPending ? "Saving..." : "Save Preference"}
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending}
+          testId="button-save-seeking-genders"
+        />
       </div>
     </Panel>
   );

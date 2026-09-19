@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Loader2, ArrowLeft, Check } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
@@ -64,6 +65,7 @@ function OptionRow({
 export default function Essentials() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data: profile, isLoading } = useProfile();
 
   const [idx, setIdx] = useState(0);
@@ -132,6 +134,8 @@ export default function Essentials() {
     setSaving(true);
     try {
       await apiRequest("POST", "/api/profiles", patch);
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     } catch {
       toast({ title: "Couldn't save that — carrying on", variant: "destructive" });
     } finally {
