@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useSubscription } from "@/hooks/use-interactions";
+import { refreshPlanQueries } from "@/hooks/use-payments";
+import { consumePendingInvite } from "@/lib/pending-invite";
 import { DestiraLockup } from "@/components/brand/logo";
 import {
   PLAN_CARDS,
@@ -67,6 +70,7 @@ const PERIOD_TAB_LABEL: Record<BillingPeriod, string> = {
 export default function Plans() {
   const [, setLocation] = useLocation();
   const search = useSearch();
+  const qc = useQueryClient();
   const { data: sub } = useSubscription();
   const currentTier = (sub?.tier as string) || "free";
   const params = new URLSearchParams(search);
@@ -84,7 +88,16 @@ export default function Plans() {
   const ctx = feature ? gateCopy(feature, {}) : null;
   const unlockRank = ctx ? tierRank(ctx.requiredTier) : -1;
 
-  const close = () => setLocation(intro ? "/discover" : "/settings");
+  // The only exit off Free/Continue — never re-enters onboarding. Refreshes
+  // profile + subscription state so Discover doesn't render against stale
+  // (pre-onboarding, pre-trial) query cache, then honors a WhatsApp group
+  // invite that was stashed before signup over the default destination.
+  const close = () => {
+    refreshPlanQueries(qc);
+    const pendingInvite = consumePendingInvite();
+    if (pendingInvite) return setLocation(`/join/${pendingInvite}`);
+    setLocation(intro ? "/discover" : "/settings");
+  };
 
   const choose = (card: PlanCard) => {
     if (card.tier === "free") return close();
@@ -101,10 +114,10 @@ export default function Plans() {
           </button>
           <button
             onClick={close}
-            className="inline-flex items-center gap-1.5 h-11 -mr-2 px-3 rounded-full text-[13px] text-vf-text hover:bg-vf-text/[0.06] transition-colors"
+            className="inline-flex items-center gap-1.5 h-11 -mr-2 px-3 rounded-full text-[13px] text-vf-muted hover:text-vf-text hover:bg-vf-text/[0.06] transition-colors"
             data-testid="button-close-plans"
           >
-            {intro ? "Skip — start on Free" : (<><X className="w-4 h-4" /> Close</>)}
+            <X className="w-4 h-4" /> {intro ? "Later" : "Close"}
           </button>
         </div>
 
@@ -132,6 +145,21 @@ export default function Plans() {
             </>
           )}
         </div>
+
+        {intro && (
+          <div className="mt-6 max-w-[46ch]">
+            <button
+              onClick={close}
+              className="w-full sm:w-auto sm:px-10 inline-flex items-center justify-center h-12 rounded-full bg-vf-ember text-vf-ink font-semibold text-[15px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
+              data-testid="button-continue-free"
+            >
+              Continue to Destira — start free
+            </button>
+            <p className="text-[12px] text-vf-muted mt-2.5">
+              You can pick a plan below any time from Settings — this won't slow you down.
+            </p>
+          </div>
+        )}
 
         <div className="mt-8 inline-flex rounded-full border border-vf-line p-1 gap-1" role="group" aria-label="Billing period">
           {BILLING_PERIODS.map((p) => (
