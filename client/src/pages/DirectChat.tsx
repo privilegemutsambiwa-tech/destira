@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDirectMessages, useSendDirectMessage, useMatches } from "@/hooks/use-interactions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,24 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
   const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+
+  // Entered from the chat list, Likes, a group chat, or a profile — each
+  // linker passes its own route as ?from so back returns to wherever the
+  // user actually came from instead of a single hardcoded screen.
+  const backRoute = useMemo(() => {
+    const from = new URLSearchParams(window.location.search).get("from");
+    return from && from.startsWith("/") ? from : "/interviews";
+  }, []);
+
+  // The chat list's preview card is a separate query (/api/chat/threads) —
+  // refresh it on the way out so it doesn't keep showing a stale last
+  // message/unread badge for this conversation.
+  useEffect(() => {
+    return () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/chat/threads"] });
+    };
+  }, [queryClient]);
 
   const match = matches?.find((m: any) => m.id === matchId);
   const otherName = match?.otherProfile?.displayName || "Match";
@@ -42,7 +61,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
   return (
     <div className="h-dvh flex flex-col bg-vf-ink">
       <div className="border-b border-vf-line px-4 py-3 flex items-center gap-4 sticky top-0 z-10 bg-vf-ink">
-        <Button variant="ghost" size="icon" onClick={() => setLocation("/matches")} data-testid="button-back">
+        <Button variant="ghost" size="icon" onClick={() => setLocation(backRoute)} data-testid="button-back">
           <ArrowLeft className="w-5 h-5 text-vf-text" />
         </Button>
         <div className="flex items-center gap-3">

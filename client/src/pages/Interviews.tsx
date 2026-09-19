@@ -59,7 +59,7 @@ export default function Interviews() {
       {profile?.onboardingCompleted && (
         <div
           className="mb-5 p-4 cursor-pointer btn-press rounded-[20px] border border-vf-mint/25 bg-vf-mint/[0.08] hover:bg-vf-mint/[0.11] transition-colors"
-          onClick={() => setLocation("/twin-chat?from=/matches")}
+          onClick={() => setLocation("/twin-chat?from=/interviews")}
           data-testid="card-my-twin"
         >
           <div className="flex items-center gap-4">
@@ -132,8 +132,9 @@ export default function Interviews() {
         <div className="space-y-0">
           {filteredThreads.map((thread: any, idx: number) => {
             const isTwin = thread.type === "ai_twin_interview";
+            const threadHref = `${thread.href}${thread.href.includes("?") ? "&" : "?"}from=/interviews`;
             return (
-              <Link key={thread.id} href={thread.href}>
+              <Link key={thread.id} href={threadHref}>
                 <div
                   className={`flex items-center gap-3 px-1 py-4 cursor-pointer rounded-xl transition-colors hover:bg-vf-text/[0.03] ${
                     idx < filteredThreads.length - 1 ? "border-b border-vf-line" : ""

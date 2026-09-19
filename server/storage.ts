@@ -117,7 +117,7 @@ export interface IStorage {
   updateProfile(userId: string, updates: Partial<InsertProfile>): Promise<Profile>;
   getDiscoverableProfiles(excludeUserId: string, filter?: string, userLat?: number, userLng?: number): Promise<any[]>;
   getProfileWithUser(userId: string, viewerId?: string): Promise<any>;
-  getPublicAnswers(userId: string, limit?: number): Promise<Array<{ question: string; answer: string }>>;
+  getPublicAnswers(userId: string, limit?: number): Promise<Array<{ questionId: number; question: string; answer: string }>>;
   getGroupsForUser(targetUserId: string, viewerUserId: string): Promise<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean }>>;
 
   createMatch(user1Id: string, user2Id: string): Promise<Match>;
@@ -129,8 +129,12 @@ export interface IStorage {
   getMatchesWithProfiles(userId: string): Promise<any[]>;
   softDeleteChat(matchId: number, userId: string): Promise<Match>;
   unmatch(matchId: number): Promise<Match>;
+  getLastDirectMessage(matchId: number): Promise<DirectMessage | undefined>;
+  getUnreadDirectMessageCount(matchId: number, userId: string): Promise<number>;
+  markDirectMessagesRead(matchId: number, userId: string): Promise<void>;
 
   createInterview(requesterId: string, targetId: string): Promise<Interview>;
+  getInterviewBetween(requesterId: string, targetId: string): Promise<Interview | undefined>;
   getInterviews(userId: string): Promise<Interview[]>;
   getInterview(id: number): Promise<Interview | undefined>;
   updateInterviewTranscript(id: number, transcript: string): Promise<Interview>;
@@ -679,9 +683,13 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getPublicAnswers(userId: string, limit = 5): Promise<Array<{ question: string; answer: string }>> {
+  async getPublicAnswers(userId: string, limit = 5): Promise<Array<{ questionId: number; question: string; answer: string }>> {
+    // `questionId` is carried through so callers (in-place answer editing)
+    // can join back to the exact question a save should target — never by
+    // array position, which breaks the instant a row is filtered out or
+    // re-ordered.
     const rows = await db
-      .select({ question: questions.text, answer: userAnswers.answerText, answeredAt: userAnswers.answeredAt })
+      .select({ questionId: userAnswers.questionId, question: questions.text, answer: userAnswers.answerText, answeredAt: userAnswers.answeredAt })
       .from(userAnswers)
       .innerJoin(questions, eq(userAnswers.questionId, questions.id))
       .where(and(eq(userAnswers.userId, userId), eq(userAnswers.isPrivate, false)))
@@ -689,7 +697,7 @@ export class DatabaseStorage implements IStorage {
     return rows
       .filter((r) => typeof r.answer === "string" && r.answer.trim().length > 0)
       .slice(0, limit)
-      .map((r) => ({ question: r.question, answer: (r.answer as string).trim() }));
+      .map((r) => ({ questionId: r.questionId, question: r.question, answer: (r.answer as string).trim() }));
   }
 
   async getGroupsForUser(
@@ -805,12 +813,25 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  // Idempotent: reuses the existing interview between this pair instead of
+  // inserting a new row every time "Meet their Twin" is clicked, which used
+  // to leave one duplicate chat-list thread per click for the same person.
   async createInterview(requesterId: string, targetId: string): Promise<Interview> {
+    const existing = await this.getInterviewBetween(requesterId, targetId);
+    if (existing) return existing;
     const [interview] = await db.insert(interviews).values({
       requesterId,
       targetId,
       status: "in_progress"
     }).returning();
+    return interview;
+  }
+
+  async getInterviewBetween(requesterId: string, targetId: string): Promise<Interview | undefined> {
+    const [interview] = await db.select().from(interviews)
+      .where(and(eq(interviews.requesterId, requesterId), eq(interviews.targetId, targetId)))
+      .orderBy(desc(interviews.updatedAt))
+      .limit(1);
     return interview;
   }
 
@@ -827,7 +848,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateInterviewTranscript(id: number, transcript: string): Promise<Interview> {
     const [updated] = await db.update(interviews)
-      .set({ transcript })
+      .set({ transcript, updatedAt: new Date() })
       .where(eq(interviews.id, id))
       .returning();
     return updated;
@@ -1143,6 +1164,40 @@ export class DatabaseStorage implements IStorage {
   async sendDirectMessage(matchId: number, senderId: string, content: string): Promise<DirectMessage> {
     const [msg] = await db.insert(directMessages).values({ matchId, senderId, content }).returning();
     return msg;
+  }
+
+  // The true latest message for a thread-list preview — getDirectMessages
+  // orders ascending (oldest-first, for rendering a conversation top to
+  // bottom) so calling it with limit=1 returns the FIRST message ever sent,
+  // not the last. This is the one that actually needs DESC + LIMIT 1.
+  async getLastDirectMessage(matchId: number): Promise<DirectMessage | undefined> {
+    const [msg] = await db.select().from(directMessages)
+      .where(eq(directMessages.matchId, matchId))
+      .orderBy(desc(directMessages.createdAt))
+      .limit(1);
+    return msg;
+  }
+
+  async getUnreadDirectMessageCount(matchId: number, userId: string): Promise<number> {
+    const match = await this.getMatch(matchId);
+    if (!match) return 0;
+    const lastReadAt = match.user1Id === userId ? match.user1LastReadAt : match.user2LastReadAt;
+    const conditions = [eq(directMessages.matchId, matchId), ne(directMessages.senderId, userId)];
+    if (lastReadAt) conditions.push(gt(directMessages.createdAt, lastReadAt));
+    const [{ count }] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(directMessages)
+      .where(and(...conditions));
+    return count;
+  }
+
+  async markDirectMessagesRead(matchId: number, userId: string): Promise<void> {
+    const match = await this.getMatch(matchId);
+    if (!match) return;
+    const isUser1 = match.user1Id === userId;
+    if (!isUser1 && match.user2Id !== userId) return;
+    await db.update(matches)
+      .set(isUser1 ? { user1LastReadAt: new Date() } : { user2LastReadAt: new Date() })
+      .where(eq(matches.id, matchId));
   }
 
   async getUserPhotos(userId: string): Promise<UserPhoto[]> {

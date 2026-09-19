@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCreateMatch } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
@@ -61,6 +62,23 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Entered from the chat list, Discover, a profile, or a proximity alert —
+  // each linker passes its own route as ?from so back returns to wherever
+  // the user actually came from instead of always landing on /interviews.
+  const backRoute = useMemo(() => {
+    const from = new URLSearchParams(window.location.search).get("from");
+    return from && from.startsWith("/") ? from : "/interviews";
+  }, []);
+
+  // The chat list's preview card is a separate query (/api/chat/threads) —
+  // refresh it on the way out so it doesn't keep showing a stale preview.
+  useEffect(() => {
+    return () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/chat/threads"] });
+    };
+  }, [queryClient]);
 
   useEffect(() => {
     fetch(`/api/interviews`, { credentials: "include" })
@@ -282,7 +300,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setLocation("/interviews")}
+            onClick={() => setLocation(backRoute)}
             data-testid="button-back"
           >
             <ArrowLeft className="w-5 h-5 text-vf-ember" />
