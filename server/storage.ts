@@ -162,7 +162,9 @@ export interface IStorage {
   createInviteLink(groupId: number, createdBy: string, token: string, expiresAt?: Date): Promise<GroupInviteLink>;
   getInviteLink(token: string): Promise<GroupInviteLink | undefined>;
   revokeInviteLink(id: number): Promise<void>;
+  deactivateGroupInviteLinks(groupId: number): Promise<void>;
   getGroupInviteLinks(groupId: number): Promise<GroupInviteLink[]>;
+  getActiveGroupInviteLink(groupId: number): Promise<GroupInviteLink | undefined>;
   createModerationLog(data: { groupId: number; messageId?: number; userId: string; action: string; reason?: string; moderatedBy?: string }): Promise<GroupModerationLog>;
 
   createPoll(groupId: number, createdBy: string, question: string, options: string[], allowMultiple: boolean): Promise<{ poll: Poll; options: PollOption[]; message: GroupMessage }>;
@@ -992,8 +994,25 @@ export class DatabaseStorage implements IStorage {
     await db.update(groupInviteLinks).set({ isActive: false }).where(eq(groupInviteLinks.id, id));
   }
 
+  // Called right before minting a new link so a group only ever has one live
+  // invite token — otherwise each "Generate Invite Link" tap would leave the
+  // previous one valid, accumulating an ever-growing set of active links.
+  async deactivateGroupInviteLinks(groupId: number): Promise<void> {
+    await db.update(groupInviteLinks)
+      .set({ isActive: false })
+      .where(and(eq(groupInviteLinks.groupId, groupId), eq(groupInviteLinks.isActive, true)));
+  }
+
   async getGroupInviteLinks(groupId: number): Promise<GroupInviteLink[]> {
     return db.select().from(groupInviteLinks).where(eq(groupInviteLinks.groupId, groupId));
+  }
+
+  async getActiveGroupInviteLink(groupId: number): Promise<GroupInviteLink | undefined> {
+    const [link] = await db.select().from(groupInviteLinks)
+      .where(and(eq(groupInviteLinks.groupId, groupId), eq(groupInviteLinks.isActive, true)))
+      .orderBy(desc(groupInviteLinks.createdAt))
+      .limit(1);
+    return link;
   }
 
   async createModerationLog(data: { groupId: number; messageId?: number; userId: string; action: string; reason?: string; moderatedBy?: string }): Promise<GroupModerationLog> {

@@ -18,7 +18,7 @@ import {
 import {
   useGroup, useGroupMembers, useGroupMedia, useUpdateGroup,
   useUpdateMemberRole, useRemoveGroupMember, useCreateInviteLink,
-  useGroupInviteLinks, useLeaveGroup, useDeleteGroup,
+  useGroupInviteLink, useLeaveGroup, useDeleteGroup,
   useStarredMessages, useUpdateGroupSettings,
   useToggleMute, useAddGroupMember, useSearchUsers, useSearchGroupMessages
 } from "@/hooks/use-interactions";
@@ -84,7 +84,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   const { data: group, isLoading: groupLoading } = useGroup(groupId);
   const { data: members } = useGroupMembers(groupId);
   const { data: media } = useGroupMedia(groupId);
-  const { data: inviteLinks } = useGroupInviteLinks(groupId);
+  const { data: inviteLink } = useGroupInviteLink(groupId);
   const { data: starredMessages } = useStarredMessages(groupId);
   const updateGroup = useUpdateGroup(groupId);
   const updateSettings = useUpdateGroupSettings(groupId);
@@ -729,27 +729,23 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                 {createInvite.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
                 Generate Invite Link
               </button>
-              {inviteLinks && inviteLinks.filter((l: any) => l.isActive).length > 0 && (
-                <div className="space-y-2 mt-3">
-                  {inviteLinks.filter((l: any) => l.isActive).map((link: any) => (
-                    <div key={link.id} className="flex items-center gap-2">
-                      <input
-                        value={makeInviteUrl(link.token)}
-                        readOnly
-                        className="text-xs flex-1 px-3 py-2 outline-none"
-                        style={{ background: ELEVATED, border: `1px solid ${LINE}`, borderRadius: "8px", color: MUTED }}
-                        data-testid={`input-invite-${link.id}`}
-                      />
-                      <button
-                        onClick={() => handleCopyLink(link.token)}
-                        className="w-9 h-9 flex items-center justify-center rounded-lg btn-press"
-                        style={{ background: ELEVATED, border: `1px solid ${LINE}`, color: TEXT }}
-                        data-testid={`button-copy-invite-${link.id}`}
-                      >
-                        {copiedLink === link.token ? <Check className="w-4 h-4" style={{ color: "#22C55E" }} /> : <Copy className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  ))}
+              {inviteLink && inviteLink.isActive && (
+                <div className="flex items-center gap-2 mt-3">
+                  <input
+                    value={makeInviteUrl(inviteLink.token)}
+                    readOnly
+                    className="text-xs flex-1 px-3 py-2 outline-none"
+                    style={{ background: ELEVATED, border: `1px solid ${LINE}`, borderRadius: "8px", color: MUTED }}
+                    data-testid="input-invite-link"
+                  />
+                  <button
+                    onClick={() => handleCopyLink(inviteLink.token)}
+                    className="w-9 h-9 flex items-center justify-center rounded-lg btn-press"
+                    style={{ background: ELEVATED, border: `1px solid ${LINE}`, color: TEXT }}
+                    data-testid="button-copy-invite-link"
+                  >
+                    {copiedLink === inviteLink.token ? <Check className="w-4 h-4" style={{ color: "#22C55E" }} /> : <Copy className="w-4 h-4" />}
+                  </button>
                 </div>
               )}
             </div>

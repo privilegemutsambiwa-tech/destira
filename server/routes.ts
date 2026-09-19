@@ -2440,6 +2440,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (!isOwner && !isAdmin && !memberCanInvite) {
         return res.status(403).json({ message: "Not authorized" });
       }
+      // Only one invite link should ever be live for a group — retire any
+      // existing active one before minting the new token.
+      await storage.deactivateGroupInviteLinks(groupId);
       const token = crypto.randomBytes(16).toString("hex");
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       const link = await storage.createInviteLink(groupId, userId, token, expiresAt);
@@ -2454,10 +2457,10 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     const groupId = parseInt(req.params.id);
     try {
-      const links = await storage.getGroupInviteLinks(groupId);
-      res.json(links);
+      const link = await storage.getActiveGroupInviteLink(groupId);
+      res.json(link ?? null);
     } catch (e) {
-      res.status(500).json({ message: "Failed to fetch invite links" });
+      res.status(500).json({ message: "Failed to fetch invite link" });
     }
   });
 

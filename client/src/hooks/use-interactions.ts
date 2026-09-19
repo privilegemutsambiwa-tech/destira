@@ -432,12 +432,15 @@ export function useCreateInviteLink(groupId: number) {
   });
 }
 
-export function useGroupInviteLinks(groupId: number) {
+// The group's single active invite link (or null if none has been generated
+// yet) — the endpoint revokes any prior link whenever a new one is created,
+// so there's never more than one live token per group.
+export function useGroupInviteLink(groupId: number) {
   return useQuery({
     queryKey: ["/api/groups", groupId, "invite-links"],
     queryFn: async () => {
       const res = await fetch(`/api/groups/${groupId}/invite-links`, { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) return null;
       return res.json();
     },
   });
