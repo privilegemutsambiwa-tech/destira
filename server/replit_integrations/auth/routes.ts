@@ -131,6 +131,10 @@ export function registerAuthRoutes(app: Express): void {
         throw err;
       }
 
+      storage.startTrialSubscription(user.id).catch((err) => {
+        console.error("[signup] failed to start trial subscription:", err);
+      });
+
       req.login(createSessionUser(user), (err: any) => {
         if (err) {
           console.error("[signup] req.login failed:", err);
@@ -230,6 +234,9 @@ export function registerAuthRoutes(app: Express): void {
           firstName,
           lastName,
           profileImageUrl: avatarUrl,
+        });
+        storage.startTrialSubscription(user.id).catch((err) => {
+          console.error("[google-callback] failed to start trial subscription:", err);
         });
       }
 

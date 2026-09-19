@@ -15,6 +15,7 @@ import {
 import { LocationPermissionModal } from "./location-permission-modal";
 import { ProximityAlerts } from "./proximity-alerts";
 import { DestiraLockup } from "./brand/logo";
+import { TrialBanner } from "./trial-banner";
 
 interface LayoutShellProps {
   children: React.ReactNode;
@@ -163,6 +164,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
             className="max-w-[1600px] mx-auto p-4 md:p-8 lg:p-12 pb-24 lg:pb-12"
             style={{ paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))", paddingRight: "max(1rem, env(safe-area-inset-right, 0px))" }}
           >
+            <TrialBanner />
             {children}
           </div>
         </main>

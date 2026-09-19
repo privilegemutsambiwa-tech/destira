@@ -426,7 +426,14 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         referralsService.checkQualification(userId).catch(() => {});
         return res.json(updated);
       }
-      const profile = await storage.createProfile({ ...safeCounted, userId });
+      // New profiles pick up whatever tier is already active for this user
+      // (the signup trial, or a payment made before onboarding finished) so
+      // the badge shown elsewhere matches getEffectiveTier from day one.
+      const profile = await storage.createProfile({
+        ...safeCounted,
+        userId,
+        subscriptionTier: await gate.getEffectiveTier(userId),
+      });
       if (isCompletingOnboarding) {
         seedOnboardingIntoTwinMemory(userId, req.body.personalityProfile).catch(() => {});
       }
@@ -3146,7 +3153,16 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     try {
       const sub = await storage.getSubscription(userId);
       const tier = await gate.getEffectiveTier(userId);
-      res.json(sub ? { ...sub, tier } : { tier, status: "active" });
+      const isTrial = sub?.provider === "trial";
+      const daysRemaining = sub?.currentPeriodEnd
+        ? Math.max(0, Math.ceil((sub.currentPeriodEnd.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+        : null;
+      const trialExpiresAt = sub?.currentPeriodEnd ? sub.currentPeriodEnd.toISOString() : null;
+      res.json(
+        sub
+          ? { ...sub, tier, isTrial, daysRemaining, trialExpiresAt }
+          : { tier, status: "active", isTrial: false, daysRemaining: null, trialExpiresAt: null },
+      );
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch subscription" });
     }

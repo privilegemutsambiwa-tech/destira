@@ -205,6 +205,7 @@ export interface IStorage {
   getSubscription(userId: string): Promise<Subscription | undefined>;
   updateSubscription(id: number, updates: Partial<Subscription>): Promise<Subscription>;
   cancelSubscription(id: number): Promise<Subscription>;
+  startTrialSubscription(userId: string): Promise<Subscription | undefined>;
 
   createPayment(userId: string, amount: number, currency: string, stripeChargeId?: string, subscriptionId?: number): Promise<Payment>;
   getPayments(userId: string): Promise<Payment[]>;
@@ -1326,6 +1327,24 @@ export class DatabaseStorage implements IStorage {
     const values: any = { userId, tier, status: "active" };
     if (stripeSubId) values.stripeSubscriptionId = stripeSubId;
     const [sub] = await db.insert(subscriptions).values(values).returning();
+    return sub;
+  }
+
+  // Grants every new signup a 1-month Flame trial. Idempotent — a user who
+  // already has a subscription row (e.g. re-running Google sign-in) is left
+  // alone rather than getting their period reset.
+  async startTrialSubscription(userId: string): Promise<Subscription | undefined> {
+    const existing = await this.getSubscription(userId);
+    if (existing) return undefined;
+    const now = new Date();
+    const [sub] = await db.insert(subscriptions).values({
+      userId,
+      tier: "flame",
+      status: "active",
+      provider: "trial",
+      currentPeriodStart: now,
+      currentPeriodEnd: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+    }).returning();
     return sub;
   }
 
