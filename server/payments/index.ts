@@ -8,18 +8,38 @@ import { periodPriceCents, PERIOD_DAYS, type BillingPeriod } from "@shared/entit
 import { and, eq, gte, lt, isNull, or } from "drizzle-orm";
 import { MockProvider } from "./mock";
 import { PaynowProvider, paynowConfigured } from "./paynow";
-import { maskPhone, type PaymentMethod, type PaymentProvider, type PaymentStatus } from "./types";
+import { NardoPayProvider, nardopayConfigured } from "./nardopay";
+import { maskPhone, WALLET_METHODS, type PaymentMethod, type PaymentProvider, type PaymentStatus } from "./types";
 import { alertPaymentSuccess, alertPaymentFailed, alertPaymentStuck } from "../email/templates";
 
 const mock = new MockProvider();
 const paynow = new PaynowProvider();
+const nardopay = new NardoPayProvider();
 
-const useMock = () => process.env.PAYMENTS_MOCK === "1" || !paynowConfigured();
-
+// NardoPay is the active gateway for the wallet methods (EcoCash/OneMoney/
+// InnBucks); Paynow is a fallback if it isn't configured; mock is the last
+// resort so the flow is always reviewable without live creds. Card stays on
+// Paynow — NardoPay's create-payment-link-api here is wallet-only.
 export function providerFor(method: PaymentMethod): { provider: PaymentProvider; name: string } {
-  if (useMock()) return { provider: mock, name: "mock" };
-  const name = method === "card" || method === "ecocash_card" ? "paynow_card" : `paynow_${method}`;
-  return { provider: paynow, name };
+  if (process.env.PAYMENTS_MOCK === "1") return { provider: mock, name: "mock" };
+  if (WALLET_METHODS.has(method) && nardopayConfigured()) {
+    return { provider: nardopay, name: `nardopay_${method}` };
+  }
+  if (paynowConfigured()) {
+    const name = method === "card" || method === "ecocash_card" ? "paynow_card" : `paynow_${method}`;
+    return { provider: paynow, name };
+  }
+  return { provider: mock, name: "mock" };
+}
+
+// refreshPayment() needs the provider that actually handled a given row, not
+// whatever providerFor(method) currently resolves to — the active gateway
+// can change (env toggled, provider added) between a payment being created
+// and it being polled later.
+function providerByStoredName(name: string): PaymentProvider {
+  if (name.startsWith("nardopay")) return nardopay;
+  if (name.startsWith("paynow")) return paynow;
+  return mock;
 }
 
 export function priceCentsFor(tier: "spark" | "flame" | "ember", period: BillingPeriod = "monthly"): number {
@@ -74,6 +94,9 @@ export async function initiatePayment(
       method,
       phone,
       authEmail,
+      userId,
+      tier,
+      period,
     });
     await db
       .update(payments)
@@ -111,7 +134,7 @@ export async function refreshPayment(paymentId: number) {
   if (row.status !== "pending") return row;
   if (!row.pollUrl) return row;
 
-  const { provider } = providerFor("ecocash");
+  const provider = providerByStoredName(row.provider);
   const r = await provider.pollStatus(row.pollUrl);
   await db
     .update(payments)
@@ -247,6 +270,10 @@ export async function cancelSubscription(userId: string): Promise<{ endsAt: Date
   return { endsAt: sub.currentPeriodEnd ?? null };
 }
 
-export function webhookProvider() {
-  return providerFor("ecocash").provider;
+export function paynowWebhookProvider(): PaymentProvider {
+  return paynow;
+}
+
+export function nardopayWebhookProvider(): PaymentProvider {
+  return nardopay;
 }

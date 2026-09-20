@@ -22,6 +22,10 @@ export interface InitiateInput {
   /** subscriber's mobile number, wallet flow only. Never logged in full. */
   phone?: string;
   authEmail?: string;
+  userId?: string;
+  /** hosted-checkout providers (NardoPay) need these for the plan label + line-item metadata; wallet PIN flows ignore them. */
+  tier?: "spark" | "flame" | "ember";
+  period?: "weekly" | "monthly" | "sixMonth";
 }
 
 export interface InitiateResult {
@@ -56,8 +60,15 @@ export interface PaymentProvider {
   readonly id: string;
   initiate(input: InitiateInput): Promise<InitiateResult>;
   pollStatus(pollUrlOrRef: string): Promise<PollResult>;
-  /** parse + verify a provider webhook body; returns null if it isn't valid. */
-  handleWebhook(body: Record<string, string>): {
+  /**
+   * Parse + verify a provider webhook; returns null if it isn't valid.
+   * `headers` carries the signature for providers (NardoPay) that sign out-of-band
+   * rather than embedding a hash field in the body itself (Paynow).
+   */
+  handleWebhook(
+    body: Record<string, string> | any,
+    headers?: Record<string, string | string[] | undefined>,
+  ): {
     reference: string;
     status: PaymentStatus;
     settledCents?: number;
