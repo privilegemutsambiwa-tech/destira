@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { LayoutShell } from "@/components/layout-shell";
-import { useChatThreads } from "@/hooks/use-interactions";
+import { useChatThreads, useMarkStoryRepliesRead } from "@/hooks/use-interactions";
 import { useProfile } from "@/hooks/use-profiles";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { Loader2, Search, Brain, Shield, MessageCircle, ArrowRight } from "lucide-react";
 
 function formatRelativeTime(dateStr: string): string {
@@ -21,15 +21,32 @@ function formatRelativeTime(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-type FilterType = "all" | "matches" | "ai_twin";
+type FilterType = "all" | "matches" | "ai_twin" | "story_replies";
+
+function initialFilterFromSearch(search: string): FilterType {
+  const value = new URLSearchParams(search).get("filter");
+  return value === "matches" || value === "ai_twin" || value === "story_replies" ? value : "all";
+}
 
 export default function Interviews() {
   const { data: profile } = useProfile();
   const [, setLocation] = useLocation();
-  const [activeFilter, setActiveFilter] = useState<FilterType>("all");
+  const search = useSearch();
+  const [activeFilter, setActiveFilter] = useState<FilterType>(() => initialFilterFromSearch(search));
   const [searchQuery, setSearchQuery] = useState("");
 
   const { data: threads, isLoading } = useChatThreads(activeFilter);
+  // Prefetched regardless of the active tab so the filter pill's unread badge
+  // is visible without having to switch to it first.
+  const { data: replyThreads } = useChatThreads("story_replies");
+  const repliesUnreadCount = (replyThreads || []).filter((t: any) => t.unreadCount > 0).length;
+  const markRepliesRead = useMarkStoryRepliesRead();
+
+  useEffect(() => {
+    if (activeFilter === "story_replies") markRepliesRead.mutate();
+    // Fires once per tab activation, not on every unread-count recompute.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilter]);
 
   const filteredThreads = useMemo(() => {
     if (!threads) return [];
@@ -43,6 +60,7 @@ export default function Interviews() {
     { label: "All", value: "all" },
     { label: "Matches", value: "matches" },
     { label: "AI Twin", value: "ai_twin" },
+    { label: "Story replies", value: "story_replies" },
   ];
 
   return (
@@ -133,6 +151,16 @@ export default function Interviews() {
             data-testid={`filter-${f.value}`}
           >
             {f.label}
+            {f.value === "story_replies" && repliesUnreadCount > 0 && (
+              <span
+                className={`ml-1.5 font-mono text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] inline-block text-center ${
+                  activeFilter === f.value ? "bg-vf-ink text-vf-ember" : "bg-vf-ember text-vf-ink"
+                }`}
+                data-testid="badge-story-replies-unread"
+              >
+                {repliesUnreadCount}
+              </span>
+            )}
           </button>
         ))}
       </div>

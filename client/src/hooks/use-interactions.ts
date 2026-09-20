@@ -146,6 +146,44 @@ export function useChatThreads(filter?: string) {
   });
 }
 
+// Free tier gets `count` with an empty list; Spark+ gets the list too — never
+// a boolean "blurred" flag on individual rows, the list itself is just empty.
+export function useStoryViewers(storyId: number | null) {
+  return useQuery({
+    queryKey: ["/api/stories", storyId, "viewers"],
+    enabled: storyId !== null,
+    queryFn: async () => {
+      const res = await fetch(`/api/stories/${storyId}/viewers`, { credentials: "include" });
+      if (!res.ok) return { count: 0, viewers: [], seeStoryEngagers: false };
+      return res.json();
+    },
+  });
+}
+
+export function useStoryLikers(storyId: number | null) {
+  return useQuery({
+    queryKey: ["/api/stories", storyId, "likes"],
+    enabled: storyId !== null,
+    queryFn: async () => {
+      const res = await fetch(`/api/stories/${storyId}/likes`, { credentials: "include" });
+      if (!res.ok) return { count: 0, likers: [], seeStoryEngagers: false };
+      return res.json();
+    },
+  });
+}
+
+export function useMarkStoryRepliesRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/stories/mine/replies/read", { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error("Failed to mark story replies read");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/chat/threads", "story_replies"] }),
+  });
+}
+
 // Thrown by useStartInterview on a gated 403 so callers can tell "you need
 // to upgrade" apart from a genuine failure instead of pattern-matching a
 // generic error message.

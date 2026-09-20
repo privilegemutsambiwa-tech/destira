@@ -32,6 +32,11 @@ export interface TierLimits {
   groupsCreatedMax: number | null;
   /** host your own events */
   canHostEvent: boolean;
+  /** see the names/profiles of people who viewed or liked your story (not just the count) */
+  seeStoryEngagers: boolean;
+  /** replies you can post to other people's stories per rolling 7 days; null = no limit.
+   *  Reading replies to your OWN stories is never capped, on any tier. */
+  storyRepliesPerWeek: number | null;
 }
 
 export const LIMITS: Record<Tier, TierLimits> = {
@@ -44,6 +49,8 @@ export const LIMITS: Record<Tier, TierLimits> = {
     groupsMax: 3,
     groupsCreatedMax: 0,
     canHostEvent: false,
+    seeStoryEngagers: false,
+    storyRepliesPerWeek: 10,
   },
   spark: {
     priceCents: 499,
@@ -54,6 +61,8 @@ export const LIMITS: Record<Tier, TierLimits> = {
     groupsMax: 8,
     groupsCreatedMax: 0,
     canHostEvent: false,
+    seeStoryEngagers: true,
+    storyRepliesPerWeek: 30,
   },
   flame: {
     priceCents: 999,
@@ -64,6 +73,8 @@ export const LIMITS: Record<Tier, TierLimits> = {
     groupsMax: 20,
     groupsCreatedMax: 3,
     canHostEvent: true,
+    seeStoryEngagers: true,
+    storyRepliesPerWeek: null,
   },
   ember: {
     priceCents: 1999,
@@ -74,6 +85,8 @@ export const LIMITS: Record<Tier, TierLimits> = {
     groupsMax: null,
     groupsCreatedMax: null,
     canHostEvent: true,
+    seeStoryEngagers: true,
+    storyRepliesPerWeek: null,
   },
 };
 
@@ -87,6 +100,8 @@ export const FEATURES = [
   "create_group",
   "host_event",
   "proximity_identity", // see WHO a "someone's here" alert is about, and act on it
+  "see_story_engagers", // names/profiles of who viewed or liked your story
+  "story_reply", // posting a reply to someone else's story
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -100,6 +115,8 @@ export const FEATURE_MIN_TIER: Record<Feature, Tier> = {
   create_group: "flame",
   host_event: "flame",
   proximity_identity: "spark",
+  see_story_engagers: "spark",
+  story_reply: "free", // a metered count, not a tier floor — see LIMIT_KEY
 };
 
 // ── Display metadata — the ONLY place plan copy lives ──
@@ -263,6 +280,7 @@ const LIMIT_KEY: Partial<Record<Feature, keyof TierLimits>> = {
   daily_likes: "dailyLikes",
   start_interview: "weeklyInterviews",
   join_group: "groupsMax",
+  story_reply: "storyRepliesPerWeek",
 };
 
 const ACTION: Record<Feature, string> = {
@@ -274,6 +292,8 @@ const ACTION: Record<Feature, string> = {
   create_group: "Creating a room",
   host_event: "Hosting an event",
   proximity_identity: "Opening a nearby profile",
+  see_story_engagers: "Seeing who viewed or liked your story",
+  story_reply: "Replying to a story",
 };
 
 export interface GateCopy {
@@ -310,10 +330,11 @@ export function gateCopy(feature: Feature, s: GateCopyState = {}): GateCopy {
     const noun =
       feature === "daily_likes" ? "likes"
       : feature === "start_interview" ? "interviews"
+      : feature === "story_reply" ? "replies"
       : "rooms";
     const per =
       feature === "daily_likes" ? "today"
-      : feature === "start_interview" ? "this week"
+      : feature === "start_interview" || feature === "story_reply" ? "this week"
       : "";
 
     let line: string;
@@ -354,6 +375,7 @@ export function gateCopy(feature: Feature, s: GateCopyState = {}): GateCopy {
     see_who_asked: `You can see that someone asked, but not who. ${reqName} shows you the names and profiles${priced}.`,
     create_group: `Creating a room starts on ${reqName}${priced}. You can still join up to ${LIMITS[curTier].groupsMax ?? "several"} on ${curName}.`,
     proximity_identity: `Your twin can tell you someone's nearby, but opening their profile needs ${reqName}${priced}.`,
+    see_story_engagers: `You can see how many people viewed or liked your story, but not who. ${reqName} shows you the names and profiles${priced}.`,
   };
 
   return {

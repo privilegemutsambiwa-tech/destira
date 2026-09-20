@@ -266,6 +266,10 @@ export interface IStorage {
   getStoryComments(storyId: number): Promise<StoryComment[]>;
   addStoryView(storyId: number, userId: string): Promise<StoryView>;
   getStoryViews(storyId: number): Promise<StoryView[]>;
+  getStoryViewersDetailed(storyId: number, ownerId: string): Promise<{ count: number; viewers: any[] }>;
+  getStoryLikersDetailed(storyId: number, ownerId: string): Promise<{ count: number; likers: any[] }>;
+  getStoryRepliesForOwner(ownerId: string): Promise<any[]>;
+  markStoryRepliesRead(userId: string): Promise<void>;
 
   getPlans(): Promise<Plan[]>;
   getPlan(id: number): Promise<Plan | undefined>;
@@ -1910,16 +1914,19 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(stories.createdAt));
   }
 
+  // Expiry only retires a story from the live feed (getStory/getActiveStories
+  // already filter on expiresAt) — it never deletes the row. storyMedia and
+  // storyComments stay forever so a reply thread in Chat still has something
+  // to render ("story expired") long after the 24h window closes. Likes and
+  // views are ephemeral engagement signals with no reason to survive expiry,
+  // so those are the only rows actually cleaned up here.
   async deleteExpiredStories(): Promise<void> {
     const expired = await db.select({ id: stories.id }).from(stories)
       .where(lte(stories.expiresAt, new Date()));
     if (expired.length === 0) return;
     const expiredIds = expired.map((s) => s.id);
-    await db.delete(storyMedia).where(inArray(storyMedia.storyId, expiredIds));
     await db.delete(storyLikes).where(inArray(storyLikes.storyId, expiredIds));
-    await db.delete(storyComments).where(inArray(storyComments.storyId, expiredIds));
     await db.delete(storyViews).where(inArray(storyViews.storyId, expiredIds));
-    await db.delete(stories).where(inArray(stories.id, expiredIds));
   }
 
   async addStoryMedia(storyId: number, type: string, url: string | null, caption?: string, textContent?: string): Promise<StoryMedia> {
@@ -1979,6 +1986,139 @@ export class DatabaseStorage implements IStorage {
 
   async getStoryViews(storyId: number): Promise<StoryView[]> {
     return db.select().from(storyViews).where(eq(storyViews.storyId, storyId));
+  }
+
+  // Both directions: a story owner shouldn't see someone they blocked in their
+  // viewer/liker/reply lists, and shouldn't see someone who blocked them
+  // either — otherwise the block would be detectable from the other side.
+  private async getBidirectionallyBlockedIds(userId: string): Promise<Set<string>> {
+    const [iBlocked, blockedMe] = await Promise.all([
+      db.select({ id: blockedUsers.blockedId }).from(blockedUsers).where(eq(blockedUsers.blockerId, userId)),
+      db.select({ id: blockedUsers.blockerId }).from(blockedUsers).where(eq(blockedUsers.blockedId, userId)),
+    ]);
+    return new Set([...iBlocked.map((r) => r.id), ...blockedMe.map((r) => r.id)]);
+  }
+
+  async getStoryViewersDetailed(storyId: number, ownerId: string): Promise<{ count: number; viewers: any[] }> {
+    const blocked = await this.getBidirectionallyBlockedIds(ownerId);
+    const rows = await db
+      .select({
+        userId: storyViews.userId,
+        viewedAt: storyViews.createdAt,
+        displayName: profiles.displayName,
+        coverPhotoUrl: profiles.coverPhotoUrl,
+        profileImageUrl: users.profileImageUrl,
+      })
+      .from(storyViews)
+      .innerJoin(users, eq(storyViews.userId, users.id))
+      .leftJoin(profiles, eq(profiles.userId, storyViews.userId))
+      .where(eq(storyViews.storyId, storyId))
+      .orderBy(desc(storyViews.createdAt));
+    const visible = rows.filter((r) => !blocked.has(r.userId));
+    return {
+      count: visible.length,
+      viewers: visible.map((r) => ({
+        userId: r.userId,
+        displayName: r.displayName || "Someone",
+        photoUrl: r.coverPhotoUrl || r.profileImageUrl || null,
+        viewedAt: r.viewedAt,
+      })),
+    };
+  }
+
+  async getStoryLikersDetailed(storyId: number, ownerId: string): Promise<{ count: number; likers: any[] }> {
+    const blocked = await this.getBidirectionallyBlockedIds(ownerId);
+    const rows = await db
+      .select({
+        userId: storyLikes.userId,
+        likedAt: storyLikes.createdAt,
+        displayName: profiles.displayName,
+        coverPhotoUrl: profiles.coverPhotoUrl,
+        profileImageUrl: users.profileImageUrl,
+      })
+      .from(storyLikes)
+      .innerJoin(users, eq(storyLikes.userId, users.id))
+      .leftJoin(profiles, eq(profiles.userId, storyLikes.userId))
+      .where(eq(storyLikes.storyId, storyId))
+      .orderBy(desc(storyLikes.createdAt));
+    const visible = rows.filter((r) => !blocked.has(r.userId));
+    return {
+      count: visible.length,
+      likers: visible.map((r) => ({
+        userId: r.userId,
+        displayName: r.displayName || "Someone",
+        photoUrl: r.coverPhotoUrl || r.profileImageUrl || null,
+        likedAt: r.likedAt,
+      })),
+    };
+  }
+
+  // One row per commenter across ALL of the owner's stories (not per-comment),
+  // newest reply first — this is what backs the Chat "Story replies" filter,
+  // so it reads like a thread list, not a raw comment feed. Reading is never
+  // capped or tier-gated; only posting a reply is (see gate.ts story_reply).
+  async getStoryRepliesForOwner(ownerId: string): Promise<any[]> {
+    const blocked = await this.getBidirectionallyBlockedIds(ownerId);
+    const [profile] = await db
+      .select({ readAt: profiles.storyRepliesReadAt })
+      .from(profiles)
+      .where(eq(profiles.userId, ownerId));
+    const readAt = profile?.readAt ?? null;
+
+    const rows = await db
+      .select({
+        commenterId: storyComments.userId,
+        text: storyComments.text,
+        createdAt: storyComments.createdAt,
+        storyId: storyComments.storyId,
+        storyExpiresAt: stories.expiresAt,
+        displayName: profiles.displayName,
+        coverPhotoUrl: profiles.coverPhotoUrl,
+        profileImageUrl: users.profileImageUrl,
+      })
+      .from(storyComments)
+      .innerJoin(stories, eq(storyComments.storyId, stories.id))
+      .innerJoin(users, eq(storyComments.userId, users.id))
+      .leftJoin(profiles, eq(profiles.userId, storyComments.userId))
+      .where(and(eq(stories.userId, ownerId), ne(storyComments.userId, ownerId)))
+      .orderBy(desc(storyComments.createdAt));
+
+    const visible = rows.filter((r) => !blocked.has(r.commenterId));
+
+    const storyIds = Array.from(new Set(visible.map((r) => r.storyId)));
+    const mediaRows = storyIds.length
+      ? await db
+          .select()
+          .from(storyMedia)
+          .where(inArray(storyMedia.storyId, storyIds))
+          .orderBy(asc(storyMedia.orderIndex))
+      : [];
+    const mediaByStory = new Map<number, StoryMedia>();
+    for (const m of mediaRows) if (!mediaByStory.has(m.storyId)) mediaByStory.set(m.storyId, m);
+
+    const byCommenter = new Map<string, any>();
+    for (const r of visible) {
+      if (byCommenter.has(r.commenterId)) continue; // newest first: first hit is the latest reply
+      const media = mediaByStory.get(r.storyId);
+      byCommenter.set(r.commenterId, {
+        commenterId: r.commenterId,
+        displayName: r.displayName || "Someone",
+        photoUrl: r.coverPhotoUrl || r.profileImageUrl || null,
+        storyId: r.storyId,
+        storySnippet: {
+          expired: r.storyExpiresAt.getTime() <= Date.now(),
+          caption: media?.caption ?? null,
+          textContent: media?.textContent ?? null,
+        },
+        lastReply: { text: r.text, createdAt: r.createdAt },
+        unread: readAt ? (r.createdAt ? r.createdAt > readAt : false) : true,
+      });
+    }
+    return Array.from(byCommenter.values());
+  }
+
+  async markStoryRepliesRead(userId: string): Promise<void> {
+    await db.update(profiles).set({ storyRepliesReadAt: new Date() }).where(eq(profiles.userId, userId));
   }
 
   async getPlans(): Promise<Plan[]> {

@@ -1,11 +1,14 @@
 ﻿import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Heart, MessageCircle, X, Plus, Eye, Send, ChevronLeft, ChevronRight, Trash2, Camera, Pencil, Brain } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
+import { UpgradeRequiredError } from "@/hooks/use-interactions";
+import { StoryEngagersSheet } from "@/components/story-engagers-sheet";
 
 interface StoryMedia {
   id: number;
@@ -25,7 +28,7 @@ interface StoryData {
   viewCount?: number;
 }
 
-export type OwnStory = StoryData & { viewCount: number; likeCount: number };
+export type OwnStory = StoryData & { viewCount: number; likeCount: number; commentCount?: number };
 
 interface StoryGroup {
   userId: string;
@@ -87,6 +90,8 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
   const [progress, setProgress] = useState(0);
   const [commentText, setCommentText] = useState("");
   const [isPaused, setIsPaused] = useState(false);
+  const [replyCapError, setReplyCapError] = useState<UpgradeRequiredError | null>(null);
+  const [, setLocation] = useLocation();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const touchStartY = useRef<number | null>(null);
   const viewTrackedRef = useRef<Set<number>>(new Set());
@@ -104,14 +109,33 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
     },
   });
 
+  // Plain fetch, not apiRequest — a capped reply is a 200-shaped 403 with a
+  // structured body (upgradeRequired/requiredTier), and apiRequest's
+  // throwIfResNotOk collapses that down to a generic message string.
   const commentMutation = useMutation({
     mutationFn: async ({ storyId, text }: { storyId: number; text: string }) => {
-      await apiRequest("POST", `/api/stories/${storyId}/comment`, { text });
+      const res = await fetch(`/api/stories/${storyId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        if (res.status === 403 && body?.upgradeRequired) {
+          throw new UpgradeRequiredError(body.message || "Reply limit reached", body.requiredTier);
+        }
+        throw new Error(body?.message || "Failed to send reply");
+      }
+      return res.json();
     },
     onSuccess: () => {
       setCommentText("");
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories/feed"] });
+    },
+    onError: (err) => {
+      if (err instanceof UpgradeRequiredError) setReplyCapError(err);
     },
   });
 
@@ -358,6 +382,47 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
           </div>
         </div>
       </div>
+
+      {replyCapError && (
+        <div
+          className="fixed inset-0 z-[110] flex items-end justify-center"
+          style={{ background: "rgba(12,9,16,0.72)" }}
+          onClick={() => setReplyCapError(null)}
+          data-testid="sheet-reply-cap"
+        >
+          <div
+            className="w-full max-w-md p-6 pb-8"
+            style={{ background: "#14101C", borderRadius: "26px 26px 0 0", border: "1px solid rgba(233,196,106,0.25)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2
+              className="text-center mb-2"
+              style={{ fontFamily: '"Instrument Serif", serif', fontWeight: 400, color: "#F5F0EA", fontSize: "22px" }}
+            >
+              That's your replies for now
+            </h2>
+            <p className="text-center text-sm mb-6 leading-relaxed" style={{ color: "#A79FB4" }} data-testid="text-reply-cap-message">
+              {replyCapError.message}
+            </p>
+            <button
+              className="w-full py-3 font-semibold mb-3"
+              style={{ background: "#E9C46A", color: "#14101C", borderRadius: "14px", border: "none", fontSize: "15px" }}
+              onClick={() => setLocation(`/plans?feature=story_reply`)}
+              data-testid="button-reply-cap-see-plans"
+            >
+              See plans
+            </button>
+            <button
+              className="w-full text-sm font-medium"
+              style={{ color: "#A79FB4" }}
+              onClick={() => setReplyCapError(null)}
+              data-testid="button-reply-cap-dismiss"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -374,7 +439,9 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
   const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [engagerSheet, setEngagerSheet] = useState<"viewers" | "likers" | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [, setLocation] = useLocation();
 
   const currentStory = stories[currentIndex];
   const currentMedia = currentStory?.media?.[0];
@@ -543,15 +610,37 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
         )}
 
         <div
-          className="absolute bottom-0 left-0 right-0 z-10 p-4 flex items-center justify-between bg-gradient-to-t from-vf-scrim/80 to-transparent"
+          className="absolute bottom-0 left-0 right-0 z-10 p-4 bg-gradient-to-t from-vf-scrim/80 to-transparent"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center gap-2 text-white text-sm" data-testid="text-own-story-views">
-            <Eye className="w-4 h-4" />
-            <span>{currentStory.viewCount} views</span>
+          <div className="flex items-center gap-4 mb-3">
+            <button
+              className="flex items-center gap-1.5 text-white text-sm"
+              onClick={() => setEngagerSheet("viewers")}
+              data-testid="text-own-story-views"
+            >
+              <Eye className="w-4 h-4" />
+              <span>{currentStory.viewCount} views</span>
+            </button>
+            <button
+              className="flex items-center gap-1.5 text-white text-sm"
+              onClick={() => setEngagerSheet("likers")}
+              data-testid="text-own-story-likes"
+            >
+              <Heart className="w-4 h-4" />
+              <span>{currentStory.likeCount} likes</span>
+            </button>
+            <button
+              className="flex items-center gap-1.5 text-white text-sm ml-auto"
+              onClick={() => { onClose(); setLocation("/interviews?filter=story_replies"); }}
+              data-testid="text-own-story-replies"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>{currentStory.commentCount ?? 0} replies</span>
+            </button>
           </div>
           <button
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold"
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold"
             style={{ background: "rgba(239,68,68,0.2)", color: "#F87171", borderRadius: "10px", border: "1px solid rgba(239,68,68,0.3)" }}
             onClick={() => deleteMutation.mutate(currentStory.id)}
             disabled={deleteMutation.isPending}
@@ -562,6 +651,14 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
           </button>
         </div>
       </div>
+
+      {engagerSheet && (
+        <StoryEngagersSheet
+          storyId={currentStory.id}
+          kind={engagerSheet}
+          onClose={() => setEngagerSheet(null)}
+        />
+      )}
     </div>
   );
 }
@@ -706,8 +803,11 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
             >
               Add a moment
             </h2>
-            <p className="text-center text-xs mb-6" style={{ color: "#7E7690" }}>
+            <p className="text-center text-xs mb-1" style={{ color: "#7E7690" }}>
               Only people in your rooms see this.
+            </p>
+            <p className="text-center text-xs mb-6" style={{ color: "#7E7690" }}>
+              Your name shows up if someone opens it.
             </p>
             <div className="grid grid-cols-2 gap-3 mb-5">
               <button

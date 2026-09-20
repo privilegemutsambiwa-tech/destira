@@ -62,6 +62,9 @@ export const profiles = pgTable("profiles", {
   disclosureSettings: jsonb("disclosure_settings").$type<Record<string, string>>(),
   // Free-text user directive to the twin — instructions, NOT data. Never quoted back.
   disclosureDirective: text("disclosure_directive"),
+  // Clears the "Story replies" chat filter's unread badge — everything newer
+  // than this on any of the user's own stories counts as unread.
+  storyRepliesReadAt: timestamp("story_replies_read_at"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [
   index("profiles_location_updated_at_idx").on(t.locationUpdatedAt),
