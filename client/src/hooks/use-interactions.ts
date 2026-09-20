@@ -204,6 +204,43 @@ export function useDirectMessages(matchId: number) {
       return res.json();
     },
     refetchInterval: 5000,
+    refetchIntervalInBackground: false,
+  });
+}
+
+// Marks a direct-message thread read. onMutate zeroes the unread badge in
+// the chat list cache immediately, since waiting on the network round trip
+// is exactly the "still shows unread after I read it" lag being fixed here.
+export function useMarkThreadRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (matchId: number) => {
+      const res = await fetch(`/api/matches/${matchId}/read`, {
+        method: "PUT",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to mark as read");
+      return res.json();
+    },
+    onMutate: async (matchId: number) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/chat/threads"] });
+      const previous = queryClient.getQueriesData({ queryKey: ["/api/chat/threads"] });
+      queryClient.setQueriesData({ queryKey: ["/api/chat/threads"] }, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.map((t: any) =>
+          t.type === "match" && t.matchId === matchId ? { ...t, unreadCount: 0 } : t
+        );
+      });
+      return { previous };
+    },
+    onError: (_err, _matchId, context) => {
+      context?.previous?.forEach(([key, data]: [readonly unknown[], unknown]) => {
+        queryClient.setQueryData(key, data);
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/chat/threads"] });
+    },
   });
 }
 
@@ -220,7 +257,10 @@ export function useSendDirectMessage(matchId: number) {
       if (!res.ok) throw new Error("Failed to send message");
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/messages", matchId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/messages", matchId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/chat/threads"] });
+    },
   });
 }
 
@@ -349,6 +389,7 @@ export function useGroupMessages(groupId: number) {
       return res.json();
     },
     refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -739,6 +780,7 @@ export function useEnrichedGroupMessages(groupId: number) {
       return res.json();
     },
     refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   });
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDirectMessages, useSendDirectMessage, useMatches } from "@/hooks/use-interactions";
+import { useDirectMessages, useSendDirectMessage, useMatches, useMarkThreadRead } from "@/hooks/use-interactions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, ArrowLeft, Loader2 } from "lucide-react";
@@ -19,6 +19,15 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const markThreadRead = useMarkThreadRead();
+
+  // Opening the thread is what counts as "read" — fire this immediately so
+  // the unread badge on the chat list clears instantly instead of waiting
+  // for the user to leave the screen.
+  useEffect(() => {
+    markThreadRead.mutate(matchId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]);
 
   // Entered from the chat list, Likes, a group chat, or a profile — each
   // linker passes its own route as ?from so back returns to wherever the

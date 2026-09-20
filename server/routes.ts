@@ -2303,6 +2303,24 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Called explicitly by the chat screen so the client can await it (the
+  // read side effect on GET /api/messages/:matchId above is fire-and-forget
+  // and isn't something the UI can key an optimistic update off of).
+  app.put("/api/matches/:matchId/read", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const matchId = parseInt(req.params.matchId);
+    try {
+      const match = await storage.getMatch(matchId);
+      if (!match) return res.status(404).json({ message: "Match not found" });
+      if (match.user1Id !== userId && match.user2Id !== userId) return res.sendStatus(403);
+      await storage.markDirectMessagesRead(matchId, userId);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to mark as read" });
+    }
+  });
+
   app.post("/api/messages/:matchId", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
