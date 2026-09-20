@@ -18,7 +18,8 @@ const useMock = () => process.env.PAYMENTS_MOCK === "1" || !paynowConfigured();
 
 export function providerFor(method: PaymentMethod): { provider: PaymentProvider; name: string } {
   if (useMock()) return { provider: mock, name: "mock" };
-  return { provider: paynow, name: method === "card" ? "paynow_card" : method === "ecocash_card" ? "paynow_card" : "paynow_ecocash" };
+  const name = method === "card" || method === "ecocash_card" ? "paynow_card" : `paynow_${method}`;
+  return { provider: paynow, name };
 }
 
 export function priceCentsFor(tier: "spark" | "flame" | "ember", period: BillingPeriod = "monthly"): number {
@@ -92,6 +93,9 @@ export async function initiatePayment(
       redirectUrl: r.redirectUrl,
       pollUrl: r.pollUrl,
       failureReason: r.failureReason,
+      authorizationCode: r.authorizationCode,
+      authorizationExpires: r.authorizationExpires,
+      deepLink: r.deepLink,
     };
   } catch (e: any) {
     const reason = String(e?.message || e);

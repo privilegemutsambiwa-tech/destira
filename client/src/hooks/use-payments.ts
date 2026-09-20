@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-export type PayMethod = "ecocash" | "ecocash_card" | "card";
+export type PayMethod = "ecocash" | "onemoney" | "innbucks" | "ecocash_card" | "card";
+export const WALLET_PAY_METHODS: ReadonlySet<PayMethod> = new Set(["ecocash", "onemoney", "innbucks"]);
 export type PayStatus = "pending" | "paid" | "failed" | "cancelled" | "expired";
 
 export interface InitiateResult {
@@ -11,6 +12,9 @@ export interface InitiateResult {
   pollUrl?: string;
   failureReason?: string;
   resumed?: boolean;
+  authorizationCode?: string;
+  authorizationExpires?: string;
+  deepLink?: string;
 }
 
 export function useInitiatePayment() {

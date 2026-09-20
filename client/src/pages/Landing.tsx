@@ -326,7 +326,7 @@ function RotatingPlace({ className = "" }: { className?: string }) {
 
   return (
     <span
-      className={`inline-block transition-opacity duration-[240ms] ${shown ? "opacity-100" : "opacity-0"} ${className}`}
+      className={`inline-block transition-opacity [transition-duration:240ms] ${shown ? "opacity-100" : "opacity-0"} ${className}`}
       aria-hidden="true"
     >
       {PLACES[i]}
@@ -554,9 +554,15 @@ export default function Landing() {
 
   // Page-level head meta. (No react-helmet in this repo — a native effect
   // gets the same title/OG tags without a new dep + provider.)
+  //
+  // document.title is deliberately left alone here — it stays the static
+  // "Destira" from index.html. Overriding it to a longer string used to mean
+  // a PWA/shortcut installed from this route got a different name than one
+  // installed from anywhere else in the app (two separate "Destira" entries
+  // on the Chrome New Tab page, one titled "Destira — reson…"). og:title
+  // below is what link previews actually read; it doesn't need to match the
+  // tab/shortcut title.
   useEffect(() => {
-    const prevTitle = document.title;
-    document.title = "Destira — resonance over photographs";
     const created: HTMLMetaElement[] = [];
     const setMeta = (attr: "name" | "property", key: string, content: string) => {
       let el = document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`);
@@ -573,11 +579,8 @@ export default function Landing() {
     setMeta("name", "description", desc);
     setMeta("property", "og:title", "Destira — resonance over photographs");
     setMeta("property", "og:description", desc);
-    // TODO: a proper 1200×630 share card. The 512 icon is a placeholder that at
-    // least resolves (there was no og.png).
-    setMeta("property", "og:image", "/brand/destira-icon-512.png");
+    setMeta("property", "og:image", "/brand/og-default.png");
     return () => {
-      document.title = prevTitle;
       created.forEach((m) => m.remove());
     };
   }, []);

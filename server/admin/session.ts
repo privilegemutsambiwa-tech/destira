@@ -81,10 +81,11 @@ export function adminSessionMiddleware(): RequestHandler {
     process.env.NODE_ENV === "production" &&
     (!process.env.ADMIN_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET === "local-dev-insecure-admin-secret")
   ) {
-    console.warn(
-      "[SECURITY] ADMIN_SESSION_SECRET is not set (or using the insecure local-dev default) " +
-        "in production. Set a strong random value before any admin logs in.",
+    console.error(
+      "[SECURITY] Refusing to start: ADMIN_SESSION_SECRET is not set (or using the insecure " +
+        "local-dev default) in production. Set a strong random value before any admin logs in.",
     );
+    throw new Error("ADMIN_SESSION_SECRET must be set to a strong random value in production");
   }
   return session({
     name: "destira.admin.sid",

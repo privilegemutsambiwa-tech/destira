@@ -317,7 +317,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
               <button
                 onClick={openTwin}
                 disabled={startInterview.isPending}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-vf-mint/35 bg-vf-mint/10 text-vf-mint text-[14px] font-medium px-5 min-h-[44px] transition-colors hover:bg-vf-mint/15 disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-vf-mint/35 bg-vf-mint/10 text-vf-mint text-[14px] font-medium px-5 min-h-[44px] btn-press vf-btn-primary transition-colors hover:bg-vf-mint/15 disabled:opacity-50"
                 data-testid="button-chat-twin"
               >
                 {startInterview.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -340,7 +340,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     if (!match) return null;
     if (match.role === "asked" && match.status === "matched") {
       return (
-        <div className="rounded-[16px] bg-vf-surface p-4 flex items-center justify-between gap-3" data-testid="status-strip">
+        <div className="rounded-[16px] bg-vf-surface p-4 flex items-center justify-between gap-3 vf-card" data-testid="status-strip">
           <div>
             <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint">You're talking</div>
             <p className="text-[13.5px] text-vf-muted mt-0.5">This went somewhere.</p>
@@ -353,7 +353,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     }
     if (match.role === "asked" && match.status === "rejected") {
       return (
-        <div className="rounded-[16px] bg-vf-surface p-4" data-testid="status-strip">
+        <div className="rounded-[16px] bg-vf-surface p-4 vf-card" data-testid="status-strip">
           <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">She passed</div>
           <p className="text-[13.5px] text-vf-muted mt-0.5">It happens. Your next read lands at 18:00.</p>
         </div>
@@ -361,7 +361,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     }
     if (match.role === "asked") {
       return (
-        <div className="rounded-[16px] bg-vf-surface p-4 flex items-start justify-between gap-3" data-testid="status-strip">
+        <div className="rounded-[16px] bg-vf-surface p-4 flex items-start justify-between gap-3 vf-card" data-testid="status-strip">
           <div>
             <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-ember">You asked to meet</div>
             <p className="text-[13.5px] text-vf-muted mt-0.5">
@@ -381,7 +381,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     }
     // they asked you
     return (
-      <div className="rounded-[16px] bg-vf-surface p-4" data-testid="status-strip">
+      <div className="rounded-[16px] bg-vf-surface p-4 vf-card" data-testid="status-strip">
         <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-ember">
           {her ? "She asked" : "They asked"} to meet you
         </div>
@@ -417,7 +417,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
             <button
               onClick={saveBio}
               disabled={updateProfile.isPending}
-              className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press vf-btn-primary hover:bg-[var(--vf-ember-soft)] transition-colors disabled:opacity-40"
               data-testid="button-save-preview-bio"
             >
               {updateProfile.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -506,7 +506,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
                     <button
                       onClick={() => saveOneAnswer(a.questionId)}
                       disabled={savingAnswerId === a.questionId}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors disabled:opacity-40"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press vf-btn-primary hover:bg-[var(--vf-ember-soft)] transition-colors disabled:opacity-40"
                       data-testid={`button-save-answer-${a.questionId}`}
                     >
                       {savingAnswerId === a.questionId && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -556,7 +556,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
 
   const missingPortrait = !portraitUrl;
   const PreviewTruths = preview ? (
-    <div className="rounded-[16px] border border-vf-line bg-vf-surface2 p-4 flex flex-col gap-2.5" data-testid="section-preview-truths">
+    <div className="rounded-[16px] border border-vf-line bg-vf-surface2 p-4 flex flex-col gap-2.5 vf-card" data-testid="section-preview-truths">
       {missingPortrait && (
         <div className="flex items-center justify-between gap-3">
           <p className="text-[13.5px] text-vf-muted">Everyone sees a letter where your face would be.</p>
@@ -618,7 +618,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   ) : null;
 
   const ResonanceCard = (
-    <div className="bg-vf-surface2 rounded-[20px]" style={{ padding: "22px" }}>
+    <div className="bg-vf-surface2 rounded-[20px] vf-card" style={{ padding: "22px" }}>
       <div className="flex items-center gap-4" style={preview ? { opacity: 0.5 } : undefined}>
         <ResonanceDial score={read.score} size={92} />
         <div>
@@ -638,7 +638,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   );
 
   const TranscriptCard = transcript ? (
-    <div className="rounded-[20px] p-[22px]" style={{ border: "1px solid rgba(143,227,199,.24)", background: "rgba(143,227,199,.045)" }}>
+    <div className="rounded-[20px] p-[22px] vf-card" style={{ border: "1px solid rgba(143,227,199,.24)", background: "rgba(143,227,199,.045)" }}>
       <div className="flex items-center gap-2">
         <span
           className="block w-[11px] h-[11px] rounded-full shrink-0 animate-[vf-breathe_4.5s_ease-in-out_infinite] motion-reduce:animate-none"
@@ -692,14 +692,14 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   ) : null;
 
   const RoomsCard = groups.length ? (
-    <div className="bg-vf-surface2 rounded-[20px]" style={{ padding: "22px" }}>
+    <div className="bg-vf-surface2 rounded-[20px] vf-card" style={{ padding: "22px" }}>
       <div className={`${EYEBROW} mb-3`}>Rooms {her ? "she's" : "they're"} in</div>
       <div className="flex flex-col gap-2.5">
         {groups.map((g: any) => (
           <button
             key={g.id}
             onClick={() => setLocation(g.viewerIsMember ? `/lounge/group/${g.id}` : `/lounge/group/${g.id}/info`)}
-            className="flex items-center justify-between gap-3 text-left"
+            className="flex items-center justify-between gap-3 text-left -mx-2 px-2 py-1.5 rounded-lg transition-colors duration-150 hover:bg-vf-elevated"
           >
             <span className="text-[14px] text-vf-text truncate">{g.name}</span>
             <span className="font-mono text-[10px] uppercase tracking-[0.16em] shrink-0 text-vf-faint">

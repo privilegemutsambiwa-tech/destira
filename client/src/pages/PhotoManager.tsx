@@ -284,7 +284,7 @@ export default function PhotoManager() {
                   <button
                     key={p.id}
                     onClick={() => setSelectedId(selectedId === p.id ? null : p.id)}
-                    className={`relative overflow-hidden rounded-[16px] transition-colors ${
+                    className={`relative overflow-hidden rounded-[16px] transition-all duration-150 hover:brightness-110 ${
                       isCover ? "border-2 border-vf-mint" : isPortrait ? "border-2 border-vf-ember" : "border border-vf-line hover:border-vf-text/25"
                     } ${selectedId === p.id ? "ring-2 ring-vf-text/60" : ""}`}
                     style={{ aspectRatio: "3 / 4" }}
@@ -435,7 +435,7 @@ function PhotoEditor({
   const roleErr = photo.role === "gallery" ? null : activeRole === "cover" ? coverErr : portraitErr;
 
   return (
-    <div className="rounded-[18px] border border-vf-line bg-vf-surface2 p-4 sm:p-5 flex flex-col gap-4" data-testid="photo-editor">
+    <div className="rounded-[18px] border border-vf-line bg-vf-surface2 p-4 sm:p-5 flex flex-col gap-4 vf-card" data-testid="photo-editor">
       <div className="flex items-center justify-between">
         <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">Editing this photo</div>
         <button onClick={onClose} className="text-[13px] text-vf-muted hover:text-vf-text">Done</button>
@@ -534,7 +534,7 @@ function PhotoEditor({
                     else if (e.key === "ArrowUp") { e.preventDefault(); onNudge(0, -step); }
                     else if (e.key === "ArrowDown") { e.preventDefault(); onNudge(0, step); }
                   }}
-                  className="absolute grid place-items-center focus:outline-none"
+                  className="absolute grid place-items-center focus:outline-none vf-input-focus rounded-full"
                   style={{ left: focal.x * box.w - 22, top: focal.y * box.h - 22, width: 44, height: 44, cursor: "grab" }}
                   data-testid="focal-ring"
                 >

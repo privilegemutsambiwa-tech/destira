@@ -65,9 +65,9 @@ function Chip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-full border px-3.5 h-9 text-[13px] capitalize transition-colors ${
+      className={`rounded-full border px-3.5 h-9 text-[13px] capitalize transition-colors duration-150 ${
         active
-          ? "border-vf-mint/50 bg-vf-mint/10 text-vf-text"
+          ? "border-vf-mint/50 bg-vf-mint/10 text-vf-text shadow-[var(--shadow-card)]"
           : "border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20"
       }`}
     >
@@ -86,7 +86,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
         on ? "bg-vf-mint justify-end" : "bg-vf-text/[0.14] justify-start"
       }`}
     >
-      <span className="block w-[18px] h-[18px] rounded-full" style={{ background: on ? "hsl(var(--vf-ink))" : "#CFC7DA" }} />
+      <span className="block w-[18px] h-[18px] rounded-full" style={{ background: on ? "hsl(var(--vf-ink))" : "hsl(var(--vf-soft))" }} />
     </button>
   );
 }
@@ -159,7 +159,7 @@ export default function EventPreferences() {
   return (
     <div className="min-h-dvh bg-vf-ink text-vf-text">
       <div className="sticky top-0 z-10 bg-vf-ink border-b border-vf-line flex items-center gap-3 px-4 h-14">
-        <button onClick={() => setLocation(backTo)} className="w-8 h-8 flex items-center justify-center" data-testid="button-prefs-back">
+        <button onClick={() => setLocation(backTo)} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-150 hover:bg-[var(--vf-elevated)]" data-testid="button-prefs-back">
           <ArrowLeft className="w-5 h-5 text-vf-ember" />
         </button>
         <h1 className="font-serif text-[20px] text-vf-text">Event preferences</h1>
@@ -233,7 +233,7 @@ export default function EventPreferences() {
 
         <section>
           <GroupLabel>Group size</GroupLabel>
-          <div className="inline-flex rounded-full border border-vf-line overflow-hidden">
+          <div className="vf-card inline-flex rounded-full border border-vf-line overflow-hidden">
             {([
               ["Intimate (under 10)", "intimate", 9],
               ["Medium", "medium", 30],
@@ -243,8 +243,8 @@ export default function EventPreferences() {
                 key={mode}
                 type="button"
                 onClick={() => patch({ groupSizeMax: val })}
-                className={`px-4 h-9 text-[13px] transition-colors ${
-                  sizeMode === mode ? "bg-vf-mint/10 text-vf-text" : "text-vf-muted hover:text-vf-text"
+                className={`px-4 h-9 text-[13px] transition-colors duration-150 ${
+                  sizeMode === mode ? "bg-vf-mint/10 text-vf-text" : "text-vf-muted hover:text-vf-text hover:bg-[var(--vf-elevated)]"
                 }`}
               >
                 {label}
@@ -271,7 +271,7 @@ export default function EventPreferences() {
           </div>
         </section>
 
-        <section className="rounded-[18px] border border-vf-mint/20 bg-vf-mint/[0.04] p-4 flex flex-col gap-4">
+        <section className="vf-card rounded-[18px] border border-vf-mint/20 bg-vf-mint/[0.04] p-4 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint">Twin alert</div>
             <Toggle on={draft.notifyOnGoodMatch} onChange={(v) => patch({ notifyOnGoodMatch: v })} />
@@ -310,7 +310,7 @@ export default function EventPreferences() {
           <button
             onClick={() => draft && save.mutate(draft)}
             disabled={pristine || save.isPending}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="vf-btn-primary w-full inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-40 disabled:cursor-not-allowed"
             data-testid="button-save-prefs"
           >
             {save.isPending && <Loader2 className="w-4 h-4 animate-spin" />}

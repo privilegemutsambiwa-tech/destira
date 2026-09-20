@@ -100,9 +100,9 @@ function Chip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-full border px-3.5 h-8 text-[12.5px] capitalize transition-colors ${
+      className={`rounded-full border px-3.5 h-8 text-[12.5px] capitalize transition-colors duration-150 ${
         active
-          ? "border-vf-mint/50 bg-vf-mint/10 text-vf-text"
+          ? "border-vf-mint/50 bg-vf-mint/10 text-vf-text shadow-[var(--shadow-card)]"
           : "border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20"
       }`}
     >
@@ -248,7 +248,7 @@ export default function Events() {
               if (panelOpen) backToFeed();
               else setPanelOpen(true);
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20 h-9 px-4 text-[13px] transition-colors"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20 hover:bg-[var(--vf-elevated)] h-9 px-4 text-[13px] transition-colors duration-150"
             data-testid="button-toggle-search"
           >
             {panelOpen ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
@@ -261,14 +261,14 @@ export default function Events() {
           </button>
           <button
             onClick={() => setLocation("/settings/events?from=/events")}
-            className="inline-flex items-center justify-center rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20 h-9 px-4 text-[13px] transition-colors"
+            className="inline-flex items-center justify-center rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20 hover:bg-[var(--vf-elevated)] h-9 px-4 text-[13px] transition-colors duration-150"
             data-testid="button-event-preferences"
           >
             Preferences
           </button>
           <button
             onClick={() => paywall.guard("host_event", () => setLocation("/events/host"))}
-            className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
+            className="vf-btn-primary inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
             data-testid="button-host-event"
           >
             {hostGate?.ok === false ? `Host an event · ${hostGate.requiredTierName || "Flame"}` : "Host an event"}
@@ -277,7 +277,7 @@ export default function Events() {
 
         {panelOpen && (
           <div
-            className="rounded-[20px] border border-vf-line bg-vf-surface2 p-5 mb-8 flex flex-col gap-5 overflow-hidden motion-safe:animate-[vf-rise_0.24s_ease-out_both]"
+            className="vf-card rounded-[20px] border border-vf-line bg-vf-surface2 p-5 mb-8 flex flex-col gap-5 overflow-hidden motion-safe:animate-[vf-rise_0.24s_ease-out_both]"
             data-testid="search-panel"
           >
             <input

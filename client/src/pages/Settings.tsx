@@ -72,14 +72,16 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
       style={{
         width: "42px", height: "24px", borderRadius: "100px",
         background: value ? MINT : "var(--vf-line)",
-        transition: "background 0.2s", position: "relative", cursor: "pointer", flexShrink: 0,
+        boxShadow: value ? "inset 0 1px 2px rgba(0,0,0,0.12)" : "inset 0 1px 2px rgba(0,0,0,0.08)",
+        transition: "background 0.2s, box-shadow 0.2s", position: "relative", cursor: "pointer", flexShrink: 0,
       }}
     >
       <div style={{
         position: "absolute", top: "3px", left: value ? "21px" : "3px",
         width: "18px", height: "18px", borderRadius: "50%",
         background: value ? INK : "#CFC7DA",
-        transition: "left 0.2s, background 0.2s",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+        transition: "left 0.2s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s",
       }} />
     </div>
   );
@@ -90,7 +92,7 @@ function ToggleRow({ icon: Icon, label, value, onChange, testId }: {
   label: string; value: boolean; onChange: (v: boolean) => void; testId?: string;
 }) {
   return (
-    <div style={ROW_STYLE} onClick={() => onChange(!value)} data-testid={testId}>
+    <div className="vf-row" style={ROW_STYLE} onClick={() => onChange(!value)} data-testid={testId}>
       <Icon className="w-5 h-5 mr-3" style={{ color: MUTED }} />
       <span className="flex-1 text-sm font-medium text-foreground">{label}</span>
       <Toggle value={value} onChange={onChange} />
@@ -103,13 +105,13 @@ function ChevronRow({ icon: Icon, label, sublabel, onClick, destructive, testId 
   label: string; sublabel?: string; onClick: () => void; destructive?: boolean; testId?: string;
 }) {
   return (
-    <div style={ROW_STYLE} onClick={onClick} data-testid={testId}>
+    <div className="vf-row group" style={ROW_STYLE} onClick={onClick} data-testid={testId}>
       <Icon className="w-5 h-5 mr-3" style={{ color: destructive ? "#EF4444" : MUTED }} />
       <div className="flex-1">
         <p className="text-sm font-medium" style={{ color: destructive ? "#EF4444" : TEXT }}>{label}</p>
         {sublabel && <p className="text-xs" style={{ color: MUTED }}>{sublabel}</p>}
       </div>
-      <ChevronRight className="w-4 h-4" style={{ color: MUTED }} />
+      <ChevronRight className="w-4 h-4 transition-transform duration-150 group-hover:translate-x-0.5" style={{ color: MUTED }} />
     </div>
   );
 }
@@ -145,7 +147,7 @@ function InviteRow() {
         <button
           onClick={copy}
           disabled={!data}
-          className="text-xs font-semibold px-3 py-1.5 rounded-lg btn-press disabled:opacity-40"
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg btn-press disabled:opacity-40 transition-colors duration-150 hover:border-vf-text/25"
           style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: copied ? MINT : TEXT }}
           data-testid="button-copy-referral"
         >
@@ -220,7 +222,7 @@ function GradientButton({ label, onClick, testId, danger, disabled }: {
       onClick={onClick}
       disabled={disabled}
       data-testid={testId}
-      className="w-full py-3 text-sm"
+      className="w-full py-3 text-sm vf-btn-primary"
       style={{
         background: danger ? "#EF4444" : EMBER,
         color: danger ? "#FFFFFF" : INK,
@@ -228,6 +230,7 @@ function GradientButton({ label, onClick, testId, danger, disabled }: {
         borderRadius: "12px", border: "none",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.5 : 1,
+        boxShadow: disabled ? "none" : "var(--shadow-card)",
       }}
     >
       {label}
@@ -265,7 +268,7 @@ function TwinTonePanel({ onBack, profile }: { onBack: () => void; profile: any }
       <p className="text-sm px-4 pt-4 pb-2" style={{ color: MUTED }}>
         Fine-tune how your AI Twin communicates when chatting with matches.
       </p>
-      <div style={{ margin: "12px 16px", borderRadius: "16px", background: CARD, padding: "4px 0" }}>
+      <div className="vf-card" style={{ margin: "12px 16px", borderRadius: "16px", background: CARD, padding: "4px 0" }}>
         {controls.map((c, i) => (
           <div key={c.key} style={{ padding: "14px 16px", borderBottom: i < controls.length - 1 ? `1px solid ${BORDER}` : "none" }}>
             <div className="flex justify-between mb-2">
@@ -348,7 +351,7 @@ function LocationPanel({ onBack, profile }: { onBack: () => void; profile: any }
 
   return (
     <Panel title="Location Preferences" onBack={onBack}>
-      <div style={{ margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden", background: CARD }}>
+      <div className="vf-card" style={{ margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden", background: CARD }}>
         <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}` }}>
           <p className="text-xs font-semibold mb-1" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Current Location</p>
           <div className="flex items-center justify-between">
@@ -356,7 +359,7 @@ function LocationPanel({ onBack, profile }: { onBack: () => void; profile: any }
             <button
               onClick={refreshLocation}
               disabled={refreshing}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg btn-press transition-colors duration-150 hover:border-vf-text/25 disabled:opacity-50"
               style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: refreshing ? MUTED : TEXT }}
               data-testid="button-refresh-location"
             >
@@ -398,7 +401,7 @@ function ChoiceRow({ label, options, value, onChange, testId }: {
             <button
               key={o.value}
               onClick={() => onChange(o.value)}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg btn-press"
+              className="text-xs font-medium px-3 py-1.5 rounded-lg btn-press transition-colors duration-150"
               style={{
                 background: active ? "rgba(143,227,199,0.14)" : ELEVATED,
                 border: `1px solid ${active ? "rgba(143,227,199,0.4)" : BORDER}`,
@@ -437,7 +440,7 @@ function AppearanceRow() {
             <button
               key={o.value}
               onClick={() => setPreference(o.value)}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg btn-press"
+              className="text-xs font-medium px-3 py-1.5 rounded-lg btn-press transition-colors duration-150"
               style={{
                 background: active ? "hsl(var(--vf-ember) / 0.14)" : ELEVATED,
                 border: `1px solid ${active ? "hsl(var(--vf-ember) / 0.4)" : BORDER}`,
@@ -501,7 +504,7 @@ function ProximityPanel({ onBack, profile }: { onBack: () => void; profile: any 
         </p>
       )}
 
-      <div style={{ background: CARD, margin: "12px 16px 0", borderRadius: "16px", overflow: "hidden" }}>
+      <div className="vf-card" style={{ background: CARD, margin: "12px 16px 0", borderRadius: "16px", overflow: "hidden" }}>
         <ChoiceRow
           label="Where alerts can fire"
           value={data?.mode ?? "off"}
@@ -531,7 +534,7 @@ function ProximityPanel({ onBack, profile }: { onBack: () => void; profile: any 
             <select
               value={data?.quietStart ?? 21}
               onChange={(e) => patch.mutate({ proximityQuietStart: Number(e.target.value) })}
-              className="px-2 py-1 rounded-lg text-sm"
+              className="px-2 py-1 rounded-lg text-sm vf-input-focus"
               style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: TEXT }}
               data-testid="proximity-quiet-start"
             >
@@ -543,7 +546,7 @@ function ProximityPanel({ onBack, profile }: { onBack: () => void; profile: any 
             <select
               value={data?.quietEnd ?? 8}
               onChange={(e) => patch.mutate({ proximityQuietEnd: Number(e.target.value) })}
-              className="px-2 py-1 rounded-lg text-sm"
+              className="px-2 py-1 rounded-lg text-sm vf-input-focus"
               style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: TEXT }}
               data-testid="proximity-quiet-end"
             >
@@ -556,7 +559,7 @@ function ProximityPanel({ onBack, profile }: { onBack: () => void; profile: any 
         </div>
       </div>
 
-      <div style={{ background: CARD, margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden" }}>
+      <div className="vf-card" style={{ background: CARD, margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden" }}>
         <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}` }}>
           <p style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "4px" }}>Right now</p>
           <div className="flex items-center justify-between gap-2">
@@ -597,7 +600,7 @@ function ProximityPanel({ onBack, profile }: { onBack: () => void; profile: any 
       {Array.isArray(data?.invisibleAt) && data.invisibleAt.length > 0 && (
         <>
           <div style={SECTION_HEADER_STYLE}>Invisible at</div>
-          <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+          <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
             {data.invisibleAt.map((pl: any, i: number) => (
               <div
                 key={pl.id}
@@ -659,7 +662,7 @@ function AgeRangePanel({ onBack, profile }: { onBack: () => void; profile: any }
     <Panel title="Age Range" onBack={onBack}>
       <div
         style={{ margin: "16px 16px 0", borderRadius: "16px", background: CARD, padding: "20px 16px" }}
-        className="flex items-center justify-center gap-4"
+        className="flex items-center justify-center gap-4 vf-card"
       >
         <label className="flex flex-col items-center gap-2">
           <span className="text-xs" style={{ color: MUTED }}>Minimum Age</span>
@@ -670,7 +673,7 @@ function AgeRangePanel({ onBack, profile }: { onBack: () => void; profile: any }
             max={99}
             value={ageMinText}
             onChange={(e) => setAgeMinText(e.target.value)}
-            className="w-20 h-11 rounded-xl text-center text-base outline-none"
+            className="w-20 h-11 rounded-xl text-center text-base outline-none vf-input-focus"
             style={{ background: ELEVATED, border: `1px solid ${minInvalid ? "#EF4444" : BORDER}`, color: TEXT }}
             data-testid="input-age-min"
           />
@@ -685,7 +688,7 @@ function AgeRangePanel({ onBack, profile }: { onBack: () => void; profile: any }
             max={99}
             value={ageMaxText}
             onChange={(e) => setAgeMaxText(e.target.value)}
-            className="w-20 h-11 rounded-xl text-center text-base outline-none"
+            className="w-20 h-11 rounded-xl text-center text-base outline-none vf-input-focus"
             style={{ background: ELEVATED, border: `1px solid ${maxInvalid || rangeInvalid ? "#EF4444" : BORDER}`, color: TEXT }}
             data-testid="input-age-max"
           />
@@ -745,7 +748,7 @@ function SeekingGendersPanel({ onBack, profile }: { onBack: () => void; profile:
 
   return (
     <Panel title="Who You See" onBack={onBack}>
-      <div style={{ margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden", background: CARD }}>
+      <div className="vf-card" style={{ margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden", background: CARD }}>
         {SEEKING_OPTIONS.map((opt, i) => {
           const active = selected.includes(opt.value);
           return (
@@ -804,7 +807,7 @@ function BlockListPanel({ onBack }: { onBack: () => void }) {
           <p className="text-sm">No blocked users</p>
         </div>
       ) : (
-        <div style={{ margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden", background: CARD }}>
+        <div className="vf-card" style={{ margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden", background: CARD }}>
           {blockedList.map((entry: any, i: number) => (
             <div key={entry.id} style={{
               display: "flex", alignItems: "center", padding: "12px 16px",
@@ -899,7 +902,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="DELETE"
-              className="w-full px-3 py-2 text-sm text-foreground"
+              className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
               style={{ background: CARD, border: `1px solid #EF4444`, borderRadius: "10px", outline: "none" }}
               data-testid="input-delete-confirm"
             />
@@ -927,7 +930,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
       <p className="text-sm px-4 pt-4 pb-2" style={{ color: MUTED }}>
         You own your data. Download or delete everything at any time.
       </p>
-      <div style={{ margin: "12px 16px", borderRadius: "16px", overflow: "hidden", background: CARD }}>
+      <div className="vf-card" style={{ margin: "12px 16px", borderRadius: "16px", overflow: "hidden", background: CARD }}>
         <div
           style={{ ...ROW_STYLE, cursor: "pointer" }}
           onClick={() => setShowCollect(v => !v)}
@@ -1010,7 +1013,7 @@ function VerifyPanel({ onBack }: { onBack: () => void }) {
           Take a selfie matching one of the reference poses to verify your identity. Verification adds trust and boosts your matches.
         </p>
         {submitted ? (
-          <div className="w-full py-4 text-center rounded-xl" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
+          <div className="w-full py-4 text-center rounded-xl vf-card" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
             <Check className="w-6 h-6 mx-auto mb-2" style={{ color: "#10B981" }} />
             <p className="text-sm font-semibold text-foreground">Verification Pending</p>
             <p className="text-xs mt-1" style={{ color: MUTED }}>We'll review your submission within 24 hours</p>
@@ -1024,7 +1027,7 @@ function VerifyPanel({ onBack }: { onBack: () => void }) {
             <div style={{ width: "100%", marginBottom: "12px" }}>
               <button
                 onClick={() => fileRef.current?.click()}
-                className="w-full py-3 text-sm font-semibold text-foreground mb-3"
+                className="w-full py-3 text-sm font-semibold text-foreground mb-3 btn-press transition-colors duration-150 hover:border-vf-text/25"
                 style={{ background: ELEVATED, borderRadius: "12px", border: `1px solid ${BORDER}` }}
                 data-testid="button-take-selfie"
               >
@@ -1081,7 +1084,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
 
   return (
     <Panel title="Manage Billing" onBack={onBack}>
-      <div style={{ margin: "16px", borderRadius: "16px", background: CARD, padding: "20px" }}>
+      <div className="vf-card" style={{ margin: "16px", borderRadius: "16px", background: CARD, padding: "20px" }}>
         <div className="flex items-start justify-between mb-2">
           <div>
             <p className="text-xs font-semibold mb-1" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1.2px" }}>Current Plan</p>
@@ -1104,7 +1107,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
         </div>
       )}
 
-      <div style={{ margin: "0 16px", borderRadius: "16px", background: CARD, overflow: "hidden" }}>
+      <div className="vf-card" style={{ margin: "0 16px", borderRadius: "16px", background: CARD, overflow: "hidden" }}>
         <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}` }}>
           <p className="text-xs font-semibold mb-2" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Payment History</p>
           {tier === "free" ? (
@@ -1170,7 +1173,7 @@ function HelpPanel({ onBack }: { onBack: () => void }) {
   return (
     <Panel title="Help Center" onBack={onBack}>
       <p className="text-sm px-4 pt-4 pb-2" style={{ color: MUTED }}>Frequently asked questions</p>
-      <div style={{ margin: "0 16px", borderRadius: "16px", background: CARD, overflow: "hidden" }}>
+      <div className="vf-card" style={{ margin: "0 16px", borderRadius: "16px", background: CARD, overflow: "hidden" }}>
         {faqs.map((faq, i) => (
           <div key={i} style={{ borderBottom: i < faqs.length - 1 ? `1px solid ${BORDER}` : "none" }}>
             <div
@@ -1227,7 +1230,7 @@ function ContactPanel({ onBack }: { onBack: () => void }) {
           <select
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            className="w-full px-3 py-2 text-sm text-foreground"
+            className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="select-contact-subject"
           >
@@ -1243,7 +1246,7 @@ function ContactPanel({ onBack }: { onBack: () => void }) {
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Describe your issue or question..."
             rows={5}
-            className="w-full px-3 py-2 text-sm text-foreground resize-none"
+            className="w-full px-3 py-2 text-sm text-foreground resize-none vf-input-focus"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="input-contact-message"
           />
@@ -1308,7 +1311,7 @@ function FeedbackPanel({ onBack }: { onBack: () => void }) {
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full px-3 py-2 text-sm text-foreground"
+            className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="select-feedback-category"
           >
@@ -1324,7 +1327,7 @@ function FeedbackPanel({ onBack }: { onBack: () => void }) {
             onChange={(e) => setFreeText(e.target.value)}
             placeholder="What happened, or what you'd change..."
             rows={5}
-            className="w-full px-3 py-2 text-sm text-foreground resize-none"
+            className="w-full px-3 py-2 text-sm text-foreground resize-none vf-input-focus"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="input-feedback-text"
           />
@@ -1410,7 +1413,7 @@ function ChangeEmailPanel({ onBack }: { onBack: () => void }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="new@example.com"
-                className="w-full px-3 py-2 text-sm text-foreground"
+                className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
                 style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
                 data-testid="input-new-email"
               />
@@ -1421,7 +1424,7 @@ function ChangeEmailPanel({ onBack }: { onBack: () => void }) {
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-3 py-2 text-sm text-foreground"
+                className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
                 style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
                 data-testid="input-email-current-password"
               />
@@ -1488,7 +1491,7 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
             value={current}
             onChange={(e) => setCurrent(e.target.value)}
             placeholder="••••••••"
-            className="w-full px-3 py-2 text-sm text-foreground"
+            className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="input-current-password"
           />
@@ -1499,7 +1502,7 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
             value={newPass}
             onChange={(e) => setNewPass(e.target.value)}
             placeholder="••••••••"
-            className="w-full px-3 py-2 text-sm text-foreground"
+            className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="input-new-password"
           />
@@ -1510,7 +1513,7 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             placeholder="••••••••"
-            className="w-full px-3 py-2 text-sm text-foreground"
+            className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
             style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
             data-testid="input-confirm-password"
           />
@@ -1606,7 +1609,7 @@ function ClearMemoryPanel({ onBack }: { onBack: () => void }) {
             <button
               onClick={() => clearMutation.mutate()}
               disabled={clearMutation.isPending}
-              className="w-full py-3 text-sm font-semibold text-foreground"
+              className="w-full py-3 text-sm font-semibold text-foreground vf-btn-primary"
               style={{ background: "#EF4444", borderRadius: "12px", border: "none", cursor: "pointer" }}
               data-testid="button-confirm-clear-final"
             >
@@ -1614,7 +1617,7 @@ function ClearMemoryPanel({ onBack }: { onBack: () => void }) {
             </button>
             <button
               onClick={() => setConfirmed(false)}
-              className="w-full py-3 text-sm font-medium"
+              className="w-full py-3 text-sm font-medium rounded-xl transition-colors duration-150 hover:bg-vf-elevated"
               style={{ color: MUTED, background: "none", border: "none", cursor: "pointer" }}
               data-testid="button-cancel-clear"
             >
@@ -1730,26 +1733,26 @@ export default function Settings() {
       <div style={{ maxWidth: "480px", margin: "0 auto", paddingBottom: "40px" }}>
 
         <div style={SECTION_HEADER_STYLE}>Account</div>
-        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ChevronRow icon={User} label="Edit Profile" onClick={() => setLocation("/profile")} testId="row-edit-profile" />
           <ChevronRow icon={Mail} label="Change Email" sublabel="Update your email address" onClick={() => setActivePanel("change-email")} testId="row-change-email" />
           <ChevronRow icon={Lock} label="Change Password" sublabel="Update your password" onClick={() => setActivePanel("change-password")} testId="row-change-password" />
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Appearance</div>
-        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <AppearanceRow />
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Twin Settings</div>
-        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ChevronRow icon={Brain} label="Interview AI Twin" onClick={() => setLocation("/twin-chat?from=/settings")} testId="row-twin-chat" />
           <ChevronRow icon={Volume2} label="Customize Twin Tone" sublabel="Style, verbosity, formality" onClick={() => setActivePanel("twin-tone")} testId="row-twin-tone" />
           <ChevronRow icon={Shield} label="What your twin may discuss" sublabel="Per-topic: open, vague, or off — plus your own note" onClick={() => setLocation("/twin-disclosure")} testId="row-twin-boundaries" />
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Discovery</div>
-        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ToggleRow icon={Compass} label="Discoverable" value={discoverable} onChange={(v) => { setDiscoverable(v); saveNotif("discoverable", v); }} testId="toggle-discoverable" />
           <ToggleRow icon={MapPin} label="Show Distance" value={showDistance} onChange={handleToggleShowDistance} testId="toggle-show-distance" />
           <ChevronRow icon={MapPin} label="Location Preferences" sublabel={`Within ${profile?.maxDistanceKm ?? 100} km`} onClick={() => setActivePanel("location")} testId="row-location" />
@@ -1772,7 +1775,7 @@ export default function Settings() {
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Privacy</div>
-        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ToggleRow
             icon={profile?.isPublic ? Eye : EyeOff}
             label="Public Profile"
@@ -1785,7 +1788,7 @@ export default function Settings() {
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Notifications</div>
-        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ToggleRow icon={Zap} label="New Matches" value={notifMatches} onChange={(v) => { setNotifMatches(v); saveNotif("notif_matches", v); }} testId="toggle-notif-matches" />
           <ToggleRow icon={MessageSquare} label="Messages" value={notifMessages} onChange={(v) => { setNotifMessages(v); saveNotif("notif_messages", v); }} testId="toggle-notif-messages" />
           <ToggleRow icon={Bell} label="Stories" value={notifStories} onChange={(v) => { setNotifStories(v); saveNotif("notif_stories", v); }} testId="toggle-notif-stories" />
@@ -1793,25 +1796,25 @@ export default function Settings() {
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Profile Tools</div>
-        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ChevronRow icon={Wrench} label="Generate AI Summary" onClick={() => setLocation("/profile")} testId="row-ai-summary" />
           <ChevronRow icon={Check} label="Verify Profile" sublabel={profile?.verificationStatus === "pending" ? "Pending review" : profile?.isVerified ? "Verified" : "Get the blue checkmark"} onClick={() => setActivePanel("verify")} testId="row-verify" />
           <ChevronRow icon={Wrench} label="Manage Photos" onClick={() => setLocation("/profile")} testId="row-manage-photos" />
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Invite</div>
-        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <InviteRow />
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Subscription</div>
-        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ChevronRow icon={Crown} label="Plans" sublabel="See what each plan gets you" onClick={() => setLocation("/plans")} testId="row-upgrade" />
           <ChevronRow icon={CreditCard} label="Manage Billing" sublabel="View plan, cancel subscription" onClick={() => setActivePanel("billing")} testId="row-billing" />
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Support</div>
-        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ChevronRow icon={BookOpen} label="Help Center" sublabel="FAQs and guides" onClick={() => setActivePanel("help")} testId="row-help" />
           <ChevronRow icon={Phone} label="Contact Us" sublabel="Send us a message" onClick={() => setActivePanel("contact")} testId="row-contact" />
           <ChevronRow icon={Wrench} label="Send Feedback" sublabel="A bug, an idea, or just a note" onClick={() => setActivePanel("feedback")} testId="row-feedback" />
@@ -1820,13 +1823,13 @@ export default function Settings() {
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Irreversible</div>
-        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ChevronRow icon={X} label="Clear Twin Memory" sublabel="Your twin forgets everything it has learned" onClick={() => setActivePanel("clear-memory")} destructive testId="row-clear-memory" />
           <ChevronRow icon={Trash2} label="Delete Account" sublabel="Permanently remove all data" onClick={() => setShowDeleteDialog(true)} destructive testId="row-delete-account" />
         </div>
 
         <div style={SECTION_HEADER_STYLE}>Account actions</div>
-        <div style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
           <ChevronRow icon={PauseCircle} label="Pause Account" sublabel="Hide your profile temporarily" onClick={() => setShowPauseDialog(true)} testId="row-pause-account" />
           <ChevronRow icon={LogOut} label="Sign Out" onClick={() => logout()} testId="row-sign-out" />
         </div>
@@ -1839,9 +1842,9 @@ export default function Settings() {
             <DialogDescription style={{ color: MUTED }}>Your profile will be hidden from discovery. You can reactivate anytime.</DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <button className="px-4 py-2 text-sm font-medium" style={{ color: MUTED }} onClick={() => setShowPauseDialog(false)} data-testid="button-cancel-pause">Cancel</button>
+            <button className="px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-150 hover:bg-vf-elevated" style={{ color: MUTED }} onClick={() => setShowPauseDialog(false)} data-testid="button-cancel-pause">Cancel</button>
             <button
-              className="px-4 py-2 text-sm"
+              className="px-4 py-2 text-sm vf-btn-primary"
               style={{ background: EMBER, color: INK, fontWeight: 600, borderRadius: "10px", border: "none" }}
               onClick={async () => {
                 setShowPauseDialog(false);
@@ -1870,16 +1873,16 @@ export default function Settings() {
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="DELETE"
-              className="w-full px-3 py-2 text-sm text-foreground"
+              className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
               style={{ background: ELEVATED, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
               data-testid="input-delete-confirm"
             />
           </div>
           <DialogFooter className="gap-2">
-            <button className="px-4 py-2 text-sm font-medium" style={{ color: MUTED }} onClick={() => { setShowDeleteDialog(false); setDeleteConfirmText(""); }} data-testid="button-cancel-delete">Cancel</button>
+            <button className="px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-150 hover:bg-vf-elevated" style={{ color: MUTED }} onClick={() => { setShowDeleteDialog(false); setDeleteConfirmText(""); }} data-testid="button-cancel-delete">Cancel</button>
             <button
               disabled={deleteConfirmText !== "DELETE" || deleteMutation.isPending}
-              className="px-4 py-2 text-sm font-semibold text-foreground"
+              className="px-4 py-2 text-sm font-semibold text-foreground vf-btn-primary"
               style={{ background: deleteConfirmText === "DELETE" ? "#EF4444" : BORDER, borderRadius: "10px", border: "none", cursor: deleteConfirmText === "DELETE" ? "pointer" : "not-allowed" }}
               onClick={() => deleteMutation.mutate()}
               data-testid="button-confirm-delete"

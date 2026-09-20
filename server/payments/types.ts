@@ -6,7 +6,10 @@
 // amount. The server resolves the price, initiates, and verifies the settled
 // amount before activating anything. Amounts are integer cents.
 
-export type PaymentMethod = "ecocash" | "ecocash_card" | "card";
+export type PaymentMethod = "ecocash" | "onemoney" | "innbucks" | "ecocash_card" | "card";
+
+/** Methods that go through the wallet (remotetransaction) flow — a phone number and a prompt, not a browser redirect. */
+export const WALLET_METHODS: ReadonlySet<PaymentMethod> = new Set(["ecocash", "onemoney", "innbucks"]);
 
 export type PaymentStatus = "pending" | "paid" | "failed" | "cancelled" | "expired";
 
@@ -33,6 +36,12 @@ export interface InitiateResult {
   /** provider's raw status string, for the audit row. */
   rawStatus?: string;
   failureReason?: string;
+  /** InnBucks only: the code the subscriber approves in their InnBucks app. */
+  authorizationCode?: string;
+  /** InnBucks only: "d-MMM-yyyy HH:mm", when the authorization code stops being valid. */
+  authorizationExpires?: string;
+  /** InnBucks only: com.innbucks.customer://purchase?paymentToken=... */
+  deepLink?: string;
 }
 
 export interface PollResult {

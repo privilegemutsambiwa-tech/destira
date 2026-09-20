@@ -312,6 +312,55 @@
     transform: scale(0.97);
   }
 
+  /* Grouped card containers (settings sections, panels, list groups) — the
+     redesign spec already ships theme-aware --shadow-card/--shadow-hover
+     (dark stays faint since structure there comes from hairlines per the
+     handoff doc; light does real lifting) but most callers only ever set a
+     background + border and never actually apply the shadow. One class so
+     every one of those containers picks up real elevation for free. */
+  .vf-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Interactive list rows (settings rows, panel options) — gives the flat
+     row-in-a-card pattern tactile hover/press feedback. Layout/borders stay
+     wherever they already are; this only ever touches background-color. */
+  .vf-row {
+    transition: background-color 150ms ease;
+  }
+  .vf-row:hover {
+    background-color: var(--vf-elevated);
+  }
+  .vf-row:active {
+    background-color: var(--vf-elevated);
+  }
+
+  /* Form fields styled by inline `style` (predates the vf-* Tailwind
+     wiring, see the comment atop Settings.tsx) — `outline: none` was
+     removing the browser default focus ring and replacing it with nothing.
+     One class puts a real one back. */
+  .vf-input-focus {
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .vf-input-focus:focus-visible {
+    border-color: hsl(var(--vf-ember) / 0.55) !important;
+    box-shadow: 0 0 0 3px hsl(var(--vf-ember) / 0.15);
+  }
+
+  /* Primary filled (ember) action buttons — subtle lift instead of a dead
+     flat fill with no feedback at all. */
+  .vf-btn-primary {
+    transition: filter 150ms ease, transform 120ms ease-out, box-shadow 150ms ease;
+  }
+  .vf-btn-primary:hover:not(:disabled) {
+    filter: brightness(1.08);
+    box-shadow: var(--shadow-hover);
+  }
+  .vf-btn-primary:active:not(:disabled) {
+    transform: scale(0.97);
+    filter: brightness(0.98);
+  }
+
   /* Story ring — the unseen-story indicator on Discover. Was a spinning
      purple/pink conic-gradient (#7C3AED/#EC4899) inherited from the old
      palette; ember is the human/action accent, so the ring reads as "there's
@@ -349,4 +398,5 @@
 @media (prefers-reduced-motion: reduce) {
   .btn-press:active { transform: none; }
   .story-ring-active { animation: none; }
+  .vf-btn-primary:active:not(:disabled) { transform: none; }
 }

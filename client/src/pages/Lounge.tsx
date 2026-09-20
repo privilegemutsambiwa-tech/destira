@@ -47,10 +47,10 @@ export default function Lounge() {
     <LayoutShell>
       {/* Header */}
       <div className="mb-6">
-        <h1 className="font-serif font-normal text-[clamp(26px,6vw,32px)] text-vf-text" data-testid="text-lounge-title">
+        <h1 className="font-serif font-normal text-[clamp(26px,6vw,32px)] leading-[1.05] tracking-[-0.02em] text-vf-text" data-testid="text-lounge-title">
           Lounge
         </h1>
-        <p className="mt-1 text-sm text-vf-muted max-w-lg">
+        <p className="mt-1.5 text-sm leading-relaxed text-vf-muted max-w-lg">
           Connect organically in interest-based groups. Chat anonymously and discover unexpected connections.
         </p>
       </div>
@@ -70,7 +70,7 @@ export default function Lounge() {
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
             <button
-              className="flex items-center gap-2 font-semibold px-4 h-11 rounded-xl btn-press shrink-0 bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors text-sm"
+              className="vf-btn-primary flex items-center gap-2 font-semibold px-4 h-11 rounded-xl btn-press shrink-0 bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors text-sm"
               data-testid="button-create-group"
             >
               <Plus className="w-4 h-4" />
@@ -178,7 +178,7 @@ function GroupCard({ group, idx, onNavigate, isJoinCard = false }: {
       transition={{ delay: idx * 0.04 }}
     >
       <div
-        className="rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden cursor-pointer transition-colors hover:border-vf-text/20"
+        className="vf-card vf-row rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden cursor-pointer transition-colors duration-150 hover:border-vf-text/20"
         onClick={() => onNavigate(group.id)}
         data-testid={`card-group-${group.id}`}
       >
@@ -236,7 +236,7 @@ function GroupCard({ group, idx, onNavigate, isJoinCard = false }: {
               {privacy.label}
             </span>
             {isJoinCard ? (
-              <button className="text-[12.5px] font-semibold px-3.5 py-1.5 rounded-full btn-press bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors">
+              <button className="vf-btn-primary text-[12.5px] font-semibold px-3.5 py-1.5 rounded-full btn-press bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors">
                 {group.privacyMode === "request-to-join" ? "Request" : "Join"}
               </button>
             ) : (
@@ -273,32 +273,32 @@ function CreateGroupDialog({ onClose }: { onClose: () => void }) {
   return (
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>Create a New Group</DialogTitle>
-        <DialogDescription>Start a conversation space around a shared interest.</DialogDescription>
+        <DialogTitle className="font-serif font-normal text-2xl leading-tight tracking-normal text-vf-text">Create a New Group</DialogTitle>
+        <DialogDescription className="text-vf-muted">Start a conversation space around a shared interest.</DialogDescription>
       </DialogHeader>
-      <div className="space-y-4">
+      <div className="space-y-5">
         <div>
-          <label className="text-sm font-medium mb-1 block text-vf-muted">Group Name</label>
+          <label className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2 block">Group Name</label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g., Photography Enthusiasts"
-            className="w-full px-3.5 py-2.5 text-sm rounded-[10px] bg-vf-ink border border-vf-line text-vf-text outline-none focus:ring-1 focus:ring-vf-ember/50"
+            className="w-full px-3.5 py-2.5 text-sm rounded-[10px] bg-vf-ink border border-vf-line text-vf-text outline-none focus:ring-1 focus:ring-vf-ember/50 transition-shadow duration-150"
             data-testid="input-group-name"
           />
         </div>
         <div>
-          <label className="text-sm font-medium mb-1 block text-vf-muted">Description</label>
+          <label className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2 block">Description</label>
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What's this group about?"
-            className="w-full px-3.5 py-2.5 text-sm rounded-[10px] bg-vf-ink border border-vf-line text-vf-text outline-none focus:ring-1 focus:ring-vf-ember/50"
+            className="w-full px-3.5 py-2.5 text-sm rounded-[10px] bg-vf-ink border border-vf-line text-vf-text outline-none focus:ring-1 focus:ring-vf-ember/50 transition-shadow duration-150"
             data-testid="input-group-description"
           />
         </div>
         <div>
-          <label className="text-sm font-medium mb-1 block text-vf-muted">Privacy</label>
+          <label className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2 block">Privacy</label>
           <Select value={privacyMode} onValueChange={setPrivacyMode}>
             <SelectTrigger data-testid="select-privacy">
               <SelectValue />
@@ -314,14 +314,14 @@ function CreateGroupDialog({ onClose }: { onClose: () => void }) {
       <DialogFooter>
         <button
           onClick={onClose}
-          className="px-4 py-2 text-sm font-medium rounded-[10px] border border-vf-line text-vf-muted hover:text-vf-text transition-colors"
+          className="px-4 py-2 text-sm font-medium rounded-[10px] border border-vf-line text-vf-muted hover:text-vf-text hover:bg-[var(--vf-elevated)] transition-colors duration-150"
         >
           Cancel
         </button>
         <button
           onClick={handleCreate}
           disabled={!name.trim() || createGroup.isPending}
-          className="px-4 py-2 text-sm font-semibold rounded-[10px] btn-press disabled:opacity-50 bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors"
+          className="vf-btn-primary px-4 py-2 text-sm font-semibold rounded-[10px] btn-press disabled:opacity-50 bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors"
           data-testid="button-submit-group"
         >
           {createGroup.isPending ? <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> : null}

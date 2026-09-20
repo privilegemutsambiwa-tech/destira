@@ -1,18 +1,25 @@
-// Paynow (Webdev) — EcoCash wallet + EcoCash Visa / card, for Zimbabwe.
+// Paynow (Webdev) — EcoCash / OneMoney / InnBucks wallets + Visa/Mastercard/
+// Zimswitch card, for Zimbabwe.
 //
-// Flow (from the Paynow SDK internals):
+// Flow (from Paynow's developer docs — developers.paynow.co.zw):
 //   wallet: POST https://www.paynow.co.zw/interface/remotetransaction
 //           fields: id, reference, amount, additionalinfo, returnurl, resulturl,
-//                   authemail, status=Message, phone, method=ecocash, hash
+//                   authemail, status=Message, phone, method=ecocash|onemoney|innbucks, hash
 //           hash = SHA512( concat of every value in order + IntegrationKey ).toUpperCase()
 //           -> response query string: status=Ok|Error, pollurl, instructions, hash
-//   card:   POST .../initiatetransaction, returns browserurl to redirect to.
+//              (innbucks also returns authorizationcode + authorizationexpires —
+//               there is no PIN prompt; the subscriber approves that code in
+//               the InnBucks app, or we deep-link them straight to it)
+//   card:   POST .../initiatetransaction (no method field — Paynow's hosted
+//           page itself offers Visa/Mastercard/Zimswitch), returns browserurl
+//           to redirect to.
 //   confirm: poll `pollurl` (POST, empty body) OR receive POST to our resulturl.
 //            status in Created|Sent|Paid|Awaiting Delivery|Cancelled|Disputed|Refunded.
 //            Paid / Awaiting Delivery == success. Verify hash + amount first.
 //
-// The PIN is entered on the subscriber's handset. We only ever display
-// `instructions`. If any Paynow doc appears to ask us to collect a PIN, stop.
+// The PIN (or InnBucks approval) happens on the subscriber's handset/app. We
+// only ever display `instructions` / `authorizationCode`. If any Paynow doc
+// appears to ask us to collect a PIN, stop.
 //
 // Credentials (set when you have a merchant account — see docs):
 //   PAYNOW_INTEGRATION_ID, PAYNOW_INTEGRATION_KEY, PAYNOW_RESULT_URL, PAYNOW_RETURN_URL
@@ -25,6 +32,7 @@ import type {
   PollResult,
   PaymentStatus,
 } from "./types";
+import { WALLET_METHODS } from "./types";
 
 const WALLET_URL = "https://www.paynow.co.zw/interface/remotetransaction";
 const CARD_URL = "https://www.paynow.co.zw/interface/initiatetransaction";
@@ -81,8 +89,9 @@ export class PaynowProvider implements PaymentProvider {
       authemail: input.authEmail || "",
       status: "Message",
     };
-    const wallet = input.method === "ecocash";
-    const fields = wallet ? { ...base, phone: input.phone || "", method: "ecocash" } : base;
+    const wallet = WALLET_METHODS.has(input.method);
+    // method values Paynow accepts on remotetransaction: ecocash | onemoney | innbucks
+    const fields = wallet ? { ...base, phone: input.phone || "", method: input.method } : base;
     fields.hash = hash(fields, this.key);
 
     const res = await fetch(wallet ? WALLET_URL : CARD_URL, {
@@ -101,6 +110,11 @@ export class PaynowProvider implements PaymentProvider {
       instructions: parsed.instructions,
       redirectUrl: wallet ? undefined : parsed.browserurl,
       rawStatus: parsed.status,
+      // InnBucks doesn't push a PIN prompt — the subscriber approves this code
+      // in the InnBucks app instead. Absent for every other method.
+      authorizationCode: parsed.authorizationcode || undefined,
+      authorizationExpires: parsed.authorizationexpires || undefined,
+      deepLink: parsed.authorizationcode ? `com.innbucks.customer://purchase?paymentToken=${parsed.authorizationcode}` : undefined,
     };
   }
 

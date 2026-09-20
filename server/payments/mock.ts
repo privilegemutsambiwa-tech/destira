@@ -16,6 +16,7 @@ import type {
   PollResult,
   PaymentStatus,
 } from "./types";
+import { WALLET_METHODS } from "./types";
 
 const MOCK_DELAY_MS = Number(process.env.PAYMENTS_MOCK_DELAY_MS ?? 4000);
 
@@ -41,16 +42,28 @@ export class MockProvider implements PaymentProvider {
   async initiate(input: InitiateInput): Promise<InitiateResult> {
     const { outcome, reason } = outcomeFor(input.phone);
     txns.set(input.reference, { createdAt: Date.now(), amountCents: input.amountCents, outcome, reason });
-    if (input.method === "card" || input.method === "ecocash_card") {
+    if (!WALLET_METHODS.has(input.method)) {
       // pretend the hosted card page immediately succeeds
       txns.set(input.reference, { createdAt: 0, amountCents: input.amountCents, outcome: "paid" });
       return { status: "pending", providerReference: input.reference, redirectUrl: `/plans/pay/return?ref=${input.reference}`, pollUrl: input.reference, rawStatus: "Sent" };
     }
+    if (input.method === "innbucks") {
+      return {
+        status: "pending",
+        providerReference: input.reference,
+        pollUrl: input.reference,
+        authorizationCode: "MOCK-1234",
+        authorizationExpires: "1-Jan-2099 00:00",
+        deepLink: "com.innbucks.customer://purchase?paymentToken=MOCK-1234",
+        rawStatus: "Sent",
+      };
+    }
+    const walletLabel = input.method === "onemoney" ? "OneMoney" : "EcoCash";
     return {
       status: "pending",
       providerReference: input.reference,
       pollUrl: input.reference,
-      instructions: `A prompt is on its way to the phone. Approve it with the EcoCash PIN — we never see it. (mock: settles in ${Math.round(MOCK_DELAY_MS / 1000)}s)`,
+      instructions: `A prompt is on its way to the phone. Approve it with the ${walletLabel} PIN — we never see it. (mock: settles in ${Math.round(MOCK_DELAY_MS / 1000)}s)`,
       rawStatus: "Sent",
     };
   }

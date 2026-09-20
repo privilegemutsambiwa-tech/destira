@@ -35,6 +35,30 @@ Created for you, git-ignored. Defaults work out of the box. Optional:
 - `HOST=127.0.0.1` — restrict the bind address.
 - `ENABLE_STRIPE=1` + the Replit Stripe connector env — turn billing back on.
 - `DEEPSEEK_API_KEY=...` — real AI Twin responses via Hive Models (DeepSeek).
+- `PAYNOW_INTEGRATION_ID` / `PAYNOW_INTEGRATION_KEY` / `PAYNOW_RESULT_URL` /
+  `PAYNOW_RETURN_URL` — real Paynow (EcoCash/OneMoney/InnBucks/card) payments.
+  See "Payments" below.
+
+## Payments
+
+`PAYMENTS_MOCK=1` (the local default) runs `server/payments/mock.ts` — every
+plan purchase "settles" after `PAYMENTS_MOCK_DELAY_MS` with no real gateway
+call. The outcome is keyed off the last 4 digits of the phone number you type
+in for a wallet method (EcoCash/OneMoney/InnBucks), so every UI state is
+reachable without merchant creds:
+
+- ends `0000` → declined
+- ends `1111` → insufficient balance
+- ends `9999` → prompt expires
+- anything else → paid
+
+To go live: get an integration ID + key from paynow.co.zw (Merchant ->
+Integration Settings), set the four `PAYNOW_*` vars above, and drop
+`PAYMENTS_MOCK` (or set it to `0`). `PAYNOW_RESULT_URL` must be a publicly
+reachable URL — Paynow calls it server-to-server to confirm a payment, which
+is what actually activates a subscription (`server/payments/index.ts`); the
+client polling `/api/payments/:id` is a convenience, never the source of
+truth.
 
 ## Reset the database
 

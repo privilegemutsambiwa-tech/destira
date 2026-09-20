@@ -641,7 +641,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                                     if (result.status === "matched" || result.status === "already_matched") {
                                       const matchId = result.match?.id;
                                       if (matchId) {
-                                        setLocation(`/chat/${matchId}`);
+                                        setLocation(`/chat/${matchId}?from=/lounge/group/${groupId}`);
                                       } else {
                                         toast({ title: "You can now chat privately!" });
                                       }

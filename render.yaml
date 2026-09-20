@@ -54,3 +54,16 @@ services:
       # instead of real DeepSeek (Hive Models) responses (LOCAL_DEV.md):
       - key: DEEPSEEK_API_KEY
         sync: false
+      # Paynow (EcoCash/OneMoney/InnBucks/card payments). Without these,
+      # payments run against the in-memory mock provider (server/payments/mock.ts)
+      # — fine for a demo, not for taking real money. Get the integration ID
+      # and key from paynow.co.zw -> Merchant -> Integration Settings; set them
+      # by hand in the Render dashboard once the service exists.
+      - key: PAYNOW_INTEGRATION_ID
+        sync: false
+      - key: PAYNOW_INTEGRATION_KEY
+        sync: false
+      - key: PAYNOW_RESULT_URL
+        value: https://destira.date/api/payments/webhook/paynow
+      - key: PAYNOW_RETURN_URL
+        value: https://destira.date/plans/pay/return

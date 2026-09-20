@@ -130,6 +130,10 @@ export const matches = pgTable("matches", {
   compatibilityScore: integer("compatibility_score"),
   user1DeletedChat: boolean("user1_deleted_chat").default(false),
   user2DeletedChat: boolean("user2_deleted_chat").default(false),
+  // Last time each side opened the thread — drives the chat-list unread
+  // count (messages from the other person after this timestamp).
+  user1LastReadAt: timestamp("user1_last_read_at"),
+  user2LastReadAt: timestamp("user2_last_read_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -141,6 +145,10 @@ export const interviews = pgTable("interviews", {
   transcript: text("transcript"),
   summary: text("summary"),
   createdAt: timestamp("created_at").defaultNow(),
+  // Bumped whenever the transcript changes, so the chat list can sort/show
+  // the true last-activity time instead of when the interview was first
+  // started (transcript has no per-message timestamps of its own).
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const groups = pgTable("groups", {
@@ -335,7 +343,7 @@ export const payments = pgTable("payments", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const PAYMENT_METHODS = ["ecocash", "ecocash_card", "card"] as const;
+export const PAYMENT_METHODS = ["ecocash", "onemoney", "innbucks", "ecocash_card", "card"] as const;
 export const paymentMethodEnum = z.enum(PAYMENT_METHODS);
 export const initiatePaymentSchema = z.object({
   tier: z.enum(["spark", "flame", "ember"]),

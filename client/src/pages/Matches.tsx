@@ -190,7 +190,7 @@ export default function Matches() {
   const acceptLike = async (matchId: number) => {
     try {
       const r = await likeBack.mutateAsync(matchId);
-      if (r?.matchId || matchId) setLocation(`/chat/${r?.matchId ?? matchId}`);
+      if (r?.matchId || matchId) setLocation(`/chat/${r?.matchId ?? matchId}?from=/matches`);
     } catch {
       err();
     }
@@ -207,7 +207,7 @@ export default function Matches() {
   const acceptRequest = async (id: number) => {
     try {
       const r = await respondChatRequest.mutateAsync({ id, action: "accept" });
-      if (r?.matchId) setLocation(`/chat/${r.matchId}`);
+      if (r?.matchId) setLocation(`/chat/${r.matchId}?from=/matches`);
     } catch {
       err();
     }
@@ -328,7 +328,7 @@ export default function Matches() {
             {asks.map((ask: any) => {
               const status =
                 ask.status === "matched"
-                  ? { label: "They said yes", action: () => setLocation(`/chat/${ask.matchId}`) }
+                  ? { label: "They said yes", action: () => setLocation(`/chat/${ask.matchId}?from=/matches`) }
                   : ask.status === "pending"
                     ? { label: "Waiting", action: null }
                     : { label: "Passed", action: null };

@@ -48,7 +48,7 @@ function ReferralNudge({ completionScore }: { completionScore: number }) {
   const copy = () => { navigator.clipboard?.writeText(data.url).catch(() => {}); };
 
   return (
-    <div className="relative rounded-[18px] border border-vf-line bg-vf-surface2 p-4 pr-10" data-testid="referral-nudge">
+    <div className="relative rounded-[18px] border border-vf-line bg-vf-surface2 p-4 pr-10 vf-card" data-testid="referral-nudge">
       <button
         onClick={dismiss}
         aria-label="Dismiss"
@@ -63,7 +63,7 @@ function ReferralNudge({ completionScore }: { completionScore: number }) {
       </p>
       <button
         onClick={copy}
-        className="mt-3 inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
+        className="mt-3 inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press vf-btn-primary hover:bg-[var(--vf-ember-soft)] transition-colors"
         data-testid="button-nudge-copy"
       >
         Copy invite link
@@ -248,11 +248,11 @@ export default function Profile() {
     return (
       <LayoutShell>
         <div className="text-center mt-20">
-          <h2 className="font-serif text-2xl text-vf-text">Welcome to Destira!</h2>
+          <h2 className="font-serif font-normal text-2xl text-vf-text">Welcome to Destira!</h2>
           <p className="mt-2 mb-6 text-vf-muted">Complete your Soul-Mapping to get started.</p>
           <button
             onClick={() => setLocation("/onboarding")}
-            className="font-semibold btn-press px-8 h-12 rounded-full bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors"
+            className="font-semibold btn-press vf-btn-primary px-8 h-12 rounded-full bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors"
             data-testid="button-start-onboarding"
           >
             Start Soul-Mapping
@@ -428,7 +428,7 @@ export default function Profile() {
                 light text regardless of theme, matching the fixed-dark scrim
                 it sits on, not the theme-aware vf-text/vf-muted. */}
             <div className="mt-3 sm:mt-0 sm:pb-2 min-w-0">
-              <h1 className="font-serif font-normal leading-[1.02] text-[clamp(32px,4.2vw,48px)]" style={{ color: "#F5F0EA" }} data-testid="text-display-name">
+              <h1 className="font-serif font-normal leading-[1.02] tracking-[-0.02em] text-[clamp(32px,4.2vw,48px)]" style={{ color: "#F5F0EA" }} data-testid="text-display-name">
                 {profile.displayName || user?.firstName}
               </h1>
               <p className="text-[14px] mt-1" style={{ color: "rgba(245,240,234,0.75)" }} data-testid="text-meta-line">
@@ -437,7 +437,7 @@ export default function Profile() {
               <div className="mt-3 flex items-center gap-4 justify-center sm:justify-start flex-wrap">
                 <button
                   onClick={() => setShowEditDialog(true)}
-                  className="inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
+                  className="inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press vf-btn-primary hover:bg-[var(--vf-ember-soft)] transition-colors"
                   data-testid="button-edit-profile"
                 >
                   Edit profile
@@ -473,7 +473,7 @@ export default function Profile() {
             is most useful to know. */}
         {completionScore < 50 && (
           <div
-            className="rounded-[14px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-center justify-between gap-3"
+            className="rounded-[14px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-center justify-between gap-3 vf-card"
             data-testid="nudge-preview-thin-profile"
           >
             <p className="text-[13.5px] text-vf-muted">Your profile is thin — see what strangers actually get.</p>
@@ -514,7 +514,7 @@ export default function Profile() {
                 )}
               </div>
               {bioOpen ? (
-                <div className="rounded-[16px] border border-vf-line bg-vf-surface2 p-4">
+                <div className="rounded-[16px] border border-vf-line bg-vf-surface2 p-4 vf-card">
                   <Textarea
                     value={bioValue}
                     onChange={(e) => setBioValue(e.target.value.slice(0, 400))}
@@ -527,7 +527,7 @@ export default function Profile() {
                     <button
                       onClick={saveBio}
                       disabled={updateProfile.isPending}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors disabled:opacity-40"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press vf-btn-primary hover:bg-[var(--vf-ember-soft)] transition-colors disabled:opacity-40"
                       data-testid="button-save-bio"
                     >
                       {updateProfile.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -577,12 +577,12 @@ export default function Profile() {
                   </button>
                 </div>
               ) : (
-                <div className="mt-3 rounded-[16px] border border-vf-line bg-vf-surface2">
+                <div className="mt-3 rounded-[16px] border border-vf-line bg-vf-surface2 overflow-hidden vf-card">
                   {prompts.map((p, i) => (
                     <button
                       key={i}
                       onClick={() => setPromptEditor({ index: i, q: p.q, a: p.a })}
-                      className={`w-full text-left p-4 ${i > 0 ? "border-t border-vf-line" : ""}`}
+                      className={`w-full text-left p-4 transition-colors duration-150 hover:bg-vf-elevated ${i > 0 ? "border-t border-vf-line" : ""}`}
                       data-testid={`prompt-${i}`}
                     >
                       <div className="text-[12.5px] text-vf-muted">{p.q}</div>
@@ -592,7 +592,7 @@ export default function Profile() {
                   {prompts.length < 3 && (
                     <button
                       onClick={() => setPromptEditor({ index: prompts.length, q: PROMPT_BANK[0], a: "" })}
-                      className="w-full text-left p-4 border-t border-dashed border-vf-line"
+                      className="w-full text-left p-4 border-t border-dashed border-vf-line transition-colors duration-150 hover:bg-vf-elevated"
                       data-testid="prompt-add"
                     >
                       <div className="text-[13.5px] text-vf-muted">Answer one more — your twin quotes these</div>
@@ -602,7 +602,7 @@ export default function Profile() {
               )}
 
               {promptEditor && (
-                <div className="mt-3 rounded-[16px] border border-vf-line bg-vf-surface2 p-4 flex flex-col gap-3" data-testid="prompt-editor">
+                <div className="mt-3 rounded-[16px] border border-vf-line bg-vf-surface2 p-4 flex flex-col gap-3 vf-card" data-testid="prompt-editor">
                   <select
                     value={promptEditor.q}
                     onChange={(e) => setPromptEditor({ ...promptEditor, q: e.target.value })}
@@ -632,7 +632,7 @@ export default function Profile() {
                     <button
                       onClick={savePrompt}
                       disabled={updatePrompts.isPending}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors disabled:opacity-40"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press vf-btn-primary hover:bg-[var(--vf-ember-soft)] transition-colors disabled:opacity-40"
                       data-testid="button-save-prompt"
                     >
                       {updatePrompts.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -732,7 +732,7 @@ export default function Profile() {
               </div>
               <button
                 onClick={() => setLocation("/twin-chat?from=/profile")}
-                className="mt-4 inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
+                className="mt-4 inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press vf-btn-primary hover:bg-[var(--vf-ember-soft)] transition-colors"
                 data-testid="button-talk-to-twin"
               >
                 Talk to your twin
@@ -777,7 +777,7 @@ export default function Profile() {
                   { n: week?.readsOver80 ?? 0, label: "reads over 80" },
                   { n: week?.meetsSet ?? 0, label: "meetings set" },
                 ].map((s) => (
-                  <div key={s.label} className="rounded-[16px] border border-vf-line bg-vf-surface2 p-4">
+                  <div key={s.label} className="rounded-[16px] border border-vf-line bg-vf-surface2 p-4 vf-card">
                     <div className="font-serif text-[32px] leading-none text-vf-text">{s.n}</div>
                     <div className="text-[11.5px] text-vf-faint mt-1.5 leading-[1.3]">{s.label}</div>
                   </div>
@@ -787,7 +787,7 @@ export default function Profile() {
 
             {/* Ember */}
             <section
-              className="rounded-[22px] border border-vf-gold/30 p-5"
+              className="rounded-[22px] border border-vf-gold/30 p-5 vf-card"
               style={{ background: "linear-gradient(150deg, rgba(233,196,106,.11), transparent)" }}
               data-testid="card-ember"
             >
@@ -812,7 +812,7 @@ export default function Profile() {
                   </p>
                   <button
                     onClick={() => setLocation("/billing")}
-                    className="mt-4 inline-flex items-center rounded-full bg-vf-gold text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press hover:bg-[#F3D890] transition-colors"
+                    className="mt-4 inline-flex items-center rounded-full bg-vf-gold text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press vf-btn-primary hover:bg-[#F3D890] transition-colors"
                     data-testid="button-see-ember"
                   >
                     See what changes
@@ -946,7 +946,7 @@ function EditProfileDialog({
           <button
             onClick={handleSave}
             disabled={saving || pristine}
-            className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-6 h-11 text-sm btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-6 h-11 text-sm btn-press vf-btn-primary transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-40 disabled:cursor-not-allowed"
             data-testid="button-save-profile"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}

@@ -86,10 +86,11 @@ export function getSession() {
     process.env.NODE_ENV === "production" &&
     (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === "local-dev-insecure-secret")
   ) {
-    console.warn(
-      "[SECURITY] SESSION_SECRET is not set (or is using the insecure local-dev default) " +
-        "in production. Set a strong random SESSION_SECRET before real users sign in.",
+    console.error(
+      "[SECURITY] Refusing to start: SESSION_SECRET is not set (or is using the insecure " +
+        "local-dev default) in production. Set a strong random SESSION_SECRET before real users sign in.",
     );
+    throw new Error("SESSION_SECRET must be set to a strong random value in production");
   }
 
   return session({
