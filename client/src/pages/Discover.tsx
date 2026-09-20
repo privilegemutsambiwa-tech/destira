@@ -3,7 +3,7 @@ import { LayoutShell } from "@/components/layout-shell";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag } from "lucide-react";
-import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories } from "@/hooks/use-interactions";
+import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories, UpgradeRequiredError } from "@/hooks/use-interactions";
 import { useTwinReadiness, useDismissReminder } from "@/hooks/use-onboarding";
 import { LIMITS } from "@shared/entitlements";
 import { usePaywall } from "@/hooks/use-paywall";
@@ -585,13 +585,17 @@ export default function Discover() {
         title: "Interview Started",
         description: `Chat with ${currentProfile.displayName}'s AI Twin now.`,
       });
-      setLocation(`/interviews/${interview.id}/chat`);
-    } catch {
-      toast({
-        title: "Error",
-        description: "Could not start interview.",
-        variant: "destructive",
-      });
+      setLocation(`/interviews/${interview.id}/chat?from=/discover`);
+    } catch (err: any) {
+      if (err instanceof UpgradeRequiredError) {
+        setLocation("/plans?feature=start_interview");
+      } else {
+        toast({
+          title: "Error",
+          description: err?.message || "Could not start interview.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -1014,9 +1018,14 @@ export default function Discover() {
             try {
               const interview = await startInterview.mutateAsync(viewingCardStory.userId);
               setViewingCardStory(null);
-              setLocation(`/interviews/${interview.id}/chat`);
-            } catch {
-              toast({ title: "Could not start interview", variant: "destructive" });
+              setLocation(`/interviews/${interview.id}/chat?from=/discover`);
+            } catch (err: any) {
+              if (err instanceof UpgradeRequiredError) {
+                setViewingCardStory(null);
+                setLocation("/plans?feature=start_interview");
+              } else {
+                toast({ title: "Could not start interview", description: err?.message, variant: "destructive" });
+              }
             }
           }}
         />

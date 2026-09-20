@@ -146,6 +146,18 @@ export function useChatThreads(filter?: string) {
   });
 }
 
+// Thrown by useStartInterview on a gated 403 so callers can tell "you need
+// to upgrade" apart from a genuine failure instead of pattern-matching a
+// generic error message.
+export class UpgradeRequiredError extends Error {
+  requiredTier?: string;
+  constructor(message: string, requiredTier?: string) {
+    super(message);
+    this.name = "UpgradeRequiredError";
+    this.requiredTier = requiredTier;
+  }
+}
+
 export function useStartInterview() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -156,7 +168,13 @@ export function useStartInterview() {
         body: JSON.stringify({ targetId }),
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to start interview");
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        if (res.status === 403 && body?.upgradeRequired) {
+          throw new UpgradeRequiredError(body.message || "Upgrade required", body.requiredTier);
+        }
+        throw new Error(body?.message || "Failed to start interview");
+      }
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/interviews"] }),

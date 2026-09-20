@@ -16,6 +16,7 @@ import {
   useIncomingLikes,
   useStartInterview,
   useUnmatch,
+  UpgradeRequiredError,
 } from "@/hooks/use-interactions";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
@@ -160,11 +161,14 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
       startInterview.mutate(userId, {
         onSuccess: (iv: any) => { if (iv?.id) setLocation(`/interviews/${iv.id}/chat?from=/u/${userId}`); },
         onError: (err: any) => {
-          const msg = String(err?.message || "");
-          if (msg.includes("upgradeRequired") || msg.toLowerCase().includes("week")) {
-            paywall.guard("start_interview", () => {});
+          // The client-side gate check above can race a server-side deny
+          // (tier just lapsed, limit hit between the check and the click) —
+          // route that case to the same upgrade screen the paywall sheet uses
+          // instead of a generic toast.
+          if (err instanceof UpgradeRequiredError) {
+            setLocation("/plans?feature=start_interview");
           } else {
-            toast({ title: "Couldn't start that", variant: "destructive" });
+            toast({ title: "Couldn't start that", description: err?.message, variant: "destructive" });
           }
         },
       }),
