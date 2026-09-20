@@ -353,29 +353,38 @@ export async function registerRoutes(
     }
   });
 
-  async function seedOnboardingIntoTwinMemory(userId: string, personalityProfile: Record<string, string>): Promise<void> {
-    try {
-      const ONBOARDING_QUESTIONS = [
-        "What are the top 3 values you live by?",
-        "Describe your ideal Sunday.",
-        "How do you handle conflict in relationships?",
-        "What's a life goal you're actively working towards?",
-        "What does emotional intimacy mean to you?",
-        "What's a deal-breaker for you in a relationship?",
-        "How do you show love and appreciation?",
-        "What's something surprising about you?",
-        "Describe the kind of partner energy you're looking for.",
-        "What would you want your partner to say about you after a year?",
-      ];
+  // Legacy shape: a couple of older callers below still hand this function
+  // a `personalityProfile: Record<string, string>` blob keyed "0".."9"
+  // instead of real question text (nothing in the current web client sends
+  // this anymore — /api/onboarding/complete is the live path — but the
+  // field is left accepted rather than dropped in case an older client
+  // build still posts it). There's no real question text to recover here,
+  // so this is honestly labeled rather than paired with the stale,
+  // mismatched wording the old code used.
+  function legacyPersonalityProfileToPairs(personalityProfile: Record<string, string>): { q: string; a: string }[] {
+    return Object.entries(personalityProfile || {}).map(([i, a]) => ({
+      q: `Onboarding question ${Number(i) + 1}`,
+      a,
+    }));
+  }
 
-      const obFacts: string[] = [];
-      for (let i = 0; i < 10; i++) {
-        const answer = personalityProfile[String(i)];
-        if (answer && typeof answer === "string" && answer.trim()) {
-          const question = ONBOARDING_QUESTIONS[i] || `Onboarding question ${i + 1}`;
-          obFacts.push(`${question} → ${answer.trim()}`);
-        }
-      }
+  // Takes the real {question, answer} pairs — never a positionally-indexed
+  // blob. The previous version took a `personalityProfile: Record<string,
+  // string>` keyed "0".."9" and paired index i with a hardcoded
+  // ONBOARDING_QUESTIONS[i] that (a) hadn't matched the actual onboarding
+  // question wording in a long time and (b) silently shifted out of sync
+  // the moment a caller's map only had the *answered* questions re-indexed
+  // from 0 — skip question 3 and everything after visibly shifted up one,
+  // so a fact could show up attributed to the wrong question entirely
+  // (surfaced as "What your twin can say" on the profile misattributing
+  // answers). Passing the pairs already assembled by the caller removes
+  // both failure modes at once: there's no index to drift and no stale
+  // question list to fall out of sync with the real ones in the DB.
+  async function seedOnboardingIntoTwinMemory(userId: string, answers: { q: string; a: string }[]): Promise<void> {
+    try {
+      const obFacts = answers
+        .filter((x) => x.a && x.a.trim().length > 0)
+        .map((x) => `${x.q} → ${x.a.trim()}`);
       if (obFacts.length) {
         const obCats = await disclosure.classifySensitivity(obFacts);
         for (let i = 0; i < obFacts.length; i++) {
@@ -396,7 +405,7 @@ export async function registerRoutes(
 {"top_values": ["value1", "value2", ...], "relationship_goals": "...", "boundaries": "...", "humor_style": "...", "communication_style": "...", "attachment_style": "...", "interests": ["interest1", ...], "lifestyle_patterns": ["pattern1", ...], "desired_partner_traits": ["trait1", ...]}
 Fill in what you can determine from the data. Use short, clear phrases. Limit arrays to 5 items max.`,
             },
-            { role: "user", content: JSON.stringify({ personality: personalityProfile, twinPersona: profile.twinPersona }) },
+            { role: "user", content: JSON.stringify({ answers, twinPersona: profile.twinPersona }) },
           ],
           { json: true, maxTokens: 8192 },
         );
@@ -492,7 +501,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (existing) {
         const updated = await storage.updateProfile(userId, safeCounted);
         if (isCompletingOnboarding && !existing.onboardingCompleted) {
-          seedOnboardingIntoTwinMemory(userId, req.body.personalityProfile).catch(() => {});
+          seedOnboardingIntoTwinMemory(userId, legacyPersonalityProfileToPairs(req.body.personalityProfile)).catch(() => {});
         }
         referralsService.checkQualification(userId).catch(() => {});
         return res.json(stripRawLocation(updated));
@@ -506,7 +515,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         subscriptionTier: await gate.getEffectiveTier(userId),
       });
       if (isCompletingOnboarding) {
-        seedOnboardingIntoTwinMemory(userId, req.body.personalityProfile).catch(() => {});
+        seedOnboardingIntoTwinMemory(userId, legacyPersonalityProfileToPairs(req.body.personalityProfile)).catch(() => {});
       }
       referralsService.checkQualification(userId).catch(() => {});
       res.status(201).json(stripRawLocation(profile));
@@ -2082,10 +2091,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
             { maxTokens: 8192 },
           )
             .then((r) => storage.updateProfile(userId, { twinPersona: r.text || "" }))
-            .then(() => {
-              const map = Object.fromEntries(answers.map((x, i) => [i, x.a]));
-              return seedOnboardingIntoTwinMemory(userId, map as Record<string, string>);
-            })
+            .then(() => seedOnboardingIntoTwinMemory(userId, answers))
             .catch((err) => console.error("Twin gen on complete failed:", err));
         }
       }

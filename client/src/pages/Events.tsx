@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { LayoutShell } from "@/components/layout-shell";
-import { EventRow } from "@/components/event-row";
+import { EventRow, FeaturedEventRow } from "@/components/event-row";
 import {
   useEventsFeed,
   useEventSearch,
@@ -211,25 +211,31 @@ export default function Events() {
     setPanelOpen(false);
   };
 
-  const rowHandlers = (event: EventItem) => {
+  const commonRowProps = (event: EventItem) => {
     const isHost = event.hostUserId === user?.id;
     const isPending =
       (attend.isPending && attend.variables?.eventId === event.id) ||
       (cancel.isPending && cancel.variables === event.id);
-    return (
-      <EventRow
-        event={event}
-        groupName={event.groupId ? groupNameById.get(event.groupId) : undefined}
-        isHost={isHost}
-        pending={isPending}
-        onOpen={() => setLocation(`/events/${event.id}`)}
-        onAttend={() => attend.mutate({ eventId: event.id, seatModel: event.seatModel })}
-        onCancel={() => cancel.mutate(event.id)}
-        onManage={() => setLocation(`/events/${event.id}`)}
-        signalOverride={searching ? searchSignal(event) || undefined : undefined}
-      />
-    );
+    return {
+      event,
+      groupName: event.groupId ? groupNameById.get(event.groupId) : undefined,
+      isHost,
+      pending: isPending,
+      onOpen: () => setLocation(`/events/${event.id}`),
+      onAttend: () => attend.mutate({ eventId: event.id, seatModel: event.seatModel }),
+      onCancel: () => cancel.mutate(event.id),
+      onManage: () => setLocation(`/events/${event.id}`),
+    };
   };
+
+  const rowHandlers = (event: EventItem) => (
+    <EventRow {...commonRowProps(event)} signalOverride={searching ? searchSignal(event) || undefined : undefined} />
+  );
+
+  // The single most-imminent event across the whole feed gets the featured
+  // hero treatment; everything else (including the rest of its own "This
+  // Week" group) renders as the compact list, same as before.
+  const featuredEvent = !searching ? grouped[0]?.[1]?.[0] : undefined;
 
   return (
     <LayoutShell>
@@ -414,18 +420,27 @@ export default function Events() {
           )
         ) : (
           <div className="flex flex-col gap-8">
-            {grouped.map(([label, items]) => (
-              <div key={label}>
-                <div className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-faint mb-3">{label}</div>
-                <div className="flex flex-col gap-3.5 motion-reduce:[&>*]:!animate-none">
-                  {items.map((event) => (
-                    <div key={event.id} className="motion-safe:animate-[vf-rise_0.4s_ease_both]">
-                      {rowHandlers(event)}
-                    </div>
-                  ))}
-                </div>
+            {featuredEvent && (
+              <div className="motion-safe:animate-[vf-rise_0.4s_ease_both]">
+                <FeaturedEventRow {...commonRowProps(featuredEvent)} />
               </div>
-            ))}
+            )}
+            {grouped.map(([label, items]) => {
+              const rest = items.filter((e) => e.id !== featuredEvent?.id);
+              if (rest.length === 0) return null;
+              return (
+                <div key={label}>
+                  <div className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-faint mb-3">{label}</div>
+                  <div className="flex flex-col gap-3.5 motion-reduce:[&>*]:!animate-none">
+                    {rest.map((event) => (
+                      <div key={event.id} className="motion-safe:animate-[vf-rise_0.4s_ease_both]">
+                        {rowHandlers(event)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
             {feed.data?.moreThanShown && (
               <p className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
                 Showing the 30 that fit best · narrow it in Preferences
