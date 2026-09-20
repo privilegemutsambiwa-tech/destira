@@ -347,6 +347,17 @@
     box-shadow: 0 0 0 3px hsl(var(--vf-ember) / 0.15);
   }
 
+  /* Native range inputs (Settings sliders) — accent-color alone leaves the
+     thumb looking flat against elevated card backgrounds. A soft drop
+     shadow on the existing thumb reads as more deliberate without
+     overriding native track/thumb rendering or touch semantics. */
+  .vf-range::-webkit-slider-thumb {
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  }
+  .vf-range::-moz-range-thumb {
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  }
+
   /* Primary filled (ember) action buttons — subtle lift instead of a dead
      flat fill with no feedback at all. */
   .vf-btn-primary {

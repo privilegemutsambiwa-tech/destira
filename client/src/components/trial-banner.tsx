@@ -36,29 +36,39 @@ export function TrialBanner() {
 
   return (
     <div
-      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl border border-vf-ember/25 bg-gradient-to-r from-vf-ember/[0.12] to-transparent px-4 py-3 mb-6"
+      className="vf-card relative rounded-[18px] border border-vf-ember/25 px-4 py-3.5 pr-11 sm:pr-4 mb-6 sm:flex sm:items-center sm:gap-4"
+      style={{ background: "linear-gradient(135deg, hsl(var(--vf-ember) / 0.1), var(--vf-surface2) 78%)" }}
       data-testid="trial-banner"
     >
-      <Sparkles className="w-4 h-4 text-vf-ember shrink-0" />
-      <p className="flex-1 min-w-[220px] text-[13px] text-vf-text leading-snug">
-        <span className="font-medium">🎉 You're on a 1-Month Free Flame Pass</span>
-        <span className="text-vf-muted">
-          {" "}
-          — host your own events, create up to {LIMITS.flame.groupsCreatedMax} groups, and send up to{" "}
-          {LIMITS.flame.dailyLikes} likes a day. ({dayLabel})
+      <div className="flex items-start gap-3 sm:items-center min-w-0">
+        <span
+          className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center"
+          style={{ background: "hsl(var(--vf-ember) / 0.14)" }}
+          aria-hidden="true"
+        >
+          <Sparkles className="w-4.5 h-4.5 text-vf-ember" />
         </span>
-      </p>
+        <div className="min-w-0">
+          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-ember">
+            Flame trial · {dayLabel}
+          </div>
+          <p className="text-[13.5px] text-vf-text leading-snug mt-0.5">
+            Host events, create up to {LIMITS.flame.groupsCreatedMax} groups, and send up to{" "}
+            {LIMITS.flame.dailyLikes} likes a day — free while it lasts.
+          </p>
+        </div>
+      </div>
       <Link href="/plans">
         <a
-          className="text-[12.5px] font-medium text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors whitespace-nowrap"
+          className="mt-2.5 sm:mt-0 sm:ml-auto inline-flex items-center gap-1 shrink-0 text-[12.5px] font-semibold text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors whitespace-nowrap"
           data-testid="trial-banner-explore"
         >
-          Explore Flame Features
+          Explore Flame features
         </a>
       </Link>
       <button
         onClick={dismiss}
-        className="text-vf-faint hover:text-vf-text transition-colors shrink-0"
+        className="absolute top-3.5 right-3.5 sm:static sm:top-auto sm:right-auto text-vf-faint hover:text-vf-text transition-colors shrink-0 rounded-full p-0.5 hover:bg-vf-elevated"
         aria-label="Dismiss trial banner"
         data-testid="trial-banner-dismiss"
       >

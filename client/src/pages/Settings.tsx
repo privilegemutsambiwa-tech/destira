@@ -180,7 +180,7 @@ function SliderInput({ label, value, min, max, onChange, unit = "" }: {
       <input
         type="range" min={min} max={max} value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full" style={{ accentColor: EMBER }}
+        className="w-full vf-range" style={{ accentColor: EMBER }}
         data-testid={`slider-${label.toLowerCase().replace(/\s+/g, "-")}`}
       />
       <div className="flex justify-between mt-1">
@@ -278,7 +278,7 @@ function TwinTonePanel({ onBack, profile }: { onBack: () => void; profile: any }
             <input
               type="range" min={0} max={100} step={5} value={c.value}
               onChange={(e) => c.set(Number(e.target.value))}
-              className="w-full"
+              className="w-full vf-range"
               style={{ accentColor: EMBER }}
               data-testid={`slider-twin-${c.key}`}
             />
@@ -569,7 +569,7 @@ function ProximityPanel({ onBack, profile }: { onBack: () => void; profile: any 
             {data?.currentPlace && (
               <button
                 onClick={() => hideHere.mutate()}
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg btn-press"
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg btn-press transition-colors duration-150"
                 style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: TEXT }}
                 data-testid="proximity-hide-here"
               >
@@ -587,7 +587,7 @@ function ProximityPanel({ onBack, profile }: { onBack: () => void; profile: any 
             </p>
             <button
               onClick={() => pause.mutate(paused ? null : 8)}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg btn-press"
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg btn-press transition-colors duration-150"
               style={{ background: paused ? EMBER : ELEVATED, border: `1px solid ${BORDER}`, color: paused ? INK : TEXT }}
               data-testid="proximity-pause"
             >
@@ -613,7 +613,7 @@ function ProximityPanel({ onBack, profile }: { onBack: () => void; profile: any 
                 <span className="text-sm" style={{ color: TEXT }}>{pl.name}</span>
                 <button
                   onClick={() => unhide.mutate(pl.id)}
-                  className="text-xs font-semibold px-3 py-1"
+                  className="text-xs font-semibold px-3 py-1 btn-press transition-colors duration-150"
                   style={{ color: EMBER, border: `1px solid rgba(255,107,74,0.4)`, borderRadius: "8px" }}
                   data-testid={`proximity-unhide-${pl.id}`}
                 >
@@ -755,7 +755,7 @@ function SeekingGendersPanel({ onBack, profile }: { onBack: () => void; profile:
             <button
               key={opt.value}
               onClick={() => toggle(opt.value)}
-              className="w-full flex items-center justify-between"
+              className="w-full flex items-center justify-between vf-row transition-colors duration-150"
               style={{
                 padding: "14px 16px",
                 borderBottom: i < SEEKING_OPTIONS.length - 1 ? `1px solid ${BORDER}` : "none",
@@ -802,9 +802,18 @@ function BlockListPanel({ onBack }: { onBack: () => void }) {
   return (
     <Panel title="Block List" onBack={onBack}>
       {blockedList.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16" style={{ color: MUTED }}>
-          <Shield className="w-12 h-12 mb-4" style={{ opacity: 0.4 }} />
-          <p className="text-sm">No blocked users</p>
+        <div
+          className="vf-card flex flex-col items-center justify-center text-center"
+          style={{ margin: "16px 16px 0", borderRadius: "16px", background: CARD, padding: "48px 24px" }}
+        >
+          <div style={{
+            width: "56px", height: "56px", borderRadius: "50%", background: ELEVATED,
+            display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "16px",
+          }}>
+            <Shield className="w-6 h-6" style={{ color: MUTED }} />
+          </div>
+          <p className="text-sm font-medium" style={{ color: TEXT }}>No blocked users</p>
+          <p className="text-xs mt-1" style={{ color: MUTED }}>Anyone you block will show up here.</p>
         </div>
       ) : (
         <div className="vf-card" style={{ margin: "16px 16px 0", borderRadius: "16px", overflow: "hidden", background: CARD }}>
@@ -826,7 +835,7 @@ function BlockListPanel({ onBack }: { onBack: () => void }) {
               <span className="flex-1 text-sm text-foreground" data-testid={`text-blocked-name-${entry.blockedId}`}>{entry.displayName || entry.blockedId}</span>
               <button
                 onClick={() => unblockMutation.mutate(entry.blockedId)}
-                className="text-xs font-semibold px-3 py-1"
+                className="text-xs font-semibold px-3 py-1 btn-press transition-colors duration-150"
                 style={{ color: EMBER, border: `1px solid rgba(255,107,74,0.4)`, borderRadius: "8px" }}
                 data-testid={`button-unblock-${entry.blockedId}`}
               >
@@ -886,40 +895,39 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
     return (
       <Panel title="Delete All Data" onBack={() => setDeleteStep(0)}>
         <div style={{ padding: "16px" }}>
-          <div className="text-center mb-6">
-            <div style={{
-              width: "60px", height: "60px", borderRadius: "50%", background: "rgba(239,68,68,0.15)",
-              display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px",
-            }}>
-              <Trash2 className="w-7 h-7" style={{ color: "#EF4444" }} />
-            </div>
-            <p className="font-semibold text-foreground mb-1">This is permanent</p>
-            <p className="text-sm" style={{ color: MUTED }}>All your profile data, matches, Twin memory, and account will be permanently deleted. This cannot be undone.</p>
-          </div>
-          <div style={{ marginBottom: "16px" }}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Type DELETE to confirm</label>
-            <input
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder="DELETE"
-              className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
-              style={{ background: CARD, border: `1px solid #EF4444`, borderRadius: "10px", outline: "none" }}
-              data-testid="input-delete-confirm"
-            />
-          </div>
-          <button
-            disabled={deleteConfirmText !== "DELETE" || deleteMutation.isPending}
-            onClick={() => deleteMutation.mutate()}
-            className="w-full py-3 text-sm font-semibold text-foreground rounded-xl"
-            style={{
-              background: deleteConfirmText === "DELETE" ? "#EF4444" : ELEVATED,
-              opacity: deleteConfirmText !== "DELETE" || deleteMutation.isPending ? 0.5 : 1,
-              cursor: deleteConfirmText === "DELETE" ? "pointer" : "default",
-            }}
-            data-testid="button-confirm-delete-all"
+          <div
+            className="vf-card"
+            style={{ background: CARD, border: "1px solid rgba(239,68,68,0.3)", borderRadius: "16px", padding: "24px 20px", marginBottom: "16px" }}
           >
-            {deleteMutation.isPending ? "Deleting..." : "Permanently Delete Everything"}
-          </button>
+            <div className="text-center mb-6">
+              <div style={{
+                width: "60px", height: "60px", borderRadius: "50%", background: "rgba(239,68,68,0.15)",
+                display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px",
+              }}>
+                <Trash2 className="w-7 h-7" style={{ color: "#EF4444" }} />
+              </div>
+              <p className="font-semibold text-foreground mb-1">This is permanent</p>
+              <p className="text-sm" style={{ color: MUTED }}>All your profile data, matches, Twin memory, and account will be permanently deleted. This cannot be undone.</p>
+            </div>
+            <div>
+              <label style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "8px", display: "block" }}>Type DELETE to confirm</label>
+              <input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
+                style={{ background: ELEVATED, border: `1px solid #EF4444`, borderRadius: "10px", outline: "none" }}
+                data-testid="input-delete-confirm"
+              />
+            </div>
+          </div>
+          <GradientButton
+            label={deleteMutation.isPending ? "Deleting..." : "Permanently Delete Everything"}
+            onClick={() => deleteMutation.mutate()}
+            disabled={deleteConfirmText !== "DELETE" || deleteMutation.isPending}
+            danger
+            testId="button-confirm-delete-all"
+          />
         </div>
       </Panel>
     );
@@ -932,6 +940,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
       </p>
       <div className="vf-card" style={{ margin: "12px 16px", borderRadius: "16px", overflow: "hidden", background: CARD }}>
         <div
+          className="vf-row"
           style={{ ...ROW_STYLE, cursor: "pointer" }}
           onClick={() => setShowCollect(v => !v)}
           data-testid="row-what-we-collect"
@@ -953,7 +962,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
             ))}
           </div>
         )}
-        <div style={ROW_STYLE} onClick={handleExport} data-testid="row-export-data">
+        <div className="vf-row" style={ROW_STYLE} onClick={handleExport} data-testid="row-export-data">
           <Download className="w-5 h-5 mr-3" style={{ color: MUTED }} />
           <div className="flex-1">
             <p className="text-sm font-medium text-foreground">Export My Data</p>
@@ -961,7 +970,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
           </div>
           <ChevronRight className="w-4 h-4" style={{ color: MUTED }} />
         </div>
-        <div style={{ ...ROW_STYLE, borderBottom: "none" }} onClick={() => setDeleteStep(1)} data-testid="row-delete-data">
+        <div className="vf-row" style={{ ...ROW_STYLE, borderBottom: "none" }} onClick={() => setDeleteStep(1)} data-testid="row-delete-data">
           <Trash2 className="w-5 h-5 mr-3" style={{ color: "#EF4444" }} />
           <div className="flex-1">
             <p className="text-sm font-medium" style={{ color: "#EF4444" }}>Delete All Data</p>
@@ -1127,6 +1136,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
         </div>
         {tier !== "free" && (
           <button
+            className="vf-row"
             style={{ ...ROW_STYLE, borderBottom: "none", width: "100%", textAlign: "left", background: "transparent", border: "none" }}
             data-testid="row-cancel-plan"
             disabled={cancelSub.isPending}
@@ -1177,6 +1187,7 @@ function HelpPanel({ onBack }: { onBack: () => void }) {
         {faqs.map((faq, i) => (
           <div key={i} style={{ borderBottom: i < faqs.length - 1 ? `1px solid ${BORDER}` : "none" }}>
             <div
+              className="vf-row"
               onClick={() => setOpen(open === i ? null : i)}
               style={{ display: "flex", alignItems: "center", padding: "14px 16px", cursor: "pointer" }}
               data-testid={`faq-toggle-${i}`}
@@ -1225,31 +1236,33 @@ function ContactPanel({ onBack }: { onBack: () => void }) {
     <Panel title="Contact Us" onBack={onBack}>
       <div style={{ padding: "16px" }}>
         <p className="text-sm mb-4" style={{ color: MUTED }}>Send us a message and we'll get back to you within 24–48 hours.</p>
-        <div style={{ marginBottom: "12px" }}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Subject</label>
-          <select
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
-            style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
-            data-testid="select-contact-subject"
-          >
-            {CONTACT_SUBJECTS.map(s => (
-              <option key={s} value={s} style={{ background: CARD }}>{s}</option>
-            ))}
-          </select>
-        </div>
-        <div style={{ marginBottom: "16px" }}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Message</label>
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Describe your issue or question..."
-            rows={5}
-            className="w-full px-3 py-2 text-sm text-foreground resize-none vf-input-focus"
-            style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
-            data-testid="input-contact-message"
-          />
+        <div className="vf-card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "16px", padding: "16px", marginBottom: "16px" }}>
+          <div style={{ marginBottom: "14px" }}>
+            <label style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "8px", display: "block" }}>Subject</label>
+            <select
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
+              style={{ background: ELEVATED, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+              data-testid="select-contact-subject"
+            >
+              {CONTACT_SUBJECTS.map(s => (
+                <option key={s} value={s} style={{ background: CARD }}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "8px", display: "block" }}>Message</label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Describe your issue or question..."
+              rows={5}
+              className="w-full px-3 py-2 text-sm text-foreground resize-none vf-input-focus"
+              style={{ background: ELEVATED, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+              data-testid="input-contact-message"
+            />
+          </div>
         </div>
         <GradientButton
           label={submitMutation.isPending ? "Sending..." : "Send Message"}
@@ -1306,36 +1319,44 @@ function FeedbackPanel({ onBack }: { onBack: () => void }) {
         <p className="text-sm mb-4" style={{ color: MUTED }}>
           Not a support ticket — this goes straight to whoever's running Destira. No reply is promised.
         </p>
-        <div style={{ marginBottom: "12px" }}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>What kind of thing is this</label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
-            style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
-            data-testid="select-feedback-category"
-          >
-            {FEEDBACK_CATEGORY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value} style={{ background: CARD }}>{o.label}</option>
-            ))}
-          </select>
+        <div className="vf-card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "16px", padding: "16px", marginBottom: "16px" }}>
+          <div style={{ marginBottom: "14px" }}>
+            <label style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "8px", display: "block" }}>What kind of thing is this</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
+              style={{ background: ELEVATED, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+              data-testid="select-feedback-category"
+            >
+              {FEEDBACK_CATEGORY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value} style={{ background: CARD }}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ marginBottom: "14px" }}>
+            <label style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "8px", display: "block" }}>Tell us</label>
+            <textarea
+              value={freeText}
+              onChange={(e) => setFreeText(e.target.value)}
+              placeholder="What happened, or what you'd change..."
+              rows={5}
+              className="w-full px-3 py-2 text-sm text-foreground resize-none vf-input-focus"
+              style={{ background: ELEVATED, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+              data-testid="input-feedback-text"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
+            <input
+              type="checkbox"
+              checked={contactBackConsent}
+              onChange={(e) => setContactBackConsent(e.target.checked)}
+              style={{ accentColor: EMBER }}
+              data-testid="checkbox-feedback-contact-back"
+            />
+            It's OK to contact me about this
+          </label>
         </div>
-        <div style={{ marginBottom: "12px" }}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Tell us</label>
-          <textarea
-            value={freeText}
-            onChange={(e) => setFreeText(e.target.value)}
-            placeholder="What happened, or what you'd change..."
-            rows={5}
-            className="w-full px-3 py-2 text-sm text-foreground resize-none vf-input-focus"
-            style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
-            data-testid="input-feedback-text"
-          />
-        </div>
-        <label className="flex items-center gap-2 mb-4 text-sm" style={{ color: MUTED }}>
-          <input type="checkbox" checked={contactBackConsent} onChange={(e) => setContactBackConsent(e.target.checked)} data-testid="checkbox-feedback-contact-back" />
-          It's OK to contact me about this
-        </label>
         <GradientButton
           label={submitMutation.isPending ? "Sending..." : "Send Feedback"}
           onClick={() => {
@@ -1406,28 +1427,30 @@ function ChangeEmailPanel({ onBack }: { onBack: () => void }) {
           </div>
         ) : (
           <>
-            <div style={{ marginBottom: "12px" }}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>New Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="new@example.com"
-                className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
-                style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
-                data-testid="input-new-email"
-              />
-            </div>
-            <div style={{ marginBottom: "16px" }}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Current Password</label>
-              <PasswordInput
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
-                style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
-                data-testid="input-email-current-password"
-              />
+            <div className="vf-card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "16px", padding: "16px", marginBottom: "16px" }}>
+              <div style={{ marginBottom: "14px" }}>
+                <label style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "8px", display: "block" }}>New Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="new@example.com"
+                  className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
+                  style={{ background: ELEVATED, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+                  data-testid="input-new-email"
+                />
+              </div>
+              <div>
+                <label style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "8px", display: "block" }}>Current Password</label>
+                <PasswordInput
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
+                  style={{ background: ELEVATED, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+                  data-testid="input-email-current-password"
+                />
+              </div>
             </div>
             <GradientButton
               label={updateMutation.isPending ? "Updating..." : "Update Email"}
@@ -1485,38 +1508,40 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
         <p className="text-sm mb-4" style={{ color: MUTED }}>
           Choose a strong password with at least 8 characters.
         </p>
-        <div style={{ marginBottom: "12px" }}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Current Password</label>
-          <PasswordInput
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-            placeholder="••••••••"
-            className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
-            style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
-            data-testid="input-current-password"
-          />
-        </div>
-        <div style={{ marginBottom: "12px" }}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>New Password</label>
-          <PasswordInput
-            value={newPass}
-            onChange={(e) => setNewPass(e.target.value)}
-            placeholder="••••••••"
-            className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
-            style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
-            data-testid="input-new-password"
-          />
-        </div>
-        <div style={{ marginBottom: "16px" }}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Confirm New Password</label>
-          <PasswordInput
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder="••••••••"
-            className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
-            style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
-            data-testid="input-confirm-password"
-          />
+        <div className="vf-card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "16px", padding: "16px", marginBottom: "16px" }}>
+          <div style={{ marginBottom: "14px" }}>
+            <label style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "8px", display: "block" }}>Current Password</label>
+            <PasswordInput
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
+              style={{ background: ELEVATED, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+              data-testid="input-current-password"
+            />
+          </div>
+          <div style={{ marginBottom: "14px" }}>
+            <label style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "8px", display: "block" }}>New Password</label>
+            <PasswordInput
+              value={newPass}
+              onChange={(e) => setNewPass(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
+              style={{ background: ELEVATED, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+              data-testid="input-new-password"
+            />
+          </div>
+          <div>
+            <label style={{ ...MONO_EYEBROW, color: FAINT, marginBottom: "8px", display: "block" }}>Confirm New Password</label>
+            <PasswordInput
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
+              style={{ background: ELEVATED, border: `1px solid ${BORDER}`, borderRadius: "10px", outline: "none" }}
+              data-testid="input-confirm-password"
+            />
+          </div>
         </div>
         <GradientButton label={updateMutation.isPending ? "Updating..." : "Update Password"} onClick={handleSubmit} testId="button-update-password" />
       </div>
@@ -1527,7 +1552,10 @@ function ChangePasswordPanel({ onBack }: { onBack: () => void }) {
 function TermsPanel({ onBack }: { onBack: () => void }) {
   return (
     <Panel title="Terms of Service" onBack={onBack}>
-      <div style={{ padding: "16px", color: MUTED, fontSize: "13px", lineHeight: "1.8" }}>
+      <div
+        className="vf-card"
+        style={{ margin: "16px", borderRadius: "16px", background: CARD, border: `1px solid ${BORDER}`, padding: "20px", color: MUTED, fontSize: "13px", lineHeight: "1.8" }}
+      >
         <p className="text-foreground font-semibold mb-2">Last updated: March 2026</p>
         <p className="mb-4">Welcome to Destira. By using our service, you agree to these Terms of Service.</p>
         <p className="text-foreground font-semibold mb-1">1. Eligibility</p>
@@ -1552,7 +1580,10 @@ function TermsPanel({ onBack }: { onBack: () => void }) {
 function PrivacyPolicyPanel({ onBack }: { onBack: () => void }) {
   return (
     <Panel title="Privacy Policy" onBack={onBack}>
-      <div style={{ padding: "16px", color: MUTED, fontSize: "13px", lineHeight: "1.8" }}>
+      <div
+        className="vf-card"
+        style={{ margin: "16px", borderRadius: "16px", background: CARD, border: `1px solid ${BORDER}`, padding: "20px", color: MUTED, fontSize: "13px", lineHeight: "1.8" }}
+      >
         <p className="text-foreground font-semibold mb-2">Last updated: March 2026</p>
         <p className="mb-4">Destira is committed to protecting your privacy.</p>
         <p className="text-foreground font-semibold mb-1">Data We Collect</p>
@@ -1934,14 +1965,14 @@ export default function Settings() {
               <button
                 key={s.id}
                 onClick={() => setActiveSection(s.id)}
-                className="w-full text-left transition-colors duration-150"
+                className="w-full text-left transition-colors duration-150 vf-row"
                 style={{
                   display: "block",
                   padding: "9px 14px",
                   borderRadius: "10px",
                   fontSize: "13.5px",
                   marginBottom: "2px",
-                  background: active ? ELEVATED : "transparent",
+                  background: active ? ELEVATED : undefined,
                   color: s.danger ? "#EF4444" : active ? TEXT : MUTED,
                   fontWeight: active ? 500 : 400,
                 }}
