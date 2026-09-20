@@ -1638,6 +1638,7 @@ export default function Settings() {
   const { toast } = useToast();
 
   const [activePanel, setActivePanel] = useState<PanelKey>(null);
+  const [activeSection, setActiveSection] = useState("account"); // desktop two-pane nav only
   const [showPauseDialog, setShowPauseDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -1720,39 +1721,49 @@ export default function Settings() {
   if (activePanel === "privacy-policy") return <PrivacyPolicyPanel onBack={() => setActivePanel(null)} />;
   if (activePanel === "clear-memory") return <ClearMemoryPanel onBack={() => setActivePanel(null)} />;
 
-  return (
-    <div className="min-h-dvh" style={{ background: BG, color: TEXT }} data-testid="page-settings">
-      <div className="sticky top-0 z-10 flex items-center gap-3 px-4"
-        style={{ height: "56px", background: BG, borderBottom: `1px solid ${BORDER}` }}>
-        <button onClick={() => setLocation("/profile")} className="w-8 h-8 flex items-center justify-center" data-testid="button-settings-back">
-          <ArrowLeft className="w-5 h-5" style={{ color: EMBER }} />
-        </button>
-        <h1 style={{ ...SERIF, color: TEXT, fontSize: "20px" }}>Settings</h1>
-      </div>
-
-      <div style={{ maxWidth: "480px", margin: "0 auto", paddingBottom: "40px" }}>
-
-        <div style={SECTION_HEADER_STYLE}>Account</div>
-        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+  // One list of sections drives both layouts — mobile's stacked drill-down
+  // column and desktop's two-pane nav — so they can never drift apart into
+  // two different settings screens that happen to look similar. `content`
+  // is just the card's rows; margin/wrapping is applied by whichever layout
+  // is rendering it, not baked in here.
+  const cardStyle: React.CSSProperties = { background: CARD, borderRadius: "16px", overflow: "hidden" };
+  const sections: { id: string; label: string; danger?: boolean; content: React.ReactNode }[] = [
+    {
+      id: "account",
+      label: "Account",
+      content: (
+        <div className="vf-card" style={cardStyle}>
           <ChevronRow icon={User} label="Edit Profile" onClick={() => setLocation("/profile")} testId="row-edit-profile" />
           <ChevronRow icon={Mail} label="Change Email" sublabel="Update your email address" onClick={() => setActivePanel("change-email")} testId="row-change-email" />
           <ChevronRow icon={Lock} label="Change Password" sublabel="Update your password" onClick={() => setActivePanel("change-password")} testId="row-change-password" />
         </div>
-
-        <div style={SECTION_HEADER_STYLE}>Appearance</div>
-        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+      ),
+    },
+    {
+      id: "appearance",
+      label: "Appearance",
+      content: (
+        <div className="vf-card" style={cardStyle}>
           <AppearanceRow />
         </div>
-
-        <div style={SECTION_HEADER_STYLE}>Twin Settings</div>
-        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+      ),
+    },
+    {
+      id: "twin",
+      label: "Twin Settings",
+      content: (
+        <div className="vf-card" style={cardStyle}>
           <ChevronRow icon={Brain} label="Interview AI Twin" onClick={() => setLocation("/twin-chat?from=/settings")} testId="row-twin-chat" />
           <ChevronRow icon={Volume2} label="Customize Twin Tone" sublabel="Style, verbosity, formality" onClick={() => setActivePanel("twin-tone")} testId="row-twin-tone" />
           <ChevronRow icon={Shield} label="What your twin may discuss" sublabel="Per-topic: open, vague, or off — plus your own note" onClick={() => setLocation("/twin-disclosure")} testId="row-twin-boundaries" />
         </div>
-
-        <div style={SECTION_HEADER_STYLE}>Discovery</div>
-        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+      ),
+    },
+    {
+      id: "discovery",
+      label: "Discovery",
+      content: (
+        <div className="vf-card" style={cardStyle}>
           <ToggleRow icon={Compass} label="Discoverable" value={discoverable} onChange={(v) => { setDiscoverable(v); saveNotif("discoverable", v); }} testId="toggle-discoverable" />
           <ToggleRow icon={MapPin} label="Show Distance" value={showDistance} onChange={handleToggleShowDistance} testId="toggle-show-distance" />
           <ChevronRow icon={MapPin} label="Location Preferences" sublabel={`Within ${profile?.maxDistanceKm ?? 100} km`} onClick={() => setActivePanel("location")} testId="row-location" />
@@ -1773,9 +1784,13 @@ export default function Settings() {
           />
           <ChevronRow icon={CalendarDays} label="Event Preferences" sublabel="What shows up in your Events feed" onClick={() => setLocation("/settings/events?from=/settings")} testId="row-event-preferences" />
         </div>
-
-        <div style={SECTION_HEADER_STYLE}>Privacy</div>
-        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+      ),
+    },
+    {
+      id: "privacy",
+      label: "Privacy",
+      content: (
+        <div className="vf-card" style={cardStyle}>
           <ToggleRow
             icon={profile?.isPublic ? Eye : EyeOff}
             label="Public Profile"
@@ -1786,52 +1801,163 @@ export default function Settings() {
           <ChevronRow icon={Shield} label="Block List" sublabel="Manage blocked users" onClick={() => setActivePanel("block-list")} testId="row-block-list" />
           <ChevronRow icon={FileText} label="Data & Privacy" sublabel="Export or delete your data" onClick={() => setActivePanel("data-privacy")} testId="row-data-privacy" />
         </div>
-
-        <div style={SECTION_HEADER_STYLE}>Notifications</div>
-        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+      ),
+    },
+    {
+      id: "notifications",
+      label: "Notifications",
+      content: (
+        <div className="vf-card" style={cardStyle}>
           <ToggleRow icon={Zap} label="New Matches" value={notifMatches} onChange={(v) => { setNotifMatches(v); saveNotif("notif_matches", v); }} testId="toggle-notif-matches" />
           <ToggleRow icon={MessageSquare} label="Messages" value={notifMessages} onChange={(v) => { setNotifMessages(v); saveNotif("notif_messages", v); }} testId="toggle-notif-messages" />
           <ToggleRow icon={Bell} label="Stories" value={notifStories} onChange={(v) => { setNotifStories(v); saveNotif("notif_stories", v); }} testId="toggle-notif-stories" />
           <ToggleRow icon={Brain} label="Interview Requests" value={notifInterviews} onChange={(v) => { setNotifInterviews(v); saveNotif("notif_interviews", v); }} testId="toggle-notif-interviews" />
         </div>
-
-        <div style={SECTION_HEADER_STYLE}>Profile Tools</div>
-        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+      ),
+    },
+    {
+      id: "profile-tools",
+      label: "Profile Tools",
+      content: (
+        <div className="vf-card" style={cardStyle}>
           <ChevronRow icon={Wrench} label="Generate AI Summary" onClick={() => setLocation("/profile")} testId="row-ai-summary" />
           <ChevronRow icon={Check} label="Verify Profile" sublabel={profile?.verificationStatus === "pending" ? "Pending review" : profile?.isVerified ? "Verified" : "Get the blue checkmark"} onClick={() => setActivePanel("verify")} testId="row-verify" />
           <ChevronRow icon={Wrench} label="Manage Photos" onClick={() => setLocation("/profile")} testId="row-manage-photos" />
         </div>
-
-        <div style={SECTION_HEADER_STYLE}>Invite</div>
-        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+      ),
+    },
+    {
+      id: "invite",
+      label: "Invite",
+      content: (
+        <div className="vf-card" style={cardStyle}>
           <InviteRow />
         </div>
-
-        <div style={SECTION_HEADER_STYLE}>Subscription</div>
-        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+      ),
+    },
+    {
+      id: "subscription",
+      label: "Subscription",
+      content: (
+        <div className="vf-card" style={cardStyle}>
           <ChevronRow icon={Crown} label="Plans" sublabel="See what each plan gets you" onClick={() => setLocation("/plans")} testId="row-upgrade" />
           <ChevronRow icon={CreditCard} label="Manage Billing" sublabel="View plan, cancel subscription" onClick={() => setActivePanel("billing")} testId="row-billing" />
         </div>
-
-        <div style={SECTION_HEADER_STYLE}>Support</div>
-        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+      ),
+    },
+    {
+      id: "support",
+      label: "Support",
+      content: (
+        <div className="vf-card" style={cardStyle}>
           <ChevronRow icon={BookOpen} label="Help Center" sublabel="FAQs and guides" onClick={() => setActivePanel("help")} testId="row-help" />
           <ChevronRow icon={Phone} label="Contact Us" sublabel="Send us a message" onClick={() => setActivePanel("contact")} testId="row-contact" />
           <ChevronRow icon={Wrench} label="Send Feedback" sublabel="A bug, an idea, or just a note" onClick={() => setActivePanel("feedback")} testId="row-feedback" />
           <ChevronRow icon={FileText} label="Terms of Service" onClick={() => setActivePanel("terms")} testId="row-terms" />
           <ChevronRow icon={Shield} label="Privacy Policy" onClick={() => setActivePanel("privacy-policy")} testId="row-privacy-policy" />
         </div>
-
-        <div style={SECTION_HEADER_STYLE}>Irreversible</div>
-        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+      ),
+    },
+    {
+      id: "irreversible",
+      label: "Irreversible",
+      danger: true,
+      // Its own visually distinct strip, not just another vf-card: a red
+      // wash + border and a "think twice" header, so these two rows never
+      // blend into the neutral settings rows around them, on mobile or
+      // desktop, no matter where they land in either layout.
+      content: (
+        <div
+          className="vf-card"
+          style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.28)", borderRadius: "16px", overflow: "hidden" }}
+          data-testid="card-irreversible"
+        >
+          <div
+            className="flex items-center gap-2"
+            style={{ padding: "11px 16px", borderBottom: "1px solid rgba(239,68,68,0.18)" }}
+          >
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "#EF4444" }} />
+            <span style={{ ...MONO_EYEBROW, color: "#EF4444" }}>Think twice — these can't be undone</span>
+          </div>
           <ChevronRow icon={X} label="Clear Twin Memory" sublabel="Your twin forgets everything it has learned" onClick={() => setActivePanel("clear-memory")} destructive testId="row-clear-memory" />
           <ChevronRow icon={Trash2} label="Delete Account" sublabel="Permanently remove all data" onClick={() => setShowDeleteDialog(true)} destructive testId="row-delete-account" />
         </div>
-
-        <div style={SECTION_HEADER_STYLE}>Account actions</div>
-        <div className="vf-card" style={{ background: CARD, margin: "0 16px", borderRadius: "16px", overflow: "hidden" }}>
+      ),
+    },
+    {
+      id: "account-actions",
+      label: "Account actions",
+      content: (
+        <div className="vf-card" style={cardStyle}>
           <ChevronRow icon={PauseCircle} label="Pause Account" sublabel="Hide your profile temporarily" onClick={() => setShowPauseDialog(true)} testId="row-pause-account" />
           <ChevronRow icon={LogOut} label="Sign Out" onClick={() => logout()} testId="row-sign-out" />
+        </div>
+      ),
+    },
+  ];
+
+  const activeSectionObj = sections.find((s) => s.id === activeSection) ?? sections[0];
+
+  return (
+    <div className="min-h-dvh" style={{ background: BG, color: TEXT }} data-testid="page-settings">
+      <div className="sticky top-0 z-10 flex items-center gap-3 px-4"
+        style={{ height: "56px", background: BG, borderBottom: `1px solid ${BORDER}` }}>
+        <button onClick={() => setLocation("/profile")} className="w-8 h-8 flex items-center justify-center" data-testid="button-settings-back">
+          <ArrowLeft className="w-5 h-5" style={{ color: EMBER }} />
+        </button>
+        <h1 style={{ ...SERIF, color: TEXT, fontSize: "20px" }}>Settings</h1>
+      </div>
+
+      {/* Mobile / tablet — the existing stacked drill-down column, touch
+          friendly, unchanged in every way except that "Irreversible" now
+          renders its own distinct strip instead of a plain vf-card. */}
+      <div className="lg:hidden" style={{ maxWidth: "480px", margin: "0 auto", paddingBottom: "40px" }}>
+        {sections.map((s) => (
+          <div key={s.id}>
+            <div style={s.danger ? { ...SECTION_HEADER_STYLE, color: "#EF4444" } : SECTION_HEADER_STYLE}>{s.label}</div>
+            <div style={{ margin: "0 16px" }}>{s.content}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop — a real two-pane destination: a sticky jump-nav on the
+          left picks the section, its rows render on the right. Every
+          drill-down (Change Email, Verify Profile, …) still opens as its
+          own focused panel over the top, same as on mobile — this only
+          restructures the top-level list, which is what actually read as
+          "a settings dump" rather than a place worth arriving at. */}
+      <div className="hidden lg:flex" style={{ maxWidth: "1080px", margin: "0 auto", paddingBottom: "48px" }}>
+        <nav className="shrink-0 sticky" style={{ width: "224px", top: "80px", alignSelf: "flex-start", padding: "24px 12px" }}>
+          {sections.map((s) => {
+            const active = s.id === activeSectionObj.id;
+            return (
+              <button
+                key={s.id}
+                onClick={() => setActiveSection(s.id)}
+                className="w-full text-left transition-colors duration-150"
+                style={{
+                  display: "block",
+                  padding: "9px 14px",
+                  borderRadius: "10px",
+                  fontSize: "13.5px",
+                  marginBottom: "2px",
+                  background: active ? ELEVATED : "transparent",
+                  color: s.danger ? "#EF4444" : active ? TEXT : MUTED,
+                  fontWeight: active ? 500 : 400,
+                }}
+                data-testid={`nav-section-${s.id}`}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="flex-1 min-w-0" style={{ padding: "24px 8px 24px 20px" }}>
+          <h2 style={{ ...SERIF, color: TEXT, fontSize: "24px", marginBottom: "18px" }} data-testid="text-active-section">
+            {activeSectionObj.label}
+          </h2>
+          <div style={{ maxWidth: "620px" }}>{activeSectionObj.content}</div>
         </div>
       </div>
 

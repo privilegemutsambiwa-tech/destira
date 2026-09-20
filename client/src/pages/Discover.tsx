@@ -731,11 +731,15 @@ export default function Discover() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="rounded-[26px] border border-vf-line bg-vf-surface overflow-hidden grid grid-cols-1 md:grid-cols-2 mb-4"
+            className="relative rounded-[26px] border border-vf-line bg-vf-surface grid grid-cols-1 md:grid-cols-2 mb-4"
             data-testid="card-profile"
           >
-            {/* Photo pane */}
-            <div className="relative min-h-[320px] md:min-h-[440px]">
+            {/* Photo pane — clips its own corners (top on mobile where it
+                stacks above the read pane, left on desktop where it sits
+                beside it) rather than the card clipping both, so the
+                resonance medallion below can sit right on the seam between
+                them without being cut off by either pane's own overflow. */}
+            <div className="relative min-h-[320px] md:min-h-[440px] rounded-t-[26px] md:rounded-t-none md:rounded-l-[26px] overflow-hidden">
               <CardGallery photos={galleryPhotos} initial={currentProfile.displayName?.[0] || "?"} />
 
               <div
@@ -819,20 +823,21 @@ export default function Discover() {
               </div>
             </div>
 
-            {/* Read pane — the twin's read AND their own voice, not one or the other */}
-            <div className="p-6 md:p-8 flex flex-col gap-5 min-w-0">
+            {/* Read pane — the twin's read AND their own voice, not one or
+                the other. Top padding is taller than the sides/bottom: the
+                resonance medallion overlaps down into this pane from the
+                seam (see below), and the extra clearance keeps its ring
+                from colliding with the first line of text. */}
+            <div className="relative px-6 pb-6 pt-14 md:px-8 md:pb-8 md:pt-32 rounded-b-[26px] md:rounded-b-none md:rounded-r-[26px] overflow-hidden flex flex-col gap-5 min-w-0">
               {resonance && (
                 <>
-                  <div className="flex items-center gap-5 flex-wrap">
-                    <ResonanceDial score={resonance.score} />
-                    <div className="min-w-0">
-                      <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted">
-                        resonance read
-                      </div>
-                      {aboutText && (
-                        <p className="text-[15px] leading-relaxed text-vf-text mt-1.5 max-w-[330px]">{aboutText}</p>
-                      )}
+                  <div className="min-w-0">
+                    <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted">
+                      resonance read
                     </div>
+                    {aboutText && (
+                      <p className="text-[15px] leading-relaxed text-vf-text mt-1.5 max-w-[330px]">{aboutText}</p>
+                    )}
                   </div>
                   <ResonanceAxes axes={resonance.axes} />
                 </>
@@ -840,18 +845,18 @@ export default function Discover() {
 
               {answers.length > 0 ? (
                 <div>
-                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted mb-2">
+                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted mb-2.5">
                     in their words
                   </div>
                   <div className="flex flex-col">
                     {answers.map((a, i) => (
                       <div
                         key={i}
-                        className={`py-3 ${i > 0 ? "border-t border-vf-line" : ""}`}
+                        className={`py-3.5 ${i > 0 ? "border-t border-vf-line" : ""}`}
                         data-testid={`profile-answer-${i}`}
                       >
-                        <div className="text-[13.5px] text-vf-faint mb-1">{a.question}</div>
-                        <p className="text-[16px] leading-[1.6] text-vf-text">{a.answer}</p>
+                        <div className="text-[12.5px] font-mono uppercase tracking-[0.08em] text-vf-faint mb-1.5">{a.question}</div>
+                        <p className="font-serif italic text-[21px] leading-[1.4] text-vf-text">"{a.answer}"</p>
                       </div>
                     ))}
                   </div>
@@ -859,11 +864,11 @@ export default function Discover() {
               ) : (
                 !resonance && (
                   <div>
-                    <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted mb-2">
+                    <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted mb-2.5">
                       in their words
                     </div>
                     {aboutText ? (
-                      <p className="text-[15px] leading-relaxed text-vf-text">{aboutText}</p>
+                      <p className="font-serif italic text-[21px] leading-[1.4] text-vf-text">"{aboutText}"</p>
                     ) : (
                       <p className="text-[15px] leading-relaxed text-vf-muted">Nothing shared yet.</p>
                     )}
@@ -926,6 +931,32 @@ export default function Discover() {
                 </button>
               </div>
             </div>
+
+            {/* Resonance medallion — a wax seal pinned to the seam between
+                the two panes, not tucked inside either one. It lives here,
+                a sibling of both panes inside the (non-clipping) card
+                shell, specifically so it can overlap both without being
+                cut off by either pane's own overflow-hidden. The seam
+                itself changes axis with the layout: on mobile the panes
+                stack, so the seam is the horizontal line where the photo
+                ends; at md+ they sit side by side, so the seam becomes the
+                vertical line between them — the medallion's position
+                switches with it via the md: variants below, rather than
+                trying to make one placement work for both. */}
+            {resonance && (
+              <div
+                className="absolute z-30 left-6 top-[270px] md:left-1/2 md:top-5 md:-translate-x-1/2"
+                style={{ filter: "drop-shadow(0 10px 22px rgba(12,9,16,.35))" }}
+                data-testid="resonance-medallion"
+              >
+                <div
+                  className="rounded-full"
+                  style={{ padding: 4, background: "var(--vf-surface)" }}
+                >
+                  <ResonanceDial score={resonance.score} size={92} />
+                </div>
+              </div>
+            )}
           </motion.div>
         </AnimatePresence>
 
@@ -953,46 +984,68 @@ export default function Discover() {
 
         {upcoming.length > 0 && (
           <div>
-            <div className="flex items-baseline justify-between gap-4 mb-3">
+            <div className="flex items-baseline justify-between gap-4 mb-4">
               <h2 className="font-serif font-normal text-[22px] text-vf-text">Next up</h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
-              {upcoming.map((p) => {
-                const r = getResonance(p.personalityProfile);
-                const idx = profiles.findIndex((x) => x.userId === p.userId);
-                return (
-                  <button
-                    key={p.userId}
-                    onClick={() => setCurrentIdx(idx)}
-                    className="text-left rounded-[20px] border border-vf-line bg-vf-surface2 p-4 flex gap-3.5 items-center hover:border-vf-text/20 transition-colors"
-                    data-testid={`card-upcoming-${p.userId}`}
-                  >
-                    <div className="w-[58px] h-[72px] rounded-[14px] shrink-0 overflow-hidden bg-vf-surface2 flex items-center justify-center">
+            <div className="flex flex-wrap items-start gap-5 mb-10">
+              {/* A loosely fanned hand of cards, not a grid — this is a
+                  queue you're being teased with one glimpse at a time, so it
+                  should look like a stack you could riffle through, not a
+                  list you scan. The first (next) card sits upright and on
+                  top; each one behind it tilts a little further and steps
+                  right, the way a hand of cards actually overlaps. */}
+              <div
+                className="relative shrink-0"
+                style={{ width: 132 + (upcoming.length - 1) * 34, height: 196 }}
+                data-testid="fan-upcoming"
+              >
+                {upcoming.map((p, i) => {
+                  const r = getResonance(p.personalityProfile);
+                  const idx = profiles.findIndex((x) => x.userId === p.userId);
+                  const rotateDeg = [0, -6, 5][i % 3];
+                  const topOffset = [0, 12, 4][i % 3];
+                  return (
+                    <button
+                      key={p.userId}
+                      onClick={() => setCurrentIdx(idx)}
+                      className="absolute rounded-[18px] border border-vf-line bg-vf-surface2 overflow-hidden text-left transition-transform duration-200 hover:-translate-y-1"
+                      style={{
+                        left: i * 34,
+                        top: topOffset,
+                        width: 132,
+                        height: 168,
+                        transform: `rotate(${rotateDeg}deg)`,
+                        zIndex: upcoming.length - i,
+                        boxShadow: "0 10px 24px rgba(12,9,16,.22), 0 0 0 3px var(--vf-surface)",
+                      }}
+                      data-testid={`card-upcoming-${p.userId}`}
+                    >
                       {p.coverPhotoUrl ? (
-                        <img src={p.coverPhotoUrl} alt={p.displayName} className="w-full h-full object-cover" />
+                        <img src={p.coverPhotoUrl} alt={p.displayName} className="absolute inset-0 w-full h-full object-cover" />
                       ) : (
-                        <span className="font-serif text-white/40 text-2xl">{p.displayName?.[0] || "?"}</span>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="font-serif text-vf-text/20 text-5xl">{p.displayName?.[0] || "?"}</span>
+                        </div>
                       )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[15px] text-vf-text truncate">
-                        {p.displayName}{p.age ? `, ${p.age}` : ""}
+                      <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-vf-scrim to-transparent pointer-events-none" />
+                      <div className="absolute left-3 right-3 bottom-2.5">
+                        <div className="font-serif text-[17px] leading-none" style={{ color: "#F5F0EA" }}>
+                          {p.displayName}{p.age ? `, ${p.age}` : ""}
+                        </div>
+                        {r && (
+                          <div className="font-mono text-[10.5px] mt-1.5" style={{ color: "#8FE3C7" }}>resonance {r.score}</div>
+                        )}
                       </div>
-                      <div className="text-[12px] text-vf-muted truncate mt-0.5">
-                        {p.locationName || p.location || " "}
-                      </div>
-                      {r && (
-                        <div className="font-mono text-[11.5px] text-vf-mint mt-1.5">resonance {r.score}</div>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })}
+              </div>
 
               <button
                 onClick={() => setLocation("/plans")}
-                className="text-left rounded-[20px] border border-dashed border-vf-gold/35 bg-vf-gold/5 p-4 flex flex-col justify-center gap-2 hover:bg-vf-gold/[0.08] transition-colors"
+                className="text-left rounded-[20px] border border-dashed border-vf-gold/35 bg-vf-gold/5 p-4 flex flex-col justify-center gap-2 hover:bg-vf-gold/[0.08] transition-colors flex-1 min-w-[220px]"
                 data-testid="card-upgrade-teaser"
+                style={{ height: 196 }}
               >
                 <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">plans</div>
                 <div className="text-[14px] leading-relaxed text-vf-text">

@@ -23,6 +23,7 @@ export interface OnboardingQuestion {
   answerText: string | null;
   selectedOptions: string[] | null;
   answered: boolean;
+  orderIndex: number;
 }
 
 export async function getOnboardingQuestions(userId: string): Promise<OnboardingQuestion[]> {
@@ -50,6 +51,7 @@ export async function getOnboardingQuestions(userId: string): Promise<Onboarding
       answerText: a?.answerText ?? null,
       selectedOptions: (a?.selectedOptions as string[] | null) ?? null,
       answered,
+      orderIndex: q.orderIndex ?? 0,
     };
   });
 }

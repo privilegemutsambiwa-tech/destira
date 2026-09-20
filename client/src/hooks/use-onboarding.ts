@@ -9,6 +9,7 @@ export interface OnboardingQuestion {
   answerText: string | null;
   selectedOptions: string[] | null;
   answered: boolean;
+  orderIndex: number;
 }
 
 export interface TwinReadiness {

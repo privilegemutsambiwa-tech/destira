@@ -2,9 +2,21 @@ import { db } from "./db";
 import { questions } from "@shared/schema";
 import { sql } from "drizzle-orm";
 
+// The ten onboarding questions (isOnboardingQuestion: true) are tap-select
+// (multiple_choice), not free-text — a blank textarea in a ten-question
+// gate was the single biggest source of onboarding drop-off. Their options
+// are curated to still give the twin real signal, and three of them
+// (orderIndex 17, 53, 81) are meant to be answered as a multi-select in the
+// client — see MULTI_SELECT_ORDER_INDEXES in client/src/pages/Onboarding.tsx.
+// A live database already seeded before this change needs
+// scripts/migrate-onboarding-tap-select.ts run once to pick this up; this
+// array only affects a fresh, empty database.
 const seedQuestionsData = [
   // ===== VALUES (15) =====
-  { text: "What's the one value you'd never compromise on, even if it cost you a relationship?", category: "values", answerType: "text", weight: 3, orderIndex: 1, isOnboardingQuestion: true },
+  // orderIndex 1 is tap-select, not free-text — see the note above
+  // seedQuestionsData about why the ten onboarding questions favor options
+  // over an empty textarea.
+  { text: "What's the one value you'd never compromise on, even if it cost you a relationship?", category: "values", answerType: "multiple_choice", options: ["Honesty, even when it costs me", "Loyalty — showing up, no matter what", "Respect, in both directions", "My independence", "Ambition and growth", "Where I come from — family, faith, roots"], weight: 3, orderIndex: 1, isOnboardingQuestion: true },
   { text: "How do you define integrity in your daily life?", category: "values", answerType: "text", weight: 2, orderIndex: 2 },
   { text: "What does loyalty look like to you in a romantic relationship?", category: "values", answerType: "text", weight: 3, orderIndex: 3 },
   { text: "If you had to choose between financial security and doing work you love, which would you pick and why?", category: "values", answerType: "text", weight: 2, orderIndex: 4 },
@@ -21,8 +33,9 @@ const seedQuestionsData = [
   { text: "If your partner had a very different political worldview, would that be a deal-breaker?", category: "values", answerType: "multiple_choice", options: ["Absolute deal-breaker", "Depends on the specific issues", "I'd be open to it", "I actually prefer different perspectives"], weight: 2, orderIndex: 15 },
 
   // ===== RELATIONSHIPS (15) =====
-  { text: "What's the most important lesson a past relationship taught you?", category: "relationships", answerType: "text", weight: 3, orderIndex: 16, isOnboardingQuestion: true },
-  { text: "What does your ideal relationship look like on a random Tuesday evening?", category: "relationships", answerType: "text", weight: 2, orderIndex: 17, isOnboardingQuestion: true },
+  { text: "What's the most important lesson a past relationship taught you?", category: "relationships", answerType: "multiple_choice", options: ["Say the hard thing before it festers", "Don't disappear into someone else", "Trust is earned in actions, not promises", "I deserve to be chosen, not just liked", "Red flags don't fix themselves", "Compromise isn't the same as losing myself"], weight: 3, orderIndex: 16, isOnboardingQuestion: true },
+  // Multi-select in the client, up to 3.
+  { text: "What does your ideal relationship look like on a random Tuesday evening?", category: "relationships", answerType: "multiple_choice", options: ["Cooking together, no occasion needed", "Comfortable silence in the same room", "Catching up on each other's day", "A show we're both actually into", "A walk or workout, side by side", "Deep talk, phones down", "Doing our own thing, just near each other"], weight: 2, orderIndex: 17, isOnboardingQuestion: true },
   { text: "How much personal space do you need in a relationship?", category: "relationships", answerType: "multiple_choice", options: ["A lot - I need plenty of alone time", "A healthy amount - some nights apart are good", "Not much - I love being around my partner", "It depends on the phase of the relationship"], weight: 2, orderIndex: 18 },
   { text: "What's an absolute deal-breaker for you in a partner?", category: "relationships", answerType: "text", weight: 3, orderIndex: 19 },
   { text: "How do you show someone you love them on a day-to-day basis?", category: "relationships", answerType: "text", weight: 2, orderIndex: 20 },
@@ -38,7 +51,7 @@ const seedQuestionsData = [
   { text: "What does trust look like once it's been broken - can it be rebuilt?", category: "relationships", answerType: "text", weight: 3, orderIndex: 30 },
 
   // ===== LIFESTYLE (12) =====
-  { text: "Describe your ideal weekend - are you out adventuring or recharging at home?", category: "lifestyle", answerType: "text", weight: 2, orderIndex: 31, isOnboardingQuestion: true },
+  { text: "Describe your ideal weekend - are you out adventuring or recharging at home?", category: "lifestyle", answerType: "multiple_choice", options: ["Outdoors and moving — hikes, sport, sun", "Home, slow, and unbothered", "Out with people I love", "Exploring something new in the city", "Active mornings, quiet nights"], weight: 2, orderIndex: 31, isOnboardingQuestion: true },
   { text: "How important is physical fitness and health in your daily routine?", category: "lifestyle", answerType: "rating", weight: 1, orderIndex: 32 },
   { text: "Are you a morning person or a night owl?", category: "lifestyle", answerType: "multiple_choice", options: ["Early bird - I love mornings", "Night owl - I come alive after dark", "Somewhere in between", "It changes depending on the season"], weight: 1, orderIndex: 33 },
   { text: "How do you feel about pets? Do you have any?", category: "lifestyle", answerType: "text", weight: 1, orderIndex: 34 },
@@ -52,7 +65,7 @@ const seedQuestionsData = [
   { text: "What does a typical weeknight look like for you after work?", category: "lifestyle", answerType: "text", weight: 1, orderIndex: 42 },
 
   // ===== COMMUNICATION (10) =====
-  { text: "When something bothers you in a relationship, do you bring it up right away or sit with it first?", category: "communication", answerType: "text", weight: 3, orderIndex: 43, isOnboardingQuestion: true },
+  { text: "When something bothers you in a relationship, do you bring it up right away or sit with it first?", category: "communication", answerType: "multiple_choice", options: ["Right away — I need the air clear", "I sit with it, then raise it calmly", "I process alone first — I don't always raise it", "Depends entirely on what it is"], weight: 3, orderIndex: 43, isOnboardingQuestion: true },
   { text: "How do you prefer to communicate - texting, calls, or face-to-face?", category: "communication", answerType: "multiple_choice", options: ["Texting - I like to think before responding", "Phone calls - I love hearing someone's voice", "Face-to-face - nothing beats in-person", "A mix of everything depending on the situation"], weight: 1, orderIndex: 44 },
   { text: "What does healthy conflict look like to you?", category: "communication", answerType: "text", weight: 3, orderIndex: 45 },
   { text: "How do you react when someone gives you constructive criticism?", category: "communication", answerType: "text", weight: 2, orderIndex: 46 },
@@ -64,7 +77,8 @@ const seedQuestionsData = [
   { text: "How do you feel about having difficult conversations over text versus in person?", category: "communication", answerType: "text", weight: 1, orderIndex: 52 },
 
   // ===== PERSONALITY (10) =====
-  { text: "How would your closest friend describe you in three words?", category: "personality", answerType: "text", weight: 2, orderIndex: 53, isOnboardingQuestion: true },
+  // Multi-select in the client, exactly 3.
+  { text: "How would your closest friend describe you in three words?", category: "personality", answerType: "multiple_choice", options: ["Loyal", "Funny", "Ambitious", "Calm", "Adventurous", "Thoughtful", "Stubborn", "Warm", "Independent", "Curious", "Reliable", "Bold", "Guarded", "Generous", "Intense", "Easygoing"], weight: 2, orderIndex: 53, isOnboardingQuestion: true },
   { text: "What's a personality trait you're actively working on improving?", category: "personality", answerType: "text", weight: 2, orderIndex: 54 },
   { text: "Are you more introverted or extroverted, and how does that show up in your relationships?", category: "personality", answerType: "text", weight: 2, orderIndex: 55 },
   { text: "What's your biggest strength that you bring to a relationship?", category: "personality", answerType: "text", weight: 2, orderIndex: 56 },
@@ -76,7 +90,7 @@ const seedQuestionsData = [
   { text: "What's the bravest thing you've ever done?", category: "personality", answerType: "text", weight: 1, orderIndex: 62 },
 
   // ===== EMOTIONS (10) =====
-  { text: "What makes you feel most loved and appreciated?", category: "emotions", answerType: "text", weight: 3, orderIndex: 63, isOnboardingQuestion: true },
+  { text: "What makes you feel most loved and appreciated?", category: "emotions", answerType: "multiple_choice", options: ["When they remember the small details", "When they show up without being asked", "When they give me room to breathe", "When they take my side, publicly", "When they just say it, out loud"], weight: 3, orderIndex: 63, isOnboardingQuestion: true },
   { text: "How comfortable are you with being vulnerable around a partner?", category: "emotions", answerType: "rating", weight: 3, orderIndex: 64 },
   { text: "What emotion do you find hardest to express?", category: "emotions", answerType: "text", weight: 2, orderIndex: 65 },
   { text: "When was the last time you cried, and what triggered it?", category: "emotions", answerType: "text", weight: 1, orderIndex: 66 },
@@ -88,7 +102,7 @@ const seedQuestionsData = [
   { text: "How do you recharge emotionally after a draining week?", category: "emotions", answerType: "text", weight: 1, orderIndex: 72 },
 
   // ===== GOALS (8) =====
-  { text: "Where do you see yourself in five years, and does that picture include a partner?", category: "goals", answerType: "text", weight: 3, orderIndex: 73, isOnboardingQuestion: true },
+  { text: "Where do you see yourself in five years, and does that picture include a partner?", category: "goals", answerType: "multiple_choice", options: ["Yes — building a life with someone", "Hopefully, but I'm not chasing it", "Focused on myself and my career first", "Honestly unsure, and staying open to it"], weight: 3, orderIndex: 73, isOnboardingQuestion: true },
   { text: "Do you want kids someday, and if so, what kind of parent do you want to be?", category: "goals", answerType: "text", weight: 3, orderIndex: 74 },
   { text: "What's a personal goal you're currently chasing?", category: "goals", answerType: "text", weight: 1, orderIndex: 75 },
   { text: "How ambitious are you when it comes to your career?", category: "goals", answerType: "rating", weight: 2, orderIndex: 76 },
@@ -98,7 +112,8 @@ const seedQuestionsData = [
   { text: "If money weren't a factor, what would you spend your life doing?", category: "goals", answerType: "text", weight: 1, orderIndex: 80 },
 
   // ===== COMPATIBILITY (10) =====
-  { text: "What three qualities are non-negotiable in a partner for you?", category: "compatibility", answerType: "text", weight: 3, orderIndex: 81, isOnboardingQuestion: true },
+  // Multi-select in the client, exactly 3.
+  { text: "What three qualities are non-negotiable in a partner for you?", category: "compatibility", answerType: "multiple_choice", options: ["Kindness", "Honesty", "Ambition", "Sense of humor", "Emotional intelligence", "Independence", "Loyalty", "Confidence", "Curiosity", "Stability", "Adventurousness", "Family-oriented"], weight: 3, orderIndex: 81, isOnboardingQuestion: true },
   { text: "How important is intellectual compatibility to you?", category: "compatibility", answerType: "rating", weight: 2, orderIndex: 82 },
   { text: "Do you prefer someone with similar interests or someone who introduces you to new things?", category: "compatibility", answerType: "multiple_choice", options: ["Similar interests - shared hobbies bring us closer", "Different interests - I love learning new things", "A healthy mix of both", "It doesn't really matter to me"], weight: 1, orderIndex: 83 },
   { text: "How important is physical attraction versus emotional connection for you?", category: "compatibility", answerType: "text", weight: 2, orderIndex: 84 },

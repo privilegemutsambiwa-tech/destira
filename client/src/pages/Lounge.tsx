@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { LayoutShell } from "@/components/layout-shell";
 import {
@@ -8,20 +8,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Users, Coffee, Mountain, BookOpen, UtensilsCrossed, Sparkles,
   Loader2, Plus, Search, Lock, Globe, UserPlus, Crown, Shield, BellOff
 } from "lucide-react";
-import { useGroups, useCreateGroup } from "@/hooks/use-interactions";
+import { useGroups, useGroup, useCreateGroup } from "@/hooks/use-interactions";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
-
-const GROUP_ICONS: Record<string, any> = {
-  "Morning Coffee": Coffee,
-  "Adventure Seekers": Mountain,
-  "Book Club": BookOpen,
-  "Foodies Unite": UtensilsCrossed,
-  "Mindfulness & Growth": Sparkles,
-};
+import { AvatarStack } from "@/components/avatar-stack";
 
 const PRIVACY_LABELS: Record<string, { icon: any; label: string }> = {
   "open": { icon: Globe, label: "Open" },
@@ -110,9 +102,24 @@ export default function Lounge() {
   );
 }
 
+// Picks the single most-worth-featuring group out of a section for the
+// bento hero slot: unread activity first (that's the group actually asking
+// for your attention right now), member count as the tiebreak/fallback for
+// sections with no unread state (e.g. Discover, where you have none).
+function pickFeatured(list: any[]): { featured: any | null; rest: any[] } {
+  if (list.length === 0) return { featured: null, rest: [] };
+  const sorted = [...list].sort((a, b) => {
+    const unreadDiff = (b.unreadCount || 0) - (a.unreadCount || 0);
+    if (unreadDiff !== 0) return unreadDiff;
+    return (b.memberCount || 0) - (a.memberCount || 0);
+  });
+  const [featured, ...rest] = sorted;
+  return { featured, rest };
+}
+
 function GroupList({ groups, onNavigate }: { groups: any[]; onNavigate: (id: string) => void }) {
-  const joinedGroups = groups.filter((g) => g.isMember);
-  const discoverGroups = groups.filter((g) => !g.isMember);
+  const joined = useMemo(() => pickFeatured(groups.filter((g) => g.isMember)), [groups]);
+  const discover = useMemo(() => pickFeatured(groups.filter((g) => !g.isMember)), [groups]);
 
   if (groups.length === 0) {
     return (
@@ -123,8 +130,8 @@ function GroupList({ groups, onNavigate }: { groups: any[]; onNavigate: (id: str
   }
 
   return (
-    <div className="space-y-8">
-      {joinedGroups.length > 0 && (
+    <div className="space-y-10">
+      {joined.featured && (
         <div>
           <h2
             className="mb-3 font-mono uppercase tracking-[0.14em] text-[10.5px] text-vf-faint"
@@ -132,14 +139,19 @@ function GroupList({ groups, onNavigate }: { groups: any[]; onNavigate: (id: str
           >
             Your Groups
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {joinedGroups.map((group, idx) => (
-              <GroupCard key={group.id} group={group} idx={idx} onNavigate={onNavigate} />
-            ))}
+          <div className="flex flex-col gap-4">
+            <FeaturedGroupCard group={joined.featured} onNavigate={onNavigate} />
+            {joined.rest.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {joined.rest.map((group, idx) => (
+                  <GroupCard key={group.id} group={group} idx={idx} onNavigate={onNavigate} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
-      {discoverGroups.length > 0 && (
+      {discover.featured && (
         <div>
           <h2
             className="mb-3 font-mono uppercase tracking-[0.14em] text-[10.5px] text-vf-faint"
@@ -147,10 +159,26 @@ function GroupList({ groups, onNavigate }: { groups: any[]; onNavigate: (id: str
           >
             Discover Groups
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {discoverGroups.map((group, idx) => (
-              <GroupCard key={group.id} group={group} idx={idx} onNavigate={onNavigate} isJoinCard />
-            ))}
+          <div className="flex flex-col gap-4">
+            <FeaturedGroupCard group={discover.featured} onNavigate={onNavigate} isJoinCard />
+            {discover.rest.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {discover.rest.map((group, idx) => (
+                  <GroupCard
+                    key={group.id}
+                    group={group}
+                    idx={idx}
+                    onNavigate={onNavigate}
+                    isJoinCard
+                    // Bento rhythm: every third discover card breaks the grid
+                    // and runs wide, so the section doesn't read as a flat,
+                    // uniform stack — harmless on a single mobile column,
+                    // it only asserts itself once there's a row to break.
+                    wide={idx % 3 === 2}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -158,57 +186,170 @@ function GroupList({ groups, onNavigate }: { groups: any[]; onNavigate: (id: str
   );
 }
 
-function GroupCard({ group, idx, onNavigate, isJoinCard = false }: {
+// Shared "no photo" treatment — the same serif-initial-on-surface2 language
+// Discover's card gallery and Profile's avatar fallback already use, so a
+// group without a banner reads as "on brand", not "broken image".
+function CoverFallback({ name, size = "text-5xl" }: { name: string; size?: string }) {
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-vf-surface2">
+      <span className={`font-serif text-vf-text/20 ${size}`}>{(name || "?")[0]?.toUpperCase()}</span>
+    </div>
+  );
+}
+
+function RoleBadge({ role }: { role?: string }) {
+  if (role !== "owner" && role !== "admin") return null;
+  return (
+    <span className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      {role === "owner" ? (
+        <Crown className="w-3.5 h-3.5 text-vf-gold" />
+      ) : (
+        <Shield className="w-3.5 h-3.5 text-vf-soft" />
+      )}
+    </span>
+  );
+}
+
+function JoinCta({ group }: { group: any }) {
+  return (
+    <button className="vf-btn-primary text-[12.5px] font-semibold px-3.5 py-1.5 rounded-full btn-press bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors shrink-0">
+      {group.privacyMode === "request-to-join" ? "Request" : "Join"}
+    </button>
+  );
+}
+
+// The bento hero: a wide, cover-led card with the room name overlapping the
+// photo's bottom edge — the same overlap language Profile uses for its own
+// portrait-over-cover header, so the "most active room" reads as a real
+// place, not another list row. Only fetches member avatars for this one
+// card (not the whole list) — a real photo, when there is one, always gets
+// the fixed-dark legibility scrim regardless of theme (matches Discover /
+// Profile); the no-photo fallback stays fully theme-aware since there's no
+// photo for a dark scrim to sit on top of.
+function FeaturedGroupCard({ group, onNavigate, isJoinCard = false }: {
+  group: any;
+  onNavigate: (id: string) => void;
+  isJoinCard?: boolean;
+}) {
+  const { data: full } = useGroup(group.id);
+  const members = Array.isArray(full?.members) ? full.members : [];
+  const cover = group.bannerUrl || group.groupPhotoUrl;
+  const privacy = PRIVACY_LABELS[group.privacyMode] || PRIVACY_LABELS.open;
+  const PrivacyIcon = privacy.icon;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <div
+        className="vf-card vf-row rounded-[24px] border border-vf-line bg-vf-surface overflow-hidden cursor-pointer transition-colors duration-150 hover:border-vf-text/20"
+        onClick={() => onNavigate(group.id)}
+        data-testid={`card-group-featured-${group.id}`}
+      >
+        <div className="relative h-[190px]">
+          {cover ? (
+            <>
+              <img src={cover} alt={group.name} className="absolute inset-0 w-full h-full object-cover" />
+              <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-vf-scrim to-transparent pointer-events-none" />
+            </>
+          ) : (
+            <CoverFallback name={group.name} size="text-7xl" />
+          )}
+
+          <RoleBadge role={group.myRole} />
+
+          <div className="absolute left-5 right-5 bottom-4 flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <div
+                className="font-serif font-normal text-[26px] leading-none truncate"
+                style={cover ? { color: "#F5F0EA" } : { color: "hsl(var(--vf-text))" }}
+                data-testid={`text-group-name-${group.id}`}
+              >
+                {group.name}
+              </div>
+              <div className="mt-2.5 flex items-center gap-2.5">
+                {members.length > 0 && <AvatarStack members={members} max={4} size="w-6 h-6" />}
+                <span
+                  className="text-[12px]"
+                  style={cover ? { color: "rgba(245,240,234,.75)" } : { color: "var(--vf-muted)" }}
+                >
+                  {group.memberCount} members
+                </span>
+              </div>
+            </div>
+            {group.unreadCount > 0 && !group.isMuted && (
+              <span
+                className="shrink-0 font-mono text-[11px] rounded-full px-2 py-0.5 min-w-[20px] text-center bg-vf-ember text-vf-ink"
+                data-testid={`badge-unread-${group.id}`}
+              >
+                {group.unreadCount}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="px-5 py-4 flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] text-vf-muted line-clamp-1" data-testid={`text-group-preview-${group.id}`}>
+              {group.lastMessage ? `${group.lastMessageNickname || "Someone"}: ${group.lastMessage}` : (group.description || "No description yet")}
+            </p>
+            <span className="mt-1.5 flex items-center gap-1 font-mono text-[10.5px] text-vf-faint">
+              <PrivacyIcon className="w-3 h-3" />
+              {privacy.label}
+            </span>
+          </div>
+          {isJoinCard ? <JoinCta group={group} /> : (
+            <span className="shrink-0 text-[12.5px] font-medium px-3.5 py-1.5 rounded-full border border-vf-line text-vf-soft">
+              Joined
+            </span>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function GroupCard({ group, idx, onNavigate, isJoinCard = false, wide = false }: {
   group: any;
   idx: number;
   onNavigate: (id: string) => void;
   isJoinCard?: boolean;
+  wide?: boolean;
 }) {
-  const Icon = GROUP_ICONS[group.name] || Users;
   const privacy = PRIVACY_LABELS[group.privacyMode] || PRIVACY_LABELS.open;
   const PrivacyIcon = privacy.icon;
-  const preview = group.lastMessageContent
-    ? `${group.lastMessageNickname || ""}: ${group.lastMessageContent}`
+  const preview = group.lastMessage
+    ? `${group.lastMessageNickname || "Someone"}: ${group.lastMessage}`
     : group.description || "No description yet";
+  const cover = group.iconUrl || group.bannerUrl || group.groupPhotoUrl;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: idx * 0.04 }}
+      className={wide ? "sm:col-span-2" : undefined}
     >
       <div
-        className="vf-card vf-row rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden cursor-pointer transition-colors duration-150 hover:border-vf-text/20"
+        className={`vf-card vf-row rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden cursor-pointer transition-colors duration-150 hover:border-vf-text/20 ${wide ? "sm:flex sm:items-stretch" : ""}`}
         onClick={() => onNavigate(group.id)}
         data-testid={`card-group-${group.id}`}
       >
         {/* Cover */}
-        <div className="h-[140px] relative bg-vf-surface2">
-          {group.iconUrl ? (
+        <div className={`relative bg-vf-surface2 ${wide ? "h-[140px] sm:h-auto sm:w-[180px] shrink-0" : "h-[140px]"}`}>
+          {cover ? (
             <img
-              src={group.iconUrl}
+              src={cover}
               alt={group.name}
               className="w-full h-full object-cover"
               data-testid={`img-group-icon-${group.id}`}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Icon className="w-9 h-9 text-vf-faint" />
-            </div>
+            <CoverFallback name={group.name} />
           )}
-          {(group.myRole === "owner" || group.myRole === "admin") && (
-            <span className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full flex items-center justify-center bg-black/50 backdrop-blur-sm">
-              {group.myRole === "owner" ? (
-                <Crown className="w-3.5 h-3.5 text-vf-gold" />
-              ) : (
-                <Shield className="w-3.5 h-3.5 text-vf-soft" />
-              )}
-            </span>
-          )}
+          <RoleBadge role={group.myRole} />
         </div>
 
         {/* Body */}
-        <div className="p-4">
+        <div className="p-4 min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1.5">
             <span className="text-[16px] text-vf-text truncate flex-1" data-testid={`text-group-name-${group.id}`}>
               {group.name}
@@ -235,11 +376,7 @@ function GroupCard({ group, idx, onNavigate, isJoinCard = false }: {
               <PrivacyIcon className="w-3 h-3" />
               {privacy.label}
             </span>
-            {isJoinCard ? (
-              <button className="vf-btn-primary text-[12.5px] font-semibold px-3.5 py-1.5 rounded-full btn-press bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors">
-                {group.privacyMode === "request-to-join" ? "Request" : "Join"}
-              </button>
-            ) : (
+            {isJoinCard ? <JoinCta group={group} /> : (
               <span className="text-[12.5px] font-medium px-3.5 py-1.5 rounded-full border border-vf-line text-vf-soft">
                 Joined
               </span>

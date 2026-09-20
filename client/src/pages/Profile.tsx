@@ -338,100 +338,148 @@ export default function Profile() {
 
         {/* ── HEADER ────────────────────────────────────────────────── */}
         <header className="relative">
-          <div className="relative overflow-hidden rounded-[24px] aspect-[16/9] sm:aspect-[21/9] bg-vf-surface2">
-            {cover?.photoUrl ? (
-              <img
-                src={cover.photoUrl}
-                alt=""
-                className="w-full h-full object-cover"
-                style={{ objectPosition: focalPos(cover.coverFocalX, cover.coverFocalY) }}
-              />
-            ) : profile.coverPhotoUrl ? (
-              <img src={profile.coverPhotoUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              // Real no-cover state: a flat warm surface (no mint — mint is the
-              // twin layer only, never decoration), with a mono label instead of
-              // the scrim-over-nothing "grey wash" this used to render as.
-              <div
-                className="w-full h-full flex items-end justify-start p-4"
-                style={{ background: "linear-gradient(160deg, rgba(255,107,74,.10), var(--vf-surface2) 65%)" }}
-              >
-                <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-                  No cover photo — this is what strangers see first
-                </span>
-              </div>
-            )}
-            {hasCover && (
-              <div
-                className="absolute inset-x-0 bottom-0 pointer-events-none"
-                style={{ height: "55%", background: "linear-gradient(to top, rgba(12,9,16,.9), transparent)" }}
-              />
-            )}
-            {/* On the cover photo, fixed dark chip + fixed light text
-                regardless of theme, same as the scrim above it; off the
-                photo, themed like the rest of the (now non-scrimmed) card. */}
-            <div
-              className={
-                hasCover
-                  ? "absolute top-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em] backdrop-blur px-2.5 py-1 rounded-full border"
-                  : "absolute top-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em] backdrop-blur px-2.5 py-1 rounded-full border border-vf-line text-vf-muted bg-vf-surface/70"
-              }
-              style={
-                hasCover
-                  ? { color: "rgba(245,240,234,0.9)", background: "rgba(12,9,16,0.45)", borderColor: "rgba(255,255,255,.12)" }
-                  : undefined
-              }
-              data-testid="chip-profile-completeness"
-            >
-              Profile completeness {completionScore}%
-            </div>
-          </div>
-
-          {/* portrait + name, overlapping the cover's bottom edge */}
-          <div
-            className="flex flex-col items-center text-center -mt-7 sm:flex-row sm:items-end sm:text-left sm:-mt-8 sm:pl-9 sm:gap-5"
-            style={!hasCover ? { marginTop: 0 } : undefined}
-          >
-            <div
-              className="relative overflow-hidden rounded-[20px] bg-vf-surface2 shrink-0"
-              style={{ width: "clamp(120px,14vw,168px)", aspectRatio: "4 / 5", border: "4px solid #0C0910" }}
-              data-testid="portrait-photo"
-            >
-              {portrait?.photoUrl ? (
+          {/* Cover wrapper — its own positioning context for the portrait,
+              separate from the cover box itself (which needs overflow-hidden
+              to clip the photo). That separation is what lets the portrait
+              overlap the cover dramatically without either clipping the
+              portrait or, worse, coupling the *name's* position to the
+              portrait's height (see the note below — that coupling was a
+              real bug, not a hypothetical one). */}
+          <div className="relative">
+            <div className="relative overflow-hidden rounded-[24px] aspect-[16/9] sm:aspect-[21/9] bg-vf-surface2">
+              {cover?.photoUrl ? (
                 <img
-                  src={portrait.photoUrl}
-                  alt={profile.displayName || "Portrait"}
+                  src={cover.photoUrl}
+                  alt=""
                   className="w-full h-full object-cover"
-                  style={{ objectPosition: focalPos(portrait.portraitFocalX, portrait.portraitFocalY) }}
+                  style={{ objectPosition: focalPos(cover.coverFocalX, cover.coverFocalY) }}
                 />
+              ) : profile.coverPhotoUrl ? (
+                <img src={profile.coverPhotoUrl} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center" style={{ background: "var(--vf-ember)" }}>
-                  <span
-                    className="font-serif text-4xl leading-none text-vf-ink"
-                    style={{ transform: "translateY(-0.06em)" }}
-                  >
-                    {(profile.displayName || user?.firstName || "?")[0]?.toUpperCase()}
+                // Real no-cover state: a flat warm surface (no mint — mint is the
+                // twin layer only, never decoration), with a mono label instead of
+                // the scrim-over-nothing "grey wash" this used to render as.
+                <div
+                  className="w-full h-full flex items-end justify-start p-4"
+                  style={{ background: "linear-gradient(160deg, rgba(255,107,74,.10), var(--vf-surface2) 65%)" }}
+                >
+                  <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
+                    No cover photo — this is what strangers see first
                   </span>
                 </div>
               )}
-              {hasStories && (
-                <button
-                  onClick={() => setShowOwnStoryViewer(true)}
-                  className="absolute inset-0 ring-2 ring-inset ring-vf-ember/80 rounded-[16px]"
-                  data-testid="button-view-own-story"
-                  aria-label="View your story"
+              {hasCover && (
+                <div
+                  className="absolute inset-x-0 bottom-0 pointer-events-none"
+                  style={{ height: "55%", background: "linear-gradient(to top, rgba(12,9,16,.9), transparent)" }}
                 />
               )}
+              {/* On the cover photo, fixed dark chip + fixed light text
+                  regardless of theme, same as the scrim above it; off the
+                  photo, themed like the rest of the (now non-scrimmed) card. */}
+              <div
+                className={
+                  hasCover
+                    ? "absolute top-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em] backdrop-blur px-2.5 py-1 rounded-full border"
+                    : "absolute top-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em] backdrop-blur px-2.5 py-1 rounded-full border border-vf-line text-vf-muted bg-vf-surface/70"
+                }
+                style={
+                  hasCover
+                    ? { color: "rgba(245,240,234,0.9)", background: "rgba(12,9,16,0.45)", borderColor: "rgba(255,255,255,.12)" }
+                    : undefined
+                }
+                data-testid="chip-profile-completeness"
+              >
+                Profile completeness {completionScore}%
+              </div>
             </div>
 
-            {/* Overlaps the cover's bottom edge (see comment above) — fixed
-                light text regardless of theme, matching the fixed-dark scrim
-                it sits on, not the theme-aware vf-text/vf-muted. */}
-            <div className="mt-3 sm:mt-0 sm:pb-2 min-w-0">
-              <h1 className="font-serif font-normal leading-[1.02] tracking-[-0.02em] text-[clamp(32px,4.2vw,48px)]" style={{ color: "#F5F0EA" }} data-testid="text-display-name">
+            {/* Portrait — absolutely positioned against the cover wrapper
+                above, not a flex sibling of the name block. It used to be:
+                both sat in one flex row, bottom-aligned, so the name's
+                position was "portrait's bottom minus the name block's own
+                height" — which put the name back on top of the cover photo
+                at ~640–900px viewports, exactly the range this pane defaults
+                to, once the portrait got big enough to overlap that much.
+                Positioning it independently of the name removes that
+                coupling: the two no longer fight over the same alignment. */}
+            <div
+              className={`absolute rounded-[22px] left-1/2 -translate-x-1/2 sm:left-9 sm:translate-x-0 w-[clamp(148px,18vw,208px)] ${
+                hasCover ? "top-[calc(100%-56px)] sm:top-[calc(100%-80px)]" : "top-[calc(100%+16px)]"
+              }`}
+              data-testid="portrait-wrap"
+            >
+              <div
+                className="relative overflow-hidden rounded-[22px] bg-vf-surface2"
+                style={{ aspectRatio: "4 / 5", border: "5px solid var(--vf-ink)", boxShadow: "0 14px 30px rgba(12,9,16,.28)" }}
+                data-testid="portrait-photo"
+              >
+                {portrait?.photoUrl ? (
+                  <img
+                    src={portrait.photoUrl}
+                    alt={profile.displayName || "Portrait"}
+                    className="w-full h-full object-cover"
+                    style={{ objectPosition: focalPos(portrait.portraitFocalX, portrait.portraitFocalY) }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center" style={{ background: "var(--vf-ember)" }}>
+                    <span
+                      className="font-serif text-4xl leading-none text-vf-ink"
+                      style={{ transform: "translateY(-0.06em)" }}
+                    >
+                      {(profile.displayName || user?.firstName || "?")[0]?.toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                {hasStories && (
+                  <button
+                    onClick={() => setShowOwnStoryViewer(true)}
+                    className="absolute inset-0 ring-2 ring-inset ring-vf-ember/80 rounded-[18px]"
+                    data-testid="button-view-own-story"
+                    aria-label="View your story"
+                  />
+                )}
+              </div>
+
+              {/* Twin badge, pinned to the portrait's corner — sits outside
+                  the portrait's own overflow-hidden box (this wrapper is the
+                  one with the clip; the badge is a sibling of it, not a
+                  child), so it isn't cut off by the portrait's rounded
+                  corner. Mint because this is the one thing on the page
+                  that's actually about the twin, not decoration. */}
+              <div
+                className="absolute -top-2.5 -right-2.5 w-9 h-9 rounded-full flex items-center justify-center"
+                style={{ background: "var(--vf-ink)", border: "2.5px solid var(--vf-mint)", boxShadow: "0 4px 10px rgba(12,9,16,.25)" }}
+                title="Your twin is learning"
+                data-testid="badge-twin-avatar"
+              >
+                <TwinOrb size={16} />
+              </div>
+            </div>
+          </div>
+
+          {/* Name block — normal flow, starts safely clear of both the cover
+              and the portrait by construction: its margin-top is computed
+              from the exact same numbers used for the portrait's size and
+              overlap above, not just "enough in practice". On mobile it sits
+              centered below the (also centered) portrait; at sm+ it sits
+              beside the portrait, offset by the portrait's own max width
+              rather than sharing a flex alignment with it. Theme-aware
+              tokens throughout — this text reliably lands on the plain page
+              background now, never the cover's dark scrim, at any width. */}
+          <div
+            className={`text-center sm:text-left min-w-0 ${
+              hasCover
+                ? "mt-[calc(clamp(185px,22.5vw,260px)-40px)] sm:mt-0 sm:pt-[calc(clamp(185px,22.5vw,260px)-64px)]"
+                : "mt-[calc(clamp(185px,22.5vw,260px)+32px)] sm:mt-0 sm:pt-[calc(clamp(185px,22.5vw,260px)+32px)]"
+            } sm:ml-[260px]`}
+          >
+            <div className="sm:pb-2">
+              <h1 className="font-serif font-normal leading-[1.02] tracking-[-0.02em] text-[clamp(32px,4.2vw,48px)] text-vf-text" data-testid="text-display-name">
                 {profile.displayName || user?.firstName}
               </h1>
-              <p className="text-[14px] mt-1" style={{ color: "rgba(245,240,234,0.75)" }} data-testid="text-meta-line">
+              <p className="text-[14px] mt-1 text-vf-muted" data-testid="text-meta-line">
                 {metaLine}{profile.isVerified ? " · verified" : ""}
               </p>
               <div className="mt-3 flex items-center gap-4 justify-center sm:justify-start flex-wrap">
@@ -577,27 +625,42 @@ export default function Profile() {
                   </button>
                 </div>
               ) : (
-                <div className="mt-3 rounded-[16px] border border-vf-line bg-vf-surface2 overflow-hidden vf-card">
-                  {prompts.map((p, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setPromptEditor({ index: i, q: p.q, a: p.a })}
-                      className={`w-full text-left p-4 transition-colors duration-150 hover:bg-vf-elevated ${i > 0 ? "border-t border-vf-line" : ""}`}
-                      data-testid={`prompt-${i}`}
-                    >
-                      <div className="text-[12.5px] text-vf-muted">{p.q}</div>
-                      <div className="text-[15px] text-vf-text mt-1 leading-[1.5]">{p.a}</div>
-                    </button>
-                  ))}
-                  {prompts.length < 3 && (
-                    <button
-                      onClick={() => setPromptEditor({ index: prompts.length, q: PROMPT_BANK[0], a: "" })}
-                      className="w-full text-left p-4 border-t border-dashed border-vf-line transition-colors duration-150 hover:bg-vf-elevated"
-                      data-testid="prompt-add"
-                    >
-                      <div className="text-[13.5px] text-vf-muted">Answer one more — your twin quotes these</div>
-                    </button>
-                  )}
+                // Weighted, not uniform: the first prompt gets a full-width
+                // featured card with the bigger serif treatment (it's the
+                // one your twin reaches for most), the rest sit smaller,
+                // side by side, below it.
+                <div className="mt-3 flex flex-col gap-3">
+                  <button
+                    onClick={() => setPromptEditor({ index: 0, q: prompts[0].q, a: prompts[0].a })}
+                    className="w-full text-left rounded-[18px] border border-vf-line bg-vf-surface2 p-5 transition-colors duration-150 hover:bg-vf-elevated vf-card"
+                    data-testid="prompt-0"
+                  >
+                    <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-vf-faint">{prompts[0].q}</div>
+                    <div className="font-serif text-[26px] leading-[1.25] text-vf-text mt-2 max-w-[520px]">{prompts[0].a}</div>
+                  </button>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {prompts.slice(1).map((p, i) => (
+                      <button
+                        key={i + 1}
+                        onClick={() => setPromptEditor({ index: i + 1, q: p.q, a: p.a })}
+                        className="w-full text-left rounded-[16px] border border-vf-line bg-vf-surface2 p-4 transition-colors duration-150 hover:bg-vf-elevated vf-card"
+                        data-testid={`prompt-${i + 1}`}
+                      >
+                        <div className="text-[12.5px] text-vf-muted">{p.q}</div>
+                        <div className="text-[15px] text-vf-text mt-1 leading-[1.5]">{p.a}</div>
+                      </button>
+                    ))}
+                    {prompts.length < 3 && (
+                      <button
+                        onClick={() => setPromptEditor({ index: prompts.length, q: PROMPT_BANK[0], a: "" })}
+                        className="w-full text-left rounded-[16px] border border-dashed border-vf-line p-4 flex items-center transition-colors duration-150 hover:bg-vf-elevated"
+                        data-testid="prompt-add"
+                      >
+                        <div className="text-[13.5px] text-vf-muted">Answer one more — your twin quotes these</div>
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -768,18 +831,26 @@ export default function Profile() {
               </button>
             </section>
 
-            {/* This week */}
+            {/* This week — one ticker strip instead of three boxed tiles.
+                Three identical rounded cards read as dashboard widgets; a
+                single strip with numerals divided by hairlines reads as an
+                editorial stat line, which is the register the rest of this
+                page is already in (mono eyebrows, serif numerals). */}
             <section>
               <SectionLabel>This week</SectionLabel>
-              <div className="mt-3 grid grid-cols-3 gap-3">
+              <div className="mt-3 rounded-[16px] border border-vf-line bg-vf-surface2 p-4 flex vf-card">
                 {[
                   { n: week?.twinTalks ?? 0, label: "twin talks" },
                   { n: week?.readsOver80 ?? 0, label: "reads over 80" },
                   { n: week?.meetsSet ?? 0, label: "meetings set" },
-                ].map((s) => (
-                  <div key={s.label} className="rounded-[16px] border border-vf-line bg-vf-surface2 p-4 vf-card">
-                    <div className="font-serif text-[32px] leading-none text-vf-text">{s.n}</div>
-                    <div className="text-[11.5px] text-vf-faint mt-1.5 leading-[1.3]">{s.label}</div>
+                ].map((s, i) => (
+                  <div
+                    key={s.label}
+                    className={`flex-1 text-center px-2 ${i > 0 ? "border-l border-vf-line" : ""}`}
+                    data-testid={`stat-${s.label.replace(/\s+/g, "-")}`}
+                  >
+                    <div className="font-serif text-[30px] leading-none text-vf-text">{s.n}</div>
+                    <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-vf-faint mt-2 leading-[1.3]">{s.label}</div>
                   </div>
                 ))}
               </div>

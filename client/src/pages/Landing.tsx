@@ -947,7 +947,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 6 · WHAT'S INSIDE (the tour) ============ */}
+      {/* ============ 6 · THE FOUR PILLARS ============ */}
       <section
         className="px-6"
         style={{ paddingBlock: "clamp(88px, 12vh, 160px)" }}
@@ -957,7 +957,7 @@ export default function Landing() {
         <div className="max-w-[1180px] mx-auto">
           <div className="max-w-[720px]">
             <Reveal>
-              <Eyebrow>Everything in there, now</Eyebrow>
+              <Eyebrow>Everything is free, on day one</Eyebrow>
             </Reveal>
             <Reveal delay={80}>
               <h2
@@ -965,7 +965,7 @@ export default function Landing() {
                 className="font-serif font-normal text-vf-text mt-4"
                 style={{ fontSize: "clamp(32px, 4.4vw, 52px)", lineHeight: 1.05, letterSpacing: "-0.02em" }}
               >
-                What you get on day one.
+                Four things it's actually built from.
               </h2>
             </Reveal>
             <Reveal delay={160}>
@@ -976,149 +976,134 @@ export default function Landing() {
             </Reveal>
           </div>
 
+          {/* The twin is the pillar everything else depends on, so it gets
+              the full-width slot and the supporting detail (resonance,
+              transcripts, boundaries — three separate flat cards before)
+              folded in as facets of one thing, not three more things. The
+              other three sit level with each other below it. */}
           <Reveal delay={200} className="mt-12">
-            <div className="grid gap-[18px] [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
-              {[
-                {
-                  n: "01",
-                  title: "Your AI twin",
-                  body:
-                    "A version of you that learns from how you talk to it. It never sends messages as you and never agrees to anything on your behalf.",
-                  fragment: (
-                    <div className="relative w-11 h-11">
-                      <div
-                        className="absolute inset-0 rounded-full animate-[vf-breathe_5s_ease-in-out_infinite]"
-                        style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint-vivid), #2E7F6B)" }}
-                      />
-                    </div>
-                  ),
-                },
-                {
-                  n: "02",
-                  title: "Matches worth meeting",
-                  body:
-                    "Your twin brings you people it has already talked to. Every match points at a real evening, not an endless thread.",
-                  fragment: <ResonanceDial score={87} size={76} />,
-                },
-                {
-                  n: "03",
-                  title: "Resonance, with the maths",
-                  body:
-                    "Four axes, scored honestly, including where you are weak. Every score opens into the conversation it came from.",
-                  fragment: (
-                    <div className="w-full max-w-[220px]">
-                      <ResonanceAxes
-                        axes={[
-                          { label: "How you argue", value: 94 },
-                          { label: "What you want next", value: 89 },
-                          { label: "Daily rhythm", value: 71 },
-                          { label: "Pace", value: 58 },
-                        ]}
-                      />
-                    </div>
-                  ),
-                },
-                {
-                  n: "04",
-                  title: "Twin transcripts",
-                  body:
-                    "Read what the two twins actually said before you met. Nobody starts from nothing.",
-                  fragment: (
-                    <div className="flex flex-col gap-1.5 text-[12px] leading-[1.4]">
-                      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
-                        <span className="font-mono uppercase text-vf-mint">Hers</span>
-                        <span className="text-vf-text">She won't move cities again for someone.</span>
-                      </div>
-                      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
-                        <span className="font-mono uppercase text-vf-ember">Yours</span>
-                        <span className="text-vf-text">He isn't asking anyone to.</span>
-                      </div>
-                    </div>
-                  ),
-                },
-                {
-                  n: "05",
-                  title: "The Lounge",
-                  body:
-                    "Interest groups — musicians, runners, long dinners — where you actually talk to people. Your twin sits in the rooms you join and learns who you are with your own people.",
-                  fragment: (
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex -space-x-2">
-                        {["#3A3350", "#4A2F3A", "#2E4A3F"].map((bg, i) => (
-                          <span
-                            key={i}
-                            className="w-6 h-6 rounded-full border-2 border-vf-surface2"
-                            style={{ background: bg }}
-                          />
-                        ))}
-                      </div>
-                      <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-                        412 members
-                      </span>
-                    </div>
-                  ),
-                },
-                {
-                  n: "06",
-                  title: "Events",
-                  body:
-                    "Small hosted evenings, starting in Harare and rolling out city by city. Your twin flags who is going that you would get on with.",
-                  fragment: (
-                    <div className="w-14 rounded-[12px] border border-vf-line bg-vf-surface overflow-hidden text-center">
-                      <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-faint py-1 border-b border-vf-line">
-                        Thu
-                      </div>
-                      <div className="font-serif text-vf-text text-[22px] py-1.5">14</div>
-                    </div>
-                  ),
-                },
-                {
-                  n: "07",
-                  title: "Stories",
-                  body:
-                    "Post a moment, see everyone else's. A feed that is actually about the people, not the performance.",
-                  fragment: (
-                    <div className="flex -space-x-1.5">
-                      {["#4A2F3A", "#2E4A3F", "#3A3350"].map((bg, i) => (
+            <div
+              className="rounded-[28px] border border-vf-mint/[0.18] p-7 sm:p-9 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-8 lg:gap-12 lg:items-center"
+              style={{ background: "linear-gradient(155deg, rgba(143,227,199,0.06), var(--vf-surface2) 60%)" }}
+              data-testid="pillar-twin"
+            >
+              <div>
+                <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint">
+                  Pillar 01 · The AI twin
+                </div>
+                <h3
+                  className="font-serif font-normal text-vf-text mt-3"
+                  style={{ fontSize: "clamp(24px, 2.6vw, 32px)", lineHeight: 1.15, letterSpacing: "-0.015em" }}
+                >
+                  Your twin talks first, so you don't start from nothing.
+                </h3>
+                <p className="mt-4 text-[15px] md:text-[16px] leading-[1.65] text-vf-muted max-w-[52ch]">
+                  It learns from how you talk to it, then has the awkward first conversation for
+                  you — with someone else's twin, in ninety seconds, before either of you gives up
+                  an evening. It never sends messages as you and never agrees to anything on your
+                  behalf.
+                </p>
+                <div className="mt-6 flex flex-wrap gap-2.5">
+                  {[
+                    "Resonance, scored honestly",
+                    "Transcripts you can read",
+                    "Boundaries you set",
+                  ].map((facet) => (
+                    <span
+                      key={facet}
+                      className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-vf-mint border border-vf-mint/25 bg-vf-mint/[0.06] rounded-full px-3 py-1.5"
+                    >
+                      {facet}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-row lg:flex-col items-center gap-6 lg:gap-5">
+                <ResonanceDial score={87} size={92} />
+                <div className="flex flex-col gap-1.5 text-[12.5px] leading-[1.4] max-w-[190px]">
+                  <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
+                    <span className="font-mono uppercase text-vf-mint">Hers</span>
+                    <span className="text-vf-text">Won't move cities again for someone.</span>
+                  </div>
+                  <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
+                    <span className="font-mono uppercase text-vf-ember">Yours</span>
+                    <span className="text-vf-text">Isn't asking anyone to.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                n: "02",
+                title: "Interest Lounges",
+                body:
+                  "Rooms for the things you actually do — musicians, runners, long dinners. Talk to people like you first; your twin sits in and learns who you are with your own people.",
+                fragment: (
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex -space-x-2">
+                      {["#3A3350", "#4A2F3A", "#2E4A3F"].map((bg, i) => (
                         <span
                           key={i}
-                          className="w-8 h-8 rounded-full p-[2px]"
-                          style={{ background: "#FF6B4A" }}
-                        >
-                          <span className="block w-full h-full rounded-full border-2 border-vf-surface2" style={{ background: bg }} />
-                        </span>
+                          className="w-6 h-6 rounded-full border-2 border-vf-surface2"
+                          style={{ background: bg }}
+                        />
                       ))}
                     </div>
-                  ),
-                },
-                {
-                  n: "08",
-                  title: "Boundaries you set",
-                  body:
-                    "Your twin discusses exactly what you allow and nothing else. Strike any fact out of its memory whenever you want.",
-                  fragment: (
-                    <div className="flex flex-col gap-2.5" aria-hidden="true">
-                      <BoundaryToggle label="Can discuss wanting kids" on />
-                      <BoundaryToggle label="Cannot discuss earnings" on={false} />
+                    <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
+                      412 members
+                    </span>
+                  </div>
+                ),
+              },
+              {
+                n: "03",
+                title: "Local Events",
+                body:
+                  "Small hosted evenings, starting in Harare and rolling out city by city. Your twin flags who's going that you'd actually get on with.",
+                fragment: (
+                  <div className="w-14 rounded-[12px] border border-vf-line bg-vf-surface overflow-hidden text-center">
+                    <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-faint py-1 border-b border-vf-line">
+                      Thu
                     </div>
-                  ),
-                },
-              ].map((card) => (
+                    <div className="font-serif text-vf-text text-[22px] py-1.5">14</div>
+                  </div>
+                ),
+              },
+              {
+                n: "04",
+                title: "Story-based Discovery",
+                body:
+                  "Post a moment, see everyone else's. Discovery here is a story you post, not a profile you optimize — a feed that's actually about the people.",
+                fragment: (
+                  <div className="flex -space-x-1.5">
+                    {["#4A2F3A", "#2E4A3F", "#3A3350"].map((bg, i) => (
+                      <span key={i} className="w-8 h-8 rounded-full p-[2px]" style={{ background: "#FF6B4A" }}>
+                        <span className="block w-full h-full rounded-full border-2 border-vf-surface2" style={{ background: bg }} />
+                      </span>
+                    ))}
+                  </div>
+                ),
+              },
+            ].map((card, i) => (
+              <Reveal key={card.n} delay={i * 80}>
                 <div
-                  key={card.n}
-                  className="rounded-[20px] border border-vf-line bg-vf-surface2 p-6 flex flex-col gap-3"
+                  className="h-full rounded-[22px] border border-vf-line bg-vf-surface2 p-6 flex flex-col gap-3"
                   data-testid={`inside-card-${card.n}`}
                 >
                   <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-                    {card.n}
+                    Pillar {card.n}
                   </div>
-                  <div className="text-[17px] text-vf-text">{card.title}</div>
-                  <p className="text-[14px] leading-[1.6] text-vf-muted">{card.body}</p>
+                  <div className="text-[18px] text-vf-text">{card.title}</div>
+                  <p className="text-[14px] leading-[1.6] text-vf-muted flex-1">{card.body}</p>
                   <div className="mt-1 min-h-[44px] flex items-center">{card.fragment}</div>
                 </div>
-              ))}
-            </div>
-          </Reveal>
+              </Reveal>
+            ))}
+          </div>
 
           <Reveal delay={120}>
             <p className="mt-10 text-center text-[14px] text-vf-muted">
