@@ -11,6 +11,8 @@ import {
 import { Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { motion } from "framer-motion";
+import { ResonanceDial } from "@/components/resonance-dial";
 
 type TabType = "waiting" | "asked";
 
@@ -31,13 +33,17 @@ function resonanceScore(personalityProfile: unknown): number | null {
   return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
 }
 
-function Avatar({ name, photoUrl }: { name: string; photoUrl?: string | null }) {
+// A real portrait, not a tiny circle — this is a page about specific
+// people, and the old 44px avatar made everyone here look interchangeable.
+// Falls back to the same serif-initial-on-surface2 language every other
+// no-photo state in the app uses.
+function Portrait({ name, photoUrl }: { name: string; photoUrl?: string | null }) {
   return (
-    <div className="w-11 h-11 rounded-full overflow-hidden shrink-0 bg-vf-surface2 border border-vf-line flex items-center justify-center">
+    <div className="w-14 h-14 rounded-[16px] overflow-hidden shrink-0 bg-vf-surface2 border border-vf-line flex items-center justify-center">
       {photoUrl ? (
         <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
       ) : (
-        <span className="font-serif text-vf-muted text-lg">{name[0]?.toUpperCase() || "?"}</span>
+        <span className="font-serif text-vf-text/25 text-2xl">{name[0]?.toUpperCase() || "?"}</span>
       )}
     </div>
   );
@@ -66,42 +72,44 @@ function InterestRow({
 }) {
   const identity = (
     <>
-      <Avatar name={name} photoUrl={photoUrl} />
-      <div className="flex-1 min-w-0 text-left">
-        <p className="text-[15px] text-vf-text truncate">
-          {name}
-          {age ? <span className="text-vf-muted">, {age}</span> : null}
-        </p>
-        {score !== null && (
-          <p className="font-serif text-vf-text leading-none mt-0.5" style={{ fontSize: "20px" }}>
-            {score}
-            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint ml-1.5 align-middle">
-              resonance
-            </span>
+      <Portrait name={name} photoUrl={photoUrl} />
+      <div className="flex-1 min-w-0 text-left flex items-center gap-3">
+        {/* The same dial used on Discover / Profile / the Landing page — one
+            visual system for "resonance" everywhere it shows up, instead of
+            this page inventing its own plain-number version of it. The
+            number lives inside the dial; no need to also print it as text. */}
+        {score !== null && <ResonanceDial score={score} size={40} />}
+        <div className="min-w-0">
+          <p className="text-[15.5px] text-vf-text truncate">
+            {name}
+            {age ? <span className="text-vf-muted">, {age}</span> : null}
           </p>
-        )}
+          {score !== null && (
+            <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-vf-faint mt-1">
+              resonance
+            </p>
+          )}
+        </div>
       </div>
     </>
   );
 
   return (
     <div
-      className={`group flex items-center gap-3 border-b border-vf-line last:border-b-0 min-h-[72px] py-3 transition-colors ${
-        onOpen ? "rounded-[14px] px-3 -mx-3 hover:bg-vf-text/[0.035] focus-within:bg-vf-text/[0.035]" : ""
-      }`}
+      className={`group vf-card vf-row flex items-center gap-3.5 rounded-[18px] border border-vf-line bg-vf-surface2 px-4 py-3.5 mb-3 last:mb-0 transition-colors duration-150 ${onOpen ? "focus-within:bg-vf-elevated" : ""}`}
       data-testid={testId}
     >
       {onOpen ? (
         <button
           type="button"
           onClick={onOpen}
-          className="flex flex-1 min-w-0 items-center gap-3 focus:outline-none rounded-[10px] focus-visible:ring-1 focus-visible:ring-vf-line"
+          className="flex flex-1 min-w-0 items-center gap-3.5 focus:outline-none rounded-[10px] focus-visible:ring-1 focus-visible:ring-vf-line"
           data-testid={testId ? `${testId}-open` : undefined}
         >
           {identity}
         </button>
       ) : (
-        <div className="flex flex-1 min-w-0 items-center gap-3">{identity}</div>
+        <div className="flex flex-1 min-w-0 items-center gap-3.5">{identity}</div>
       )}
       <div className="flex items-center gap-2 shrink-0">
         {hoverLabel ? (
@@ -124,7 +132,7 @@ function MeetButton({ onClick, pending }: { onClick: () => void; pending?: boole
     <button
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       disabled={pending}
-      className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 min-h-[44px] text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-40"
+      className="vf-btn-primary inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 min-h-[44px] text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-40"
       data-testid="button-meet"
     >
       {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Meet"}
@@ -137,7 +145,7 @@ function PassButton({ onClick, pending }: { onClick: () => void; pending?: boole
     <button
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       disabled={pending}
-      className="text-[13px] font-medium text-vf-muted hover:text-vf-text px-2 min-h-[44px] transition-colors disabled:opacity-40"
+      className="text-[13px] font-medium text-vf-muted hover:text-vf-text px-2.5 min-h-[44px] rounded-full transition-colors duration-150 hover:bg-vf-elevated disabled:opacity-40"
       data-testid="button-pass"
     >
       Pass
@@ -245,7 +253,17 @@ export default function Matches() {
               {count > 0 && (
                 <span className="ml-1.5 font-mono text-[11px] text-vf-faint">{count}</span>
               )}
-              {isActive && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-vf-ember rounded-full" />}
+              {/* A layoutId'd indicator slides between tabs instead of just
+                  appearing under whichever one is active — small, but this
+                  is exactly the kind of tap that should feel like something
+                  moved, not like the page re-rendered. */}
+              {isActive && (
+                <motion.div
+                  layoutId="interest-tab-indicator"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-vf-ember rounded-full"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
+              )}
             </button>
           );
         })}
@@ -262,7 +280,7 @@ export default function Matches() {
         ) : (
           <div data-testid="list-waiting">
             {incoming?.seeWhoAsked === false && likes.some((l: any) => l.masked) ? (
-              <div className="rounded-[16px] border border-vf-line bg-vf-surface2 p-5 mb-3" data-testid="masked-asks">
+              <div className="vf-card rounded-[16px] border border-vf-line bg-vf-surface2 p-5 mb-3" data-testid="masked-asks">
                 <p className="text-[15px] text-vf-text">
                   <span className="font-serif text-[22px] align-baseline">{likes.length}</span>{" "}
                   {likes.length === 1 ? "person has" : "people have"} asked to meet you.
@@ -272,7 +290,7 @@ export default function Matches() {
                 </p>
                 <button
                   onClick={() => setLocation("/plans?feature=see_who_asked")}
-                  className="mt-3 inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
+                  className="vf-btn-primary mt-3 inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
                   data-testid="button-see-who-asked"
                 >
                   See plans

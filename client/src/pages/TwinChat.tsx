@@ -503,7 +503,17 @@ export default function TwinChat() {
 
   return (
     <div className="h-dvh flex flex-col bg-vf-ink">
-      <div className="border-b border-vf-line px-4 py-3 flex items-center gap-3 sticky top-0 z-10 bg-vf-ink shrink-0">
+      {/* This is the one place in the app that's unambiguously "inside the
+          twin's own space" (not a read, not an interview with someone
+          else's twin) — a tinted wash instead of the flat bar every other
+          page uses, and a bigger avatar with real breathing-glow presence,
+          say that before the copy does. Mint throughout: this is the one
+          screen where mint-as-primary is the correct call, not a violation
+          of "mint is twin-layer only" — it's the whole layer. */}
+      <div
+        className="px-4 py-3.5 flex items-center gap-3 sticky top-0 z-10 shrink-0 border-b border-vf-mint/[0.16]"
+        style={{ background: "linear-gradient(180deg, hsl(var(--vf-mint) / 0.07), var(--vf-ink) 130%)" }}
+      >
         <Button
           variant="ghost"
           size="icon"
@@ -512,9 +522,14 @@ export default function TwinChat() {
         >
           <ArrowLeft className="w-5 h-5 text-vf-text" />
         </Button>
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="relative w-9 h-9 shrink-0">
-            <div className="absolute inset-0 rounded-full overflow-hidden animate-[vf-breathe_5s_ease-in-out_infinite]">
+        <div className="flex items-center gap-3.5 flex-1 min-w-0">
+          <div className="relative w-12 h-12 shrink-0">
+            <div
+              className="absolute -inset-1.5 rounded-full animate-[vf-breathe_5s_ease-in-out_infinite]"
+              style={{ background: "radial-gradient(circle, hsl(var(--vf-mint) / 0.35), transparent 70%)" }}
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 rounded-full overflow-hidden ring-2 ring-vf-mint/30">
               {twinAvatarUrl ? (
                 <img src={twinAvatarUrl} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -526,10 +541,15 @@ export default function TwinChat() {
             </div>
           </div>
           <div className="min-w-0">
-            <h2 className="font-serif text-base text-vf-text truncate" data-testid="text-twin-title">
+            <h2 className="font-serif font-normal text-[19px] leading-tight text-vf-text truncate" data-testid="text-twin-title">
               {twinName}
             </h2>
-            <p className="text-xs text-vf-mint">Self-reflection &amp; growth</p>
+            <p className="flex items-center gap-1.5 mt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-vf-mint shrink-0" style={{ boxShadow: "0 0 6px hsl(var(--vf-mint))" }} />
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-mint">
+                Self-reflection &amp; growth
+              </span>
+            </p>
           </div>
         </div>
         <Button

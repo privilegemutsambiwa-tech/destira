@@ -295,7 +295,16 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
 
   return (
     <div className="h-dvh flex flex-col bg-vf-ink text-vf-text" data-testid="interview-chat-page">
-      <div className="bg-vf-ink border-b border-vf-line px-4 py-3 flex items-center justify-between gap-2 sticky top-0 z-50">
+      {/* Same tinted-header language as TwinChat.tsx (mint wash, a bigger
+          avatar with real presence) — this is still fundamentally "a twin,
+          talking" even though it's someone else's, so it earns the same
+          weight. The "Ask to meet" CTA stays ember (a human action, not a
+          twin one), which is exactly the contrast the header should make
+          legible at a glance: mint frame, ember action. */}
+      <div
+        className="border-b border-vf-mint/[0.16] px-4 py-3.5 flex items-center justify-between gap-2 sticky top-0 z-50"
+        style={{ background: "linear-gradient(180deg, hsl(var(--vf-mint) / 0.07), var(--vf-ink) 130%)" }}
+      >
         <div className="flex items-center gap-3 min-w-0">
           <Button
             variant="ghost"
@@ -305,21 +314,28 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
           >
             <ArrowLeft className="w-5 h-5 text-vf-ember" />
           </Button>
-          <div className="flex items-center gap-3 min-w-0">
-            <Avatar className="ring-2 ring-vf-mint">
-              {targetAvatar ? (
-                <AvatarImage src={targetAvatar} alt={targetName} />
-              ) : null}
-              <AvatarFallback className="bg-vf-ink text-vf-text font-serif">
-                {avatarInitial}
-              </AvatarFallback>
-            </Avatar>
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="relative w-11 h-11 shrink-0">
+              <div
+                className="absolute -inset-1 rounded-full animate-[vf-breathe_5s_ease-in-out_infinite]"
+                style={{ background: "radial-gradient(circle, hsl(var(--vf-mint) / 0.32), transparent 70%)" }}
+                aria-hidden="true"
+              />
+              <Avatar className="relative w-full h-full ring-2 ring-vf-mint/30">
+                {targetAvatar ? (
+                  <AvatarImage src={targetAvatar} alt={targetName} />
+                ) : null}
+                <AvatarFallback className="bg-vf-ink text-vf-text font-serif">
+                  {avatarInitial}
+                </AvatarFallback>
+              </Avatar>
+            </div>
             <div className="min-w-0">
-              <h2 className="font-serif text-[15px] text-vf-text truncate" data-testid="text-twin-name">
+              <h2 className="font-serif font-normal text-[17px] leading-tight text-vf-text truncate" data-testid="text-twin-name">
                 {targetName}
               </h2>
-              <p className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-vf-mint" />
+              <p className="flex items-center gap-1.5 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-vf-mint shrink-0" style={{ boxShadow: "0 0 6px hsl(var(--vf-mint))" }} />
                 <span
                   className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-mint"
                   data-testid="text-twin-status"
@@ -334,7 +350,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
           <button
             onClick={handleRequestMatch}
             disabled={createMatch.isPending}
-            className="shrink-0 rounded-full bg-vf-ember text-vf-ink font-semibold text-sm px-4 h-10 hover:bg-[var(--vf-ember-soft)] disabled:opacity-50 transition-colors"
+            className="vf-btn-primary shrink-0 rounded-full bg-vf-ember text-vf-ink font-semibold text-sm px-4 h-10 hover:bg-[var(--vf-ember-soft)] disabled:opacity-50 transition-colors btn-press"
             data-testid="button-request-match"
           >
             Ask to meet {meetName}

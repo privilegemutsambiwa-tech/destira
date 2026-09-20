@@ -55,40 +55,54 @@ export default function Interviews() {
         <p className="mt-1 text-sm text-vf-muted">All your conversations in one place</p>
       </div>
 
-      {/* My Twin featured card */}
+      {/* My Twin featured card — the one card on this page that isn't a
+          conversation with another person, so it earns a genuinely
+          different treatment: the same breathing mint-glow presence as the
+          twin chat screens themselves, not just a tinted rectangle. */}
       {profile?.onboardingCompleted && (
         <div
-          className="mb-5 p-4 cursor-pointer btn-press rounded-[20px] border border-vf-mint/25 bg-vf-mint/[0.08] hover:bg-vf-mint/[0.11] transition-colors"
+          className="group mb-6 p-5 cursor-pointer btn-press vf-card rounded-[22px] border border-vf-mint/25 transition-colors hover:border-vf-mint/45"
+          style={{ background: "linear-gradient(155deg, hsl(var(--vf-mint) / 0.1), var(--vf-surface2) 72%)" }}
           onClick={() => setLocation("/twin-chat?from=/interviews")}
           data-testid="card-my-twin"
         >
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0 bg-vf-mint/15">
-              <Brain className="w-7 h-7 text-vf-mint" />
+            <div className="relative w-16 h-16 shrink-0">
+              <div
+                className="absolute -inset-2 rounded-full animate-[vf-breathe_5s_ease-in-out_infinite]"
+                style={{ background: "radial-gradient(circle, hsl(var(--vf-mint) / 0.35), transparent 70%)" }}
+                aria-hidden="true"
+              />
+              <div
+                className="relative w-full h-full rounded-full flex items-center justify-center"
+                style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint-vivid), #2E7F6B)" }}
+              >
+                <Brain className="w-7 h-7 text-vf-ink" />
+              </div>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <h2 className="font-serif text-lg text-vf-text">Chat With My Twin</h2>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 border border-vf-mint/30 text-vf-mint">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <h2 className="font-serif font-normal text-[20px] text-vf-text">Chat with my twin</h2>
+                <span className="font-mono text-[9.5px] uppercase tracking-[0.12em] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 border border-vf-mint/30 text-vf-mint">
                   <Shield className="w-3 h-3" />
                   Private
                 </span>
               </div>
-              <p className="text-sm mb-2 leading-snug text-vf-muted">
+              <p className="text-[13.5px] mb-2.5 leading-snug text-vf-muted">
                 Train, coach, and reflect with your personal AI Twin
               </p>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3.5">
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full" style={{ background: "#22C55E" }} />
-                  <span className="text-xs font-medium text-vf-muted">Active</span>
+                  <div className="w-2 h-2 rounded-full" style={{ background: "#22C55E", boxShadow: "0 0 6px #22C55E" }} />
+                  <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-vf-muted">Active</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Brain className="w-3 h-3 text-vf-faint" />
-                  <span className="text-xs text-vf-muted">Memory enabled</span>
+                  <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-vf-muted">Memory enabled</span>
                 </div>
               </div>
             </div>
-            <ArrowRight className="w-5 h-5 shrink-0 text-vf-mint" />
+            <ArrowRight className="w-5 h-5 shrink-0 text-vf-mint transition-transform duration-150 group-hover:translate-x-1" />
           </div>
         </div>
       )}
@@ -100,7 +114,7 @@ export default function Interviews() {
           placeholder="Search conversations..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full h-11 pl-9 pr-4 text-sm rounded-xl bg-vf-surface border border-vf-line text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-1 focus:ring-vf-mint/50"
+          className="w-full h-11 pl-9 pr-4 text-sm rounded-xl bg-vf-surface border border-vf-line text-vf-text placeholder:text-vf-faint outline-none transition-shadow duration-150 focus:ring-2 focus:ring-vf-mint/40"
           data-testid="input-search-chats"
         />
       </div>
@@ -129,16 +143,14 @@ export default function Interviews() {
           <Loader2 className="w-8 h-8 animate-spin text-vf-mint" />
         </div>
       ) : filteredThreads.length > 0 ? (
-        <div className="space-y-0">
-          {filteredThreads.map((thread: any, idx: number) => {
+        <div className="flex flex-col gap-2.5">
+          {filteredThreads.map((thread: any) => {
             const isTwin = thread.type === "ai_twin_interview";
             const threadHref = `${thread.href}${thread.href.includes("?") ? "&" : "?"}from=/interviews`;
             return (
               <Link key={thread.id} href={threadHref}>
                 <div
-                  className={`flex items-center gap-3 px-1 py-4 cursor-pointer rounded-xl transition-colors hover:bg-vf-text/[0.03] ${
-                    idx < filteredThreads.length - 1 ? "border-b border-vf-line" : ""
-                  }`}
+                  className="vf-card vf-row flex items-center gap-3.5 px-4 py-3.5 cursor-pointer rounded-[16px] border border-vf-line bg-vf-surface2 transition-colors duration-150"
                   data-testid={`card-thread-${thread.id}`}
                 >
                   <Avatar className={`shrink-0 w-12 h-12 rounded-xl ${isTwin ? "ring-1 ring-vf-mint/40" : ""}`}>
