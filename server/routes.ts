@@ -3323,7 +3323,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (!notConfigured) {
         emailTemplates.alertGatewayUnreachable({ provider: method, error: String(err?.message || err) }).catch(() => {});
       }
-      res.status(400).json({ message: err?.message || "Couldn't reach the payment gateway. Try again." });
+      // Only ever forward the small set of messages a provider throws on
+      // purpose (e.g. "not configured") — anything else, most notably a raw
+      // DB driver error, carries query text and params (a user id, digits of
+      // a phone number) that must never reach the browser.
+      const safeMessage = notConfigured ? err.message : "Couldn't reach the payment gateway. Try again.";
+      res.status(400).json({ message: safeMessage });
     }
   });
 

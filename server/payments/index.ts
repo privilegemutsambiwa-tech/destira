@@ -5,7 +5,7 @@
 import { db } from "../db";
 import { payments, subscriptions, profiles } from "@shared/schema";
 import { periodPriceCents, PERIOD_DAYS, type BillingPeriod } from "@shared/entitlements";
-import { and, eq, gte, lt, isNull, or } from "drizzle-orm";
+import { and, eq, lt, isNull, or } from "drizzle-orm";
 import { MockProvider } from "./mock";
 import { PaynowProvider, paynowConfigured } from "./paynow";
 import { NardoPayProvider, nardopayConfigured } from "./nardopay";
@@ -66,11 +66,19 @@ export async function initiatePayment(
   const windowStart = new Date(Date.now() - 15 * 60 * 1000);
   const key = `${userId}:${tier}:${period}:${method}`;
 
+  // idempotencyKey is UNIQUE and has no time component, so there can only
+  // ever be one row per (user, tier, period, method) in the table's entire
+  // history — this lookup must find it regardless of age, or a retry after
+  // more than 15 minutes falls through to the INSERT below and crashes on
+  // payments_idempotency_key_unique. The 15-minute window only decides
+  // whether a still-pending/paid row is fresh enough to hand back as-is
+  // versus reset and reused for a new attempt.
   const [existing] = await db
     .select()
     .from(payments)
-    .where(and(eq(payments.idempotencyKey, key), gte(payments.createdAt, windowStart)));
-  if (existing && (existing.status === "pending" || existing.status === "paid")) {
+    .where(eq(payments.idempotencyKey, key));
+  const existingIsFresh = !!existing?.createdAt && existing.createdAt >= windowStart;
+  if (existing && existingIsFresh && (existing.status === "pending" || existing.status === "paid")) {
     return { paymentId: existing.id, status: existing.status as PaymentStatus, pollUrl: existing.pollUrl, resumed: true };
   }
 
