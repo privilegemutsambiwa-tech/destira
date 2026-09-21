@@ -33,6 +33,19 @@ export function usePaymentsConfig() {
   });
 }
 
+// The server forwards its caught error's `.message` verbatim so real
+// validation copy ("Enter the wallet number as...") reaches the UI — but
+// that means an *uncaught* failure (a DB driver error, a stack trace) would
+// forward just as verbatim. Anything that reads like backend internals gets
+// swapped for a generic message rather than rendered to the subscriber.
+const RAW_BACKEND_ERROR = /constraint|duplicate key|syntax error|violates|relation "|column "|SQLSTATE|stack trace/i;
+function friendlyPaymentError(message: unknown): string {
+  if (typeof message !== "string" || !message.trim() || RAW_BACKEND_ERROR.test(message)) {
+    return "Couldn't start that payment. Try again.";
+  }
+  return message;
+}
+
 export function useInitiatePayment() {
   return useMutation({
     mutationFn: async (input: {
@@ -49,7 +62,7 @@ export function useInitiatePayment() {
         body: JSON.stringify(input),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.message || "Couldn't start that payment");
+      if (!res.ok) throw new Error(friendlyPaymentError(body?.message));
       return body as InitiateResult;
     },
   });

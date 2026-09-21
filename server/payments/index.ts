@@ -46,8 +46,13 @@ export function priceCentsFor(tier: "spark" | "flame" | "ember", period: Billing
   return periodPriceCents(tier, period);
 }
 
-// A retried initiate for the same (user, tier, period) inside 15 min returns
-// the existing pending row — a double-tap gets charged once.
+// A retried initiate for the same (user, tier, period, method) inside 15 min
+// reuses the existing row instead of inserting a new one — idempotencyKey is
+// UNIQUE, so a second INSERT with the same key (a double-tap, or a retry
+// after the first attempt failed/expired/cancelled) would otherwise crash on
+// payments_idempotency_key_unique. Still-pending or already-paid rows are
+// handed straight back; failed/expired/cancelled rows are reset to pending
+// and reused for the new attempt.
 export async function initiatePayment(
   userId: string,
   tier: "spark" | "flame" | "ember",
@@ -64,27 +69,46 @@ export async function initiatePayment(
   const [existing] = await db
     .select()
     .from(payments)
-    .where(and(eq(payments.idempotencyKey, key), eq(payments.status, "pending"), gte(payments.createdAt, windowStart)));
-  if (existing) {
+    .where(and(eq(payments.idempotencyKey, key), gte(payments.createdAt, windowStart)));
+  if (existing && (existing.status === "pending" || existing.status === "paid")) {
     return { paymentId: existing.id, status: existing.status as PaymentStatus, pollUrl: existing.pollUrl, resumed: true };
   }
 
   const { provider, name } = providerFor(method);
-  const [row] = await db
-    .insert(payments)
-    .values({
-      userId,
-      tier,
-      period,
-      amount: amountCents,
-      currency: "usd",
-      status: "pending",
-      provider: name,
-      phoneNumberMasked: maskPhone(phone),
-      idempotencyKey: key,
-      sourceFeature: sourceFeature ?? null,
-    })
-    .returning();
+  const [row] = existing
+    ? await db
+        .update(payments)
+        .set({
+          amount: amountCents,
+          currency: "usd",
+          status: "pending",
+          provider: name,
+          phoneNumberMasked: maskPhone(phone),
+          providerReference: null,
+          pollUrl: null,
+          rawStatus: null,
+          failureReason: null,
+          lastPolledAt: null,
+          sourceFeature: sourceFeature ?? null,
+          createdAt: new Date(), // restart the idempotency/stuck-payment window for this retry
+        })
+        .where(eq(payments.id, existing.id))
+        .returning()
+    : await db
+        .insert(payments)
+        .values({
+          userId,
+          tier,
+          period,
+          amount: amountCents,
+          currency: "usd",
+          status: "pending",
+          provider: name,
+          phoneNumberMasked: maskPhone(phone),
+          idempotencyKey: key,
+          sourceFeature: sourceFeature ?? null,
+        })
+        .returning();
 
   try {
     const r = await provider.initiate({
