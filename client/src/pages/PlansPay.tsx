@@ -16,13 +16,24 @@ const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-fai
 const RESEND_AFTER_MS = 45_000;
 const RENEWAL_WINDOW: Record<BillingPeriod, string> = { weekly: "a week", monthly: "a month", sixMonth: "six months" };
 
-const METHODS: { id: PayMethod; label: string; sub: string }[] = [
-  { id: "ecocash", label: "EcoCash", sub: "Pay from your EcoCash wallet. A prompt comes to your phone." },
-  { id: "onemoney", label: "OneMoney", sub: "Pay from your OneMoney wallet. A prompt comes to your phone." },
-  { id: "innbucks", label: "InnBucks", sub: "Approve the payment in your InnBucks app." },
-  { id: "ecocash_card", label: "EcoCash Visa card", sub: "Your EcoCash debit card." },
-  { id: "card", label: "Another card", sub: "Visa, Mastercard, or Zimswitch." },
-];
+// EcoCash/OneMoney's subtitle depends on which gateway is actually live:
+// Paynow pushes a USSD prompt straight to the phone, but NardoPay is a
+// hosted redirect — the number and PIN are entered on NardoPay's own next
+// screen, never a phone prompt from us. Wrong here is what confused the
+// person who tested a real charge expecting a handset prompt that never came.
+function methodsFor(walletHandledByNardoPay: boolean): { id: PayMethod; label: string; sub: string }[] {
+  const walletSub = (walletName: string) =>
+    walletHandledByNardoPay
+      ? `Pay from your ${walletName} wallet. You'll finish this on ${walletName}'s own page.`
+      : `Pay from your ${walletName} wallet. A prompt comes to your phone.`;
+  return [
+    { id: "ecocash", label: "EcoCash", sub: walletSub("EcoCash") },
+    { id: "onemoney", label: "OneMoney", sub: walletSub("OneMoney") },
+    { id: "innbucks", label: "InnBucks", sub: "Approve the payment in your InnBucks app." },
+    { id: "ecocash_card", label: "EcoCash Visa card", sub: "Your EcoCash debit card." },
+    { id: "card", label: "Another card", sub: "Visa, Mastercard, or Zimswitch." },
+  ];
+}
 
 export default function PlansPay() {
   const [, setLocation] = useLocation();
@@ -70,6 +81,7 @@ export default function PlansPay() {
   // subscriber pick EcoCash/OneMoney/InnBucks there — asking for it here too
   // would be a second, redundant prompt for a number we never actually use.
   const walletHandledByNardoPay = paymentsConfig?.walletProvider === "nardopay";
+  const methods = methodsFor(walletHandledByNardoPay);
   const { data: status } = usePaymentStatus(paymentId, paymentId != null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -256,7 +268,7 @@ export default function PlansPay() {
       <h1 className="font-serif font-normal text-vf-text mt-3 text-[28px] leading-[1.12]">How do you want to pay?</h1>
 
       <div className="flex flex-col gap-2.5 mt-6">
-        {METHODS.map((m) => (
+        {methods.map((m) => (
           <button
             key={m.id}
             onClick={() => setMethod(m.id)}
