@@ -48,6 +48,22 @@ export default function PlansPay() {
   const [instructions, setInstructions] = useState<string | null>(null);
   const [authCode, setAuthCode] = useState<{ code: string; expires?: string; deepLink?: string } | null>(null);
 
+  // Wouter keeps this component mounted across a /plans/pay navigation that
+  // only changes the query string (e.g. picking a different plan after a
+  // failed attempt), so the useState initializers above only run once and
+  // never see the new URL. Without this, a stale paymentId from an earlier
+  // failed/interrupted attempt keeps rendering the failed/waiting screen for
+  // a plan the user hasn't even tried to pay for yet. Only a genuine return
+  // callback (a `ref` in the new URL) is allowed to seed that state.
+  useEffect(() => {
+    if (!returnRef) {
+      setPaymentId(null);
+      setStartedAt(null);
+      setInstructions(null);
+      setAuthCode(null);
+    }
+  }, [search]);
+
   const initiate = useInitiatePayment();
   const { data: paymentsConfig } = usePaymentsConfig();
   // NardoPay's own hosted page collects the wallet number and lets the

@@ -3317,13 +3317,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const email = (req as any).user?.claims?.email || (await storage.getProfile(userId))?.displayName;
       const result = await payments.initiatePayment(userId, tier, period, method, phone, typeof email === "string" ? email : undefined, sourceFeature);
       res.json(result);
-    } catch (e: any) {
-      console.error("Payment initiate error:", e);
-      const notConfigured = e?.message?.includes("not configured");
+    } catch (err: any) {
+      console.error('[Payment Initiate Error]:', err);
+      const notConfigured = err?.message?.includes("not configured");
       if (!notConfigured) {
-        emailTemplates.alertGatewayUnreachable({ provider: method, error: String(e?.message || e) }).catch(() => {});
+        emailTemplates.alertGatewayUnreachable({ provider: method, error: String(err?.message || err) }).catch(() => {});
       }
-      res.status(502).json({ message: notConfigured ? "Payments aren't switched on yet." : "Couldn't reach the payment gateway. Try again." });
+      res.status(400).json({ message: err?.message || "Couldn't reach the payment gateway. Try again." });
     }
   });
 

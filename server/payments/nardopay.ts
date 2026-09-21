@@ -73,7 +73,14 @@ export class NardoPayProvider implements PaymentProvider {
 
   async initiate(input: InitiateInput): Promise<InitiateResult> {
     if (!this.apiKey) throw new Error("NardoPay is not configured (NARDOPAY_API_KEY)");
-    const amount = Math.round(input.amountCents) / 100;
+    // .toFixed(2) + reparse rather than a bare cents/100 division: guarantees
+    // a clean two-decimal number (never 4.989999999999999-style float noise)
+    // and gives us one place to reject a bad amount before it ever reaches
+    // NardoPay's API.
+    const amount = Number((input.amountCents / 100).toFixed(2));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error(`NardoPay: invalid amount (${input.amountCents} cents)`);
+    }
     const productName = input.tier ? `Destira ${input.tier.toUpperCase()} Pass` : "Destira Pass";
 
     const res = await fetch(CREATE_LINK_URL, {
