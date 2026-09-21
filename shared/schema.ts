@@ -618,7 +618,7 @@ export const reminderDismissals = pgTable("reminder_dismissals", {
   uniqueIndex("reminder_dismissals_user_kind_idx").on(t.userId, t.kind),
 ]);
 
-export const REMINDER_KINDS = ["discover_readiness_strip", "proximity_upsell", "twin_disclosure_intro", "twin_disclosure_interview"] as const;
+export const REMINDER_KINDS = ["discover_readiness_strip", "proximity_upsell", "twin_disclosure_intro", "twin_disclosure_interview", "profile_photos_nudge"] as const;
 export const reminderKindEnum = z.enum(REMINDER_KINDS);
 
 // The minimum answered soul-mapping questions below which the twin is NOT

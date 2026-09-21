@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, X, LogOut } from "lucide-react";
+import { Loader2, Plus, X, LogOut, Camera } from "lucide-react";
 import { AddStoryButton, OwnStoryViewer, type OwnStory } from "@/components/story-viewer";
 import { RefineWithAI } from "@/components/refine-with-ai";
 import { useAuth } from "@/hooks/use-auth";
@@ -14,6 +14,16 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+
+// Below this many total photos (cover + portrait + gallery combined), a
+// profile is genuinely light on the one thing that drives reads the most —
+// worth a nudge, not a permanent one-time dismiss, since adding one photo
+// today doesn't mean the next viewer three months from now won't still be
+// looking at a mostly-empty gallery. Server-backed reminder (see
+// REMINDER_KINDS in shared/schema.ts) so it resurfaces after the same
+// 7-day window as the other "you're missing something" strips instead of
+// vanishing forever after one dismiss.
+const MIN_PHOTOS_BEFORE_NUDGE = 3;
 
 const NUDGE_KEY = "vf_referral_nudge_dismissed";
 
@@ -68,6 +78,62 @@ function ReferralNudge({ completionScore }: { completionScore: number }) {
       >
         Copy invite link
       </button>
+    </div>
+  );
+}
+
+/** Shown right where it's relevant — inside the Photos section itself, not
+ *  at the top of the page with the other nudges — while the user has fewer
+ *  than MIN_PHOTOS_BEFORE_NUDGE photos total (cover + portrait + gallery).
+ *  Server-backed dismiss, same 7-day resurface as the Discover strips. */
+function PhotoNudge({ photoCount, onAddPhotos }: { photoCount: number; onAddPhotos: () => void }) {
+  const reminderKey = ["/api/reminders", "profile_photos_nudge"];
+  const { data } = useQuery<{ dismissed: boolean }>({
+    queryKey: reminderKey,
+    queryFn: async () => {
+      const res = await fetch("/api/reminders/profile_photos_nudge", { credentials: "include" });
+      if (!res.ok) return { dismissed: true };
+      return res.json();
+    },
+  });
+
+  const dismiss = async () => {
+    await fetch("/api/reminders/profile_photos_nudge/dismiss", { method: "POST", credentials: "include" });
+    queryClient.invalidateQueries({ queryKey: reminderKey });
+  };
+
+  if (!data || data.dismissed || photoCount >= MIN_PHOTOS_BEFORE_NUDGE) return null;
+
+  return (
+    <div className="relative rounded-[18px] border border-vf-line bg-vf-surface2 p-4 pr-10 mb-4 vf-card" data-testid="photo-nudge">
+      <button
+        onClick={dismiss}
+        aria-label="Dismiss"
+        className="absolute right-3 top-3 text-vf-faint hover:text-vf-text transition-colors"
+        data-testid="button-dismiss-photo-nudge"
+      >
+        <X className="w-4 h-4" />
+      </button>
+      <div className="flex items-start gap-3">
+        <span className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-vf-ember/10" aria-hidden="true">
+          <Camera className="w-4 h-4 text-vf-ember" />
+        </span>
+        <div className="min-w-0">
+          <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">Get seen</div>
+          <p className="text-[14px] text-vf-text mt-1.5 leading-[1.5]">
+            Profiles with {MIN_PHOTOS_BEFORE_NUDGE} or more photos get noticeably more reads — and more likes.
+            You have {photoCount === 0 ? "none up yet" : `${photoCount} up`}. Add{" "}
+            {photoCount === 0 ? "a few" : "a couple more"} before your twin sends you out there.
+          </p>
+          <button
+            onClick={onAddPhotos}
+            className="mt-3 inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press vf-btn-primary hover:bg-[var(--vf-ember-soft)] transition-colors"
+            data-testid="button-photo-nudge-add"
+          >
+            Add photos
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -722,7 +788,10 @@ export default function Profile() {
             {/* Photos */}
             <section>
               <SectionLabel>Photos</SectionLabel>
-              <div className="mt-3 grid grid-cols-3 gap-3">
+              <div className="mt-3">
+                <PhotoNudge photoCount={(photos ?? []).length} onAddPhotos={() => setLocation("/photos")} />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
                 {gallery.slice(0, 5).map((p: any) => (
                   <div key={p.id} className="rounded-[16px] overflow-hidden border border-vf-line bg-vf-surface2" style={{ aspectRatio: "3 / 4" }} data-testid={`gallery-photo-${p.id}`}>
                     <img src={p.photoUrl} alt="" className="w-full h-full object-cover" />
