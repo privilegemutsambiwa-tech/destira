@@ -3290,13 +3290,27 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   // The client sends a plan tier, NEVER an amount. The server resolves the
   // price, initiates, and only a poll/webhook confirmation activates the plan.
 
+  // Which gateway actually handles the wallet methods right now — env-driven
+  // (providerFor), so the client can decide upfront whether to collect a
+  // phone number itself (Paynow's direct USSD push) or skip straight to a
+  // hosted redirect (NardoPay's own picker) before ever calling initiate.
+  app.get("/api/payments/config", async (req, res) => {
+    const { name } = payments.providerFor("ecocash");
+    const walletProvider = name.startsWith("nardopay") ? "nardopay" : name.startsWith("paynow") ? "paynow" : "mock";
+    res.json({ walletProvider });
+  });
+
   app.post("/api/payments/initiate", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     const parsed = initiatePaymentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid payment request" });
     const { tier, period, method, phone, sourceFeature } = parsed.data;
-    if ((method === "ecocash" || method === "onemoney" || method === "innbucks") && !/^0?7\d{8}$/.test((phone || "").replace(/\D/g, ""))) {
+    // NardoPay's hosted link takes the wallet number on its own page, not
+    // ours — the phone requirement only applies to Paynow's direct USSD push.
+    const walletMethod = method === "ecocash" || method === "onemoney" || method === "innbucks";
+    const handledByNardoPay = walletMethod && payments.providerFor(method).name.startsWith("nardopay");
+    if (walletMethod && !handledByNardoPay && !/^0?7\d{8}$/.test((phone || "").replace(/\D/g, ""))) {
       return res.status(400).json({ message: "Enter the wallet number as 07XX XXX XXX." });
     }
     try {

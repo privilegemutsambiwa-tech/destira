@@ -17,6 +17,22 @@ export interface InitiateResult {
   deepLink?: string;
 }
 
+// Which gateway is live for the wallet methods right now — decides whether
+// the checkout screen asks for a phone number itself (Paynow) or skips
+// straight to a redirect and lets the gateway's own page collect it
+// (NardoPay). Static per deployment, so this is safe to cache indefinitely.
+export function usePaymentsConfig() {
+  return useQuery({
+    queryKey: ["/api/payments/config"],
+    staleTime: Infinity,
+    queryFn: async () => {
+      const res = await fetch("/api/payments/config", { credentials: "include" });
+      if (!res.ok) return { walletProvider: "mock" as const };
+      return res.json() as Promise<{ walletProvider: "nardopay" | "paynow" | "mock" }>;
+    },
+  });
+}
+
 export function useInitiatePayment() {
   return useMutation({
     mutationFn: async (input: {

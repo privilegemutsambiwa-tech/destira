@@ -6,6 +6,7 @@ import { PLAN_CARDS, BILLING_PERIODS, PERIOD_LABEL, priceLabel, periodPriceCents
 import {
   useInitiatePayment,
   usePaymentStatus,
+  usePaymentsConfig,
   refreshPlanQueries,
   WALLET_PAY_METHODS,
   type PayMethod,
@@ -48,6 +49,11 @@ export default function PlansPay() {
   const [authCode, setAuthCode] = useState<{ code: string; expires?: string; deepLink?: string } | null>(null);
 
   const initiate = useInitiatePayment();
+  const { data: paymentsConfig } = usePaymentsConfig();
+  // NardoPay's own hosted page collects the wallet number and lets the
+  // subscriber pick EcoCash/OneMoney/InnBucks there — asking for it here too
+  // would be a second, redundant prompt for a number we never actually use.
+  const walletHandledByNardoPay = paymentsConfig?.walletProvider === "nardopay";
   const { data: status } = usePaymentStatus(paymentId, paymentId != null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -70,8 +76,9 @@ export default function PlansPay() {
 
   const pay = () => {
     setStartedAt(Date.now());
+    const needsPhone = !!method && WALLET_PAY_METHODS.has(method) && !walletHandledByNardoPay;
     initiate.mutate(
-      { tier, period, method: method!, phone: method && WALLET_PAY_METHODS.has(method) ? phone : undefined, sourceFeature },
+      { tier, period, method: method!, phone: needsPhone ? phone : undefined, sourceFeature },
       {
         onSuccess: (r) => {
           setPaymentId(r.paymentId);
@@ -249,24 +256,31 @@ export default function PlansPay() {
       </div>
 
       {method && WALLET_PAY_METHODS.has(method) && (
-        <div className="mt-5">
-          <label className={`${EYEBROW} block mb-2`}>
-            {method === "onemoney" ? "OneMoney" : method === "innbucks" ? "InnBucks" : "EcoCash"} number
-          </label>
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, "").slice(0, 10))}
-            inputMode="numeric"
-            placeholder="0771 234 567"
-            className="w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-12 text-[16px] tracking-[0.04em] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60"
-            data-testid="input-wallet-phone"
-          />
-          <p className="text-[12px] text-vf-faint mt-2 leading-[1.5]">
-            {method === "innbucks"
-              ? "You'll get a code to approve in your InnBucks app — we never see your PIN."
-              : "You'll get a prompt on this number. Approve it with your PIN — we never see it."}
+        walletHandledByNardoPay ? (
+          <p className="text-[12.5px] text-vf-faint mt-5 leading-[1.5]" data-testid="text-nardopay-redirect-note">
+            You'll enter your {method === "onemoney" ? "OneMoney" : method === "innbucks" ? "InnBucks" : "EcoCash"}{" "}
+            number and approve it on the next screen — we never see your PIN.
           </p>
-        </div>
+        ) : (
+          <div className="mt-5">
+            <label className={`${EYEBROW} block mb-2`}>
+              {method === "onemoney" ? "OneMoney" : method === "innbucks" ? "InnBucks" : "EcoCash"} number
+            </label>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, "").slice(0, 10))}
+              inputMode="numeric"
+              placeholder="0771 234 567"
+              className="w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-12 text-[16px] tracking-[0.04em] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60"
+              data-testid="input-wallet-phone"
+            />
+            <p className="text-[12px] text-vf-faint mt-2 leading-[1.5]">
+              {method === "innbucks"
+                ? "You'll get a code to approve in your InnBucks app — we never see your PIN."
+                : "You'll get a prompt on this number. Approve it with your PIN — we never see it."}
+            </p>
+          </div>
+        )
       )}
 
       {initiate.isError && (
@@ -277,14 +291,16 @@ export default function PlansPay() {
         disabled={
           !method ||
           initiate.isPending ||
-          (!!method && WALLET_PAY_METHODS.has(method) && !/^0?7\d{8}$/.test(phone))
+          (!!method && WALLET_PAY_METHODS.has(method) && !walletHandledByNardoPay && !/^0?7\d{8}$/.test(phone))
         }
         onClick={pay}
         className="mt-6 inline-flex items-center justify-center gap-2 h-12 px-7 rounded-full bg-vf-ember text-vf-ink font-bold text-[15px] btn-press hover:bg-[var(--vf-ember-soft)] disabled:opacity-40 transition-colors"
         data-testid="button-pay"
       >
         {initiate.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-        {method && WALLET_PAY_METHODS.has(method) ? "Send me the prompt" : `Pay ${priceLabel(priceCents)}`}
+        {method && WALLET_PAY_METHODS.has(method) && !walletHandledByNardoPay
+          ? "Send me the prompt"
+          : `Pay ${priceLabel(priceCents)}`}
       </button>
       <p className="text-[11.5px] text-vf-faint mt-3">
         You'll see the exact amount before anything is charged. This pays for {RENEWAL_WINDOW[period]}, not an

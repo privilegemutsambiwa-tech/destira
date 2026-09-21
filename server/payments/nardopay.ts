@@ -6,12 +6,12 @@
 //             hosted `url`. The EcoCash/OneMoney/InnBucks picker lives on
 //             NardoPay's own page (window.NardoPay.init(...)), not ours — we
 //             just send the browser there.
-//   confirm:  webhook only (POST /api/payments/nardopay/webhook). NardoPay's
+//   confirm:  webhook only (POST /api/payments/webhook/nardopay). NardoPay's
 //             create-payment-link-api doesn't document a status-poll
 //             endpoint, so pollStatus() is a no-op; refreshPayment() already
 //             skips polling when a payment's pollUrl is unset.
 //
-// Every charge uses link_type "payment_link", never "subscription": our
+// Every charge uses link_type "payment", never "subscription": our
 // subscriptions.currentPeriodEnd model is a discrete, user-initiated top-up
 // per period (weekly/monthly/sixMonth) — never gateway-driven recurring
 // billing — and NardoPay's billing_cycle vocabulary has no sixMonth cycle
@@ -39,12 +39,6 @@ import type {
 } from "./types";
 
 const CREATE_LINK_URL = "https://mczqwqsvumfsneoknlep.supabase.co/functions/v1/create-payment-link-api";
-
-const TIER_LABEL: Record<string, string> = {
-  spark: "Destira Spark",
-  flame: "Destira Flame",
-  ember: "Destira Ember",
-};
 
 export function nardopayConfigured(): boolean {
   return !!process.env.NARDOPAY_API_KEY;
@@ -80,7 +74,7 @@ export class NardoPayProvider implements PaymentProvider {
   async initiate(input: InitiateInput): Promise<InitiateResult> {
     if (!this.apiKey) throw new Error("NardoPay is not configured (NARDOPAY_API_KEY)");
     const amount = Math.round(input.amountCents) / 100;
-    const planName = input.tier ? TIER_LABEL[input.tier] ?? `Destira ${input.tier}` : "Destira";
+    const productName = input.tier ? `Destira ${input.tier.toUpperCase()} Pass` : "Destira Pass";
 
     const res = await fetch(CREATE_LINK_URL, {
       method: "POST",
@@ -89,17 +83,17 @@ export class NardoPayProvider implements PaymentProvider {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        link_type: "payment_link",
-        plan_name: planName,
+        link_type: "payment",
+        product_name: productName,
         amount,
         currency: "USD",
         redirect_url: `${appUrl()}/plans/pay/return?ref=${input.reference}`,
-        webhook_url: `${appUrl()}/api/payments/nardopay/webhook`,
+        webhook_url: `${appUrl()}/api/payments/webhook/nardopay`,
         metadata: {
           paymentId: input.reference,
           userId: input.userId,
           tier: input.tier,
-          plan: input.period,
+          period: input.period,
         },
       }),
     });
