@@ -52,6 +52,23 @@ export function useMatches() {
   });
 }
 
+// Free, uncounted, and permanent — a passed profile never comes back into
+// Discover for this viewer. No cache invalidation needed: Discover removes
+// the card from its own local state the instant the tap lands, well before
+// this request resolves.
+export function useDiscoverPass() {
+  return useMutation({
+    mutationFn: async (targetId: string) => {
+      await fetch("/api/discover/pass", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetId }),
+        credentials: "include",
+      });
+    },
+  });
+}
+
 export function useCreateMatch() {
   const queryClient = useQueryClient();
   return useMutation({

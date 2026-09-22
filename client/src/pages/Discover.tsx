@@ -3,10 +3,11 @@ import { LayoutShell } from "@/components/layout-shell";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag } from "lucide-react";
-import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories, useProfileCompletion, UpgradeRequiredError } from "@/hooks/use-interactions";
+import { useDiscoverProfiles, useStartInterview, useCreateMatch, useDiscoverPass, useFeedStories, useProfileCompletion, UpgradeRequiredError } from "@/hooks/use-interactions";
 import { useTwinReadiness, useDismissReminder } from "@/hooks/use-onboarding";
-import { LIMITS } from "@shared/entitlements";
+import { LIMITS, gateCopy } from "@shared/entitlements";
 import { usePaywall } from "@/hooks/use-paywall";
+import { useGate, resetLabel } from "@/hooks/use-gate";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -467,7 +468,12 @@ function ProfileCompletionStrip() {
 }
 
 export default function Discover() {
-  const [currentIdx, setCurrentIdx] = useState(0);
+  // Profiles liked or passed THIS session get pulled out of the deck the
+  // instant you act on them — no waiting on a refetch to stop seeing someone
+  // you already decided about. The exclusion is also persisted server-side
+  // (a `matches` row for a like, `discover_passes` for a pass) so it holds
+  // across reloads and future sessions too, not just this one.
+  const [evaluatedIds, setEvaluatedIds] = useState<Set<string>>(() => new Set());
   const [filter, setFilter] = useState<FilterChip>(getInitialFilter);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
@@ -485,6 +491,12 @@ export default function Discover() {
   const { data: feedStories } = useFeedStories();
   const startInterview = useStartInterview();
   const createMatch = useCreateMatch();
+  const discoverPass = useDiscoverPass();
+  const qc = useQueryClient();
+  // Checked up front, not just on tap: once today's likes are used up, the
+  // whole deck stops (not just the Like button) — see the empty-state block
+  // below. Passing stays free and doesn't touch this.
+  const { data: likesGate } = useGate("daily_likes");
   const [woLocation, setLocation] = useLocation();
   const { toast } = useToast();
   const { data: ownProfile, isLoading: isOwnProfileLoading } = useProfile();
@@ -503,13 +515,7 @@ export default function Discover() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setFilter(params.get("filter") === "nearby" ? "nearby" : "all");
-    setCurrentIdx(0);
   }, [woLocation]);
-
-  useEffect(() => {
-    isActingRef.current = false;
-    setIsActing(false);
-  }, [currentIdx]);
 
   useEffect(() => {
     if (navigator.geolocation && localStorage.getItem("location_permission_asked") === "asked") {
@@ -531,16 +537,32 @@ export default function Discover() {
     return map;
   }, [feedStories]);
 
-  const profiles = useMemo(() => {
+  // Under the active filter, before this session's evaluations thin it out
+  // — the stable denominator for the "N of total" counter below. Excludes
+  // evaluatedIds on purpose: the counter's total shouldn't shrink every time
+  // a card leaves the deck, only the position within it should climb.
+  const eligibleForFilter = useMemo(() => {
     if (!rawProfiles) return [];
-    let list = [...rawProfiles];
+    return filter === "nearby" ? rawProfiles.filter((p: any) => p.distanceKm !== null && p.distanceKm !== undefined) : rawProfiles;
+  }, [rawProfiles, filter]);
+
+  const profiles = useMemo(() => {
+    let list = eligibleForFilter.filter((p: any) => !evaluatedIds.has(p.userId));
     if (filter === "nearby") {
-      list = list
-        .filter((p) => p.distanceKm !== null && p.distanceKm !== undefined)
-        .sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+      list = [...list].sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
     }
     return list;
-  }, [rawProfiles, filter]);
+  }, [eligibleForFilter, filter, evaluatedIds]);
+
+  // Always the front of the deck — evaluating a profile removes it from
+  // `profiles` above (via evaluatedIds), so there's no index to advance,
+  // just a new [0] once the set changes.
+  const currentProfile = profiles[0];
+
+  useEffect(() => {
+    isActingRef.current = false;
+    setIsActing(false);
+  }, [currentProfile?.userId]);
 
   const handleViewCardStory = useCallback((profile: any) => {
     const userId: string = profile.userId;
@@ -566,6 +588,38 @@ export default function Discover() {
 
   const weekday = new Date().toLocaleDateString(undefined, { weekday: "long" });
 
+  // Likes are the metric, not passes — free tier gets 30/day (80 Spark, 200
+  // Flame, unlimited Ember). The moment that's used up, the deck itself
+  // stops, not just the Like button: there's no point browsing further
+  // today if nothing you tap can turn into a like. Passing stays free and
+  // never trips this.
+  if (likesGate && !likesGate.ok) {
+    const copy = gateCopy("daily_likes", {
+      tier: likesGate.tier as any,
+      limit: likesGate.limit,
+      used: likesGate.used,
+      resetLabel: resetLabel(likesGate.resetAt),
+    });
+    return (
+      <LayoutShell>
+        <div className="max-w-lg mx-auto text-center py-20 px-6 rounded-[22px] border border-vf-line bg-vf-surface" data-testid="discover-likes-exhausted">
+          <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 bg-vf-ember/10">
+            <Heart className="w-10 h-10 text-vf-ember" />
+          </div>
+          <h3 className="font-serif text-xl mb-2 text-vf-text">That's today's likes</h3>
+          <p className="text-sm text-vf-muted">{likesGate.line || copy.line}</p>
+          <button
+            onClick={() => setLocation(`/plans?feature=daily_likes`)}
+            className="mt-5 h-11 px-6 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
+            data-testid="button-discover-likes-upgrade"
+          >
+            {likesGate.requiredTierName || copy.requiredTierName ? `See ${likesGate.requiredTierName || copy.requiredTierName}` : "See plans"}
+          </button>
+        </div>
+      </LayoutShell>
+    );
+  }
+
   if (!profiles || profiles.length === 0) {
     return (
       <LayoutShell>
@@ -579,7 +633,7 @@ export default function Discover() {
             </h1>
           </div>
           <div className="flex gap-2 mb-5" data-testid="filter-chips">
-            <ScopePill active={filter === "nearby"} onToggle={() => { setFilter(filter === "nearby" ? "all" : "nearby"); setCurrentIdx(0); }} />
+            <ScopePill active={filter === "nearby"} onToggle={() => setFilter(filter === "nearby" ? "all" : "nearby")} />
           </div>
           <StoriesCarousel />
           <div className="text-center py-20 px-6 rounded-[22px] border border-vf-line bg-vf-surface">
@@ -587,12 +641,14 @@ export default function Discover() {
               <Brain className="w-10 h-10 text-vf-mint" />
             </div>
             <h3 className="font-serif text-xl mb-2 text-vf-text">
-              {filter === "nearby" ? "Nobody within 20km right now" : "No one to discover yet"}
+              {filter === "nearby" ? "Nobody within 20km right now" : evaluatedIds.size > 0 ? "That's everyone for now" : "No one to discover yet"}
             </h3>
             <p className="text-sm text-vf-muted">
               {filter === "nearby"
                 ? "Widen the scope to see everyone, or check back when people are near you."
-                : "Complete your onboarding first, then check back as more people join Destira."}
+                : evaluatedIds.size > 0
+                  ? "You've seen everyone available right now — check back as more people join or answer."
+                  : "Complete your onboarding first, then check back as more people join Destira."}
             </p>
             {filter !== "all" && (
               <button
@@ -608,8 +664,6 @@ export default function Discover() {
     );
   }
 
-  const currentProfile = profiles[currentIdx % profiles.length];
-
   const distanceKm: number | null = currentProfile.distanceKm ?? null;
   const nearby: boolean = currentProfile.isNearbyNow ?? false;
   const isVeryClose = distanceKm !== null && distanceKm < 1;
@@ -617,8 +671,10 @@ export default function Discover() {
   const hasCardStories = cardStories.length > 0;
   const resonance = getResonance(currentProfile.personalityProfile);
 
-  const handleNext = () => {
-    setCurrentIdx((prev) => (prev + 1) % profiles.length);
+  // The only way a card leaves the deck: mark it evaluated so the `profiles`
+  // memo drops it and [0] becomes whoever's next. No index to advance.
+  const handleNext = (evaluatedUserId: string) => {
+    setEvaluatedIds((prev) => new Set(prev).add(evaluatedUserId));
   };
 
   const handleInterview = async () => {
@@ -642,20 +698,26 @@ export default function Discover() {
     }
   };
 
+  // Free and uncounted — only likes touch the daily cap. Persisted
+  // server-side (discover_passes) so this person never comes back, the
+  // same permanence a like already has via the matches table.
   const handlePass = () => {
     if (isActingRef.current) return;
     isActingRef.current = true;
     setIsActing(true);
-    handleNext();
+    const passedProfile = currentProfile;
+    handleNext(passedProfile.userId);
+    discoverPass.mutate(passedProfile.userId);
   };
 
   const doBlock = async () => {
     if (!currentProfile?.userId) return;
+    const blockedId = currentProfile.userId;
     setConfirm(null);
     try {
-      await apiRequest("POST", `/api/users/block/${currentProfile.userId}`, {});
+      await apiRequest("POST", `/api/users/block/${blockedId}`, {});
       toast({ title: "Blocked", description: "They won't appear in your feed anymore." });
-      handleNext();
+      handleNext(blockedId);
     } catch {
       toast({ title: "Could not block", variant: "destructive" });
     }
@@ -663,13 +725,14 @@ export default function Discover() {
 
   const doReport = async () => {
     if (!currentProfile?.userId) return;
+    const reportedId = currentProfile.userId;
     const reason = reportReason.trim();
     setConfirm(null);
     setReportReason("");
     try {
-      await apiRequest("POST", `/api/users/${currentProfile.userId}/report`, { reason });
+      await apiRequest("POST", `/api/users/${reportedId}/report`, { reason });
       toast({ title: "Report sent", description: "Our team will review it. They're now blocked too." });
-      handleNext();
+      handleNext(reportedId);
     } catch {
       toast({ title: "Could not send report", variant: "destructive" });
     }
@@ -677,7 +740,9 @@ export default function Discover() {
 
   // Refuse before attempting when the daily cap is already reached — the sheet
   // says the number, the reset time, and the next tier. The server still
-  // enforces on /api/likes.
+  // enforces on /api/likes. (The empty-deck block further up already stops
+  // this from ever being reachable once the cap is hit, but this stays as
+  // the same defense-in-depth the rest of the app uses.)
   const handleLike = () => {
     if (isActingRef.current) return;
     isActingRef.current = true;
@@ -686,11 +751,12 @@ export default function Discover() {
     paywall.guard("daily_likes", () => {
       // Optimistic: the card leaves the deck the instant the tap lands, like a
       // swipe — the actual like request finishes in the background.
-      handleNext();
+      handleNext(likedProfile.userId);
       doLike(likedProfile);
     }).finally(() => {
       // Covers the path that never advances the deck (gate refused) — the
-      // currentIdx effect already resets this pair once handleNext runs above.
+      // effect keyed on currentProfile's id already resets this pair once
+      // handleNext runs above.
       isActingRef.current = false;
       setIsActing(false);
     });
@@ -709,6 +775,10 @@ export default function Discover() {
     }
     try {
       await createMatch.mutateAsync(targetProfile.userId);
+      // The deck-stops-at-the-cap block above reads this same query — without
+      // invalidating it, a like that lands exactly on the limit wouldn't lock
+      // the deck until the gate's own 60s staleTime happened to expire.
+      qc.invalidateQueries({ queryKey: ["/api/gate", "daily_likes"] });
       toast({
         title: "Liked!",
         description: `${targetProfile.displayName} will be notified.`,
@@ -737,9 +807,7 @@ export default function Discover() {
   const interests: string[] = Array.isArray(currentProfile.interests) ? currentProfile.interests.slice(0, 6) : [];
   const aboutText: string = currentProfile.aboutMe || currentProfile.bio || "";
 
-  const upcoming = profiles.length > 1
-    ? [1, 2].map((offset) => profiles[(currentIdx + offset) % profiles.length]).filter((p, i, arr) => arr.findIndex((x) => x.userId === p.userId) === i && p.userId !== currentProfile.userId)
-    : [];
+  const upcoming = profiles.slice(1, 3);
 
   return (
     <LayoutShell>
@@ -758,7 +826,7 @@ export default function Discover() {
             </h1>
           </div>
           <div className="flex gap-2 flex-wrap" data-testid="filter-chips">
-            <ScopePill active={filter === "nearby"} onToggle={() => { setFilter(filter === "nearby" ? "all" : "nearby"); setCurrentIdx(0); }} />
+            <ScopePill active={filter === "nearby"} onToggle={() => setFilter(filter === "nearby" ? "all" : "nearby")} />
           </div>
         </div>
 
@@ -770,7 +838,7 @@ export default function Discover() {
 
         <AnimatePresence mode="wait">
           <motion.div
-            key={currentIdx}
+            key={currentProfile.userId}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
@@ -1006,7 +1074,7 @@ export default function Discover() {
 
         <div className="flex items-center justify-between px-1 mb-8">
           <p className="text-xs text-vf-faint">
-            {(currentIdx % profiles.length) + 1} of {profiles.length} profiles
+            {eligibleForFilter.length - profiles.length + 1} of {eligibleForFilter.length} profiles
           </p>
           <div className="flex items-center gap-4">
             <button
@@ -1043,16 +1111,14 @@ export default function Discover() {
                 style={{ width: 132 + (upcoming.length - 1) * 34, height: 196 }}
                 data-testid="fan-upcoming"
               >
-                {upcoming.map((p, i) => {
+                {upcoming.map((p: any, i: number) => {
                   const r = getResonance(p.personalityProfile);
-                  const idx = profiles.findIndex((x) => x.userId === p.userId);
                   const rotateDeg = [0, -6, 5][i % 3];
                   const topOffset = [0, 12, 4][i % 3];
                   return (
-                    <button
+                    <div
                       key={p.userId}
-                      onClick={() => setCurrentIdx(idx)}
-                      className="absolute rounded-[18px] border border-vf-line bg-vf-surface2 overflow-hidden text-left transition-transform duration-200 hover:-translate-y-1"
+                      className="absolute rounded-[18px] border border-vf-line bg-vf-surface2 overflow-hidden text-left"
                       style={{
                         left: i * 34,
                         top: topOffset,
@@ -1080,7 +1146,7 @@ export default function Discover() {
                           <div className="font-mono text-[10.5px] mt-1.5" style={{ color: "#8FE3C7" }}>resonance {r.score}</div>
                         )}
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>

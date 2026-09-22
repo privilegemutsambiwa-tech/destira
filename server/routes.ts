@@ -1167,6 +1167,23 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // "Not interested" from the Discover deck — free and uncounted (only likes
+  // count against the daily cap), but persisted so this person never comes
+  // back into the feed, the same permanence a like already has.
+  app.post("/api/discover/pass", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const targetId = typeof req.body?.targetId === "string" ? req.body.targetId : undefined;
+    if (!targetId) return res.status(400).json({ message: "targetId is required" });
+    try {
+      await storage.recordDiscoverPass(userId, targetId);
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("Discover pass error:", e);
+      res.status(500).json({ message: "Failed to record pass" });
+    }
+  });
+
   app.post("/api/matches", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -3803,6 +3820,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         allGroups.sort((a: any, b: any) => (b.memberCount || 0) - (a.memberCount || 0));
       } else if (filter === "new") {
         allGroups.sort((a: any, b: any) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime());
+      } else if (filter === "official") {
+        allGroups = allGroups.filter((g: any) => g.isOfficial);
       }
 
       allGroups.sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime());

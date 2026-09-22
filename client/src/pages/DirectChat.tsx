@@ -1,13 +1,71 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDirectMessages, useSendDirectMessage, useMatches, useMarkThreadRead } from "@/hooks/use-interactions";
+import { useDirectMessages, useSendDirectMessage, useMatches, useMarkThreadRead, useGroups } from "@/hooks/use-interactions";
+import { useProfile, useProfileGroups } from "@/hooks/use-profiles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, ArrowLeft, Loader2 } from "lucide-react";
+import { Send, ArrowLeft, Loader2, X, Users } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
 import { motion } from "framer-motion";
+
+// A lower-pressure first step than a cold 1:1 thread: if this pair already
+// shares a Lounge, point at it; otherwise suggest a curated one near the
+// viewer. Dismissible for this one conversation only (local state, not a
+// server-persisted reminder) — it's contextual to this thread, not a
+// recurring nudge like Discover's strips.
+function SharedLoungeStrip({ otherUserId, otherName }: { otherUserId?: string; otherName: string }) {
+  const [, setLocation] = useLocation();
+  const [dismissed, setDismissed] = useState(false);
+  const { data: myProfile } = useProfile();
+  const { data: theirGroups } = useProfileGroups(otherUserId);
+  const { data: officialLounges } = useGroups(undefined, "official");
+
+  if (dismissed || !otherUserId) return null;
+
+  const mutual = (theirGroups || []).filter((g) => g.viewerIsMember);
+  const myCity = myProfile?.locationName || myProfile?.location || null;
+  const suggested = !mutual.length
+    ? (officialLounges || []).find((g: any) => myCity && g.locationLabel === myCity) || (officialLounges || [])[0]
+    : null;
+
+  if (!mutual.length && !suggested) return null;
+
+  const lounge = mutual.length ? mutual[0] : suggested;
+  const copy = mutual.length
+    ? <>You're both in <span className="text-vf-text">{lounge.name}</span> — say hi there too.</>
+    : <><span className="text-vf-text">{lounge.name}</span> could be a good place to meet {otherName} in a group first.</>;
+
+  return (
+    <div
+      className="mx-4 mt-3 rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-start justify-between gap-3"
+      data-testid="strip-shared-lounge"
+    >
+      <div className="flex items-start gap-2.5">
+        <Users className="w-4 h-4 text-vf-faint shrink-0 mt-0.5" />
+        <p className="text-[13px] text-vf-muted leading-[1.55]">
+          {copy}{" "}
+          <button
+            onClick={() => setLocation(`/lounge/group/${lounge.id}`)}
+            className="text-vf-ember hover:text-vf-text underline underline-offset-2 transition-colors"
+            data-testid="link-shared-lounge"
+          >
+            {mutual.length ? "Open lounge" : "Take a look"}
+          </button>
+        </p>
+      </div>
+      <button
+        onClick={() => setDismissed(true)}
+        className="text-vf-faint hover:text-vf-text transition-colors shrink-0 -mr-1 -mt-0.5"
+        aria-label="Dismiss"
+        data-testid="button-dismiss-shared-lounge"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
 
 export default function DirectChat({ params }: { params: { matchId: string } }) {
   const matchId = Number(params.matchId);
@@ -85,6 +143,8 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
           </div>
         </div>
       </div>
+
+      <SharedLoungeStrip otherUserId={match?.otherProfile?.userId} otherName={otherName} />
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {isLoading ? (

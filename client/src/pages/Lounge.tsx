@@ -8,7 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Loader2, Plus, Search, Lock, Globe, UserPlus, Crown, Shield, BellOff
+  Loader2, Plus, Search, Lock, Globe, UserPlus, Crown, Shield, BellOff, BadgeCheck
 } from "lucide-react";
 import { useGroups, useGroup, useCreateGroup } from "@/hooks/use-interactions";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +24,7 @@ const PRIVACY_LABELS: Record<string, { icon: any; label: string }> = {
 const FILTER_OPTIONS = [
   { value: "all", label: "All" },
   { value: "joined", label: "Joined" },
+  { value: "official", label: "Official" },
   { value: "popular", label: "Popular" },
   { value: "new", label: "New" },
 ];
@@ -106,9 +107,17 @@ export default function Lounge() {
 // bento hero slot: unread activity first (that's the group actually asking
 // for your attention right now), member count as the tiebreak/fallback for
 // sections with no unread state (e.g. Discover, where you have none).
-function pickFeatured(list: any[]): { featured: any | null; rest: any[] } {
+// `preferOfficial` puts curated Destira Lounges ahead of that — used for the
+// "Discover Groups" section only, so a browsing (especially brand-new) user
+// always lands on a guaranteed-good, guaranteed-joinable room first, not
+// whatever happens to have the most members that week.
+function pickFeatured(list: any[], preferOfficial = false): { featured: any | null; rest: any[] } {
   if (list.length === 0) return { featured: null, rest: [] };
   const sorted = [...list].sort((a, b) => {
+    if (preferOfficial) {
+      const officialDiff = (b.isOfficial ? 1 : 0) - (a.isOfficial ? 1 : 0);
+      if (officialDiff !== 0) return officialDiff;
+    }
     const unreadDiff = (b.unreadCount || 0) - (a.unreadCount || 0);
     if (unreadDiff !== 0) return unreadDiff;
     return (b.memberCount || 0) - (a.memberCount || 0);
@@ -117,14 +126,46 @@ function pickFeatured(list: any[]): { featured: any | null; rest: any[] } {
   return { featured, rest };
 }
 
+// A small, neutral badge — deliberately not ember (already means "unread"
+// here) or mint (reserved for the AI-twin layer everywhere else in the
+// app) — for "this is a Destira-run Lounge, not a member-created one."
+function OfficialBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-1 font-mono text-[9.5px] uppercase tracking-[0.1em] px-1.5 py-0.5 rounded-full border border-vf-line text-vf-soft"
+      data-testid="badge-official"
+    >
+      <BadgeCheck className="w-2.5 h-2.5" />
+      Official
+    </span>
+  );
+}
+
 function GroupList({ groups, onNavigate }: { groups: any[]; onNavigate: (id: string) => void }) {
   const joined = useMemo(() => pickFeatured(groups.filter((g) => g.isMember)), [groups]);
-  const discover = useMemo(() => pickFeatured(groups.filter((g) => !g.isMember)), [groups]);
+  const discover = useMemo(() => pickFeatured(groups.filter((g) => !g.isMember), true), [groups]);
+  // Only fetched into view when the list above is actually empty (a search
+  // or filter came back with nothing) — the curated set a new user always
+  // has something to join from, instead of a bare "create one" dead end.
+  const { data: officialFallback } = useGroups(undefined, "official");
 
   if (groups.length === 0) {
+    const suggestions = (officialFallback || []).filter((g: any) => !g.isMember).slice(0, 4);
     return (
-      <div className="text-center py-12 text-vf-muted" data-testid="text-no-groups">
-        No groups found. Create one to get started!
+      <div className="text-center py-12" data-testid="text-no-groups">
+        <p className="text-vf-muted mb-6">No groups found. Create one to get started!</p>
+        {suggestions.length > 0 && (
+          <div className="max-w-2xl mx-auto text-left">
+            <h2 className="mb-3 font-mono uppercase tracking-[0.14em] text-[10.5px] text-vf-faint text-center">
+              Start with one of these
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {suggestions.map((group: any, idx: number) => (
+                <GroupCard key={group.id} group={group} idx={idx} onNavigate={onNavigate} isJoinCard />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -291,9 +332,12 @@ function FeaturedGroupCard({ group, onNavigate, isJoinCard = false }: {
             <p className="text-[13px] text-vf-muted line-clamp-1" data-testid={`text-group-preview-${group.id}`}>
               {group.lastMessage ? `${group.lastMessageNickname || "Someone"}: ${group.lastMessage}` : (group.description || "No description yet")}
             </p>
-            <span className="mt-1.5 flex items-center gap-1 font-mono text-[10.5px] text-vf-faint">
-              <PrivacyIcon className="w-3 h-3" />
-              {privacy.label}
+            <span className="mt-1.5 flex items-center gap-2 font-mono text-[10.5px] text-vf-faint">
+              <span className="flex items-center gap-1">
+                <PrivacyIcon className="w-3 h-3" />
+                {privacy.label}
+              </span>
+              {group.isOfficial && <OfficialBadge />}
             </span>
           </div>
           {isJoinCard ? <JoinCta group={group} /> : (
@@ -354,6 +398,7 @@ function GroupCard({ group, idx, onNavigate, isJoinCard = false, wide = false }:
             <span className="text-[16px] text-vf-text truncate flex-1" data-testid={`text-group-name-${group.id}`}>
               {group.name}
             </span>
+            {group.isOfficial && <OfficialBadge />}
             {group.unreadCount > 0 && !group.isMuted && (
               <span
                 className="shrink-0 font-mono text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center bg-vf-ember text-vf-ink"

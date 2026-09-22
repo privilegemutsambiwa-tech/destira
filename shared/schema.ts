@@ -175,6 +175,14 @@ export const groups = pgTable("groups", {
   canMembersSendMessages: boolean("can_members_send_messages").default(true),
   canMembersAddOthers: boolean("can_members_add_others").default(true),
   maxMembers: integer("max_members").default(500),
+  // Curated/Destira-run Lounges (see scripts/seed-lounges.ts) vs. anything a
+  // member created themselves — lets the Lounge tab guarantee new users
+  // always see something joinable instead of a cold, empty list.
+  isOfficial: boolean("is_official").default(false),
+  // A campus ("University of Zimbabwe") or city/area ("Harare") this Lounge
+  // is for. One flexible label rather than separate campus/city columns —
+  // unlike `events`, Lounges don't need real geo math, just a grouping tag.
+  locationLabel: text("location_label"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -597,6 +605,20 @@ export const referralClaimSchema = z.object({
 export type ReferralCode = typeof referralCodes.$inferSelect;
 export type Referral = typeof referrals.$inferSelect;
 export type ProfileViewGrant = typeof profileViewGrants.$inferSelect;
+
+// A Discover "pass" (not interested) — separate from `matches` (which only
+// ever holds likes/requests) so a pass can never leak into a match list, a
+// chat thread, or the incoming-likes page. Recorded once per (viewer,
+// target) so getDiscoverableProfiles can exclude them permanently, the same
+// way an existing `matches` row already excludes someone you liked.
+export const discoverPasses = pgTable("discover_passes", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  targetId: varchar("target_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [
+  uniqueIndex("discover_passes_user_target_idx").on(t.userId, t.targetId),
+]);
 
 export const dailyLikeCounts = pgTable("daily_like_counts", {
   id: serial("id").primaryKey(),

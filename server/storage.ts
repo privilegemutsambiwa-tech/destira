@@ -7,7 +7,7 @@ import {
   twinProfilesStructured, twinMemoryFacts, twinMemorySummary,
   questions, userAnswers, questionSchedule, auditLogs,
   stories, storyMedia, storyLikes, storyComments, storyViews, plans, chatRequests,
-  blockedUsers, supportTickets, dailyLikeCounts, inviteRequests,
+  blockedUsers, supportTickets, dailyLikeCounts, inviteRequests, discoverPasses,
   type Profile, type InsertProfile, type UpdateProfileRequest,
   type Match, type Interview, type Group, type GroupMember, type DirectMessage, type GroupMessage,
   type GroupJoinRequest, type GroupInviteLink, type GroupModerationLog,
@@ -120,6 +120,7 @@ export interface IStorage {
   getPublicAnswers(userId: string, limit?: number): Promise<Array<{ questionId: number; question: string; answer: string }>>;
   getGroupsForUser(targetUserId: string, viewerUserId: string): Promise<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean }>>;
 
+  recordDiscoverPass(userId: string, targetId: string): Promise<void>;
   createMatch(user1Id: string, user2Id: string): Promise<Match>;
   getMatches(userId: string): Promise<Match[]>;
   getMatch(id: number): Promise<Match | undefined>;
@@ -144,7 +145,7 @@ export interface IStorage {
   getGroups(): Promise<Group[]>;
   getGroup(id: number): Promise<Group | undefined>;
   createGroup(name: string, description: string, type: string): Promise<Group>;
-  createGroupFull(data: { name: string; description: string; type: string; ownerId: string; iconUrl?: string; categoryTags?: string[]; privacyMode?: string; mediaEnabled?: boolean; stickersEnabled?: boolean; postingPermission?: string; inviteDirectJoinEnabled?: boolean }): Promise<Group>;
+  createGroupFull(data: { name: string; description: string; type: string; ownerId: string; iconUrl?: string; categoryTags?: string[]; privacyMode?: string; mediaEnabled?: boolean; stickersEnabled?: boolean; postingPermission?: string; inviteDirectJoinEnabled?: boolean; isOfficial?: boolean; locationLabel?: string }): Promise<Group>;
   updateGroup(id: number, updates: Partial<Group>): Promise<Group>;
   deleteGroup(id: number): Promise<void>;
   searchGroups(query: string): Promise<Group[]>;
@@ -398,11 +399,20 @@ export class DatabaseStorage implements IStorage {
       .from(matches)
       .where(or(eq(matches.user1Id, excludeUserId), eq(matches.user2Id, excludeUserId)));
 
+    // Same idea for an explicit "not interested" — kept in its own table
+    // (not a `matches` row) so a pass can never leak into a match list, a
+    // chat thread, or the incoming-likes page the way reusing `matches`
+    // with a new status would.
+    const passed = await db.select({ targetId: discoverPasses.targetId })
+      .from(discoverPasses)
+      .where(eq(discoverPasses.userId, excludeUserId));
+
     const excludedIds = new Set([
       excludeUserId,
       ...blockedByRequester.map(r => r.blockedId),
       ...blockedOfRequester.map(r => r.blockerId),
       ...evaluatedMatches.map(m => m.user1Id === excludeUserId ? m.user2Id : m.user1Id),
+      ...passed.map(p => p.targetId),
     ]);
 
     const baseCondition = and(
@@ -725,6 +735,14 @@ export class DatabaseStorage implements IStorage {
       .map((g) => ({ id: g.id, name: g.name, iconUrl: g.iconUrl, viewerIsMember: mineSet.has(g.id) }));
   }
 
+  // Idempotent — a double-tap or a retried request must not throw on the
+  // unique (userId, targetId) index; the pass already existing is success.
+  async recordDiscoverPass(userId: string, targetId: string): Promise<void> {
+    await db.insert(discoverPasses)
+      .values({ userId, targetId })
+      .onConflictDoNothing();
+  }
+
   async createMatch(user1Id: string, user2Id: string): Promise<Match> {
     const [match] = await db.insert(matches).values({
       user1Id,
@@ -893,7 +911,7 @@ export class DatabaseStorage implements IStorage {
     return group;
   }
 
-  async createGroupFull(data: { name: string; description: string; type: string; ownerId: string; iconUrl?: string; categoryTags?: string[]; privacyMode?: string; mediaEnabled?: boolean; stickersEnabled?: boolean; postingPermission?: string; inviteDirectJoinEnabled?: boolean }): Promise<Group> {
+  async createGroupFull(data: { name: string; description: string; type: string; ownerId: string; iconUrl?: string; categoryTags?: string[]; privacyMode?: string; mediaEnabled?: boolean; stickersEnabled?: boolean; postingPermission?: string; inviteDirectJoinEnabled?: boolean; isOfficial?: boolean; locationLabel?: string }): Promise<Group> {
     const [group] = await db.insert(groups).values(data).returning();
     return group;
   }
