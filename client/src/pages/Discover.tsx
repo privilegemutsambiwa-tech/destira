@@ -3,7 +3,7 @@ import { LayoutShell } from "@/components/layout-shell";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag } from "lucide-react";
-import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories, UpgradeRequiredError } from "@/hooks/use-interactions";
+import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories, useProfileCompletion, UpgradeRequiredError } from "@/hooks/use-interactions";
 import { useTwinReadiness, useDismissReminder } from "@/hooks/use-onboarding";
 import { LIMITS } from "@shared/entitlements";
 import { usePaywall } from "@/hooks/use-paywall";
@@ -423,6 +423,49 @@ function DisclosureIntroStrip() {
   );
 }
 
+/** Same completion score and per-task benefit copy Profile.tsx's own
+ *  completeness chip already computes (server/storage.ts's
+ *  getProfileCompletion) — surfaced here too, where people actually spend
+ *  their time, instead of only on a page they may rarely open. */
+function ProfileCompletionStrip() {
+  const [, navigate] = useLocation();
+  const qc = useQueryClient();
+  const { data: completion } = useProfileCompletion();
+  const { data } = useQuery<{ dismissed: boolean }>({
+    queryKey: ["/api/reminders", "profile_completion_nudge"],
+    queryFn: async () => {
+      const res = await fetch("/api/reminders/profile_completion_nudge", { credentials: "include" });
+      if (!res.ok) return { dismissed: true };
+      return res.json();
+    },
+  });
+  if (!data || data.dismissed || !completion || completion.score >= 80) return null;
+  const nextTask = completion.tasks.find((t: { completed: boolean }) => !t.completed);
+  const dismiss = async () => {
+    await fetch("/api/reminders/profile_completion_nudge/dismiss", { method: "POST", credentials: "include" });
+    qc.invalidateQueries({ queryKey: ["/api/reminders", "profile_completion_nudge"] });
+  };
+  return (
+    <div className="mb-5 rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-start justify-between gap-3" data-testid="strip-profile-completion">
+      <p className="text-[13px] text-vf-muted leading-[1.55]">
+        A complete profile gets more likes and shows up more. You're at {completion.score}%
+        {nextTask ? <> — {nextTask.benefit.toLowerCase()}.</> : "."}{" "}
+        <button
+          onClick={() => { dismiss(); navigate("/profile"); }}
+          className="text-vf-ember hover:text-vf-text underline underline-offset-2 transition-colors"
+          data-testid="link-profile-completion"
+        >
+          Finish your profile
+        </button>
+        .
+      </p>
+      <button onClick={dismiss} className="text-vf-faint hover:text-vf-text transition-colors shrink-0 -mr-1 -mt-0.5" aria-label="Dismiss" data-testid="button-dismiss-profile-completion">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
 export default function Discover() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [filter, setFilter] = useState<FilterChip>(getInitialFilter);
@@ -721,6 +764,7 @@ export default function Discover() {
 
         <ReadinessStrip />
         <DisclosureIntroStrip />
+        <ProfileCompletionStrip />
 
         <StoriesCarousel />
 

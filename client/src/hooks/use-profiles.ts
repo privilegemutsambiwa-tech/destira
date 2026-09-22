@@ -21,7 +21,7 @@ export function useCaptureTimezone() {
   }, [profile]);
 }
 
-export function useProfile(userId?: string) {
+export function useProfile(userId?: string, opts?: { enabled?: boolean }) {
   const url = userId ? `/api/profiles/${userId}` : "/api/profiles/me";
   const key = userId ? ["/api/profiles", userId] : ["/api/profiles/me"];
 
@@ -33,6 +33,7 @@ export function useProfile(userId?: string) {
       if (!res.ok) throw new Error("Failed to fetch profile");
       return res.json();
     },
+    enabled: opts?.enabled,
   });
 }
 

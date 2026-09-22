@@ -50,18 +50,35 @@ import Settings from "@/pages/Settings";
 function ProtectedRoute({ component: Component, ...rest }: any) {
   const { user, isLoading } = useAuth();
   const [location, setLocation] = useLocation();
+  // Only fetched once there's an actual session — otherwise a logged-out
+  // visitor hitting a protected URL directly fires a doomed /api/profiles/me
+  // request before the !user redirect below even has a chance to run.
+  const { data: profile, isLoading: profileLoading } = useProfile(undefined, { enabled: !!user });
+
+  // Gender + who they want to see are the two fields nothing else in the
+  // product works without — matching, Discover, likes all assume both
+  // exist. Enforced here, not just on the "/" landing redirect, so a
+  // bookmarked or deep-linked URL can't skip past Essentials entirely
+  // (how a real share of accounts ended up with neither ever set).
+  const essentialsDone = !!profile?.gender && !!profile?.seekingGenders?.length;
+  const onEssentials = location === "/essentials";
 
   useEffect(() => {
     if (!isLoading && !user) {
       setLocation("/");
+    } else if (user && !profileLoading && !essentialsDone && !onEssentials) {
+      setLocation("/essentials");
     }
-  }, [user, isLoading, setLocation]);
+  }, [user, isLoading, profileLoading, essentialsDone, onEssentials, setLocation]);
 
-  if (isLoading) {
+  if (isLoading || (user && profileLoading)) {
     return <DestiraLoadingScreen />;
   }
 
   if (!user) return null;
+  // Render nothing while the redirect above is in flight, rather than a
+  // frame of the real page underneath — same reasoning as the !user case.
+  if (!essentialsDone && !onEssentials) return null;
 
   // Per-screen, not just app-wide: a crash in one screen's render must not
   // blank every screen reachable from it. Keyed on the route so navigating
@@ -90,7 +107,7 @@ function AuthenticatedHome() {
       const pendingInvite = consumePendingInvite();
       if (pendingInvite) {
         setLocation(`/join/${pendingInvite}`);
-      } else if (!profile || !profile.gender) {
+      } else if (!profile || !profile.gender || !profile.seekingGenders?.length) {
         // Matching essentials come first — before the soul-mapping questions.
         setLocation("/essentials");
       } else if (!profile.onboardingCompleted) {
