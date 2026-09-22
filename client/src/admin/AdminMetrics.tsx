@@ -11,6 +11,7 @@ import {
   PaymentSuccessChart,
   ResonanceHistogram,
   ConversionByGateChart,
+  GenderBreakdownChart,
 } from "./charts";
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -53,6 +54,10 @@ export default function AdminMetrics() {
   // windows, independent of whichever single day is selected.
   const { data: moneySeries } = useQuery({ queryKey: ["admin", "metrics", "money-series"], queryFn: () => adminGet("/api/admin/metrics/money-series?days=90") });
   const { data: retentionCohorts } = useQuery({ queryKey: ["admin", "metrics", "retention-cohorts"], queryFn: () => adminGet("/api/admin/metrics/retention-cohorts") });
+  // Live headcount, not a rollup — "how many people are on the platform"
+  // shouldn't lag a night behind. See its own refetchInterval, independent
+  // of the date picker above.
+  const { data: audience } = useQuery({ queryKey: ["admin", "metrics", "audience"], queryFn: () => adminGet("/api/admin/metrics/audience"), refetchInterval: 60_000 });
 
   // Default to the most recent rollup that actually exists, rather than a
   // fixed "yesterday" the viewer has to notice is stale and correct by hand.
@@ -130,6 +135,14 @@ export default function AdminMetrics() {
           <Row label="DAU" value={fmt(data.growth.dau?.at(-1)?.value)} />
           <Row label="WAU" value={fmt(data.growth.wau?.at(-1)?.value)} />
           <Row label="MAU" value={fmt(data.growth.mau?.at(-1)?.value)} />
+        </Section>
+
+        <Section title="Audience — everyone on the platform, right now">
+          <Row label="Total users" value={fmt(audience?.totalUsers)} />
+          {audience && <GenderBreakdownChart data={audience.byGender} />}
+          {(audience?.byGender ?? []).map((g: { value: string; label: string; count: number }) => (
+            <Row key={g.value} label={g.label} value={fmt(g.count)} />
+          ))}
         </Section>
 
         <Section title="Twin layer">

@@ -309,6 +309,40 @@ export function ConversionByGateChart({ data }: { data: Record<string, number> }
   );
 }
 
+// ── Gender breakdown, ranked horizontal bar (Metrics) ────────────────────
+// "Not set yet" and "Prefer not to say" are real, common answers here (a lot
+// of accounts haven't finished Essentials) — shown in FAINT rather than
+// dropped, so the total always reads as everyone on the platform, not just
+// the people who picked an identity.
+export function GenderBreakdownChart({ data }: { data: { value: string; label: string; count: number }[] }) {
+  const reduced = usePrefersReducedMotion();
+  const rows = [...data].sort((a, b) => b.count - a.count);
+  const total = rows.reduce((s, r) => s + r.count, 0);
+  if (!total) return <ChartEmpty note="No users yet." height={140} />;
+  const isUnknown = (value: string) => value === "unset" || value === "prefer-not";
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(90, rows.length * 32)}>
+      <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 34, left: 8, bottom: 0 }}>
+        <CartesianGrid stroke={grid} horizontal={false} />
+        <XAxis type="number" tick={axisTick} allowDecimals={false} axisLine={false} tickLine={false} />
+        <YAxis type="category" dataKey="label" width={130} tick={{ ...axisTick, fontSize: 10.5 }} axisLine={false} tickLine={false} />
+        <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(255,255,255,.04)" }} />
+        <Bar dataKey="count" name="users" radius={[0, 3, 3, 0]} isAnimationActive={!reduced}>
+          {rows.map((r) => (
+            <Cell key={r.value} fill={isUnknown(r.value) ? FAINT : MUTED} />
+          ))}
+          <LabelList
+            dataKey="count"
+            position="right"
+            formatter={(v: any) => `${v} (${Math.round((Number(v) / total) * 100)}%)`}
+            style={{ fill: FAINT, fontSize: 10, fontFamily: CHART_MONO }}
+          />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 // ── Report volume strip (Reports page) ───────────────────────────────────
 export function ReportVolumeStrip({ series }: { series: { date: string; value: number }[] }) {
   const reduced = usePrefersReducedMotion();

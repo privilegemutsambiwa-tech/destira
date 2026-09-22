@@ -3,8 +3,9 @@
 // time; nothing here recomputes from OLTP tables on request.
 import type { Express } from "express";
 import { db } from "../db";
-import { metricDaily } from "@shared/schema";
-import { and, gte, lte, like, desc, eq } from "drizzle-orm";
+import { metricDaily, users, profiles } from "@shared/schema";
+import { GENDER_OPTIONS } from "@shared/essentials";
+import { and, gte, lte, like, desc, eq, count } from "drizzle-orm";
 import { adminRoute } from "./auth";
 import { currentErrorRate } from "./error-rate";
 import { computeDailyMetrics, backfillRecentMetrics } from "./metrics-rollup";
@@ -273,6 +274,33 @@ export function registerAdminMetricsRoutes(app: Express) {
     } catch (e) {
       console.error("[admin] retention-cohorts error:", e);
       res.status(500).json({ message: "Failed to load retention cohorts" });
+    }
+  });
+
+  // Total users + gender split — a live count, not a rollup: cheap to
+  // compute on request and there's no reason for "how many people are on
+  // the platform right now" to lag a night behind. Every user has exactly
+  // one profiles row or none at all (never more), so total minus the sum of
+  // every known gender bucket is exactly the "hasn't set it / no profile
+  // yet" count — no LEFT JOIN or GROUP BY needed to get that right.
+  adminRoute(app, "get", "/api/admin/metrics/audience", "support", async (req, res) => {
+    try {
+      const [[totalRow], ...genderRows] = await Promise.all([
+        db.select({ n: count() }).from(users),
+        ...GENDER_OPTIONS.map((o) =>
+          db.select({ n: count() }).from(users).innerJoin(profiles, eq(profiles.userId, users.id)).where(eq(profiles.gender, o.value))
+        ),
+      ]);
+      const totalUsers = Number(totalRow?.n ?? 0);
+      const byGender = GENDER_OPTIONS.map((o, i) => ({ value: o.value, label: o.label, count: Number(genderRows[i][0]?.n ?? 0) }));
+      const notSetCount = totalUsers - byGender.reduce((s, g) => s + g.count, 0);
+      res.json({
+        totalUsers,
+        byGender: [...byGender, { value: "unset", label: "Not set yet", count: Math.max(0, notSetCount) }],
+      });
+    } catch (e) {
+      console.error("[admin] audience error:", e);
+      res.status(500).json({ message: "Failed to load audience stats" });
     }
   });
 }
