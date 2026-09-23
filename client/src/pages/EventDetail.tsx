@@ -9,7 +9,11 @@ import { useGroups } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { useState } from "react";
-import { Loader2, ArrowLeft, Pencil } from "lucide-react";
+import { Loader2, ArrowLeft, Pencil, Flag } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 function toLocalInput(dateStr: string): string {
   const d = new Date(dateStr);
@@ -66,6 +70,28 @@ export default function EventDetail({ params }: { params: { id: string } }) {
   const [edit, setEdit] = useState({ title: "", description: "", startsAt: "" });
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const { toast } = useToast();
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportBusy, setReportBusy] = useState(false);
+
+  const submitEventReport = async () => {
+    if (!event) return;
+    setReportBusy(true);
+    try {
+      await apiRequest("POST", `/api/users/${event.hostUserId}/report`, {
+        reason: reportReason.trim(),
+        evidence: [{ type: "event", id: event.id }],
+      });
+      toast({ title: "Report sent", description: "Our team will review it." });
+      setReportOpen(false);
+      setReportReason("");
+    } catch {
+      toast({ title: "Could not send report", variant: "destructive" });
+    } finally {
+      setReportBusy(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -240,6 +266,15 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                 data-testid="button-event-chat"
               >
                 Open event chat
+              </button>
+            )}
+            {!isHost && event.status !== "cancelled" && (
+              <button
+                onClick={() => setReportOpen(true)}
+                className="inline-flex items-center gap-1.5 text-[12.5px] text-vf-faint hover:text-vf-text transition-colors self-start"
+                data-testid="button-report-event"
+              >
+                <Flag className="w-3.5 h-3.5" /> Report event
               </button>
             )}
             {isHost && event.status !== "cancelled" && (
@@ -428,6 +463,31 @@ export default function EventDetail({ params }: { params: { id: string } }) {
           </div>
         </div>
       </div>
+
+      <Dialog open={reportOpen} onOpenChange={(v) => { setReportOpen(v); if (!v) setReportReason(""); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Report this event</DialogTitle>
+            <DialogDescription>This sends a record to our team for review, citing this event.</DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={reportReason}
+            onChange={(e) => setReportReason(e.target.value)}
+            placeholder="What's going on? (optional)"
+            rows={3}
+            className="w-full rounded-[12px] border border-vf-line bg-vf-surface2 p-3 text-sm text-vf-text outline-none resize-none"
+            data-testid="input-event-report-reason"
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setReportOpen(false)} data-testid="button-cancel-event-report">
+              Cancel
+            </Button>
+            <Button onClick={submitEventReport} disabled={reportBusy} data-testid="button-submit-event-report">
+              {reportBusy ? "Sending…" : "Send report"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </LayoutShell>
   );
 }

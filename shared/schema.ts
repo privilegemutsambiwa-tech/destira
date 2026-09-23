@@ -25,6 +25,11 @@ export const profiles = pgTable("profiles", {
   twinPersona: text("twin_persona"),
   onboardingCompleted: boolean("onboarding_completed").default(false),
   isPublic: boolean("is_public").default(false),
+  // Admin moderation enforcement — see server/admin/reports.ts. "active" is
+  // the only state that can log in or appear in Discover.
+  moderationStatus: text("moderation_status").notNull().default("active"), // active | suspended | banned
+  moderationStatusReason: text("moderation_status_reason"),
+  moderationStatusAt: timestamp("moderation_status_at"),
   profileVisibility: text("profile_visibility").default("public"),
   coverPhotoUrl: text("cover_photo_url"),
   cartoonPhotoUrl: text("cartoon_photo_url"),
@@ -230,6 +235,9 @@ export const directMessages = pgTable("direct_messages", {
   matchId: integer("match_id").notNull().references(() => matches.id),
   senderId: varchar("sender_id").notNull().references(() => users.id),
   content: text("content").notNull(),
+  // Admin moderation removal — same shape as groupMessages' isDeletedByAdmin.
+  isDeletedByAdmin: boolean("is_deleted_by_admin").default(false),
+  originalContent: text("original_content"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -1379,6 +1387,10 @@ export const moderationActions = pgTable(
     type: text("type").notNull(), // shared/admin.ts MODERATION_ACTION_TYPES
     reason: text("reason").notNull(),
     adminUserId: varchar("admin_user_id").notNull().references(() => users.id),
+    // Which cited evidence item remove_photo/remove_message/unpublish_event
+    // actually acted on — null for account-level actions (warn/suspend/ban)
+    // and dismiss_report.
+    evidenceRef: jsonb("evidence_ref").$type<{ type: string; id: string } | null>(),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (t) => [index("moderation_actions_target_idx").on(t.targetUserId, t.createdAt)],

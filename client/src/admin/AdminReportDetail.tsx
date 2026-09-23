@@ -23,10 +23,22 @@ export default function AdminReportDetail({ id }: { id: string }) {
 
   const [actionType, setActionType] = useState<ModerationActionType>("warn");
   const [reason, setReason] = useState("");
+  const [evidenceIdx, setEvidenceIdx] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stepUpNeeded, setStepUpNeeded] = useState(false);
   const [stepUpPassword, setStepUpPassword] = useState("");
+
+  // Which cited evidence types a given action can actually target.
+  const EVIDENCE_TYPES_FOR_ACTION: Partial<Record<ModerationActionType, string[]>> = {
+    remove_photo: ["photo"],
+    remove_message: ["direct_message", "group_message"],
+    unpublish_event: ["event"],
+  };
+  const neededEvidenceTypes = EVIDENCE_TYPES_FOR_ACTION[actionType];
+  const matchingEvidence: any[] = neededEvidenceTypes
+    ? (data?.evidence || []).filter((ev: any) => neededEvidenceTypes.includes(ev.type))
+    : [];
 
   const setStatus = async (status: string) => {
     await adminPatch(`/api/admin/reports/${reportId}`, { status });
@@ -38,10 +50,17 @@ export default function AdminReportDetail({ id }: { id: string }) {
     e.preventDefault();
     setError(null);
     if (!reason.trim()) return setError("A reason is required.");
+    if (neededEvidenceTypes && evidenceIdx == null) return setError("Pick which cited item this action removes.");
+    const evidenceRef = neededEvidenceTypes && evidenceIdx != null ? matchingEvidence[evidenceIdx] : undefined;
     setBusy(true);
     try {
-      await adminPost(`/api/admin/reports/${reportId}/actions`, { type: actionType, reason });
+      await adminPost(`/api/admin/reports/${reportId}/actions`, {
+        type: actionType,
+        reason,
+        evidenceRef: evidenceRef ? { type: evidenceRef.type, id: evidenceRef.id } : undefined,
+      });
       setReason("");
+      setEvidenceIdx(null);
       refetch();
       qc.invalidateQueries({ queryKey: ["admin", "overview"] });
     } catch (err) {
@@ -148,7 +167,12 @@ export default function AdminReportDetail({ id }: { id: string }) {
       <Box title="Take action">
         {!stepUpNeeded ? (
           <form onSubmit={submitAction} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <select value={actionType} onChange={(e) => setActionType(e.target.value as ModerationActionType)} style={selectStyle} data-testid="action-type">
+            <select
+              value={actionType}
+              onChange={(e) => { setActionType(e.target.value as ModerationActionType); setEvidenceIdx(null); setError(null); }}
+              style={selectStyle}
+              data-testid="action-type"
+            >
               {MODERATION_ACTION_TYPES.map((t) => (
                 <option key={t} value={t}>{MODERATION_ACTION_COPY[t].label}</option>
               ))}
@@ -159,6 +183,23 @@ export default function AdminReportDetail({ id }: { id: string }) {
                 : "The subject is not notified."}
               {" "}Reporter is told: "{MODERATION_ACTION_COPY[actionType].reporterNotice}"
             </div>
+            {neededEvidenceTypes && (
+              matchingEvidence.length === 0 ? (
+                <p style={{ fontSize: 12.5, color: ALERT }}>
+                  No cited evidence of the right type ({neededEvidenceTypes.join(" or ")}) on this report — this action can't be filed without one.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ ...LABEL, fontSize: 9.5 }}>Which one?</div>
+                  {matchingEvidence.map((ev: any, i: number) => (
+                    <label key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12.5, color: TEXT, cursor: "pointer" }}>
+                      <input type="radio" name="evidence-ref" checked={evidenceIdx === i} onChange={() => setEvidenceIdx(i)} style={{ marginTop: 3 }} data-testid={`evidence-choice-${i}`} />
+                      <span>{ev.type} #{ev.id} — {ev.content ?? "(not available)"}</span>
+                    </label>
+                  ))}
+                </div>
+              )
+            )}
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -168,7 +209,12 @@ export default function AdminReportDetail({ id }: { id: string }) {
               data-testid="action-reason"
             />
             {error && <p style={{ color: ALERT, fontSize: 12.5 }}>{error}</p>}
-            <button type="submit" disabled={busy} style={{ height: 34, borderRadius: 6, background: EMBER, color: "#0C0910", border: "none", fontWeight: 600, fontSize: 13, alignSelf: "flex-start", padding: "0 16px" }} data-testid="submit-action">
+            <button
+              type="submit"
+              disabled={busy || (!!neededEvidenceTypes && matchingEvidence.length === 0)}
+              style={{ height: 34, borderRadius: 6, background: EMBER, color: "#0C0910", border: "none", fontWeight: 600, fontSize: 13, alignSelf: "flex-start", padding: "0 16px", opacity: busy || (!!neededEvidenceTypes && matchingEvidence.length === 0) ? 0.5 : 1 }}
+              data-testid="submit-action"
+            >
               {busy ? "Recording…" : "Record action"}
             </button>
           </form>

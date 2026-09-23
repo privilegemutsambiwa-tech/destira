@@ -187,6 +187,8 @@ export interface IStorage {
 
   getDirectMessages(matchId: number, limit?: number): Promise<DirectMessage[]>;
   sendDirectMessage(matchId: number, senderId: string, content: string): Promise<DirectMessage>;
+  getDirectMessage(messageId: number): Promise<DirectMessage | undefined>;
+  deleteDirectMessageByAdmin(messageId: number): Promise<DirectMessage>;
 
   getUserPhotos(userId: string): Promise<UserPhoto[]>;
   addUserPhoto(userId: string, photoUrl: string, orderIndex: number, opts?: { isMain?: boolean; width?: number; height?: number; variants?: { w800?: string; w1600?: string } }): Promise<UserPhoto>;
@@ -419,6 +421,7 @@ export class DatabaseStorage implements IStorage {
       ne(profiles.userId, excludeUserId),
       eq(profiles.onboardingCompleted, true),
       eq(profiles.isPublic, true),
+      eq(profiles.moderationStatus, "active"),
       isNotNull(profiles.gender),
       isNotNull(profiles.seekingGenders)
     );
@@ -537,7 +540,7 @@ export class DatabaseStorage implements IStorage {
   // then gallery by orderIndex — for PUBLIC profiles only (private -> absent).
   async getPublicGalleries(userIds: string[]): Promise<
     Map<string, Array<{
-      url: string; w800: string | null; w1600: string | null;
+      id: number; url: string; w800: string | null; w1600: string | null;
       role: string; orderIndex: number; width: number | null; height: number | null;
       focalX: number; focalY: number;
     }>>
@@ -560,6 +563,7 @@ export class DatabaseStorage implements IStorage {
           const v = (r.variants ?? {}) as { w800?: string; w1600?: string };
           const isCover = r.role === "cover";
           return {
+            id: r.id,
             url: r.photoUrl,
             w800: v.w800 ?? null,
             w1600: v.w1600 ?? null,
@@ -1186,6 +1190,20 @@ export class DatabaseStorage implements IStorage {
   async sendDirectMessage(matchId: number, senderId: string, content: string): Promise<DirectMessage> {
     const [msg] = await db.insert(directMessages).values({ matchId, senderId, content }).returning();
     return msg;
+  }
+
+  async getDirectMessage(messageId: number): Promise<DirectMessage | undefined> {
+    const [msg] = await db.select().from(directMessages).where(eq(directMessages.id, messageId));
+    return msg;
+  }
+
+  async deleteDirectMessageByAdmin(messageId: number): Promise<DirectMessage> {
+    const [msg] = await db.select().from(directMessages).where(eq(directMessages.id, messageId));
+    const [updated] = await db.update(directMessages)
+      .set({ isDeletedByAdmin: true, originalContent: msg.content, content: "[Message deleted by admin]" })
+      .where(eq(directMessages.id, messageId))
+      .returning();
+    return updated;
   }
 
   // The true latest message for a thread-list preview — getDirectMessages

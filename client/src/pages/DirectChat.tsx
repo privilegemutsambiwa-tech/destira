@@ -4,11 +4,15 @@ import { useDirectMessages, useSendDirectMessage, useMatches, useMarkThreadRead 
 import { useSuggestedLounges } from "@/hooks/use-profiles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, ArrowLeft, Loader2, X, Users } from "lucide-react";
+import { Send, ArrowLeft, Loader2, X, Users, Flag } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
 import { motion } from "framer-motion";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 // A lower-pressure first step than a cold 1:1 thread: if this pair already
 // shares Lounges, point at them; otherwise suggest ones the other person is
@@ -89,6 +93,29 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const markThreadRead = useMarkThreadRead();
+  const { toast } = useToast();
+  const [activeMessageId, setActiveMessageId] = useState<number | null>(null);
+  const [reportTarget, setReportTarget] = useState<{ userId: string; messageId: number } | null>(null);
+  const [reportReason, setReportReason] = useState("");
+  const [reportBusy, setReportBusy] = useState(false);
+
+  const submitReport = async () => {
+    if (!reportTarget) return;
+    setReportBusy(true);
+    try {
+      await apiRequest("POST", `/api/users/${reportTarget.userId}/report`, {
+        reason: reportReason.trim(),
+        evidence: [{ type: "direct_message", id: reportTarget.messageId }],
+      });
+      toast({ title: "Report sent", description: "Our team will review it." });
+      setReportTarget(null);
+      setReportReason("");
+    } catch {
+      toast({ title: "Could not send report", variant: "destructive" });
+    } finally {
+      setReportBusy(false);
+    }
+  };
 
   // Opening the thread is what counts as "read" — fire this immediately so
   // the unread badge on the chat list clears instantly instead of waiting
@@ -165,6 +192,18 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
         ) : messages && messages.length > 0 ? (
           messages.map((msg: any) => {
             const isMe = msg.senderId === user?.id;
+            const bubble = (
+              <div
+                className={`max-w-[80%] px-4 py-2.5 text-sm leading-relaxed ${isMe ? "" : "cursor-pointer"} ${
+                  isMe
+                    ? "rounded-[18px] rounded-br-[6px] bg-vf-ember text-vf-ink font-medium"
+                    : "rounded-[18px] rounded-bl-[6px] border border-vf-line bg-vf-surface text-vf-text"
+                }`}
+                data-testid={`message-${msg.id}`}
+              >
+                {msg.content}
+              </div>
+            );
             return (
               <motion.div
                 key={msg.id}
@@ -172,16 +211,25 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
                 animate={{ opacity: 1, y: 0 }}
                 className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
               >
-                <div
-                  className={`max-w-[80%] px-4 py-2.5 text-sm leading-relaxed ${
-                    isMe
-                      ? "rounded-[18px] rounded-br-[6px] bg-vf-ember text-vf-ink font-medium"
-                      : "rounded-[18px] rounded-bl-[6px] border border-vf-line bg-vf-surface text-vf-text"
-                  }`}
-                  data-testid={`message-${msg.id}`}
-                >
-                  {msg.content}
-                </div>
+                {isMe ? (
+                  bubble
+                ) : (
+                  <Popover open={activeMessageId === msg.id} onOpenChange={(open) => setActiveMessageId(open ? msg.id : null)}>
+                    <PopoverTrigger asChild>{bubble}</PopoverTrigger>
+                    <PopoverContent className="w-auto p-1" side="right" align="start">
+                      <button
+                        onClick={() => {
+                          setReportTarget({ userId: msg.senderId, messageId: msg.id });
+                          setActiveMessageId(null);
+                        }}
+                        className="flex items-center w-full px-3 py-1.5 text-sm rounded-md btn-press transition-colors text-left text-red-500 hover:bg-vf-surface2"
+                        data-testid={`action-report-${msg.id}`}
+                      >
+                        <Flag className="w-4 h-4 mr-2" /> Report
+                      </button>
+                    </PopoverContent>
+                  </Popover>
+                )}
               </motion.div>
             );
           })
@@ -217,6 +265,31 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
           </Button>
         </form>
       </div>
+
+      <Dialog open={!!reportTarget} onOpenChange={(v) => { if (!v) { setReportTarget(null); setReportReason(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Report this message</DialogTitle>
+            <DialogDescription>This sends a record to our team for review, citing this exact message.</DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={reportReason}
+            onChange={(e) => setReportReason(e.target.value)}
+            placeholder="What's going on? (optional)"
+            rows={3}
+            className="w-full rounded-[12px] border border-vf-line bg-vf-surface2 p-3 text-sm text-vf-text outline-none resize-none"
+            data-testid="input-dm-report-reason"
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setReportTarget(null); setReportReason(""); }} data-testid="button-cancel-dm-report">
+              Cancel
+            </Button>
+            <Button onClick={submitReport} disabled={reportBusy} data-testid="button-submit-dm-report">
+              {reportBusy ? "Sending…" : "Send report"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

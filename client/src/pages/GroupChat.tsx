@@ -14,7 +14,7 @@ import {
   ArrowLeft, Send, Info, Loader2, Paperclip, BarChart3,
   Heart, ThumbsUp, ThumbsDown, Laugh, Flame, Star,
   Reply, Copy, Trash2, X, Plus, Users, Image as ImageIcon,
-  MessageSquarePlus, Crown
+  MessageSquarePlus, Crown, Flag
 } from "lucide-react";
 import {
   useGroup, useEnrichedGroupMessages, useSendGroupMessage,
@@ -27,6 +27,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
 import { usePaywall } from "@/hooks/use-paywall";
+import { apiRequest } from "@/lib/queryClient";
 
 interface MessageAction {
   icon: React.ReactNode;
@@ -290,6 +291,9 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   const [replyTo, setReplyTo] = useState<any>(null);
   const [activeMessageId, setActiveMessageId] = useState<number | null>(null);
   const [showPollDialog, setShowPollDialog] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ userId: string; messageId: number } | null>(null);
+  const [reportReason, setReportReason] = useState("");
+  const [reportBusy, setReportBusy] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
   const [highlightedMsgId, setHighlightedMsgId] = useState<number | null>(highlightMsgId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -393,6 +397,24 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
       toast({ title: "Error", description: "Failed to delete.", variant: "destructive" });
     }
     setActiveMessageId(null);
+  };
+
+  const submitReport = async () => {
+    if (!reportTarget) return;
+    setReportBusy(true);
+    try {
+      await apiRequest("POST", `/api/users/${reportTarget.userId}/report`, {
+        reason: reportReason.trim(),
+        evidence: [{ type: "group_message", id: reportTarget.messageId }],
+      });
+      toast({ title: "Report sent", description: "Our team will review it." });
+      setReportTarget(null);
+      setReportReason("");
+    } catch {
+      toast({ title: "Could not send report", variant: "destructive" });
+    } finally {
+      setReportBusy(false);
+    }
   };
 
   const handleCopy = (text: string) => {
@@ -684,6 +706,16 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                                 },
                                 testId: `action-chat-request-${msg.id}`,
                               }] : []),
+                              ...(!isMe ? [{
+                                icon: <Flag className="w-4 h-4 mr-2" />,
+                                label: "Report",
+                                onClick: () => {
+                                  setReportTarget({ userId: msg.userId, messageId: msg.id });
+                                  setActiveMessageId(null);
+                                },
+                                testId: `action-report-${msg.id}`,
+                                danger: true,
+                              }] : []),
                               ...(isAdmin && !isMe ? [{
                                 icon: <Trash2 className="w-4 h-4 mr-2" />,
                                 label: "Admin Delete",
@@ -868,6 +900,32 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
 
       <PollComposerDialog groupId={groupId} open={showPollDialog} onClose={() => setShowPollDialog(false)} />
       {paywall.sheet}
+
+      <Dialog open={!!reportTarget} onOpenChange={(v) => { if (!v) { setReportTarget(null); setReportReason(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Report this message</DialogTitle>
+            <DialogDescription>This sends a record to our team for review, citing this exact message.</DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={reportReason}
+            onChange={(e) => setReportReason(e.target.value)}
+            placeholder="What's going on? (optional)"
+            rows={3}
+            className="w-full rounded-[12px] border p-3 text-sm outline-none resize-none"
+            style={{ background: ELEVATED, borderColor: LINE, color: TEXT }}
+            data-testid="input-group-report-reason"
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setReportTarget(null); setReportReason(""); }} data-testid="button-cancel-group-report">
+              Cancel
+            </Button>
+            <Button onClick={submitReport} disabled={reportBusy} data-testid="button-submit-group-report">
+              {reportBusy ? "Sending…" : "Send report"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -45,6 +45,7 @@ function getResonance(personalityProfile: unknown): { score: number; axes: { lab
 }
 
 type GalleryPhoto = {
+  id?: number;
   url: string;
   w800: string | null;
   w1600: string | null;
@@ -481,6 +482,7 @@ export default function Discover() {
   const paywall = usePaywall();
   const [confirm, setConfirm] = useState<"block" | "report" | null>(null);
   const [reportReason, setReportReason] = useState("");
+  const [reportPhotoId, setReportPhotoId] = useState<number | null>(null);
   // Guards against a double-tap firing two Like/Pass actions on the same card
   // before the deck advances — isActingRef blocks re-entrancy synchronously
   // (state updates aren't visible until the next render), isActing state just
@@ -739,10 +741,12 @@ export default function Discover() {
     if (!currentProfile?.userId) return;
     const reportedId = currentProfile.userId;
     const reason = reportReason.trim();
+    const evidence = reportPhotoId != null ? [{ type: "photo", id: reportPhotoId }] : undefined;
     setConfirm(null);
     setReportReason("");
+    setReportPhotoId(null);
     try {
-      await apiRequest("POST", `/api/users/${reportedId}/report`, { reason });
+      await apiRequest("POST", `/api/users/${reportedId}/report`, { reason, evidence });
       toast({ title: "Report sent", description: "Our team will review it. They're now blocked too." });
       handleNext(reportedId);
     } catch {
@@ -1216,7 +1220,7 @@ export default function Discover() {
         <div
           className="fixed inset-0 flex items-center justify-center z-[100] p-4"
           style={{ background: "rgba(8,6,11,.82)", backdropFilter: "blur(14px)" }}
-          onClick={() => { setConfirm(null); setReportReason(""); }}
+          onClick={() => { setConfirm(null); setReportReason(""); setReportPhotoId(null); }}
         >
           <div
             className="w-full max-w-[400px] rounded-[20px] border border-vf-line bg-vf-surface p-6"
@@ -1231,18 +1235,42 @@ export default function Discover() {
                 : "This sends a record to our team for review. It also blocks them."}
             </p>
             {confirm === "report" && (
-              <textarea
-                value={reportReason}
-                onChange={(e) => setReportReason(e.target.value)}
-                placeholder="What's going on? (optional)"
-                rows={3}
-                className="w-full mb-4 rounded-[12px] bg-vf-surface2 border border-vf-line p-3 text-[14px] text-vf-text placeholder:text-vf-faint resize-none outline-none focus:border-vf-text/25"
-                data-testid="input-report-reason"
-              />
+              <>
+                <textarea
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  placeholder="What's going on? (optional)"
+                  rows={3}
+                  className="w-full mb-3 rounded-[12px] bg-vf-surface2 border border-vf-line p-3 text-[14px] text-vf-text placeholder:text-vf-faint resize-none outline-none focus:border-vf-text/25"
+                  data-testid="input-report-reason"
+                />
+                {galleryPhotos.some((p) => p.id != null) && (
+                  <div className="mb-4">
+                    <p className="text-[12px] text-vf-faint mb-2">Is it a specific photo? (optional)</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {galleryPhotos.filter((p) => p.id != null).map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setReportPhotoId(reportPhotoId === p.id ? null : p.id!)}
+                          className="w-14 h-14 rounded-[10px] overflow-hidden shrink-0"
+                          style={{
+                            outline: reportPhotoId === p.id ? "2px solid hsl(var(--vf-ember))" : "2px solid transparent",
+                            outlineOffset: "2px",
+                          }}
+                          data-testid={`button-report-photo-${p.id}`}
+                        >
+                          <img src={p.w800 || p.url} alt="" className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
             <div className="flex gap-2.5">
               <button
-                onClick={() => { setConfirm(null); setReportReason(""); }}
+                onClick={() => { setConfirm(null); setReportReason(""); setReportPhotoId(null); }}
                 className="flex-1 h-11 rounded-full border border-vf-text/14 text-[14px] text-vf-muted hover:text-vf-text transition-colors"
                 data-testid="button-confirm-cancel"
               >

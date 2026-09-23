@@ -177,6 +177,16 @@ export function registerAuthRoutes(app: Express): void {
       }
 
       clearAttempts(normalizedEmail);
+
+      const profile = await storage.getProfile(user.id);
+      if (profile?.moderationStatus === "banned" || profile?.moderationStatus === "suspended") {
+        return res.status(403).json({
+          message: profile.moderationStatus === "banned"
+            ? "This account has been removed for violating our terms."
+            : "This account is temporarily suspended.",
+        });
+      }
+
       req.login(createSessionUser(user), (err: any) => {
         if (err) {
           console.error("[login] req.login failed:", err);
@@ -237,6 +247,15 @@ export function registerAuthRoutes(app: Express): void {
         });
         storage.startTrialSubscription(user.id).catch((err) => {
           console.error("[google-callback] failed to start trial subscription:", err);
+        });
+      }
+
+      const profile = await storage.getProfile(user.id);
+      if (profile?.moderationStatus === "banned" || profile?.moderationStatus === "suspended") {
+        return res.status(403).json({
+          message: profile.moderationStatus === "banned"
+            ? "This account has been removed for violating our terms."
+            : "This account is temporarily suspended.",
         });
       }
 

@@ -5,10 +5,11 @@
 // user's other conversations, never their location.
 import type { Express } from "express";
 import { db } from "../db";
-import { reports, moderationActions, directMessages, groupMessages, profiles, users } from "@shared/schema";
+import { reports, moderationActions, directMessages, groupMessages, profiles, users, userPhotos, events } from "@shared/schema";
 import { and, desc, asc, eq, sql, inArray, count } from "drizzle-orm";
 import { adminRoute, requireStepUp } from "./auth";
 import { auditAdmin } from "./audit";
+import { storage } from "../storage";
 import {
   REPORT_CATEGORIES,
   REPORT_STATUSES,
@@ -127,6 +128,12 @@ export function registerAdminReportRoutes(app: Express) {
             } else if (item.type === "group_message") {
               const [m] = await db.select().from(groupMessages).where(eq(groupMessages.id, Number(item.id)));
               if (m) content = scrubReply(m.content).text;
+            } else if (item.type === "photo") {
+              const [p] = await db.select().from(userPhotos).where(eq(userPhotos.id, Number(item.id)));
+              if (p) content = p.photoUrl;
+            } else if (item.type === "event") {
+              const [ev] = await db.select().from(events).where(eq(events.id, Number(item.id)));
+              if (ev) content = ev.title;
             }
           } catch {
             content = null;
@@ -189,7 +196,7 @@ export function registerAdminReportRoutes(app: Express) {
     next();
   }, async (req, res) => {
     const id = Number(req.params.id);
-    const { type, reason } = req.body || {};
+    const { type, reason, evidenceRef } = req.body || {};
     if (!(MODERATION_ACTION_TYPES as readonly string[]).includes(type)) {
       return res.status(400).json({ message: "Unknown action type" });
     }
@@ -201,30 +208,80 @@ export function registerAdminReportRoutes(app: Express) {
     if (type === "ban" && admin.role !== "admin" && admin.role !== "owner") {
       return res.status(403).json({ message: "Banning needs the admin role" });
     }
+    const needsEvidence = type === "remove_photo" || type === "remove_message" || type === "unpublish_event";
+    let ref: { type: string; id: string } | null = null;
+    if (needsEvidence) {
+      if (!evidenceRef || typeof evidenceRef.type !== "string" || (typeof evidenceRef.id !== "string" && typeof evidenceRef.id !== "number")) {
+        return res.status(400).json({ message: "Cite which photo, message, or event this action targets" });
+      }
+      ref = { type: evidenceRef.type, id: String(evidenceRef.id) };
+    }
     try {
       const [r] = await db.select().from(reports).where(eq(reports.id, id));
       if (!r) return res.status(404).json({ message: "Report not found" });
+      const trimmedReason = reason.trim().slice(0, 2000);
+
+      // The actual enforcement — every branch verifies the cited item really
+      // belongs to the report's subject before touching it, so a bad-faith or
+      // stale evidenceRef can't be used to act on someone else's content.
+      if (type === "suspend" || type === "ban") {
+        await db.update(profiles).set({
+          moderationStatus: type === "ban" ? "banned" : "suspended",
+          moderationStatusReason: trimmedReason,
+          moderationStatusAt: new Date(),
+        }).where(eq(profiles.userId, r.subjectId));
+      } else if (type === "remove_photo") {
+        const photoId = Number(ref!.id);
+        const [photo] = await db.select().from(userPhotos).where(eq(userPhotos.id, photoId));
+        if (!photo || photo.userId !== r.subjectId) {
+          return res.status(400).json({ message: "That photo doesn't belong to this report's subject" });
+        }
+        await storage.deleteUserPhoto(r.subjectId, photoId);
+      } else if (type === "remove_message") {
+        const msgId = Number(ref!.id);
+        if (ref!.type === "direct_message") {
+          const msg = await storage.getDirectMessage(msgId);
+          if (!msg || msg.senderId !== r.subjectId) {
+            return res.status(400).json({ message: "That message doesn't belong to this report's subject" });
+          }
+          await storage.deleteDirectMessageByAdmin(msgId);
+        } else if (ref!.type === "group_message") {
+          const msg = await storage.getGroupMessage(msgId);
+          if (!msg || msg.userId !== r.subjectId) {
+            return res.status(400).json({ message: "That message doesn't belong to this report's subject" });
+          }
+          await storage.deleteGroupMessage(msgId);
+        } else {
+          return res.status(400).json({ message: "Unknown message evidence type" });
+        }
+      } else if (type === "unpublish_event") {
+        const eventId = Number(ref!.id);
+        const [event] = await db.select().from(events).where(eq(events.id, eventId));
+        if (!event || (event.hostUserId !== r.subjectId && event.createdByUserId !== r.subjectId)) {
+          return res.status(400).json({ message: "That event doesn't belong to this report's subject" });
+        }
+        await db.update(events).set({ status: "cancelled", cancelReason: trimmedReason, cancelledAt: new Date() }).where(eq(events.id, eventId));
+      }
+      // warn / dismiss_report: logged only, nothing further to enforce.
 
       await auditAdmin(req, admin.userId, "report.action", {
         targetType: "user",
         targetId: r.subjectId,
-        details: { reportId: id, type, reason },
+        details: { reportId: id, type, reason: trimmedReason, evidenceRef: ref },
       });
 
       await db.insert(moderationActions).values({
         reportId: id,
         targetUserId: r.subjectId,
         type,
-        reason: reason.trim().slice(0, 2000),
+        reason: trimmedReason,
         adminUserId: admin.userId,
+        evidenceRef: ref,
       });
 
       const newStatus = type === "dismiss_report" ? "dismissed" : "actioned";
       await db.update(reports).set({ status: newStatus, resolvedAt: new Date(), updatedAt: new Date() }).where(eq(reports.id, id));
 
-      // Real suspend/ban enforcement (block from discover, refuse login) is a
-      // separate piece of member-facing plumbing — flagged, not built here;
-      // see the report to the user for what's stubbed vs enforced.
       res.json({ ok: true, copy: MODERATION_ACTION_COPY[type as keyof typeof MODERATION_ACTION_COPY] });
     } catch (e) {
       console.error("[admin] report action error:", e);
