@@ -118,7 +118,7 @@ export interface IStorage {
   getDiscoverableProfiles(excludeUserId: string, filter?: string, userLat?: number, userLng?: number): Promise<any[]>;
   getProfileWithUser(userId: string, viewerId?: string): Promise<any>;
   getPublicAnswers(userId: string, limit?: number): Promise<Array<{ questionId: number; question: string; answer: string }>>;
-  getGroupsForUser(targetUserId: string, viewerUserId: string): Promise<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean }>>;
+  getGroupsForUser(targetUserId: string, viewerUserId: string): Promise<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean; categoryTags: string[] | null }>>;
 
   recordDiscoverPass(userId: string, targetId: string): Promise<void>;
   createMatch(user1Id: string, user2Id: string): Promise<Match>;
@@ -717,9 +717,9 @@ export class DatabaseStorage implements IStorage {
   async getGroupsForUser(
     targetUserId: string,
     viewerUserId: string,
-  ): Promise<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean }>> {
+  ): Promise<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean; categoryTags: string[] | null }>> {
     const theirRows = await db
-      .select({ id: groups.id, name: groups.name, iconUrl: groups.iconUrl, privacyMode: groups.privacyMode })
+      .select({ id: groups.id, name: groups.name, iconUrl: groups.iconUrl, privacyMode: groups.privacyMode, categoryTags: groups.categoryTags })
       .from(groupMembers)
       .innerJoin(groups, eq(groupMembers.groupId, groups.id))
       .where(eq(groupMembers.userId, targetUserId));
@@ -732,7 +732,7 @@ export class DatabaseStorage implements IStorage {
     return theirRows
       // don't expose private groups the viewer isn't in
       .filter((g) => g.privacyMode !== "private" || mineSet.has(g.id))
-      .map((g) => ({ id: g.id, name: g.name, iconUrl: g.iconUrl, viewerIsMember: mineSet.has(g.id) }));
+      .map((g) => ({ id: g.id, name: g.name, iconUrl: g.iconUrl, viewerIsMember: mineSet.has(g.id), categoryTags: g.categoryTags }));
   }
 
   // Idempotent — a double-tap or a retried request must not throw on the

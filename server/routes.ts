@@ -2414,10 +2414,16 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     try {
       const group = await storage.getGroup(groupId);
       if (!group) return res.status(404).json({ message: "Group not found" });
-      const members = await storage.getGroupMembers(groupId);
-      const isMember = userId ? members.some(m => m.userId === userId) : false;
-      const myRole = userId ? members.find(m => m.userId === userId)?.role : undefined;
-      res.json({ ...group, memberCount: members.length, members, isMember, myRole });
+      const rawMembers = await storage.getGroupMembers(groupId);
+      // Bare gender only, same as the enriched-messages endpoint — a Lounge
+      // is for meeting people, so who's who is part of the point.
+      const membersWithGender = await Promise.all(rawMembers.map(async (m) => {
+        const profile = await storage.getProfile(m.userId);
+        return { ...m, gender: profile?.gender || null };
+      }));
+      const isMember = userId ? membersWithGender.some(m => m.userId === userId) : false;
+      const myRole = userId ? membersWithGender.find(m => m.userId === userId)?.role : undefined;
+      res.json({ ...group, memberCount: membersWithGender.length, members: membersWithGender, isMember, myRole });
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch group" });
     }
@@ -2714,7 +2720,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     const groupId = parseInt(req.params.id);
     try {
-      const members = await storage.getGroupMembers(groupId);
+      const rawMembers = await storage.getGroupMembers(groupId);
+      // Bare gender only, same as the enriched-messages endpoint — a Lounge
+      // is for meeting people, so who's who is part of the point.
+      const members = await Promise.all(rawMembers.map(async (m) => {
+        const profile = await storage.getProfile(m.userId);
+        return { ...m, gender: profile?.gender || null };
+      }));
       res.json(members);
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch members" });
@@ -3275,6 +3287,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         reactions: reactionsByMsg[m.id] || [],
         isStarred: starredMsgIds.has(m.id),
         subscriptionTier: profilesMap[m.userId]?.subscriptionTier || "free",
+        // Groups exist to find love, unlike a generic-interest chat — knowing
+        // who's replying is part of the point, not incidental. Bare gender
+        // only (no self-describe text, no age) — the smallest signal that
+        // answers "is this a man or a woman replying" without over-exposing
+        // anyone's profile inside a room they may not have fully opened up in.
+        gender: profilesMap[m.userId]?.gender || null,
       }));
       res.json(enriched);
     } catch (e) {

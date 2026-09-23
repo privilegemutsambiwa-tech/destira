@@ -32,6 +32,16 @@ const PRIVACY_LABELS: Record<string, { icon: any; label: string }> = {
   "invite-only": { icon: Lock, label: "Invite Only" },
 };
 
+// Groups exist to find love here, not just to chat about a shared interest —
+// knowing who's who matters. Only the two binary answers get a label;
+// non-binary/self-describe/prefer-not/unset stay unlabeled rather than
+// forcing a category on someone who deliberately didn't pick one.
+function genderLabel(gender: string | null | undefined): string | null {
+  if (gender === "man") return "Man";
+  if (gender === "woman") return "Woman";
+  return null;
+}
+
 // vf-* tokens, theme-aware — see client/src/index.css (this file styles
 // inline, not via Tailwind classes, so a value only needs to change here once)
 const INK = "hsl(var(--vf-ink))";
@@ -662,6 +672,15 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                           <p className="text-sm font-medium text-foreground truncate">{member.nickname || "Anonymous"}</p>
                           {member.role === "owner" && <Crown className="w-3.5 h-3.5 shrink-0" style={{ color: TEXT }} />}
                           {member.role === "admin" && <Shield className="w-3.5 h-3.5 shrink-0" style={{ color: MUTED }} />}
+                          {genderLabel(member.gender) && (
+                            <span
+                              className="font-mono uppercase tracking-[0.08em] shrink-0"
+                              style={{ fontSize: "9.5px", color: FAINT }}
+                              data-testid={`gender-member-${member.id}`}
+                            >
+                              {genderLabel(member.gender)}
+                            </span>
+                          )}
                         </div>
                         <span className="text-xs capitalize" style={{ color: MUTED }}>{member.role}</span>
                       </div>

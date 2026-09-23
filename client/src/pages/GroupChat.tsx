@@ -73,6 +73,16 @@ const MONO: React.CSSProperties = {
   textTransform: "uppercase",
 };
 
+// Groups exist to find love here, not just to chat about a shared interest —
+// knowing who's replying matters. Only the two binary answers get a label;
+// non-binary/self-describe/prefer-not/unset stay unlabeled rather than
+// forcing a category on someone who deliberately didn't pick one.
+function genderLabel(gender: string | null | undefined): string | null {
+  if (gender === "man") return "Man";
+  if (gender === "woman") return "Woman";
+  return null;
+}
+
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -515,6 +525,15 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                         {msg.nickname || "Anonymous"}
                         {msg.subscriptionTier === "vip" && (
                           <Crown className="w-3 h-3 shrink-0" style={{ color: TEXT }} />
+                        )}
+                        {genderLabel(msg.gender) && (
+                          <span
+                            className="font-mono uppercase tracking-[0.08em]"
+                            style={{ fontSize: "9.5px", color: FAINT }}
+                            data-testid={`gender-${msg.id}`}
+                          >
+                            · {genderLabel(msg.gender)}
+                          </span>
                         )}
                       </span>
                     )}

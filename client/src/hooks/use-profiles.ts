@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type InsertProfile } from "@shared/schema";
+import { useGroups, useTwinStructuredProfile } from "@/hooks/use-interactions";
 
 // Records the viewer's IANA timezone once, so limit-reset copy ("resets at
 // midnight") is honest to their actual clock. No-op once set.
@@ -144,7 +145,7 @@ export function usePublicAnswers(userId?: string) {
 
 /** The groups another user is in, each flagged with whether you're also in it. */
 export function useProfileGroups(userId?: string) {
-  return useQuery<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean }>>({
+  return useQuery<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean; categoryTags: string[] | null }>>({
     queryKey: ["/api/profiles", userId, "groups"],
     enabled: !!userId,
     queryFn: async () => {
@@ -153,6 +154,52 @@ export function useProfileGroups(userId?: string) {
       return res.json();
     },
   });
+}
+
+function tagsOverlap(a: string[] | null | undefined, b: string[] | null | undefined): boolean {
+  if (!a?.length || !b?.length) return false;
+  const bLower = b.map((t) => t.toLowerCase());
+  return a.some((t) => {
+    const lower = t.toLowerCase();
+    return bLower.some((other) => other === lower || other.includes(lower) || lower.includes(other));
+  });
+}
+
+/** A lower-pressure first step than a cold 1:1 thread — never a replacement
+ *  for the 1:1 chat, just an option alongside it. Priority order:
+ *   1. A Lounge this pair already shares (the strongest signal).
+ *   2. A Lounge the OTHER person is already in that overlaps the viewer's
+ *      own AI-Twin interests (twinProfilesStructured.interests vs. the
+ *      group's categoryTags) — "your suitor is in a room you'd probably
+ *      like too", not just a same-city guess.
+ *   3. A curated official Lounge near the viewer, as a last resort.
+ *  Shared by DirectChat's ongoing strip and the match-celebration moment,
+ *  so "meet in a group first" reads the same wherever it shows up. */
+export function useSharedOrSuggestedLounge(otherUserId?: string) {
+  const { data: myProfile } = useProfile();
+  const { data: myStructured } = useTwinStructuredProfile();
+  const { data: theirGroups } = useProfileGroups(otherUserId);
+  const { data: officialLounges } = useGroups(undefined, "official");
+
+  const mutual = (theirGroups || []).filter((g) => g.viewerIsMember);
+  const myInterests: string[] = Array.isArray((myStructured as any)?.interests) ? (myStructured as any).interests : [];
+  const theirInterestMatch = !mutual.length
+    ? (theirGroups || []).find((g) => tagsOverlap(myInterests, g.categoryTags))
+    : null;
+  const myCity = (myProfile as any)?.locationName || (myProfile as any)?.location || null;
+  const suggested = !mutual.length && !theirInterestMatch
+    ? (officialLounges || []).find((g: any) => myCity && g.locationLabel === myCity) || (officialLounges || [])[0]
+    : null;
+
+  const lounge = mutual[0] ?? theirInterestMatch ?? suggested ?? null;
+  const reason: "mutual" | "their-interest" | "suggested" | null = mutual[0]
+    ? "mutual"
+    : theirInterestMatch
+      ? "their-interest"
+      : suggested
+        ? "suggested"
+        : null;
+  return { lounge, reason, isMutual: reason === "mutual" };
 }
 
 export function useGenerateTwin() {

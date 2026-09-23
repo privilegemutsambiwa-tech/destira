@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDirectMessages, useSendDirectMessage, useMatches, useMarkThreadRead, useGroups } from "@/hooks/use-interactions";
-import { useProfile, useProfileGroups } from "@/hooks/use-profiles";
+import { useDirectMessages, useSendDirectMessage, useMatches, useMarkThreadRead } from "@/hooks/use-interactions";
+import { useSharedOrSuggestedLounge } from "@/hooks/use-profiles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, ArrowLeft, Loader2, X, Users } from "lucide-react";
@@ -18,24 +18,18 @@ import { motion } from "framer-motion";
 function SharedLoungeStrip({ otherUserId, otherName }: { otherUserId?: string; otherName: string }) {
   const [, setLocation] = useLocation();
   const [dismissed, setDismissed] = useState(false);
-  const { data: myProfile } = useProfile();
-  const { data: theirGroups } = useProfileGroups(otherUserId);
-  const { data: officialLounges } = useGroups(undefined, "official");
+  const { lounge, reason, isMutual } = useSharedOrSuggestedLounge(otherUserId);
 
-  if (dismissed || !otherUserId) return null;
+  if (dismissed || !otherUserId || !lounge) return null;
 
-  const mutual = (theirGroups || []).filter((g) => g.viewerIsMember);
-  const myCity = myProfile?.locationName || myProfile?.location || null;
-  const suggested = !mutual.length
-    ? (officialLounges || []).find((g: any) => myCity && g.locationLabel === myCity) || (officialLounges || [])[0]
-    : null;
-
-  if (!mutual.length && !suggested) return null;
-
-  const lounge = mutual.length ? mutual[0] : suggested;
-  const copy = mutual.length
-    ? <>You're both in <span className="text-vf-text">{lounge.name}</span> — say hi there too.</>
-    : <><span className="text-vf-text">{lounge.name}</span> could be a good place to meet {otherName} in a group first.</>;
+  const copy =
+    reason === "mutual" ? (
+      <>You're both in <span className="text-vf-text">{lounge.name}</span> — say hi there too.</>
+    ) : reason === "their-interest" ? (
+      <>{otherName} is in <span className="text-vf-text">{lounge.name}</span> — looks like your kind of thing. Join to interact with them there.</>
+    ) : (
+      <><span className="text-vf-text">{lounge.name}</span> could be a good place to meet {otherName} in a group first.</>
+    );
 
   return (
     <div
@@ -51,7 +45,7 @@ function SharedLoungeStrip({ otherUserId, otherName }: { otherUserId?: string; o
             className="text-vf-ember hover:text-vf-text underline underline-offset-2 transition-colors"
             data-testid="link-shared-lounge"
           >
-            {mutual.length ? "Open lounge" : "Take a look"}
+            {isMutual ? "Open lounge" : "Take a look"}
           </button>
         </p>
       </div>
