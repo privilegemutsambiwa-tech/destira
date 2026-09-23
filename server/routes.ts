@@ -2734,7 +2734,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
-  app.put("/api/groups/:id/members/:memberId/role", async (req, res) => {
+  app.put("/api/groups/:id/members/role", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     const groupId = parseInt(req.params.id);

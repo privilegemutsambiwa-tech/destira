@@ -10,8 +10,10 @@ import {
 import {
   Loader2, Plus, Search, Lock, Globe, UserPlus, Crown, Shield, BellOff, BadgeCheck
 } from "lucide-react";
-import { useGroups, useGroup, useCreateGroup } from "@/hooks/use-interactions";
+import { useGroups, useGroup, useCreateGroup, useJoinGroup } from "@/hooks/use-interactions";
 import { useToast } from "@/hooks/use-toast";
+import { usePaywall } from "@/hooks/use-paywall";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { AvatarStack } from "@/components/avatar-stack";
 
@@ -252,10 +254,60 @@ function RoleBadge({ role }: { role?: string }) {
 }
 
 function JoinCta({ group }: { group: any }) {
+  const [status, setStatus] = useState<"idle" | "joined" | "requested">("idle");
+  const joinGroup = useJoinGroup();
+  const paywall = usePaywall();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const performJoin = () => {
+    joinGroup.mutate(group.id, {
+      onSuccess: (data: any) => {
+        queryClient.invalidateQueries({ queryKey: ["/api/lounge/groups"] });
+        if (data?.status === "requested") {
+          setStatus("requested");
+          toast({ title: "Request sent", description: "You'll be let in once an admin approves." });
+        } else {
+          setStatus("joined");
+        }
+      },
+      onError: (err: Error) => {
+        toast({ title: "Couldn't join", description: err.message, variant: "destructive" });
+      },
+    });
+  };
+
+  if (status === "joined") {
+    return (
+      <span className="shrink-0 text-[12.5px] font-medium px-3.5 py-1.5 rounded-full border border-vf-line text-vf-soft">
+        Joined
+      </span>
+    );
+  }
+  if (status === "requested") {
+    return (
+      <span className="shrink-0 text-[12.5px] font-medium px-3.5 py-1.5 rounded-full border border-vf-line text-vf-soft">
+        Requested
+      </span>
+    );
+  }
+
   return (
-    <button className="vf-btn-primary text-[12.5px] font-semibold px-3.5 py-1.5 rounded-full btn-press bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors shrink-0">
-      {group.privacyMode === "request-to-join" ? "Request" : "Join"}
-    </button>
+    <>
+      <button
+        onClick={(e) => {
+          // The card behind this pill navigates on click — join, don't navigate.
+          e.stopPropagation();
+          paywall.guard("join_group", performJoin);
+        }}
+        disabled={joinGroup.isPending}
+        className="vf-btn-primary text-[12.5px] font-semibold px-3.5 py-1.5 rounded-full btn-press bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors shrink-0 disabled:opacity-60"
+        data-testid={`button-join-${group.id}`}
+      >
+        {joinGroup.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (group.privacyMode === "request-to-join" ? "Request" : "Join")}
+      </button>
+      {paywall.sheet}
+    </>
   );
 }
 
