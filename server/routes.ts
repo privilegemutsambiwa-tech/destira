@@ -2371,6 +2371,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       } else {
         allGroups = await storage.getGroups();
       }
+      allGroups = allGroups.filter((g: any) => !g.isEventChat);
       const groupsWithCounts = await Promise.all(allGroups.map(async (g) => {
         const members = await storage.getGroupMembers(g.id);
         const isMember = userId ? members.some(m => m.userId === userId) : false;
@@ -2814,6 +2815,10 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         return res.status(403).json({ message: "Only admins can post in this group" });
       }
 
+      if (group?.canMembersSendMessages === false && member.role !== "owner" && member.role !== "admin") {
+        return res.status(403).json({ message: "The host has turned off messaging in this group" });
+      }
+
       if ((contentType === "image" || contentType === "video") && group?.mediaPermission === "admin_only" && member.role === "member") {
         return res.status(403).json({ message: "Only admins can post media in this group" });
       }
@@ -3162,6 +3167,10 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         await storage.updateMatchStatus(match.id, "matched");
         return res.json({ status: "matched", match });
       }
+
+      // Paying tiers only, and metered by tier — free's limit is 0, so this
+      // rejects every free-tier attempt from the very first one.
+      if (await gate.denyIfGated(res, userId, "group_chat_request")) return;
 
       const existingRequests = await storage.getChatRequests(userId);
       const pendingToTarget = existingRequests.find(
@@ -3808,6 +3817,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       } else {
         rawGroups = await storage.getGroups();
       }
+      rawGroups = rawGroups.filter((g: any) => !g.isEventChat);
 
       let allGroups = await Promise.all(rawGroups.map(async (g) => {
         const members = await storage.getGroupMembers(g.id);
@@ -4787,6 +4797,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       res.json(result);
     } catch (e) {
       if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof eventsService.GenderPolicyError) return res.status(403).json({ message: e.message });
       console.error("Attend event error:", e);
       res.status(500).json({ message: "Failed to join event" });
     }
@@ -4804,6 +4815,24 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
       console.error("Cancel event attendance error:", e);
       res.status(500).json({ message: "Failed to cancel" });
+    }
+  });
+
+  // Host-only, idempotent: creates the event's private attendee chat the
+  // first time it's called, or just hands back the existing group id.
+  app.post("/api/events/:id/chat/ensure", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    try {
+      const groupId = await eventsService.ensureEventChatGroup(eventId, userId);
+      res.json({ groupId });
+    } catch (e) {
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof eventsService.NotEventHostError) return res.status(403).json({ message: e.message });
+      console.error("Ensure event chat error:", e);
+      res.status(500).json({ message: "Failed to set up the event chat" });
     }
   });
 

@@ -37,6 +37,9 @@ export interface TierLimits {
   /** replies you can post to other people's stories per rolling 7 days; null = no limit.
    *  Reading replies to your OWN stories is never capped, on any tier. */
   storyRepliesPerWeek: number | null;
+  /** "Request Private Chat" from inside a Lounge, per rolling 7 days; free is
+   *  0 — this is a paying-tier-only action, not just metered lower for free. */
+  groupChatRequestsPerWeek: number | null;
 }
 
 export const LIMITS: Record<Tier, TierLimits> = {
@@ -51,6 +54,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
     canHostEvent: false,
     seeStoryEngagers: false,
     storyRepliesPerWeek: 10,
+    groupChatRequestsPerWeek: 0,
   },
   spark: {
     priceCents: 499,
@@ -63,6 +67,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
     canHostEvent: false,
     seeStoryEngagers: true,
     storyRepliesPerWeek: 30,
+    groupChatRequestsPerWeek: 5,
   },
   flame: {
     priceCents: 999,
@@ -75,6 +80,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
     canHostEvent: true,
     seeStoryEngagers: true,
     storyRepliesPerWeek: null,
+    groupChatRequestsPerWeek: 20,
   },
   ember: {
     priceCents: 1999,
@@ -87,6 +93,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
     canHostEvent: true,
     seeStoryEngagers: true,
     storyRepliesPerWeek: null,
+    groupChatRequestsPerWeek: null,
   },
 };
 
@@ -102,6 +109,7 @@ export const FEATURES = [
   "proximity_identity", // see WHO a "someone's here" alert is about, and act on it
   "see_story_engagers", // names/profiles of who viewed or liked your story
   "story_reply", // posting a reply to someone else's story
+  "group_chat_request", // "Request Private Chat" on a member from inside a Lounge
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -117,6 +125,7 @@ export const FEATURE_MIN_TIER: Record<Feature, Tier> = {
   proximity_identity: "spark",
   see_story_engagers: "spark",
   story_reply: "free", // a metered count, not a tier floor — see LIMIT_KEY
+  group_chat_request: "free", // metered, not tier-floored — free's count is just 0, see LIMIT_KEY
 };
 
 // ── Display metadata — the ONLY place plan copy lives ──
@@ -281,6 +290,7 @@ const LIMIT_KEY: Partial<Record<Feature, keyof TierLimits>> = {
   start_interview: "weeklyInterviews",
   join_group: "groupsMax",
   story_reply: "storyRepliesPerWeek",
+  group_chat_request: "groupChatRequestsPerWeek",
 };
 
 const ACTION: Record<Feature, string> = {
@@ -294,6 +304,7 @@ const ACTION: Record<Feature, string> = {
   proximity_identity: "Opening a nearby profile",
   see_story_engagers: "Seeing who viewed or liked your story",
   story_reply: "Replying to a story",
+  group_chat_request: "Requesting a private chat",
 };
 
 export interface GateCopy {
@@ -331,10 +342,11 @@ export function gateCopy(feature: Feature, s: GateCopyState = {}): GateCopy {
       feature === "daily_likes" ? "likes"
       : feature === "start_interview" ? "interviews"
       : feature === "story_reply" ? "replies"
+      : feature === "group_chat_request" ? "requests"
       : "rooms";
     const per =
       feature === "daily_likes" ? "today"
-      : feature === "start_interview" || feature === "story_reply" ? "this week"
+      : feature === "start_interview" || feature === "story_reply" || feature === "group_chat_request" ? "this week"
       : "";
 
     let line: string;

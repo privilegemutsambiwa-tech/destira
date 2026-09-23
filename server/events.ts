@@ -17,6 +17,7 @@ import {
 import { users } from "@shared/models/auth";
 import { eq, and, ne, or, ilike, inArray, asc, desc, gte, lte, count, isNull } from "drizzle-orm";
 import { computeResonance } from "./resonance";
+import { storage } from "./storage";
 
 export class EventNotFoundError extends Error {
   constructor() { super("Event not found"); }
@@ -40,6 +41,9 @@ export class PhotoLimitError extends Error {
 }
 export class ContactNotReleasedError extends Error {
   constructor(msg = "Contact details unlock the day before, once you're confirmed as going.") { super(msg); }
+}
+export class GenderPolicyError extends Error {
+  constructor(msg: string) { super(msg); }
 }
 
 export const HOST_WEEKLY_LIMIT = 3;
@@ -349,6 +353,9 @@ export async function createHostedEvent(hostUserId: string, data: HostEventInput
       contributionNote: data.contributionNote || null,
       contactPhone: data.contactPhone || null,
       contactWhatsapp: data.contactWhatsapp || null,
+      genderPolicy: data.genderPolicy,
+      menSlots: data.genderPolicy === "quota" ? data.menSlots ?? null : null,
+      womenSlots: data.genderPolicy === "quota" ? data.womenSlots ?? null : null,
     })
     .returning();
   return event;
@@ -458,7 +465,7 @@ export async function attendEvent(
   eventId: number,
   userId: string,
 ): Promise<{ status: AttendeeStatus; waitlistPosition?: number }> {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [event] = await tx.select().from(events).where(eq(events.id, eventId)).for("update");
     if (!event) throw new EventNotFoundError();
 
@@ -470,9 +477,21 @@ export async function attendEvent(
     // rather than re-running allocation (double-tap / retry safety).
     if (existing && ["going", "waitlisted", "requested"].includes(existing.status)) {
       const status = existing.status as AttendeeStatus;
-      if (status !== "waitlisted") return { status };
+      if (status !== "waitlisted") return { status, chatGroupId: event.chatGroupId };
       const position = await waitlistPosition(tx, eventId, existing.id);
-      return { status, waitlistPosition: position };
+      return { status, waitlistPosition: position, chatGroupId: event.chatGroupId };
+    }
+
+    let requesterGender: string | null | undefined;
+    if (event.genderPolicy !== "mixed") {
+      const [profile] = await tx.select({ gender: profiles.gender }).from(profiles).where(eq(profiles.userId, userId));
+      requesterGender = profile?.gender ?? null;
+      if (event.genderPolicy === "men_only" && requesterGender !== "man") {
+        throw new GenderPolicyError("This event is for men only.");
+      }
+      if (event.genderPolicy === "women_only" && requesterGender !== "woman") {
+        throw new GenderPolicyError("This event is for women only.");
+      }
     }
 
     const [{ count: goingCount }] = await tx
@@ -480,7 +499,24 @@ export async function attendEvent(
       .from(eventAttendees)
       .where(and(eq(eventAttendees.eventId, eventId), eq(eventAttendees.status, "going")));
 
-    const status = seatStatusFor(event.seatModel, Number(goingCount), event.seatCount);
+    // Non-binary/self-describe/unset attendees are never quota-limited — the
+    // quota only splits capacity between the two binary buckets.
+    let status: AttendeeStatus;
+    if (event.genderPolicy === "quota" && (requesterGender === "man" || requesterGender === "woman")) {
+      const slot = requesterGender === "man" ? event.menSlots : event.womenSlots;
+      const [{ count: sameGenderGoing }] = await tx
+        .select({ count: count() })
+        .from(eventAttendees)
+        .innerJoin(profiles, eq(profiles.userId, eventAttendees.userId))
+        .where(and(
+          eq(eventAttendees.eventId, eventId),
+          eq(eventAttendees.status, "going"),
+          eq(profiles.gender, requesterGender),
+        ));
+      status = seatStatusFor(event.seatModel, Number(sameGenderGoing), slot);
+    } else {
+      status = seatStatusFor(event.seatModel, Number(goingCount), event.seatCount);
+    }
     const decidedAt = status === "requested" ? null : new Date();
 
     let row: EventAttendee;
@@ -495,9 +531,23 @@ export async function attendEvent(
         .returning();
     }
 
-    if (status !== "waitlisted") return { status };
-    return { status, waitlistPosition: await waitlistPosition(tx, eventId, row.id) };
+    if (status !== "waitlisted") return { status, chatGroupId: event.chatGroupId };
+    return { status, waitlistPosition: await waitlistPosition(tx, eventId, row.id), chatGroupId: event.chatGroupId };
   });
+
+  // Best-effort: a late RSVP still lands in an already-created event chat.
+  // Not part of the RSVP transaction — a failure here shouldn't undo the
+  // seat decision, which has already been committed.
+  if (result.status === "going" && result.chatGroupId != null) {
+    const alreadyMember = await storage.getGroupMember(result.chatGroupId, userId);
+    if (!alreadyMember) {
+      const profile = await storage.getProfile(userId);
+      const nickname = profile?.groupNickname || profile?.displayName || "Guest";
+      await storage.joinGroup(result.chatGroupId, userId, nickname);
+    }
+  }
+
+  return { status: result.status, waitlistPosition: result.waitlistPosition };
 }
 
 export async function cancelEventAttendance(
@@ -549,6 +599,7 @@ export async function getEventAttendeesList(eventId: number, requesterId: string
     coverPhotoUrl: profiles.coverPhotoUrl,
     isPublic: profiles.isPublic,
     subscriptionTier: profiles.subscriptionTier,
+    gender: profiles.gender,
   })
     .from(eventAttendees)
     .leftJoin(profiles, eq(profiles.userId, eventAttendees.userId))
@@ -603,6 +654,40 @@ async function requireHost(eventId: number, hostUserId: string): Promise<Event> 
   if (!event) throw new EventNotFoundError();
   if (event.hostUserId !== hostUserId) throw new NotEventHostError();
   return event;
+}
+
+// Idempotent: the first call creates the room (host + every current 'going'
+// attendee), a later call just hands back the same group id. Marked
+// isEventChat so it never shows up in the public Lounge tab/search — it's
+// scoped to this one event, not browsable.
+export async function ensureEventChatGroup(eventId: number, hostUserId: string): Promise<number> {
+  const event = await requireHost(eventId, hostUserId);
+  if (event.chatGroupId != null) return event.chatGroupId;
+
+  const group = await storage.createGroupFull({
+    name: `${event.title} — Event Chat`,
+    description: `Private chat for attendees of "${event.title}"`,
+    type: "event",
+    ownerId: hostUserId,
+    privacyMode: "invite-only",
+    isEventChat: true,
+  });
+
+  const going = await db
+    .select({ userId: eventAttendees.userId })
+    .from(eventAttendees)
+    .where(and(eq(eventAttendees.eventId, eventId), eq(eventAttendees.status, "going")));
+  const memberIds = new Set([hostUserId, ...going.map((a) => a.userId)]);
+
+  for (const userId of memberIds) {
+    const profile = await storage.getProfile(userId);
+    const nickname = profile?.groupNickname || profile?.displayName || "Guest";
+    await storage.joinGroup(group.id, userId, nickname);
+  }
+  await storage.updateGroupMemberRole(group.id, hostUserId, "owner");
+
+  await db.update(events).set({ chatGroupId: group.id }).where(eq(events.id, eventId));
+  return group.id;
 }
 
 export async function addEventPhoto(
@@ -893,6 +978,7 @@ export async function seedEvents(): Promise<void> {
       endsAt: inDays(3, 8),
       seatModel: "open",
       seatCount: null,
+      genderPolicy: "mixed",
       emberFirstPick: false,
       status: "published",
       kind: "outdoors",
@@ -911,6 +997,7 @@ export async function seedEvents(): Promise<void> {
       endsAt: inDays(5, 21),
       seatModel: "capped",
       seatCount: 8,
+      genderPolicy: "mixed",
       emberFirstPick: false,
       status: "published",
       kind: "books",
@@ -929,6 +1016,7 @@ export async function seedEvents(): Promise<void> {
       endsAt: inDays(8, 22),
       seatModel: "curated",
       seatCount: 6,
+      genderPolicy: "mixed",
       emberFirstPick: true,
       status: "published",
       kind: "food",

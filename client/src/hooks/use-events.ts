@@ -3,6 +3,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export type SeatModel = "open" | "capped" | "curated";
 export type AttendeeStatus = "going" | "waitlisted" | "requested" | "declined" | "cancelled";
+export type EventGenderPolicy = "mixed" | "men_only" | "women_only" | "quota";
 
 export interface EventResonance {
   goingCount: number;
@@ -23,6 +24,10 @@ export interface EventItem {
   endsAt: string | null;
   seatModel: SeatModel;
   seatCount: number | null;
+  genderPolicy: EventGenderPolicy;
+  menSlots: number | null;
+  womenSlots: number | null;
+  chatGroupId: number | null;
   emberFirstPick: boolean;
   coverImageUrl: string | null;
   status: string;
@@ -139,6 +144,9 @@ export interface HostEventInput {
   endsAt?: string | null;
   seatModel: SeatModel;
   seatCount?: number | null;
+  genderPolicy: EventGenderPolicy;
+  menSlots?: number | null;
+  womenSlots?: number | null;
   isSober: boolean;
   accessibility: string[];
   visibility: "public" | "group" | "invite";
@@ -334,6 +342,31 @@ export function useCancelEvent() {
   });
 }
 
+export interface EventAttendeeRow {
+  userId: string;
+  status: AttendeeStatus;
+  createdAt: string;
+  displayName: string | null;
+  coverPhotoUrl: string | null;
+  isPublic: boolean | null;
+  subscriptionTier: string | null;
+  gender: string | null;
+}
+
+// The full RSVP list (visibility only — no messaging entry point here).
+// Non-hosts only see public, unblocked attendees (server-filtered).
+export function useEventAttendees(eventId: number | undefined) {
+  return useQuery<EventAttendeeRow[]>({
+    queryKey: ["/api/events", eventId, "attendees"],
+    queryFn: async () => {
+      const res = await fetch(`/api/events/${eventId}/attendees`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: eventId != null && !Number.isNaN(eventId),
+  });
+}
+
 export function useEvent(id: number | undefined) {
   return useQuery<EventItem | null>({
     queryKey: ["/api/events", id],
@@ -363,8 +396,9 @@ export function useAttendEvent() {
   return useMutation({
     mutationFn: async ({ eventId }: AttendVars) => {
       const res = await fetch(`/api/events/${eventId}/attend`, { method: "POST", credentials: "include" });
-      if (!res.ok) throw new Error("Failed to join event");
-      return res.json() as Promise<{ status: AttendeeStatus; waitlistPosition?: number }>;
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || "Failed to join event");
+      return body as { status: AttendeeStatus; waitlistPosition?: number };
     },
     onMutate: async ({ eventId, seatModel }: AttendVars) => {
       await queryClient.cancelQueries({ queryKey: ["/api/events"] });
@@ -390,12 +424,12 @@ export function useAttendEvent() {
         old ? { ...old, ...patch } : old
       );
     },
-    onError: (_err, { eventId }, ctx) => {
+    onError: (err: Error, { eventId }, ctx) => {
       if (ctx) {
         queryClient.setQueryData(["/api/events"], ctx.prevList);
         queryClient.setQueryData(["/api/events", eventId], ctx.prevDetail);
       }
-      toast({ title: "Couldn't join", description: "Something went wrong. Try again.", variant: "destructive" });
+      toast({ title: "Couldn't join", description: err.message || "Something went wrong. Try again.", variant: "destructive" });
     },
     onSettled: (_data, _err, { eventId }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
@@ -403,6 +437,21 @@ export function useAttendEvent() {
       queryClient.invalidateQueries({ queryKey: ["/api/events/feed"] });
       queryClient.invalidateQueries({ queryKey: ["events-search"] });
     },
+  });
+}
+
+// Host-only. Idempotent — safe to call every time the host taps "Event
+// chat"; the server hands back the existing group id once it's created.
+export function useEnsureEventChat() {
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (eventId: number) => {
+      const res = await fetch(`/api/events/${eventId}/chat/ensure`, { method: "POST", credentials: "include" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || "Couldn't set up the event chat");
+      return body as { groupId: number };
+    },
+    onError: (err: Error) => toast({ title: "Couldn't open chat", description: err.message, variant: "destructive" }),
   });
 }
 

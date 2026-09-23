@@ -12,6 +12,7 @@ import {
   type HostEventInput,
   type SeatModel,
   type EventCostModel,
+  type EventGenderPolicy,
   type Place,
 } from "@/hooks/use-events";
 import { HostVideoRecorder, type RecordedVideo } from "@/components/host-video-recorder";
@@ -41,6 +42,9 @@ type Draft = {
   groupId: number | null;
   seatModel: SeatModel;
   seatCount: string;
+  genderPolicy: EventGenderPolicy;
+  menSlots: string;
+  womenSlots: string;
   costModel: EventCostModel;
   contributionAmount: string;
   contributionNote: string;
@@ -59,6 +63,7 @@ const EMPTY: Draft = {
   placeId: null, placeName: "", addressLine: "", isPrivateAddress: false,
   visibility: "public", groupId: null,
   seatModel: "open", seatCount: "",
+  genderPolicy: "mixed", menSlots: "", womenSlots: "",
   costModel: "free_hosted", contributionAmount: "", contributionNote: "",
   contactPhone: "", contactWhatsapp: "",
   vibes: [], isSober: false, accessibility: [],
@@ -178,6 +183,7 @@ export default function HostEvent() {
     }
     if (s === 3) {
       if (d.seatModel !== "open" && (!d.seatCount || Number(d.seatCount) < 2)) return "Set how many seats (2+).";
+      if (d.genderPolicy === "quota" && (!d.menSlots || !d.womenSlots)) return "Set how many men and women.";
       if (d.visibility === "group" && d.groupId == null) return "Choose which group.";
       if (d.costModel === "contribute") {
         const n = Number(d.contributionAmount);
@@ -217,6 +223,9 @@ export default function HostEvent() {
       endsAt: endsAtISO,
       seatModel: d.seatModel,
       seatCount: d.seatModel === "open" ? null : Number(d.seatCount),
+      genderPolicy: d.genderPolicy,
+      menSlots: d.genderPolicy === "quota" ? Number(d.menSlots) : null,
+      womenSlots: d.genderPolicy === "quota" ? Number(d.womenSlots) : null,
       isSober: d.isSober,
       accessibility: d.accessibility,
       visibility: d.visibility,
@@ -505,6 +514,23 @@ export default function HostEvent() {
             </div>
 
             <div>
+              <GroupLabel>Who's welcome</GroupLabel>
+              <div className="inline-flex rounded-full border border-vf-line overflow-hidden flex-wrap">
+                {([["mixed", "Everyone"], ["men_only", "Men only"], ["women_only", "Women only"], ["quota", "Set a quota"]] as const).map(([v, label]) => (
+                  <button key={v} type="button" onClick={() => set({ genderPolicy: v })} className={`px-4 h-9 text-[13px] transition-colors ${d.genderPolicy === v ? "bg-vf-mint/10 text-vf-text" : "text-vf-muted hover:text-vf-text"}`} data-testid={`button-gender-policy-${v}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {d.genderPolicy === "quota" && (
+                <div className="mt-3 flex gap-3 max-w-[340px]">
+                  <input type="number" min={1} max={500} className={inputCls} value={d.menSlots} onChange={(e) => set({ menSlots: e.target.value })} placeholder="Men needed" data-testid="input-men-slots" />
+                  <input type="number" min={1} max={500} className={inputCls} value={d.womenSlots} onChange={(e) => set({ womenSlots: e.target.value })} placeholder="Women needed" data-testid="input-women-slots" />
+                </div>
+              )}
+            </div>
+
+            <div>
               <GroupLabel>Who can see it</GroupLabel>
               <div className="inline-flex rounded-full border border-vf-line overflow-hidden">
                 {(["public", "group"] as const).map((v) => (
@@ -624,6 +650,13 @@ export default function HostEvent() {
                 <dd className="text-vf-text">{d.isPrivateAddress ? "A private home" : d.placeId ? "A verified venue" : "A public place"}</dd>
                 <dt className="text-vf-faint">Seats</dt>
                 <dd className="text-vf-text capitalize">{d.seatModel}{d.seatModel !== "open" && d.seatCount ? ` · ${d.seatCount}` : ""}</dd>
+                <dt className="text-vf-faint">Who's welcome</dt>
+                <dd className="text-vf-text">
+                  {d.genderPolicy === "mixed" ? "Everyone"
+                    : d.genderPolicy === "men_only" ? "Men only"
+                    : d.genderPolicy === "women_only" ? "Women only"
+                    : `${d.menSlots || 0} men, ${d.womenSlots || 0} women`}
+                </dd>
                 <dt className="text-vf-faint">Cost</dt>
                 <dd className="text-vf-text">
                   {d.costModel === "free_hosted"

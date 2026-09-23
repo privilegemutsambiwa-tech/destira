@@ -4,7 +4,7 @@ import {
   eventActionState,
   eventResonanceSignal,
 } from "@/components/event-row";
-import { useEvent, useAttendEvent, useCancelAttendance, useUpdateEvent, useCancelEvent } from "@/hooks/use-events";
+import { useEvent, useEventAttendees, useAttendEvent, useCancelAttendance, useUpdateEvent, useCancelEvent, useEnsureEventChat } from "@/hooks/use-events";
 import { useGroups } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -32,9 +32,28 @@ const SEAT_MODEL_COPY: Record<string, string> = {
   curated: "Seats picked for conversation, not first-come",
 };
 
+function genderLabel(gender: string | null | undefined): string | null {
+  if (gender === "man") return "Man";
+  if (gender === "woman") return "Woman";
+  return null;
+}
+
+function genderPolicyLabel(event: { genderPolicy: string; menSlots: number | null; womenSlots: number | null }): string | null {
+  if (event.genderPolicy === "men_only") return "Men only";
+  if (event.genderPolicy === "women_only") return "Women only";
+  if (event.genderPolicy === "quota" && (event.menSlots != null || event.womenSlots != null)) {
+    const parts = [];
+    if (event.menSlots != null) parts.push(`${event.menSlots} men`);
+    if (event.womenSlots != null) parts.push(`${event.womenSlots} women`);
+    return `${parts.join(", ")} needed`;
+  }
+  return null;
+}
+
 export default function EventDetail({ params }: { params: { id: string } }) {
   const eventId = Number(params.id);
   const { data: event, isLoading } = useEvent(eventId);
+  const { data: attendees } = useEventAttendees(eventId);
   const { data: groups } = useGroups();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -42,6 +61,7 @@ export default function EventDetail({ params }: { params: { id: string } }) {
   const cancel = useCancelAttendance();
   const updateEvent = useUpdateEvent();
   const cancelEvent = useCancelEvent();
+  const ensureChat = useEnsureEventChat();
   const [editing, setEditing] = useState(false);
   const [edit, setEdit] = useState({ title: "", description: "", startsAt: "" });
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -84,7 +104,9 @@ export default function EventDetail({ params }: { params: { id: string } }) {
   };
 
   const notable = event.resonance.notableAttendees;
-  const otherGoing = Math.max(0, event.resonance.goingCount - notable.length);
+  const notableIds = new Set(notable.map((a) => a.id));
+  const genderByUserId = new Map((attendees || []).map((a) => [a.userId, a.gender]));
+  const otherAttendees = (attendees || []).filter((a) => a.status === "going" && !notableIds.has(a.userId));
 
   return (
     <LayoutShell>
@@ -175,6 +197,9 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                 {formatTime(event.startsAt)} · {event.resonance.goingCount} going
               </div>
               <div className="text-[12px] text-vf-faint mt-1.5">{SEAT_MODEL_COPY[event.seatModel]}</div>
+              {genderPolicyLabel(event) && (
+                <div className="text-[12px] text-vf-faint mt-0.5" data-testid="event-gender-policy">{genderPolicyLabel(event)}</div>
+              )}
               {event.costModel === "contribute" && event.contributionAmount != null && (
                 <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-vf-faint leading-[1.5]" data-testid="event-contribution-line">
                   Contribution · ${event.contributionAmount} · settled in person on the day · Destira never handles it
@@ -208,32 +233,60 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                 {state.label}
               </button>
             )}
+            {!isHost && event.myStatus === "going" && event.chatGroupId != null && (
+              <button
+                onClick={() => setLocation(`/lounge/group/${event.chatGroupId}`)}
+                className="w-full h-10 rounded-full border border-vf-line text-vf-soft hover:border-vf-text/25 text-[13px] transition-colors"
+                data-testid="button-event-chat"
+              >
+                Open event chat
+              </button>
+            )}
             {isHost && event.status !== "cancelled" && (
               <div className="border-t border-vf-line pt-4 flex flex-col gap-3">
                 <div className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-faint">You're hosting</div>
 
                 {!editing && !cancelOpen && (
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setEdit({
+                            title: event.title,
+                            description: event.description ?? "",
+                            startsAt: toLocalInput(event.startsAt),
+                          });
+                          setEditing(true);
+                        }}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-full border border-vf-line text-vf-soft hover:border-vf-text/25 text-[13px] transition-colors"
+                        data-testid="button-edit-event"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Edit
+                      </button>
+                      <button
+                        onClick={() => setCancelOpen(true)}
+                        className="flex-1 h-9 rounded-full border border-vf-line text-vf-faint hover:text-vf-text hover:border-vf-text/25 text-[13px] transition-colors"
+                        data-testid="button-open-cancel-event"
+                      >
+                        Call it off
+                      </button>
+                    </div>
                     <button
+                      disabled={ensureChat.isPending}
                       onClick={() => {
-                        setEdit({
-                          title: event.title,
-                          description: event.description ?? "",
-                          startsAt: toLocalInput(event.startsAt),
-                        });
-                        setEditing(true);
+                        if (event.chatGroupId) {
+                          setLocation(`/lounge/group/${event.chatGroupId}`);
+                        } else {
+                          ensureChat.mutate(event.id, {
+                            onSuccess: (r) => setLocation(`/lounge/group/${r.groupId}`),
+                          });
+                        }
                       }}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-full border border-vf-line text-vf-soft hover:border-vf-text/25 text-[13px] transition-colors"
-                      data-testid="button-edit-event"
+                      className="w-full h-9 rounded-full border border-vf-line text-vf-soft hover:border-vf-text/25 text-[13px] transition-colors inline-flex items-center justify-center gap-2"
+                      data-testid="button-event-chat"
                     >
-                      <Pencil className="w-3.5 h-3.5" /> Edit
-                    </button>
-                    <button
-                      onClick={() => setCancelOpen(true)}
-                      className="flex-1 h-9 rounded-full border border-vf-line text-vf-faint hover:text-vf-text hover:border-vf-text/25 text-[13px] transition-colors"
-                      data-testid="button-open-cancel-event"
-                    >
-                      Call it off
+                      {ensureChat.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      {event.chatGroupId ? "Open event chat" : "Turn on event chat"}
                     </button>
                   </div>
                 )}
@@ -330,7 +383,7 @@ export default function EventDetail({ params }: { params: { id: string } }) {
               </div>
             )}
 
-            {notable.length > 0 && (
+            {(notable.length > 0 || otherAttendees.length > 0) && (
               <div className="border-t border-vf-line pt-4">
                 <div className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-faint mb-3">Who's going</div>
                 <div className="flex flex-col gap-2.5">
@@ -343,14 +396,33 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                           <span className="font-serif text-[12px] text-vf-soft">{a.name[0]}</span>
                         )}
                       </div>
-                      <span className="text-[13.5px] text-vf-text flex-1 truncate">{a.name}</span>
+                      <span className="text-[13.5px] text-vf-text flex-1 truncate">
+                        {a.name}
+                        {genderLabel(genderByUserId.get(a.id)) && (
+                          <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-vf-faint"> · {genderLabel(genderByUserId.get(a.id))}</span>
+                        )}
+                      </span>
                       <span className="font-mono text-[11.5px] text-vf-mint shrink-0">{a.score}</span>
                     </div>
                   ))}
+                  {otherAttendees.map((a) => (
+                    <div key={a.userId} className="flex items-center gap-2.5" data-testid={`event-attendee-${a.userId}`}>
+                      <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 bg-vf-surface flex items-center justify-center">
+                        {a.coverPhotoUrl ? (
+                          <img src={a.coverPhotoUrl} alt={a.displayName || "Attendee"} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="font-serif text-[12px] text-vf-soft">{(a.displayName || "?")[0]}</span>
+                        )}
+                      </div>
+                      <span className="text-[13.5px] text-vf-text flex-1 truncate">
+                        {a.displayName || "Someone"}
+                        {genderLabel(a.gender) && (
+                          <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-vf-faint"> · {genderLabel(a.gender)}</span>
+                        )}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                {otherGoing > 0 && (
-                  <div className="text-[12px] text-vf-faint mt-2.5">and {otherGoing} other{otherGoing === 1 ? "" : "s"}</div>
-                )}
               </div>
             )}
           </div>

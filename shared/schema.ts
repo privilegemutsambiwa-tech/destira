@@ -183,6 +183,9 @@ export const groups = pgTable("groups", {
   // is for. One flexible label rather than separate campus/city columns —
   // unlike `events`, Lounges don't need real geo math, just a grouping tag.
   locationLabel: text("location_label"),
+  // An event's auto-created attendee room. Excluded from the public
+  // Lounge tab/search — it's scoped to that one event, not browsable.
+  isEventChat: boolean("is_event_chat").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -761,6 +764,13 @@ export const events = pgTable("events", {
   hostVideoRejectReason: text("host_video_reject_reason"),
   minAttendees: integer("min_attendees"),    // forced to 4 for private_residence
   infoScore: integer("info_score").notNull().default(0), // computed — Events v3 Conversation Two
+  // Who the host is willing to seat. "quota" splits seatCount into two
+  // gender-segmented buckets (menSlots/womenSlots) instead of one shared count.
+  genderPolicy: text("gender_policy").notNull().default("mixed"), // mixed | men_only | women_only | quota
+  menSlots: integer("men_slots"),
+  womenSlots: integer("women_slots"),
+  // Optional private chat for attendees, off until the host creates it.
+  chatGroupId: integer("chat_group_id").references(() => groups.id),
 });
 
 // Up to 6 per event. EXIF is stripped server-side on upload (mandatory — a
@@ -942,10 +952,12 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
 export const seatModelEnum = z.enum(["open", "capped", "curated"]);
 export const eventStatusEnum = z.enum(["draft", "pending_review", "published", "cancelled"]);
 export const attendeeStatusEnum = z.enum(["going", "waitlisted", "requested", "declined", "cancelled"]);
+export const eventGenderPolicyEnum = z.enum(["mixed", "men_only", "women_only", "quota"]);
 
 export const insertEventSchema = createInsertSchema(events, {
   seatModel: seatModelEnum,
   status: eventStatusEnum,
+  genderPolicy: eventGenderPolicyEnum,
 }).omit({
   id: true,
   hostUserId: true,
@@ -960,6 +972,7 @@ export const insertEventSchema = createInsertSchema(events, {
 export const updateEventSchema = createInsertSchema(events, {
   seatModel: seatModelEnum,
   status: eventStatusEnum,
+  genderPolicy: eventGenderPolicyEnum,
 }).omit({
   id: true,
   hostUserId: true,
@@ -1048,10 +1061,17 @@ export const hostEventSchema = z
     contributionNote: z.string().trim().max(200).optional().or(z.literal("")),
     contactPhone: z.string().trim().max(40).optional().or(z.literal("")),
     contactWhatsapp: z.string().trim().max(40).optional().or(z.literal("")),
+    genderPolicy: eventGenderPolicyEnum.default("mixed"),
+    menSlots: z.coerce.number().int().min(1).max(500).nullable().optional(),
+    womenSlots: z.coerce.number().int().min(1).max(500).nullable().optional(),
   })
   .refine((d) => d.seatModel === "open" || (d.seatCount != null && d.seatCount > 0), {
     message: "Set how many seats",
     path: ["seatCount"],
+  })
+  .refine((d) => d.genderPolicy !== "quota" || (d.menSlots != null && d.womenSlots != null), {
+    message: "Set how many men and women",
+    path: ["menSlots"],
   })
   .refine((d) => !d.endsAt || d.endsAt.getTime() > d.startsAt.getTime(), {
     message: "End time has to be after the start",

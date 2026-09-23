@@ -911,7 +911,7 @@ export class DatabaseStorage implements IStorage {
     return group;
   }
 
-  async createGroupFull(data: { name: string; description: string; type: string; ownerId: string; iconUrl?: string; categoryTags?: string[]; privacyMode?: string; mediaEnabled?: boolean; stickersEnabled?: boolean; postingPermission?: string; inviteDirectJoinEnabled?: boolean; isOfficial?: boolean; locationLabel?: string }): Promise<Group> {
+  async createGroupFull(data: { name: string; description: string; type: string; ownerId: string; iconUrl?: string; categoryTags?: string[]; privacyMode?: string; mediaEnabled?: boolean; stickersEnabled?: boolean; postingPermission?: string; inviteDirectJoinEnabled?: boolean; isOfficial?: boolean; locationLabel?: string; isEventChat?: boolean }): Promise<Group> {
     const [group] = await db.insert(groups).values(data).returning();
     return group;
   }

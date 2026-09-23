@@ -165,17 +165,24 @@ function tagsOverlap(a: string[] | null | undefined, b: string[] | null | undefi
   });
 }
 
+export type SuggestedLounge = { id: number; name: string; reason: "mutual" | "their-interest" | "suggested" };
+
+const MAX_SUGGESTED_LOUNGES = 3;
+
 /** A lower-pressure first step than a cold 1:1 thread — never a replacement
- *  for the 1:1 chat, just an option alongside it. Priority order:
- *   1. A Lounge this pair already shares (the strongest signal).
- *   2. A Lounge the OTHER person is already in that overlaps the viewer's
- *      own AI-Twin interests (twinProfilesStructured.interests vs. the
- *      group's categoryTags) — "your suitor is in a room you'd probably
- *      like too", not just a same-city guess.
- *   3. A curated official Lounge near the viewer, as a last resort.
+ *  for the 1:1 chat, just an option alongside it. As the platform grows a
+ *  suitor may well be in several groups worth suggesting, not just one, so
+ *  this returns up to three, ranked:
+ *   1. Every Lounge this pair already shares (the strongest signal).
+ *   2. Lounges the OTHER person is already in that overlap the viewer's own
+ *      AI-Twin interests (twinProfilesStructured.interests vs. the group's
+ *      categoryTags) — "your suitor is in a room you'd probably like too",
+ *      not just a same-city guess.
+ *   3. One curated official Lounge near the viewer, only if the above found
+ *      nothing at all.
  *  Shared by DirectChat's ongoing strip and the match-celebration moment,
  *  so "meet in a group first" reads the same wherever it shows up. */
-export function useSharedOrSuggestedLounge(otherUserId?: string) {
+export function useSuggestedLounges(otherUserId?: string): { lounges: SuggestedLounge[] } {
   const { data: myProfile } = useProfile();
   const { data: myStructured } = useTwinStructuredProfile();
   const { data: theirGroups } = useProfileGroups(otherUserId);
@@ -183,23 +190,22 @@ export function useSharedOrSuggestedLounge(otherUserId?: string) {
 
   const mutual = (theirGroups || []).filter((g) => g.viewerIsMember);
   const myInterests: string[] = Array.isArray((myStructured as any)?.interests) ? (myStructured as any).interests : [];
-  const theirInterestMatch = !mutual.length
-    ? (theirGroups || []).find((g) => tagsOverlap(myInterests, g.categoryTags))
-    : null;
-  const myCity = (myProfile as any)?.locationName || (myProfile as any)?.location || null;
-  const suggested = !mutual.length && !theirInterestMatch
-    ? (officialLounges || []).find((g: any) => myCity && g.locationLabel === myCity) || (officialLounges || [])[0]
-    : null;
+  const seen = new Set(mutual.map((g) => g.id));
+  const interestMatches = (theirGroups || []).filter((g) => !seen.has(g.id) && tagsOverlap(myInterests, g.categoryTags));
+  interestMatches.forEach((g) => seen.add(g.id));
 
-  const lounge = mutual[0] ?? theirInterestMatch ?? suggested ?? null;
-  const reason: "mutual" | "their-interest" | "suggested" | null = mutual[0]
-    ? "mutual"
-    : theirInterestMatch
-      ? "their-interest"
-      : suggested
-        ? "suggested"
-        : null;
-  return { lounge, reason, isMutual: reason === "mutual" };
+  const lounges: SuggestedLounge[] = [
+    ...mutual.map((g) => ({ id: g.id, name: g.name, reason: "mutual" as const })),
+    ...interestMatches.map((g) => ({ id: g.id, name: g.name, reason: "their-interest" as const })),
+  ];
+
+  if (lounges.length === 0) {
+    const myCity = (myProfile as any)?.locationName || (myProfile as any)?.location || null;
+    const fallback = (officialLounges || []).find((g: any) => myCity && g.locationLabel === myCity) || (officialLounges || [])[0];
+    if (fallback) lounges.push({ id: fallback.id, name: fallback.name, reason: "suggested" });
+  }
+
+  return { lounges: lounges.slice(0, MAX_SUGGESTED_LOUNGES) };
 }
 
 export function useGenerateTwin() {

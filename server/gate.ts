@@ -10,7 +10,7 @@
 // they're back on Flame+.
 
 import { db } from "./db";
-import { subscriptions, profiles, interviews, groupMembers, groups, dailyLikeCounts, storyComments } from "@shared/schema";
+import { subscriptions, profiles, interviews, groupMembers, groups, dailyLikeCounts, storyComments, chatRequests } from "@shared/schema";
 import { and, eq, gte, count, asc } from "drizzle-orm";
 import { LIMITS, tierRank, FEATURE_MIN_TIER, gateCopy, type Tier, type Feature } from "@shared/entitlements";
 
@@ -141,6 +141,12 @@ async function usage(userId: string, feature: Feature): Promise<number> {
         .from(storyComments)
         .where(and(eq(storyComments.userId, userId), gte(storyComments.createdAt, weekAgo)))
         .then((r) => Number(r[0]?.n ?? 0));
+    case "group_chat_request":
+      return db
+        .select({ n: count() })
+        .from(chatRequests)
+        .where(and(eq(chatRequests.requesterId, userId), gte(chatRequests.createdAt, weekAgo)))
+        .then((r) => Number(r[0]?.n ?? 0));
     default:
       return 0;
   }
@@ -162,6 +168,16 @@ async function oldestStoryReplyInWindow(userId: string, since: Date): Promise<Da
     .from(storyComments)
     .where(and(eq(storyComments.userId, userId), gte(storyComments.createdAt, since)))
     .orderBy(asc(storyComments.createdAt))
+    .limit(1);
+  return row?.createdAt ?? undefined;
+}
+
+async function oldestChatRequestInWindow(userId: string, since: Date): Promise<Date | undefined> {
+  const [row] = await db
+    .select({ createdAt: chatRequests.createdAt })
+    .from(chatRequests)
+    .where(and(eq(chatRequests.requesterId, userId), gte(chatRequests.createdAt, since)))
+    .orderBy(asc(chatRequests.createdAt))
     .limit(1);
   return row?.createdAt ?? undefined;
 }
@@ -233,7 +249,9 @@ export async function checkGate(
           ? limits.groupsMax
           : feature === "story_reply"
             ? limits.storyRepliesPerWeek
-            : null;
+            : feature === "group_chat_request"
+              ? limits.groupChatRequestsPerWeek
+              : null;
 
   if (limit == null) return { ok: true, tier, limit: null };
   const used = opts.countOverride ?? (await usage(userId, feature));
@@ -245,7 +263,9 @@ export async function checkGate(
       ? await rollingWindowResetAt(userId, 7, oldestInterviewInWindow)
       : feature === "story_reply"
         ? await rollingWindowResetAt(userId, 7, oldestStoryReplyInWindow)
-        : undefined;
+        : feature === "group_chat_request"
+          ? await rollingWindowResetAt(userId, 7, oldestChatRequestInWindow)
+          : undefined;
   return {
     ok: false,
     tier,

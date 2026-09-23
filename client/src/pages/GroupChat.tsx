@@ -26,6 +26,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
+import { usePaywall } from "@/hooks/use-paywall";
 
 interface MessageAction {
   icon: React.ReactNode;
@@ -283,6 +284,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   const starMessage = useStarMessage(groupId);
   const unstarMessage = useUnstarMessage(groupId);
   const createChatRequest = useCreateChatRequest();
+  const paywall = usePaywall();
 
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<any>(null);
@@ -654,23 +656,25 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                               ...(!isMe ? [{
                                 icon: <MessageSquarePlus className="w-4 h-4 mr-2" />,
                                 label: "Request Private Chat",
-                                onClick: async () => {
-                                  try {
-                                    const result = await createChatRequest.mutateAsync({ targetId: msg.userId, groupId });
-                                    if (result.status === "matched" || result.status === "already_matched") {
-                                      const matchId = result.match?.id;
-                                      if (matchId) {
-                                        setLocation(`/chat/${matchId}?from=/lounge/group/${groupId}`);
+                                onClick: () => {
+                                  paywall.guard("group_chat_request", async () => {
+                                    try {
+                                      const result = await createChatRequest.mutateAsync({ targetId: msg.userId, groupId });
+                                      if (result.status === "matched" || result.status === "already_matched") {
+                                        const matchId = result.match?.id;
+                                        if (matchId) {
+                                          setLocation(`/chat/${matchId}?from=/lounge/group/${groupId}`);
+                                        } else {
+                                          toast({ title: "You can now chat privately!" });
+                                        }
                                       } else {
-                                        toast({ title: "You can now chat privately!" });
+                                        toast({ title: "Request sent!", description: "They'll be notified of your request." });
                                       }
-                                    } else {
-                                      toast({ title: "Request sent!", description: "They'll be notified of your request." });
+                                    } catch (err) {
+                                      const msg = err instanceof Error ? err.message : "Failed to send request.";
+                                      toast({ title: "Error", description: msg, variant: "destructive" });
                                     }
-                                  } catch (err) {
-                                    const msg = err instanceof Error ? err.message : "Failed to send request.";
-                                    toast({ title: "Error", description: msg, variant: "destructive" });
-                                  }
+                                  });
                                   setActiveMessageId(null);
                                 },
                                 testId: `action-chat-request-${msg.id}`,
@@ -858,6 +862,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
       </div>
 
       <PollComposerDialog groupId={groupId} open={showPollDialog} onClose={() => setShowPollDialog(false)} />
+      {paywall.sheet}
     </div>
   );
 }
