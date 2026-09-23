@@ -487,6 +487,8 @@ export default function Discover() {
   // drives the disabled prop so the buttons visibly lock while it settles.
   const isActingRef = useRef(false);
   const [isActing, setIsActing] = useState(false);
+  // Which "Next up" card, if any, the viewer tapped to bring to the front.
+  const [pinnedUserId, setPinnedUserId] = useState<string | null>(null);
   const { data: rawProfiles, isLoading } = useDiscoverProfiles(filter, userLat, userLng);
   const { data: feedStories } = useFeedStories();
   const startInterview = useStartInterview();
@@ -551,8 +553,18 @@ export default function Discover() {
     if (filter === "nearby") {
       list = [...list].sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
     }
+    // Tapping a "Next up" card jumps that person to the front without
+    // touching anyone else's order or evaluating who it skipped past.
+    if (pinnedUserId) {
+      const idx = list.findIndex((p: any) => p.userId === pinnedUserId);
+      if (idx > 0) {
+        const next = list.slice();
+        const [pinned] = next.splice(idx, 1);
+        list = [pinned, ...next];
+      }
+    }
     return list;
-  }, [eligibleForFilter, filter, evaluatedIds]);
+  }, [eligibleForFilter, filter, evaluatedIds, pinnedUserId]);
 
   // Always the front of the deck — evaluating a profile removes it from
   // `profiles` above (via evaluatedIds), so there's no index to advance,
@@ -1116,9 +1128,14 @@ export default function Discover() {
                   const rotateDeg = [0, -6, 5][i % 3];
                   const topOffset = [0, 12, 4][i % 3];
                   return (
-                    <div
+                    <button
                       key={p.userId}
-                      className="absolute rounded-[18px] border border-vf-line bg-vf-surface2 overflow-hidden text-left"
+                      type="button"
+                      onClick={() => {
+                        if (isActingRef.current) return;
+                        setPinnedUserId(p.userId);
+                      }}
+                      className="absolute rounded-[18px] border border-vf-line bg-vf-surface2 overflow-hidden text-left cursor-pointer btn-press transition-transform hover:brightness-110"
                       style={{
                         left: i * 34,
                         top: topOffset,
@@ -1128,6 +1145,7 @@ export default function Discover() {
                         zIndex: upcoming.length - i,
                         boxShadow: "0 10px 24px rgba(12,9,16,.22), 0 0 0 3px var(--vf-surface)",
                       }}
+                      aria-label={`Bring ${p.displayName || "this person"} to the front`}
                       data-testid={`card-upcoming-${p.userId}`}
                     >
                       {p.coverPhotoUrl ? (
@@ -1146,7 +1164,7 @@ export default function Discover() {
                           <div className="font-mono text-[10.5px] mt-1.5" style={{ color: "#8FE3C7" }}>resonance {r.score}</div>
                         )}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
