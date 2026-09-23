@@ -48,16 +48,22 @@ export default function PlansPay() {
     ? (periodParam as BillingPeriod)
     : "monthly";
 
-  const card = useMemo(() => PLAN_CARDS.find((c) => c.tier === tierParam), [tierParam]);
-  const tier = card?.tier as "spark" | "flame" | "ember" | undefined;
-  const priceCents = tier ? periodPriceCents(tier, period) : 0;
-
   const [method, setMethod] = useState<PayMethod | null>(null);
   const [phone, setPhone] = useState("");
   const [paymentId, setPaymentId] = useState<number | null>(returnRef ? Number(returnRef) : null);
   const [startedAt, setStartedAt] = useState<number | null>(returnRef ? Date.now() : null);
   const [instructions, setInstructions] = useState<string | null>(null);
   const [authCode, setAuthCode] = useState<{ code: string; expires?: string; deepLink?: string } | null>(null);
+
+  // A hosted-checkout return (Paynow's card page, NardoPay) only round-trips
+  // `ref` — the gateway's own redirect URL never carries our `tier` query
+  // param — so on that leg we fall back to the tier the server already has
+  // on the payment row itself rather than showing a false "not here" dead end.
+  const { data: status } = usePaymentStatus(paymentId, paymentId != null);
+  const effectiveTierParam = tierParam || status?.tier || null;
+  const card = useMemo(() => PLAN_CARDS.find((c) => c.tier === effectiveTierParam), [effectiveTierParam]);
+  const tier = card?.tier as "spark" | "flame" | "ember" | undefined;
+  const priceCents = tier ? periodPriceCents(tier, period) : 0;
 
   // Wouter keeps this component mounted across a /plans/pay navigation that
   // only changes the query string (e.g. picking a different plan after a
@@ -82,7 +88,6 @@ export default function PlansPay() {
   // would be a second, redundant prompt for a number we never actually use.
   const walletHandledByNardoPay = paymentsConfig?.walletProvider === "nardopay";
   const methods = methodsFor(walletHandledByNardoPay);
-  const { data: status } = usePaymentStatus(paymentId, paymentId != null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -94,6 +99,18 @@ export default function PlansPay() {
   }, [status?.status, qc]);
 
   if (!card || !tier) {
+    // Returning from a hosted checkout redirect: we have the payment id but
+    // haven't loaded its tier yet — show a brief wait, not a dead end.
+    if (paymentId != null && status === undefined) {
+      return (
+        <Shell>
+          <div className="flex items-center gap-2.5 text-[13px] text-vf-muted">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Checking your payment…
+          </div>
+        </Shell>
+      );
+    }
     return (
       <Shell>
         <p className="text-vf-muted text-[14px]">That plan isn't here.</p>

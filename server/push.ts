@@ -6,7 +6,7 @@
 
 import webpush from "web-push";
 import { db } from "./db";
-import { pushSubscriptions } from "@shared/schema";
+import { pushSubscriptions, profiles } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 let ready = false;
@@ -37,6 +37,24 @@ export interface PushPayload {
   body: string;
   url?: string;
   tag?: string;
+}
+
+export type NotificationCategory = "matches" | "messages" | "stories" | "interviews";
+
+// Missing key => on, matching the Settings toggles' default-enabled behavior
+// (a user who never opened the toggle keeps getting notified).
+async function categoryEnabled(userId: string, category: NotificationCategory): Promise<boolean> {
+  const [row] = await db.select({ prefs: profiles.notificationPrefs }).from(profiles).where(eq(profiles.userId, userId));
+  const v = row?.prefs?.[category];
+  return v !== false;
+}
+
+// The one place a category-gated push goes out — every send-site funnels
+// through here instead of calling sendPush directly, so a new notification
+// type can't accidentally skip the user's preference.
+export async function sendCategorizedPush(userId: string, category: NotificationCategory, payload: PushPayload): Promise<void> {
+  if (!(await categoryEnabled(userId, category))) return;
+  await sendPush(userId, payload);
 }
 
 // Best-effort. Prunes dead subscriptions (404/410). Never throws.

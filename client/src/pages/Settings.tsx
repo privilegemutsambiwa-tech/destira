@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import {
-  ArrowLeft, User, Brain, Compass, Shield, Bell, Wrench, Crown, HelpCircle,
+  ArrowLeft, User, Brain, Shield, Bell, Wrench, Crown, HelpCircle,
   AlertTriangle, ChevronRight, LogOut, Trash2, PauseCircle, Eye, EyeOff,
   Volume2, MapPin, MessageSquare, Zap, Check, Lock, Mail, Sliders, FileText,
   ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2, Users
@@ -13,7 +13,7 @@ import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
 import { PLAN_CARDS as SETTINGS_PLAN_CARDS, LIMITS as SETTINGS_LIMITS, PERIOD_LABEL, type BillingPeriod } from "@shared/entitlements";
 import { SEEKING_OPTIONS, ageFieldError } from "@shared/essentials";
-import { useSubscription } from "@/hooks/use-interactions";
+import { useSubscription, useGenerateAboutMe } from "@/hooks/use-interactions";
 import { useCancelSubscription } from "@/hooks/use-payments";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -195,7 +195,7 @@ type PanelKey =
   | "change-email" | "change-password"
   | "twin-tone" | "location" | "age-range" | "seeking-genders" | "block-list" | "proximity"
   | "data-privacy" | "verify" | "billing" | "help" | "contact" | "feedback"
-  | "terms" | "privacy-policy" | "clear-memory" | null;
+  | "terms" | "privacy-policy" | "clear-memory" | "ai-summary" | null;
 
 function Panel({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
   return (
@@ -1603,6 +1603,81 @@ function PrivacyPolicyPanel({ onBack }: { onBack: () => void }) {
   );
 }
 
+// Writes a fresh "About Me" from what the twin already knows (structured
+// profile + question answers) — same review-before-apply shape as "Refine
+// with AI" beside the bio field in Profile.tsx, just generating from
+// scratch instead of proofreading existing text.
+function AiSummaryPanel({ onBack, profile }: { onBack: () => void; profile: any }) {
+  const { toast } = useToast();
+  const generate = useGenerateAboutMe();
+  const updateProfile = useUpdateProfile();
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+
+  const handleGenerate = () => {
+    setSuggestion(null);
+    generate.mutate(undefined, {
+      onError: () => toast({ title: "Couldn't generate that right now", variant: "destructive" }),
+      onSuccess: (data: any) => setSuggestion(data?.aboutMeText || ""),
+    });
+  };
+
+  const handleApply = async () => {
+    if (!suggestion || !profile) return;
+    try {
+      await updateProfile.mutateAsync({ userId: profile.userId, data: { aboutMe: suggestion, bio: suggestion } });
+      toast({ title: "About Me updated" });
+      onBack();
+    } catch {
+      toast({ title: "Couldn't save that", variant: "destructive" });
+    }
+  };
+
+  return (
+    <Panel title="Generate AI Summary" onBack={onBack}>
+      <div className="flex flex-col px-6 pt-6">
+        <p className="text-sm mb-6" style={{ color: MUTED }}>
+          Your twin writes a fresh "About Me" from your profile and question answers. You review it before anything changes.
+        </p>
+
+        {suggestion === null ? (
+          <GradientButton
+            label={generate.isPending ? "Writing…" : "Generate"}
+            onClick={handleGenerate}
+            disabled={generate.isPending}
+            testId="button-generate-ai-summary"
+          />
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="rounded-[12px] p-4" style={{ background: ELEVATED, border: `1px solid ${BORDER}` }}>
+              <div style={MONO_EYEBROW}>Suggestion</div>
+              <p className="text-sm mt-2 whitespace-pre-line" style={{ color: TEXT }} data-testid="text-ai-summary-suggestion">
+                {suggestion || "Nothing came back — try again."}
+              </p>
+            </div>
+            {suggestion && (
+              <GradientButton
+                label={updateProfile.isPending ? "Saving…" : "Use this as my About Me"}
+                onClick={handleApply}
+                disabled={updateProfile.isPending}
+                testId="button-apply-ai-summary"
+              />
+            )}
+            <button
+              onClick={handleGenerate}
+              disabled={generate.isPending}
+              className="w-full py-3 text-sm font-medium rounded-xl transition-colors duration-150 hover:bg-vf-elevated"
+              style={{ color: MUTED, background: "none", border: "none", cursor: "pointer" }}
+              data-testid="button-regenerate-ai-summary"
+            >
+              {generate.isPending ? "Writing…" : "Write another version"}
+            </button>
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
 function ClearMemoryPanel({ onBack }: { onBack: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1674,11 +1749,6 @@ export default function Settings() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
-  const [notifMatches, setNotifMatches] = useState(() => localStorage.getItem("notif_matches") !== "false");
-  const [notifMessages, setNotifMessages] = useState(() => localStorage.getItem("notif_messages") !== "false");
-  const [notifStories, setNotifStories] = useState(() => localStorage.getItem("notif_stories") !== "false");
-  const [notifInterviews, setNotifInterviews] = useState(() => localStorage.getItem("notif_interviews") !== "false");
-  const [discoverable, setDiscoverable] = useState(() => localStorage.getItem("discoverable") !== "false");
   const [showDistance, setShowDistance] = useState(() => localStorage.getItem("show_distance") !== "false");
 
   useEffect(() => {
@@ -1721,9 +1791,16 @@ export default function Settings() {
     }
   };
 
-  function saveNotif(key: string, value: boolean) {
-    localStorage.setItem(key, String(value));
-  }
+  const notifPrefs: Record<string, boolean> = (profile as any)?.notificationPrefs || {};
+  const notifEnabled = (key: string) => notifPrefs[key] !== false;
+  const handleToggleNotifPref = async (key: string, value: boolean) => {
+    if (!profile) return;
+    try {
+      await updateProfile.mutateAsync({ userId: profile.userId, data: { notificationPrefs: { ...notifPrefs, [key]: value } } });
+    } catch {
+      toast({ title: "Error saving preference", variant: "destructive" });
+    }
+  };
 
   const deleteMutation = useMutation({
     mutationFn: () => apiRequest("DELETE", "/api/account", { confirmation: "DELETE" }),
@@ -1751,6 +1828,7 @@ export default function Settings() {
   if (activePanel === "terms") return <TermsPanel onBack={() => setActivePanel(null)} />;
   if (activePanel === "privacy-policy") return <PrivacyPolicyPanel onBack={() => setActivePanel(null)} />;
   if (activePanel === "clear-memory") return <ClearMemoryPanel onBack={() => setActivePanel(null)} />;
+  if (activePanel === "ai-summary") return <AiSummaryPanel onBack={() => setActivePanel(null)} profile={profile} />;
 
   // One list of sections drives both layouts — mobile's stacked drill-down
   // column and desktop's two-pane nav — so they can never drift apart into
@@ -1795,7 +1873,6 @@ export default function Settings() {
       label: "Discovery",
       content: (
         <div className="vf-card" style={cardStyle}>
-          <ToggleRow icon={Compass} label="Discoverable" value={discoverable} onChange={(v) => { setDiscoverable(v); saveNotif("discoverable", v); }} testId="toggle-discoverable" />
           <ToggleRow icon={MapPin} label="Show Distance" value={showDistance} onChange={handleToggleShowDistance} testId="toggle-show-distance" />
           <ChevronRow icon={MapPin} label="Location Preferences" sublabel={`Within ${profile?.maxDistanceKm ?? 100} km`} onClick={() => setActivePanel("location")} testId="row-location" />
           <ChevronRow icon={Zap} label="Proximity Alerts" sublabel="When someone worth knowing is at the same place" onClick={() => setActivePanel("proximity")} testId="row-proximity" />
@@ -1839,10 +1916,10 @@ export default function Settings() {
       label: "Notifications",
       content: (
         <div className="vf-card" style={cardStyle}>
-          <ToggleRow icon={Zap} label="New Matches" value={notifMatches} onChange={(v) => { setNotifMatches(v); saveNotif("notif_matches", v); }} testId="toggle-notif-matches" />
-          <ToggleRow icon={MessageSquare} label="Messages" value={notifMessages} onChange={(v) => { setNotifMessages(v); saveNotif("notif_messages", v); }} testId="toggle-notif-messages" />
-          <ToggleRow icon={Bell} label="Stories" value={notifStories} onChange={(v) => { setNotifStories(v); saveNotif("notif_stories", v); }} testId="toggle-notif-stories" />
-          <ToggleRow icon={Brain} label="Interview Requests" value={notifInterviews} onChange={(v) => { setNotifInterviews(v); saveNotif("notif_interviews", v); }} testId="toggle-notif-interviews" />
+          <ToggleRow icon={Zap} label="New Matches" value={notifEnabled("matches")} onChange={(v) => handleToggleNotifPref("matches", v)} testId="toggle-notif-matches" />
+          <ToggleRow icon={MessageSquare} label="Messages" value={notifEnabled("messages")} onChange={(v) => handleToggleNotifPref("messages", v)} testId="toggle-notif-messages" />
+          <ToggleRow icon={Bell} label="Stories" value={notifEnabled("stories")} onChange={(v) => handleToggleNotifPref("stories", v)} testId="toggle-notif-stories" />
+          <ToggleRow icon={Brain} label="Interview Requests" value={notifEnabled("interviews")} onChange={(v) => handleToggleNotifPref("interviews", v)} testId="toggle-notif-interviews" />
         </div>
       ),
     },
@@ -1851,9 +1928,9 @@ export default function Settings() {
       label: "Profile Tools",
       content: (
         <div className="vf-card" style={cardStyle}>
-          <ChevronRow icon={Wrench} label="Generate AI Summary" onClick={() => setLocation("/profile")} testId="row-ai-summary" />
+          <ChevronRow icon={Wrench} label="Generate AI Summary" onClick={() => setActivePanel("ai-summary")} testId="row-ai-summary" />
           <ChevronRow icon={Check} label="Verify Profile" sublabel={profile?.verificationStatus === "pending" ? "Pending review" : profile?.isVerified ? "Verified" : "Get the blue checkmark"} onClick={() => setActivePanel("verify")} testId="row-verify" />
-          <ChevronRow icon={Wrench} label="Manage Photos" onClick={() => setLocation("/profile")} testId="row-manage-photos" />
+          <ChevronRow icon={Wrench} label="Manage Photos" onClick={() => setLocation("/photos")} testId="row-manage-photos" />
         </div>
       ),
     },

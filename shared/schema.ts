@@ -65,6 +65,10 @@ export const profiles = pgTable("profiles", {
   // Clears the "Story replies" chat filter's unread badge — everything newer
   // than this on any of the user's own stories counts as unread.
   storyRepliesReadAt: timestamp("story_replies_read_at"),
+  // Per-category push toggle. Missing key => on (matches the Settings UI's
+  // "everything on by default" behavior). Categories: matches, messages,
+  // stories, interviews.
+  notificationPrefs: jsonb("notification_prefs").$type<Record<string, boolean>>(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [
   index("profiles_location_updated_at_idx").on(t.locationUpdatedAt),

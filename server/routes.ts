@@ -113,6 +113,25 @@ const uploadVideo = multer({
   },
 });
 
+// Fires from every path that can flip a match to "matched" (mutual like,
+// like-back, an accepted private-chat request, VIP auto-match) — one place
+// so "It's a match!" always reaches both people the same way.
+async function notifyMatch(match: { id: number; user1Id: string; user2Id: string }): Promise<void> {
+  try {
+    const [p1, p2] = await Promise.all([storage.getProfile(match.user1Id), storage.getProfile(match.user2Id)]);
+    const name1 = p1?.displayName || "Someone";
+    const name2 = p2?.displayName || "Someone";
+    await Promise.all([
+      storage.createNotification(match.user1Id, "match", "It's a match!", `You and ${name2} matched.`),
+      storage.createNotification(match.user2Id, "match", "It's a match!", `You and ${name1} matched.`),
+    ]);
+    push.sendCategorizedPush(match.user1Id, "matches", { title: "It's a match!", body: `You and ${name2} matched.`, url: "/matches", tag: `match-${match.id}` }).catch(() => {});
+    push.sendCategorizedPush(match.user2Id, "matches", { title: "It's a match!", body: `You and ${name1} matched.`, url: "/matches", tag: `match-${match.id}` }).catch(() => {});
+  } catch (e) {
+    console.error("notifyMatch error:", e);
+  }
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -1222,6 +1241,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (match.user2Id !== userId) return res.status(403).json({ message: "Not authorized" });
       const status = action === "accept" ? "matched" : "rejected";
       const updated = await storage.updateMatchStatus(matchId, status);
+      if (status === "matched" && match.status !== "matched") void notifyMatch(updated);
       res.json(updated);
     } catch (e) {
       res.status(500).json({ message: "Failed to respond to match" });
@@ -1272,8 +1292,19 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const { targetId } = req.body;
     if (await gate.denyIfGated(res, userId, "start_interview")) return;
     try {
+      const existingInterview = await storage.getInterviewBetween(userId, targetId);
       const interview = await storage.createInterview(userId, targetId);
       res.status(201).json(interview);
+      if (!existingInterview) {
+        const requesterProfile = await storage.getProfile(userId);
+        const requesterName = requesterProfile?.displayName || "Someone";
+        push.sendCategorizedPush(targetId, "interviews", {
+          title: "Your twin has a visitor",
+          body: `${requesterName} is interviewing your twin.`,
+          url: `/interviews`,
+          tag: `interview-${interview.id}`,
+        }).catch(() => {});
+      }
       // First time this user's twin is interviewed by anyone -> a one-time
       // nudge to review what it may disclose. Not a modal; lands in the inbox.
       (async () => {
@@ -2356,6 +2387,15 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (match.status !== "matched") return res.status(400).json({ message: "Not matched yet" });
       const msg = await storage.sendDirectMessage(matchId, userId, content);
       res.status(201).json(msg);
+      const recipientId = match.user1Id === userId ? match.user2Id : match.user1Id;
+      const senderProfile = await storage.getProfile(userId);
+      const senderName = senderProfile?.displayName || "Someone";
+      push.sendCategorizedPush(recipientId, "messages", {
+        title: senderName,
+        body: typeof content === "string" ? content.slice(0, 140) : "Sent you a message",
+        url: `/chat/${matchId}`,
+        tag: `dm-${matchId}`,
+      }).catch(() => {});
     } catch (e) {
       res.status(500).json({ message: "Failed to send message" });
     }
@@ -3165,6 +3205,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (requesterTier === "vip") {
         const match = await storage.createMatch(userId, targetId);
         await storage.updateMatchStatus(match.id, "matched");
+        void notifyMatch(match);
         return res.json({ status: "matched", match });
       }
 
@@ -3226,11 +3267,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       await storage.updateChatRequestStatus(requestId, action === "accept" ? "accepted" : "declined");
       if (action === "accept") {
         const existing = await storage.getMatchBetweenUsers(chatReq.requesterId, chatReq.targetId);
+        const wasAlreadyMatched = existing?.status === "matched";
         let match = existing;
         if (!match) {
           match = await storage.createMatch(chatReq.requesterId, chatReq.targetId);
         }
         await storage.updateMatchStatus(match.id, "matched");
+        if (!wasAlreadyMatched) void notifyMatch(match);
         await storage.createNotification(chatReq.requesterId, "chat_request_accepted", "Chat Request Accepted", "Your private chat request was accepted!");
         return res.json({ status: "accepted", matchId: match.id });
       }
@@ -3799,6 +3842,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const match = await storage.getMatch(matchId);
       if (!match) return res.status(404).json({ message: "Match not found" });
       const updated = await storage.updateMatchStatus(matchId, "matched");
+      if (match.status !== "matched") void notifyMatch(updated);
       res.json(updated);
     } catch (e) {
       res.status(500).json({ message: "Failed to like back" });
@@ -4168,6 +4212,16 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (await gate.denyIfGated(res, userId, "story_reply")) return;
       const comment = await storage.addStoryComment(story.id, userId, text.trim());
       res.json(comment);
+      if (story.userId !== userId) {
+        const replierProfile = await storage.getProfile(userId);
+        const replierName = replierProfile?.displayName || "Someone";
+        push.sendCategorizedPush(story.userId, "stories", {
+          title: `${replierName} replied to your story`,
+          body: text.trim().slice(0, 140),
+          url: "/interviews?filter=story_replies",
+          tag: `story-reply-${story.id}`,
+        }).catch(() => {});
+      }
     } catch (e) {
       res.status(500).json({ message: "Failed to add comment" });
     }

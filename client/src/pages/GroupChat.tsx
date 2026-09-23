@@ -540,10 +540,15 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                       </span>
                     )}
 
-                    <Popover open={activeMessageId === msg.id} onOpenChange={(open) => setActiveMessageId(open ? msg.id : null)}>
+                    <Popover
+                      open={activeMessageId === msg.id && !isDeleted}
+                      onOpenChange={(open) => {
+                        if (!isDeleted) setActiveMessageId(open ? msg.id : null);
+                      }}
+                    >
                       <PopoverTrigger asChild>
                         <div
-                          className="px-4 py-2.5 text-sm leading-relaxed cursor-pointer"
+                          className={`px-4 py-2.5 text-sm leading-relaxed ${isDeleted ? "" : "cursor-pointer"}`}
                           style={{
                             borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
                             ...(isDeleted
