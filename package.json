@@ -5,10 +5,13 @@
   "license": "MIT",
   "scripts": {
     "dev": "tsx --env-file=.env server/index.ts",
+    "dev:local": "tsx --env-file=.env.dev server/index.ts",
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
+    "db:push:local": "drizzle-kit push --config=drizzle.dev.config.ts",
+    "seed:local": "tsx --env-file=.env.dev scripts/seed-local-dev.ts",
     "build:icons": "node scripts/build-icons.mjs",
     "photos": "node scripts/resize-photos.mjs",
     "check:feed": "tsx scripts/assert-feed-sort.ts",

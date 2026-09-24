@@ -7,7 +7,9 @@ vite.config.ts.*
 
 # local dev
 .env
+.env.*
 .localdb/
+.localdb-dev/
 debug.log
 .local/
 

@@ -66,6 +66,35 @@ truth.
 rm -rf .localdb && npm run db:push
 ```
 
+## Isolated QA database (never touches production)
+
+`.env` in this repo is configured to point `DATABASE_URL` at the real
+production Supabase database (see its own comments) — convenient for
+checking real reports/behavior, but that means `npm run dev` + manual
+testing is happening against live user data. For anything that pokes at
+data (reproducing a bug, a QA sweep, seeded fake profiles), use the
+separate local-only setup instead:
+
+```bash
+npm run db:push:local   # create the schema in ./.localdb-dev (PGlite, on disk, no network)
+npm run seed:local      # seed 4 log-in-able test accounts (one per tier) + 40 fake candidate profiles
+npm run dev:local       # http://localhost:5001, reads .env.dev — no DATABASE_URL, so it's structurally
+                         # impossible for this to reach Supabase no matter what runs against it
+```
+
+Test accounts (password `Testing123!` for all): `free@local.test`,
+`spark@local.test`, `flame@local.test`, `ember@local.test` — one per tier,
+each with a different gender/seekingGenders so Discover/matching has
+something to actually match against. `scripts/seed-local-dev.ts` is
+idempotent (safe to re-run) and easy to extend — add more candidates, an
+event, a group, etc. as new features need fixtures.
+
+`.env.dev` is git-ignored (like `.env`) and not committed — see
+`drizzle.dev.config.ts` for why the schema push uses `--config` instead of
+just relying on `PGLITE_DATA_DIR` in the env: drizzle-kit auto-loads the
+plain `.env` file itself and that silently wins over a shell-exported
+override.
+
 ## Windows note
 
 `npm run dev` spawns `tsx` as a child; `Ctrl-C` in the terminal stops both, but
