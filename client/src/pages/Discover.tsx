@@ -507,8 +507,13 @@ export default function Discover() {
   // drives the disabled prop so the buttons visibly lock while it settles.
   const isActingRef = useRef(false);
   const [isActing, setIsActing] = useState(false);
-  // Which "Next up" card, if any, the viewer tapped to bring to the front.
-  const [pinnedUserId, setPinnedUserId] = useState<string | null>(null);
+  // The actual browsing order, as a list of ids — not re-derived from
+  // scratch each render. Tapping a "Next up" card must permanently rotate
+  // the previous front card out of the immediate preview window (otherwise
+  // it lands right back in the next-up slice and two or three people just
+  // trade places forever instead of the viewer ever reaching the rest of
+  // the deck — this was the actual bug, not the backend candidate list).
+  const [deckOrder, setDeckOrder] = useState<string[]>([]);
   const { data: rawProfiles, isLoading } = useDiscoverProfiles(filter, userLat, userLng);
   const { data: feedStories } = useFeedStories();
   const startInterview = useStartInterview();
@@ -570,23 +575,35 @@ export default function Discover() {
     return filter === "nearby" ? rawProfiles.filter((p: any) => p.distanceKm !== null && p.distanceKm !== undefined) : rawProfiles;
   }, [rawProfiles, filter]);
 
+  // Keeps the deck's browsing order stable across renders instead of
+  // re-deriving it from the raw list every time. Newly-seen candidates
+  // (a fresh signup, or the filter changing) are appended at the back;
+  // anyone evaluated or filtered out drops off; everyone else keeps their
+  // relative position, which is what makes the "Next up" rotation below
+  // actually work.
+  useEffect(() => {
+    const availableIds: string[] = eligibleForFilter
+      .map((p: any) => p.userId as string)
+      .filter((id: string) => !evaluatedIds.has(id));
+    const availableSet = new Set(availableIds);
+    setDeckOrder((prev) => {
+      const kept = prev.filter((id) => availableSet.has(id));
+      const keptSet = new Set(kept);
+      const added = availableIds.filter((id) => !keptSet.has(id));
+      const next = [...kept, ...added];
+      const unchanged = next.length === prev.length && next.every((id, i) => id === prev[i]);
+      return unchanged ? prev : next;
+    });
+  }, [eligibleForFilter, evaluatedIds]);
+
   const profiles = useMemo(() => {
-    let list = eligibleForFilter.filter((p: any) => !evaluatedIds.has(p.userId));
+    const byId = new Map<string, any>(eligibleForFilter.map((p: any) => [p.userId as string, p]));
+    let list: any[] = deckOrder.map((id) => byId.get(id)).filter((p): p is any => !!p);
     if (filter === "nearby") {
-      list = [...list].sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
-    }
-    // Tapping a "Next up" card jumps that person to the front without
-    // touching anyone else's order or evaluating who it skipped past.
-    if (pinnedUserId) {
-      const idx = list.findIndex((p: any) => p.userId === pinnedUserId);
-      if (idx > 0) {
-        const next = list.slice();
-        const [pinned] = next.splice(idx, 1);
-        list = [pinned, ...next];
-      }
+      list = [...list].sort((a: any, b: any) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
     }
     return list;
-  }, [eligibleForFilter, filter, evaluatedIds, pinnedUserId]);
+  }, [eligibleForFilter, filter, deckOrder]);
 
   // Always the front of the deck — evaluating a profile removes it from
   // `profiles` above (via evaluatedIds), so there's no index to advance,
@@ -1150,25 +1167,50 @@ export default function Discover() {
                   const r = getResonance(p.personalityProfile);
                   const rotateDeg = [0, -6, 5][i % 3];
                   const topOffset = [0, 12, 4][i % 3];
+                  const CARD_WIDTH = 132;
+                  const STEP = 34;
+                  // Each card after the first is mostly covered by the one
+                  // in front of it (higher z-index, same width, offset by
+                  // only STEP px) — so its real on-screen clickable area is
+                  // just the STEP-px sliver poking out on the right, not
+                  // its full width. A button sized to the full card here
+                  // used to eat clicks meant for whichever card is actually
+                  // on top there, so tapping "the second card" mostly just
+                  // re-selected the first one — which is exactly what made
+                  // the deck look stuck between two or three people.
+                  const hitLeft = i === 0 ? 0 : i * STEP + (CARD_WIDTH - STEP);
+                  const hitWidth = i === 0 ? CARD_WIDTH : STEP;
+                  const handlePin = () => {
+                    if (isActingRef.current) return;
+                    const pinnedId = p.userId;
+                    setDeckOrder((prev) => {
+                      const idx = prev.indexOf(pinnedId);
+                      if (idx <= 0) return prev;
+                      const rest = prev.slice();
+                      const [pinned] = rest.splice(idx, 1);
+                      // The old front card doesn't just fall back to slot
+                      // one (right back into "Next up") — it goes to the
+                      // end of the line, so the viewer actually works
+                      // through everyone else before it's up again, instead
+                      // of two or three people trading the front spot
+                      // forever.
+                      const [oldFront] = rest.splice(0, 1);
+                      return oldFront ? [pinned, ...rest, oldFront] : [pinned, ...rest];
+                    });
+                  };
                   return (
-                    <button
+                    <div
                       key={p.userId}
-                      type="button"
-                      onClick={() => {
-                        if (isActingRef.current) return;
-                        setPinnedUserId(p.userId);
-                      }}
-                      className="absolute rounded-[18px] border border-vf-line bg-vf-surface2 overflow-hidden text-left cursor-pointer btn-press transition-transform hover:brightness-110"
+                      className="absolute rounded-[18px] border border-vf-line bg-vf-surface2 overflow-hidden pointer-events-none"
                       style={{
-                        left: i * 34,
+                        left: i * STEP,
                         top: topOffset,
-                        width: 132,
+                        width: CARD_WIDTH,
                         height: 168,
                         transform: `rotate(${rotateDeg}deg)`,
                         zIndex: upcoming.length - i,
                         boxShadow: "0 10px 24px rgba(12,9,16,.22), 0 0 0 3px var(--vf-surface)",
                       }}
-                      aria-label={`Bring ${p.displayName || "this person"} to the front`}
                       data-testid={`card-upcoming-${p.userId}`}
                     >
                       {p.coverPhotoUrl ? (
@@ -1187,7 +1229,14 @@ export default function Discover() {
                           <div className="font-mono text-[10.5px] mt-1.5" style={{ color: "#8FE3C7" }}>resonance {r.score}</div>
                         )}
                       </div>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={handlePin}
+                        className="absolute btn-press cursor-pointer pointer-events-auto"
+                        style={{ left: hitLeft - i * STEP, top: 0, width: hitWidth, height: 168 }}
+                        aria-label={`Bring ${p.displayName || "this person"} to the front`}
+                      />
+                    </div>
                   );
                 })}
               </div>
