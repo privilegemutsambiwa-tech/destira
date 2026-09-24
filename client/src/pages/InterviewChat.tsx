@@ -448,7 +448,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
                   <span className="w-1.5 h-1.5 bg-vf-mint rounded-full animate-bounce [animation-delay:100ms]" />
                   <span className="w-1.5 h-1.5 bg-vf-mint rounded-full animate-bounce [animation-delay:200ms]" />
                 </div>
-                <span className="text-xs text-vf-muted">Reading {twinPossessive} answers…</span>
+                <span className="text-xs text-vf-muted">Responding…</span>
               </div>
             </motion.div>
           )}

@@ -1346,9 +1346,11 @@ IMPORTANT PRIVACY GUARDRAIL: Under NO circumstances reveal any of the following:
 
   async function buildTwinSystemPrompt(userId: string, profile: any | null | undefined): Promise<string> {
     profile = profile || {};
-    const structuredProfile = await storage.getTwinProfileStructured(userId);
-    const memorySummary = await storage.getTwinMemorySummary(userId);
-    const memoryFacts = await storage.getTwinMemoryFacts(userId, 20);
+    const [structuredProfile, memorySummary, memoryFacts] = await Promise.all([
+      storage.getTwinProfileStructured(userId),
+      storage.getTwinMemorySummary(userId),
+      storage.getTwinMemoryFacts(userId, 20),
+    ]);
     const toneProfile = structuredProfile?.twinToneProfile as any;
 
     const toneStyle = toneProfile?.tone_style || "supportive";
@@ -1462,6 +1464,7 @@ CONVERSATION RULES (CRITICAL):
 - Never monologue. Never list things with bullet points in chat.
 - Match their energy and vibe.
 - NEVER ask for information you already have from the onboarding section below.
+- If you don't actually have real information to answer something, say so plainly rather than inventing specifics that aren't in the data below.
 
 TONE: You are ${toneStyle}, with ${verbosity} verbosity, ${emojiUsage} emoji usage, and ${formality} formality.
 
@@ -1473,8 +1476,10 @@ ${PRIVACY_GUARDRAIL}`;
   }
 
   async function buildInterviewSystemPrompt(targetProfile: any): Promise<string> {
-    const targetStructured = await storage.getTwinProfileStructured(targetProfile.userId);
-    const targetFacts = await storage.getTwinMemoryFacts(targetProfile.userId, 20);
+    const [targetStructured, targetFacts] = await Promise.all([
+      storage.getTwinProfileStructured(targetProfile.userId),
+      storage.getTwinMemoryFacts(targetProfile.userId, 20),
+    ]);
 
     const settings = normalizeDisclosure(targetProfile.disclosureSettings);
     const directive = targetProfile.disclosureDirective as string | null;
@@ -1519,7 +1524,7 @@ ${PRIVACY_GUARDRAIL}`;
 CONVERSATION RULES (CRITICAL):
 - Chat like a real person: 1-3 sentences per response. No monologues.
 - Represent ${targetProfile.displayName}'s personality warmly and authentically.
-- Only share what's in the profile data below - don't invent details.
+- Only share what's in the profile data below - don't invent details. If you don't have real information to answer something, say so plainly instead of making something up.
 
 ${targetProfile.twinPersona || "You are friendly, open, and genuine."}${locationLine}${structuredSection}${factsSection}
 ${boundaries}
@@ -1650,7 +1655,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
     const systemPrompt = await buildInterviewSystemPrompt(targetProfile);
 
     try {
-      await storage.createAuditLog(userId, "interview_chat", { interviewId, targetId: interview.targetId });
+      storage.createAuditLog(userId, "interview_chat", { interviewId, targetId: interview.targetId }).catch(() => {});
 
       if (useStream) {
         res.setHeader("Content-Type", "text/event-stream");
@@ -1667,7 +1672,10 @@ Only include structured_updates fields if the conversation clearly reveals them.
         const stream = await ai.chat.completions.create({
           model: AI_MODEL,
           messages: [{ role: "system", content: systemPrompt }, ...chatHistory],
-          max_tokens: 8192,
+          // 1-3 sentences per the prompt — a small cap keeps worst-case
+          // latency bounded instead of leaving it open to a much longer
+          // generation with no real benefit for a chat reply this short.
+          max_tokens: 300,
           stream: true,
         });
 
@@ -1695,7 +1703,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
 
         const completion = await completeText(
           [{ role: "system", content: systemPrompt }, ...chatHistory],
-          { maxTokens: 8192 },
+          { maxTokens: 300 },
         );
 
         let aiResponse = completion.text || "I'd love to tell you more about that in person!";
@@ -1734,8 +1742,10 @@ Only include structured_updates fields if the conversation clearly reveals them.
       // No gate on profile/twinPersona/onboarding completeness — buildTwinSystemPrompt
       // fills in sensible defaults and steers the twin to get to know the user
       // conversationally when this data is thin or missing.
-      const profile = await storage.getProfile(userId);
-      const memory = await storage.getTwinMemory(userId, 20);
+      const [profile, memory] = await Promise.all([
+        storage.getProfile(userId),
+        storage.getTwinMemory(userId, 20),
+      ]);
       const memoryMessages = memory.reverse().map(m => ({
         role: m.role as "user" | "assistant",
         content: m.message,
@@ -1744,7 +1754,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
 
       const systemPrompt = await buildTwinSystemPrompt(userId, profile);
 
-      await storage.createAuditLog(userId, "twin_chat", { messageLength: message.length });
+      storage.createAuditLog(userId, "twin_chat", { messageLength: message.length }).catch(() => {});
 
       if (useStream) {
         res.setHeader("Content-Type", "text/event-stream");
@@ -1764,7 +1774,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         const stream = await ai.chat.completions.create({
           model: AI_MODEL,
           messages: [{ role: "system", content: systemPrompt }, ...chatMsgs],
-          max_tokens: 8192,
+          max_tokens: 300,
           presence_penalty: 0.3,
           frequency_penalty: 0.3,
           stream: true,
@@ -1798,7 +1808,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
 
         const completion = await completeText(
           [{ role: "system", content: systemPrompt }, ...chatMsgs],
-          { maxTokens: 8192, presencePenalty: 0.3, frequencyPenalty: 0.3 },
+          { maxTokens: 300, presencePenalty: 0.3, frequencyPenalty: 0.3 },
         );
 
         let aiResponse = completion.text || "I hear you. Tell me more about what's on your mind.";
@@ -5015,6 +5025,58 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (e instanceof eventsService.NotEventHostError) return res.status(403).json({ message: e.message });
       console.error("Delete event photo error:", e);
       res.status(500).json({ message: "Failed to remove photo" });
+    }
+  });
+
+  // What "going" attendees are volunteering to bring — visible to every
+  // other attendee, not just the host. No auth restriction on the read side
+  // beyond being logged in: this is the same audience that can already see
+  // who's going.
+  app.get("/api/events/:id/resources", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    try {
+      const resources = await eventsService.listEventResources(eventId);
+      res.json(resources);
+    } catch (e) {
+      console.error("List event resources error:", e);
+      res.status(500).json({ message: "Failed to fetch resources" });
+    }
+  });
+
+  app.post("/api/events/:id/resources", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    const description = typeof req.body?.description === "string" ? req.body.description.trim() : "";
+    if (!description) return res.status(400).json({ message: "Say what you're bringing" });
+    try {
+      const pledge = await eventsService.addEventResource(eventId, userId, description);
+      res.status(201).json(pledge);
+    } catch (e) {
+      if (e instanceof eventsService.NotGoingError) return res.status(403).json({ message: e.message });
+      if (e instanceof eventsService.ResourcePledgeLimitError) return res.status(422).json({ message: e.message });
+      console.error("Add event resource error:", e);
+      res.status(500).json({ message: "Failed to add that" });
+    }
+  });
+
+  app.delete("/api/events/:id/resources/:pledgeId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    const pledgeId = parseInt(req.params.pledgeId, 10);
+    if (Number.isNaN(eventId) || Number.isNaN(pledgeId)) return res.status(400).json({ message: "Invalid id" });
+    try {
+      const deleted = await eventsService.deleteEventResource(eventId, pledgeId, userId);
+      if (!deleted) return res.status(404).json({ message: "Not found" });
+      res.json({ success: true });
+    } catch (e) {
+      console.error("Delete event resource error:", e);
+      res.status(500).json({ message: "Failed to remove that" });
     }
   });
 

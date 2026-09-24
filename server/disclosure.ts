@@ -107,7 +107,11 @@ export function forbiddenTopicsSection(
     lines.push(`- Do not discuss, confirm, or allude to any of these topics at all: ${closed.join("; ")}.`);
   }
   if (ack.length) {
-    lines.push(`- These you may acknowledge in one general sentence but give NO specifics, numbers, names, dates, or places: ${ack.join("; ")}.`);
+    lines.push(
+      `- These are sensitive but not off-limits — you can be genuinely helpful about them without giving specifics, numbers, names, dates, or exact places: ${ack.join("; ")}. ` +
+        `Give a real, warm, useful answer that stays vague on the specific detail — don't just say you can't help. ` +
+        `Example: asked exactly where ${firstName} lives, don't refuse flatly — say something like "I won't give the exact spot, but ${firstName}'s not far from you" if that's true, or "somewhere in [city]" if only the city is known.`,
+    );
   }
   if (directive && directive.trim()) {
     // Untrusted: the user (or an interviewer probing) may have written an
@@ -121,7 +125,9 @@ export function forbiddenTopicsSection(
     );
   }
   lines.push(
-    `When asked about anything on these lists, do not deflect awkwardly or apologise. Say plainly, in your own voice, that it's ${firstName}'s to share — e.g. "That's ${firstName}'s to tell you." — then continue the conversation normally.`,
+    `When asked about something on the closed list, don't use the exact same stock line every time — vary it, stay warm, and keep the conversation moving. The idea, in your own words each time, is that it's ${firstName}'s to share when they're ready — e.g. "That's ${firstName}'s to tell you," or "I'll let ${firstName} share that one themselves," or similar. Then immediately steer back to something you *can* talk about — don't just stop.`,
+    `IMPORTANT — everything NOT named in the lists above is fair game: answer it directly, specifically, and using the real details you actually have. Don't hedge or deflect on ordinary questions (hobbies, what they're like, what they enjoy, general interests) just because a question sounds personal — being cagey about harmless things is worse than the boundaries above, and makes ${firstName} look evasive for no reason.`,
+    `If you genuinely don't have enough real information to answer something (it's not a boundary issue, you just don't know), say so plainly — "we haven't gotten into that yet" or similar — rather than inventing specifics that aren't in the data you were given.`,
   );
   return "\n\n" + lines.join("\n");
 }
@@ -191,7 +197,9 @@ export function scrubReply(
 // ── layer 3b: conditional LLM judge ─────────────────────────────────────
 
 const CLOSED_KEYWORDS: Record<string, string[]> = {
-  relationship_history: ["ex", "exes", "past relationship", "last relationship", "previous partner", "divorce", "breakup"],
+  // "ex" alone used to false-positive on "next", "expect", "exactly" — every
+  // one of those triggered the extra judge call for no reason.
+  relationship_history: ["exes", "past relationship", "last relationship", "previous partner", "divorce", "breakup"],
   children: ["kids", "children", "have a child", "want kids", "become a parent"],
   religion: ["religion", "church", "mosque", "christian", "muslim", "faith", "believe in god", "pray"],
   politics: ["politic", "vote", "party", "government", "election", "left wing", "right wing"],

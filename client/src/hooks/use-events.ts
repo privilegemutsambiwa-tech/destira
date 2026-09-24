@@ -223,6 +223,56 @@ export function useDeleteEventPhoto() {
   });
 }
 
+export interface EventResource {
+  id: number;
+  userId: string;
+  description: string;
+  createdAt: string | null;
+  displayName: string | null;
+  coverPhotoUrl: string | null;
+}
+
+export function useEventResources(eventId: number | undefined) {
+  return useQuery<EventResource[]>({
+    queryKey: ["/api/events", eventId, "resources"],
+    queryFn: async () => {
+      const res = await fetch(`/api/events/${eventId}/resources`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: eventId != null && !Number.isNaN(eventId),
+  });
+}
+
+export function useAddEventResource() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, description }: { eventId: number; description: string }) => {
+      const res = await fetch(`/api/events/${eventId}/resources`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || "Couldn't add that");
+      return body as EventResource;
+    },
+    onSuccess: (_d, v) => queryClient.invalidateQueries({ queryKey: ["/api/events", v.eventId, "resources"] }),
+  });
+}
+
+export function useDeleteEventResource() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, pledgeId }: { eventId: number; pledgeId: number }) => {
+      const res = await fetch(`/api/events/${eventId}/resources/${pledgeId}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error("Couldn't remove that");
+    },
+    onSuccess: (_d, v) => queryClient.invalidateQueries({ queryKey: ["/api/events", v.eventId, "resources"] }),
+  });
+}
+
 export function useSetHostVideo() {
   const queryClient = useQueryClient();
   return useMutation({

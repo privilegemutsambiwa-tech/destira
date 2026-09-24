@@ -4,12 +4,12 @@ import {
   eventActionState,
   eventResonanceSignal,
 } from "@/components/event-row";
-import { useEvent, useEventAttendees, useAttendEvent, useCancelAttendance, useUpdateEvent, useCancelEvent, useEnsureEventChat } from "@/hooks/use-events";
+import { useEvent, useEventAttendees, useAttendEvent, useCancelAttendance, useUpdateEvent, useCancelEvent, useEnsureEventChat, useEventResources, useAddEventResource, useDeleteEventResource } from "@/hooks/use-events";
 import { useGroups } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { useState } from "react";
-import { Loader2, ArrowLeft, Pencil, Flag } from "lucide-react";
+import { Loader2, ArrowLeft, Pencil, Flag, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -58,6 +58,10 @@ export default function EventDetail({ params }: { params: { id: string } }) {
   const eventId = Number(params.id);
   const { data: event, isLoading } = useEvent(eventId);
   const { data: attendees } = useEventAttendees(eventId);
+  const { data: resources } = useEventResources(eventId);
+  const addResource = useAddEventResource();
+  const deleteResource = useDeleteEventResource();
+  const [resourceText, setResourceText] = useState("");
   const { data: groups } = useGroups();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -211,6 +215,71 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                 </>
               )}
             </dl>
+
+            {(event.myStatus === "going" || (resources && resources.length > 0)) && (
+              <div>
+                <div className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-faint mb-2">What people are bringing</div>
+                {resources && resources.length > 0 ? (
+                  <div className="flex flex-col gap-2 mb-3">
+                    {resources.map((r) => (
+                      <div key={r.id} className="flex items-center gap-2.5 text-[13.5px]" data-testid={`event-resource-${r.id}`}>
+                        <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-vf-surface2 flex items-center justify-center">
+                          {r.coverPhotoUrl ? (
+                            <img src={r.coverPhotoUrl} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="font-serif text-[11px] text-vf-soft">{(r.displayName || "?")[0]}</span>
+                          )}
+                        </div>
+                        <span className="text-vf-text">
+                          <span className="text-vf-muted">{r.displayName || "Someone"} —</span> {r.description}
+                        </span>
+                        {r.userId === user?.id && (
+                          <button
+                            onClick={() => deleteResource.mutate({ eventId: event.id, pledgeId: r.id })}
+                            className="text-vf-faint hover:text-vf-text transition-colors ml-auto shrink-0"
+                            aria-label="Remove"
+                            data-testid={`button-remove-resource-${r.id}`}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[13px] text-vf-faint mb-3">Nobody's said what they're bringing yet.</p>
+                )}
+                {event.myStatus === "going" && (
+                  <form
+                    className="flex gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!resourceText.trim()) return;
+                      addResource.mutate(
+                        { eventId: event.id, description: resourceText.trim() },
+                        { onSuccess: () => setResourceText("") },
+                      );
+                    }}
+                  >
+                    <input
+                      value={resourceText}
+                      onChange={(e) => setResourceText(e.target.value)}
+                      placeholder="I'm bringing… ($10, a speaker, extra chairs)"
+                      className="flex-1 h-9 rounded-full border border-vf-line bg-vf-surface2 px-3.5 text-[13px] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-text/25"
+                      data-testid="input-add-resource"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!resourceText.trim() || addResource.isPending}
+                      className="h-9 px-4 rounded-full bg-vf-ember text-vf-ink text-[13px] font-semibold btn-press hover:bg-[var(--vf-ember-soft)] transition-colors disabled:opacity-40 shrink-0"
+                      data-testid="button-add-resource"
+                    >
+                      Add
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Right: sticky action card */}

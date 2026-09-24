@@ -9,10 +9,10 @@
 import { db } from "./db";
 import {
   events, eventAttendees, profiles, groupMembers, blockedUsers, groups, suburbCentroids,
-  twinNotifications, twinAlertLog, places, eventPhotos, eventContactViews,
+  twinNotifications, twinAlertLog, places, eventPhotos, eventContactViews, eventResourcePledges,
   PRIVATE_RESIDENCE_MIN_ATTENDEES,
   type Event, type InsertEvent, type EventAttendee,
-  type HostEventInput, type EventLocationTier, type Place, type EventPhoto,
+  type HostEventInput, type EventLocationTier, type Place, type EventPhoto, type EventResourcePledge,
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import { eq, and, ne, or, ilike, inArray, asc, desc, gte, lte, count, isNull } from "drizzle-orm";
@@ -717,6 +717,56 @@ export async function deleteEventPhoto(eventId: number, photoId: number, hostUse
   const [deleted] = await db
     .delete(eventPhotos)
     .where(and(eq(eventPhotos.id, photoId), eq(eventPhotos.eventId, eventId)))
+    .returning();
+  return deleted;
+}
+
+export class NotGoingError extends Error {
+  constructor() { super("You need to be going to this event to bring something to it"); }
+}
+export class ResourcePledgeLimitError extends Error {
+  constructor() { super("That's plenty pledged already — 10 per person, per event."); }
+}
+
+export async function listEventResources(eventId: number): Promise<Array<{
+  id: number; userId: string; description: string; createdAt: Date | null;
+  displayName: string | null; coverPhotoUrl: string | null;
+}>> {
+  return db
+    .select({
+      id: eventResourcePledges.id,
+      userId: eventResourcePledges.userId,
+      description: eventResourcePledges.description,
+      createdAt: eventResourcePledges.createdAt,
+      displayName: profiles.displayName,
+      coverPhotoUrl: profiles.coverPhotoUrl,
+    })
+    .from(eventResourcePledges)
+    .leftJoin(profiles, eq(profiles.userId, eventResourcePledges.userId))
+    .where(eq(eventResourcePledges.eventId, eventId))
+    .orderBy(asc(eventResourcePledges.createdAt));
+}
+
+export async function addEventResource(eventId: number, userId: string, description: string): Promise<EventResourcePledge> {
+  const [attendee] = await db.select().from(eventAttendees).where(
+    and(eq(eventAttendees.eventId, eventId), eq(eventAttendees.userId, userId)),
+  );
+  if (!attendee || attendee.status !== "going") throw new NotGoingError();
+  const [{ c }] = await db.select({ c: count() }).from(eventResourcePledges).where(
+    and(eq(eventResourcePledges.eventId, eventId), eq(eventResourcePledges.userId, userId)),
+  );
+  if (Number(c) >= 10) throw new ResourcePledgeLimitError();
+  const [row] = await db
+    .insert(eventResourcePledges)
+    .values({ eventId, userId, description: description.trim().slice(0, 140) })
+    .returning();
+  return row;
+}
+
+export async function deleteEventResource(eventId: number, pledgeId: number, userId: string): Promise<EventResourcePledge | undefined> {
+  const [deleted] = await db
+    .delete(eventResourcePledges)
+    .where(and(eq(eventResourcePledges.id, pledgeId), eq(eventResourcePledges.eventId, eventId), eq(eventResourcePledges.userId, userId)))
     .returning();
   return deleted;
 }

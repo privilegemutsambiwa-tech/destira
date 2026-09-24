@@ -799,6 +799,19 @@ export const eventPhotos = pgTable("event_photos", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// What a "going" attendee is volunteering to bring — cash, gear, whatever the
+// event needs. Visible to every other attendee (that's the point: seeing
+// "Tino — a first-aid kit" before you show up beats finding out on the day).
+// One row per pledge, not one-per-user, so someone bringing two different
+// things doesn't have to cram it into a single line.
+export const eventResourcePledges = pgTable("event_resource_pledges", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => events.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  description: text("description").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Audit: every time an attendee unlocks a host's contact number. The host sees
 // this list on their manage screen; it is never exposed to anyone else.
 export const eventContactViews = pgTable("event_contact_views", {
@@ -1259,6 +1272,7 @@ export type CancelEventInput = z.infer<typeof cancelEventSchema>;
 export type TwinAlertLogEntry = typeof twinAlertLog.$inferSelect;
 export type Place = typeof places.$inferSelect;
 export type EventPhoto = typeof eventPhotos.$inferSelect;
+export type EventResourcePledge = typeof eventResourcePledges.$inferSelect;
 export type EventContactView = typeof eventContactViews.$inferSelect;
 export type EventLocationTier = z.infer<typeof eventLocationTierEnum>;
 export type EventCostModel = z.infer<typeof eventCostModelEnum>;
