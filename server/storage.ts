@@ -528,6 +528,12 @@ export class DatabaseStorage implements IStorage {
         photos.find((p) => p.role === "cover") ?? photos.find((p) => p.role === "portrait") ?? photos[0];
       return {
         ...r,
+        // A profile can reach here with displayName still null — Google
+        // sign-in seeds users.firstName from the Google account, but
+        // nothing sets profiles.displayName until the person happens to
+        // edit it in Settings. A card with a blank name is never
+        // acceptable, so fall back to the account's own first name.
+        displayName: r.displayName || r.user?.firstName || "Someone",
         coverPhotoUrl: lead?.w1600 ?? lead?.url ?? r.coverPhotoUrl ?? r.user?.profileImageUrl ?? null,
         photos,
         answers: answersByUser.get(r.userId) ?? [],

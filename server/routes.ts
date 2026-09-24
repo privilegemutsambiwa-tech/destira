@@ -528,8 +528,19 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       // New profiles pick up whatever tier is already active for this user
       // (the signup trial, or a payment made before onboarding finished) so
       // the badge shown elsewhere matches getEffectiveTier from day one.
+      // displayName falls back to the account's first name (set at signup,
+      // or by Google) when this first PATCH doesn't carry one — Essentials
+      // is often the first profile-creating call for a Google sign-in, and
+      // it never sends a name, which used to leave the row permanently
+      // blank until the person happened to visit Settings.
+      let displayNameFallback: string | undefined;
+      if (!safeCounted.displayName) {
+        const user = await authStorage.getUser(userId);
+        displayNameFallback = user?.firstName || undefined;
+      }
       const profile = await storage.createProfile({
         ...safeCounted,
+        ...(displayNameFallback ? { displayName: displayNameFallback } : {}),
         userId,
         subscriptionTier: await gate.getEffectiveTier(userId),
       });
