@@ -335,8 +335,8 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
     }
     try {
       await sendMessage.mutateAsync(payload);
-    } catch {
-      toast({ title: "Error", description: "Must join group first.", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: "Couldn't send that", description: error?.message || "Must join group first.", variant: "destructive" });
     }
   };
 

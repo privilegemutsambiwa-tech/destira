@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { useProfile, useSuggestedLounges } from "@/hooks/use-profiles";
+import { withFrom } from "@/lib/from-route";
 
 type TabType = "waiting" | "asked";
 
@@ -421,7 +422,7 @@ export default function Matches() {
                   Spark shows you who — names, photos, the whole profile — so you can decide.
                 </p>
                 <button
-                  onClick={() => setLocation("/plans?feature=see_who_asked")}
+                  onClick={() => setLocation(withFrom("/plans?feature=see_who_asked", "/matches"))}
                   className="vf-btn-primary mt-3 inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
                   data-testid="button-see-who-asked"
                 >

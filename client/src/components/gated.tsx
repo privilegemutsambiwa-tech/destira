@@ -1,6 +1,7 @@
 import { useLocation } from "wouter";
 import { useGate, resetLabel } from "@/hooks/use-gate";
 import { gateCopy, type Feature } from "@shared/entitlements";
+import { withFrom } from "@/lib/from-route";
 
 // A gated feature rendered inline: VISIBLE but clearly not yours — never hidden,
 // never a dead button, never a fake blur. Same contextual line as the
@@ -44,7 +45,7 @@ export function Gated({
       <p className="text-[13.5px] text-vf-muted leading-[1.55]">{line}</p>
       <div className="mt-3 flex items-center gap-3">
         <button
-          onClick={() => setLocation(`/plans?feature=${feature}`)}
+          onClick={() => setLocation(withFrom(`/plans?feature=${feature}`, window.location.pathname))}
           className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
           data-testid={`gated-cta-${feature}`}
         >

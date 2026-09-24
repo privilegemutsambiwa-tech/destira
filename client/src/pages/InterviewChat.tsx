@@ -240,6 +240,15 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
                     prev.map(m => m.id === aiMsgId ? { ...m, text: finalContent } : m)
                   );
                 }
+                // A real outage still gets a reply (a generic, honest one —
+                // never fabricated), but silently treating it as a normal
+                // answer hides the outage from the user and from support.
+                if (data.error) {
+                  toast({
+                    title: "Having trouble connecting",
+                    description: "That reply is a placeholder — the twin couldn't actually respond just now. Try again in a moment.",
+                  });
+                }
               }
             } catch {
               // skip malformed JSON
@@ -257,6 +266,12 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
           timestamp: new Date(),
           status: "delivered",
         }]);
+        if (data.error) {
+          toast({
+            title: "Having trouble connecting",
+            description: "That reply is a placeholder — the twin couldn't actually respond just now. Try again in a moment.",
+          });
+        }
       }
     } catch (error) {
       console.error("Chat failed", error);

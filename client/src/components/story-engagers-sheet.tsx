@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Loader2, X } from "lucide-react";
 import { useStoryViewers, useStoryLikers } from "@/hooks/use-interactions";
+import { withFrom } from "@/lib/from-route";
 
 interface Engager {
   userId: string;
@@ -84,7 +85,7 @@ export function StoryEngagersSheet({ storyId, kind, onClose }: StoryEngagersShee
             <button
               className="mt-3 inline-flex items-center justify-center rounded-full font-semibold h-9 px-4 text-[13px]"
               style={{ background: "#E9C46A", color: "#14101C" }}
-              onClick={() => setLocation(`/plans?feature=see_story_engagers`)}
+              onClick={() => setLocation(withFrom(`/plans?feature=see_story_engagers`, window.location.pathname))}
               data-testid="button-story-engagers-see-plans"
             >
               See plans

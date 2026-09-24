@@ -16,12 +16,13 @@ import {
   ArrowLeft,
   RefreshCw,
 } from "lucide-react";
-import { useTwinMemory, useTwinStructuredProfile, useExtractTwinProfile } from "@/hooks/use-interactions";
+import { useTwinMemory, useTwinStructuredProfile, useExtractTwinProfile, useUpdateTwinTrainingOptOut } from "@/hooks/use-interactions";
 import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile, usePhotos } from "@/hooks/use-profiles";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
+import { useToast } from "@/hooks/use-toast";
 
 type MessageStatus = "sending" | "sent" | "delivered";
 
@@ -230,12 +231,19 @@ export default function TwinChat() {
   const [isTyping, setIsTyping] = useState(false);
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const [memoryOpen, setMemoryOpen] = useState(false);
-  const [trainingOptOut, setTrainingOptOut] = useState(false);
   const { data: memory } = useTwinMemory();
   const { user } = useAuth();
   const { data: profile } = useProfile();
   const { data: ownPhotos } = usePhotos(user?.id);
   const [woLocation, setLocation] = useLocation();
+  const { toast } = useToast();
+  // Server is the source of truth (profiles.twinTrainingOptOut) — this isn't
+  // local UI state, it's a real privacy setting that must survive a reload.
+  const trainingOptOut = !!profile?.twinTrainingOptOut;
+  const updateTrainingOptOut = useUpdateTwinTrainingOptOut();
+  const handleTrainingOptOutChange = (optedOut: boolean) => {
+    updateTrainingOptOut.mutate(!optedOut);
+  };
 
   const twinName = useMemo(() => {
     const rawName = (profile as any)?.displayName || user?.firstName || "";
@@ -421,6 +429,15 @@ export default function TwinChat() {
                     m.id === userMsgId ? { ...m, status: "delivered" as MessageStatus } : m
                   )
                 );
+                // A real outage still gets a reply (a generic, honest one —
+                // never fabricated), but silently treating it as a normal
+                // answer hides the outage from the user and from support.
+                if (event.error) {
+                  toast({
+                    title: "Having trouble connecting",
+                    description: "That reply is a placeholder — your twin couldn't actually respond just now. Try again in a moment.",
+                  });
+                }
               } else if (event.type === "quick_replies" && event.replies) {
                 const uniqueReplies = Array.from(new Set(event.replies as string[]));
                 setQuickReplies(uniqueReplies);
@@ -470,6 +487,12 @@ export default function TwinChat() {
         );
         if (data.quickReplies) {
           setQuickReplies(Array.from(new Set(data.quickReplies as string[])));
+        }
+        if (data.error) {
+          toast({
+            title: "Having trouble connecting",
+            description: "That reply is a placeholder — your twin couldn't actually respond just now. Try again in a moment.",
+          });
         }
       }
     } catch (e: any) {
@@ -576,7 +599,7 @@ export default function TwinChat() {
                 memoryFacts={memoryFacts}
                 memorySummary={memorySummary}
                 trainingOptOut={trainingOptOut}
-                onTrainingOptOutChange={setTrainingOptOut}
+                onTrainingOptOutChange={handleTrainingOptOutChange}
               />
             </div>
           </motion.div>
@@ -716,7 +739,7 @@ export default function TwinChat() {
             memoryFacts={memoryFacts}
             memorySummary={memorySummary}
             trainingOptOut={trainingOptOut}
-            onTrainingOptOutChange={setTrainingOptOut}
+            onTrainingOptOutChange={handleTrainingOptOutChange}
           />
         </aside>
       </div>

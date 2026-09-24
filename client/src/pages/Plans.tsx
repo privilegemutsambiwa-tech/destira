@@ -6,6 +6,7 @@ import { useSubscription } from "@/hooks/use-interactions";
 import { refreshPlanQueries } from "@/hooks/use-payments";
 import { consumePendingInvite } from "@/lib/pending-invite";
 import { DestiraLockup } from "@/components/brand/logo";
+import { getFromRoute, withFrom } from "@/lib/from-route";
 import {
   PLAN_CARDS,
   LIMITS,
@@ -75,6 +76,10 @@ export default function Plans() {
   const currentTier = (sub?.tier as string) || "free";
   const params = new URLSearchParams(search);
   const intro = params.get("intro") === "1";
+  // Whoever linked here (a paywall refusal, a gated feature, a trial banner,
+  // a direct Settings link) passes its own route as ?from — closing or
+  // finishing here returns there instead of always landing on Settings.
+  const from = getFromRoute(search, "/settings");
 
   // Monthly is the default no matter what — never pre-select the period that
   // maximises revenue, that's a dark pattern.
@@ -96,13 +101,13 @@ export default function Plans() {
     refreshPlanQueries(qc);
     const pendingInvite = consumePendingInvite();
     if (pendingInvite) return setLocation(`/join/${pendingInvite}`);
-    setLocation(intro ? "/discover" : "/settings");
+    setLocation(intro ? "/discover" : from);
   };
 
   const choose = (card: PlanCard) => {
     if (card.tier === "free") return close();
     const featureQs = feature ? `&feature=${feature}` : "";
-    setLocation(`/plans/pay?tier=${card.tier}&period=${period}${featureQs}`);
+    setLocation(withFrom(`/plans/pay?tier=${card.tier}&period=${period}${featureQs}`, from));
   };
 
   return (

@@ -9,6 +9,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { UpgradeRequiredError } from "@/hooks/use-interactions";
 import { StoryEngagersSheet } from "@/components/story-engagers-sheet";
+import { withFrom } from "@/lib/from-route";
 
 interface StoryMedia {
   id: number;
@@ -416,7 +417,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
             <button
               className="w-full py-3 font-semibold mb-3"
               style={{ background: "#E9C46A", color: "#14101C", borderRadius: "14px", border: "none", fontSize: "15px" }}
-              onClick={() => setLocation(`/plans?feature=story_reply`)}
+              onClick={() => setLocation(withFrom(`/plans?feature=story_reply`, window.location.pathname))}
               data-testid="button-reply-cap-see-plans"
             >
               See plans

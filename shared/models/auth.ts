@@ -32,3 +32,19 @@ export const users = pgTable("users", {
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+// A single-use, time-limited password reset grant, sent by email. The raw
+// token is never stored — only its SHA-256 (server/admin/crypto.ts's
+// generateOpaqueToken, reused here — same "high-entropy machine-generated
+// value" reasoning as an admin invite token) — so a DB dump alone can't mint
+// a working reset link.
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  tokenHash: varchar("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;

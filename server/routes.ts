@@ -1264,6 +1264,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     const matchId = parseInt(req.params.id);
     try {
+      const match = await storage.getMatch(matchId);
+      if (!match) return res.status(404).json({ message: "Match not found" });
+      if (match.user1Id !== userId && match.user2Id !== userId) return res.sendStatus(403);
       const updated = await storage.softDeleteChat(matchId, userId);
       res.json(updated);
     } catch (e) {
@@ -1792,11 +1795,14 @@ Only include structured_updates fields if the conversation clearly reveals them.
       const fallback = "That's a great question! I'd love to share more about that when we connect in person.";
       history.push({ role: "assistant", content: fallback });
       await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
+      // `error: true` lets the client tell a genuine AI outage apart from a
+      // real reply — without it, a full backend outage silently looks like
+      // the twin being evasive, invisible to the user and to support.
       if (useStream) {
-        res.write(`data: ${JSON.stringify({ type: "done", content: fallback })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: "done", content: fallback, error: true })}\n\n`);
         res.end();
       } else {
-        res.json({ response: fallback });
+        res.json({ response: fallback, error: true });
       }
     }
   });
@@ -1898,11 +1904,13 @@ Only include structured_updates fields if the conversation clearly reveals them.
       console.error("Twin Chat Error:", e);
       const fallback = "I'm here for you. Let's talk about what's on your mind.";
       await storage.addTwinMemory(userId, fallback, "assistant");
+      // `error: true` lets the client tell a genuine AI outage apart from a
+      // real reply — see the matching comment on /api/interviews/:id/chat.
       if (useStream) {
-        res.write(`data: ${JSON.stringify({ type: "done", content: fallback })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: "done", content: fallback, error: true })}\n\n`);
         res.end();
       } else {
-        res.json({ response: fallback });
+        res.json({ response: fallback, error: true });
       }
     }
   });
@@ -2410,7 +2418,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     try {
-      await storage.markNotificationRead(parseInt(req.params.id));
+      await storage.markNotificationRead(parseInt(req.params.id), userId);
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ message: "Failed to mark notification read" });
@@ -2832,8 +2840,18 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   app.delete("/api/groups/:id/invite-links/:linkId", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
     try {
-      await storage.revokeInviteLink(parseInt(req.params.linkId));
+      const group = await storage.getGroup(groupId);
+      if (!group) return res.status(404).json({ message: "Group not found" });
+      const member = await storage.getGroupMember(groupId, userId);
+      const isOwner = group.ownerId === userId;
+      const isAdmin = member?.role === "owner" || member?.role === "admin";
+      const memberCanInvite = !!member && (group.canMembersAddOthers || group.privacyMode === "open");
+      if (!isOwner && !isAdmin && !memberCanInvite) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      await storage.revokeInviteLink(parseInt(req.params.linkId), groupId);
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ message: "Failed to revoke invite link" });
@@ -3476,7 +3494,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     const parsed = initiatePaymentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid payment request" });
-    const { tier, period, method, phone, sourceFeature } = parsed.data;
+    const { tier, period, method, phone, sourceFeature, resend } = parsed.data;
     // NardoPay's hosted link takes the wallet number on its own page, not
     // ours — the phone requirement only applies to Paynow's direct USSD push.
     const walletMethod = method === "ecocash" || method === "onemoney" || method === "innbucks";
@@ -3486,7 +3504,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
     try {
       const email = (req as any).user?.claims?.email || (await storage.getProfile(userId))?.displayName;
-      const result = await payments.initiatePayment(userId, tier, period, method, phone, typeof email === "string" ? email : undefined, sourceFeature);
+      const result = await payments.initiatePayment(userId, tier, period, method, phone, typeof email === "string" ? email : undefined, sourceFeature, resend);
       res.json(result);
     } catch (err: any) {
       console.error('[Payment Initiate Error]:', err);
@@ -3925,6 +3943,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     try {
       const match = await storage.getMatch(matchId);
       if (!match) return res.status(404).json({ message: "Match not found" });
+      if (match.user2Id !== userId) return res.sendStatus(403);
       const updated = await storage.updateMatchStatus(matchId, "matched");
       if (match.status !== "matched") void notifyMatch(updated);
       res.json(updated);

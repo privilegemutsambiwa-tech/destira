@@ -163,6 +163,10 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
       await sendMessage.mutateAsync(text);
     } catch (error) {
       console.error("Failed to send:", error);
+      // Restore the draft instead of silently losing it — a flaky connection
+      // shouldn't make someone's message vanish with zero feedback.
+      setInput((current) => current || text);
+      toast({ title: "Message didn't send", description: "Check your connection and try again.", variant: "destructive" });
     }
   };
 

@@ -498,7 +498,10 @@ export function useSendGroupMessage(groupId: number) {
         body: JSON.stringify(body),
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to send message");
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.message || "Failed to send message");
+      }
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages"] }),
@@ -651,6 +654,23 @@ export function useTwinStructuredProfile() {
       if (!res.ok) return {};
       return res.json();
     },
+  });
+}
+
+export function useUpdateTwinTrainingOptOut() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (useForTraining: boolean) => {
+      const res = await fetch("/api/twin/training-opt-out", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ useForTraining }),
+      });
+      if (!res.ok) throw new Error("Failed to update training preference");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] }),
   });
 }
 

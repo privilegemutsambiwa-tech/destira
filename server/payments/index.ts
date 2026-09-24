@@ -61,6 +61,7 @@ export async function initiatePayment(
   phone: string | undefined,
   authEmail: string | undefined,
   sourceFeature?: string,
+  resend?: boolean,
 ) {
   const amountCents = priceCentsFor(tier, period);
   const windowStart = new Date(Date.now() - 15 * 60 * 1000);
@@ -72,13 +73,16 @@ export async function initiatePayment(
   // more than 15 minutes falls through to the INSERT below and crashes on
   // payments_idempotency_key_unique. The 15-minute window only decides
   // whether a still-pending/paid row is fresh enough to hand back as-is
-  // versus reset and reused for a new attempt.
+  // versus reset and reused for a new attempt — an explicit `resend` skips
+  // that short-circuit entirely, since the whole point of resend is to
+  // actually re-trigger the gateway, not hand back the same unconfirmed
+  // attempt the user already said didn't arrive.
   const [existing] = await db
     .select()
     .from(payments)
     .where(eq(payments.idempotencyKey, key));
   const existingIsFresh = !!existing?.createdAt && existing.createdAt >= windowStart;
-  if (existing && existingIsFresh && (existing.status === "pending" || existing.status === "paid")) {
+  if (!resend && existing && existingIsFresh && (existing.status === "pending" || existing.status === "paid")) {
     return { paymentId: existing.id, status: existing.status as PaymentStatus, pollUrl: existing.pollUrl, resumed: true };
   }
 

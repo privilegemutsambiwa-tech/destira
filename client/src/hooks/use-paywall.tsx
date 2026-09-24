@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { gateCopy, type Feature } from "@shared/entitlements";
 import type { GateState } from "@/hooks/use-gate";
 import { resetLabel } from "@/hooks/use-gate";
+import { withFrom } from "@/lib/from-route";
 
 // The moment-of-tap refusal. Call `guard(feature, proceed)` from a locked
 // button: if the gate is clear it runs `proceed`, otherwise it shows a sheet
@@ -92,7 +93,7 @@ export function RefusalSheet({
         <button
           onClick={() => {
             onClose();
-            setLocation(`/plans?feature=${feature}`);
+            setLocation(withFrom(`/plans?feature=${feature}`, window.location.pathname));
           }}
           className="mt-5 w-full h-12 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
           data-testid={`refusal-cta-${feature}`}

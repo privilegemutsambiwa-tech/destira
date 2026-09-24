@@ -54,6 +54,7 @@ export function useInitiatePayment() {
       method: PayMethod;
       phone?: string;
       sourceFeature?: string;
+      resend?: boolean;
     }) => {
       const res = await fetch("/api/payments/initiate", {
         method: "POST",

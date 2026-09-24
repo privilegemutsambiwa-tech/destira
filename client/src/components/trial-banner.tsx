@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Sparkles, X } from "lucide-react";
 import { useSubscription } from "@/hooks/use-interactions";
 import { LIMITS } from "@shared/entitlements";
+import { withFrom } from "@/lib/from-route";
 
 const DISMISS_KEY = "vf_trial_banner_dismissed";
 
@@ -11,6 +12,7 @@ const DISMISS_KEY = "vf_trial_banner_dismissed";
 // Only ever renders for the server-granted signup trial (isTrial from
 // GET /api/subscription), never for a real Flame purchase.
 export function TrialBanner() {
+  const [location] = useLocation();
   const { data: sub } = useSubscription();
   const [dismissed, setDismissed] = useState(() => {
     try {
@@ -58,7 +60,7 @@ export function TrialBanner() {
           </p>
         </div>
       </div>
-      <Link href="/plans">
+      <Link href={withFrom("/plans", location)}>
         <a
           className="mt-2.5 sm:mt-0 sm:ml-auto inline-flex items-center gap-1 shrink-0 text-[12.5px] font-semibold text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors whitespace-nowrap"
           data-testid="trial-banner-explore"

@@ -122,7 +122,7 @@ export default function Login() {
                 <label htmlFor="login-password" className={`${LABEL} mb-0`}>Password</label>
                 <button
                   type="button"
-                  onClick={() => setError("Password reset isn't wired up yet — for now, ask an admin.")}
+                  onClick={() => setLocation("/forgot-password")}
                   className="text-[12px] text-vf-muted hover:text-vf-text transition-colors"
                   data-testid="link-forgot-password"
                 >

@@ -6,6 +6,8 @@ import { supabaseAuthClient } from "./supabase";
 import type { User } from "@shared/models/auth";
 import * as referrals from "../../referrals";
 import { storage } from "../../storage";
+import { generateOpaqueToken, hashOpaqueToken } from "../../admin/crypto";
+import { sendViaResend, resendConfigured } from "../../email/resend";
 
 // A profile only counts as onboarded once the mandatory matching fields —
 // gender and who they're seeking — are actually filled in. Used to decide
@@ -69,6 +71,26 @@ setInterval(() => {
     if (now - entry.firstAttempt > ATTEMPT_WINDOW_MS) loginAttempts.delete(key);
   }
 }, 5 * 60 * 1000);
+
+// Same shape, separate budget — a forgot-password spam risk (repeatedly
+// emailing someone else's inbox) is different from a login brute-force one,
+// so it gets its own counter rather than sharing loginAttempts' budget.
+const resetRequests = new Map<string, { count: number; firstAttempt: number }>();
+const MAX_RESET_REQUESTS = 3;
+const RESET_WINDOW_MS = 60 * 60 * 1000;
+
+function resetRequestAllowed(key: string): boolean {
+  const entry = resetRequests.get(key);
+  if (!entry || Date.now() - entry.firstAttempt > RESET_WINDOW_MS) {
+    resetRequests.set(key, { count: 1, firstAttempt: Date.now() });
+    return true;
+  }
+  if (entry.count >= MAX_RESET_REQUESTS) return false;
+  entry.count += 1;
+  return true;
+}
+
+const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 // Register auth-specific routes
 export function registerAuthRoutes(app: Express): void {
@@ -197,6 +219,72 @@ export function registerAuthRoutes(app: Express): void {
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ message: "Failed to log in" });
+    }
+  });
+
+  // Always the same generic response regardless of whether the email is
+  // registered, has a password at all (a Google-only account has none to
+  // reset), or the send actually succeeded — never confirm/deny an email's
+  // existence to an unauthenticated caller. The real outcome is only
+  // observable by the person who controls that inbox.
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const GENERIC = { message: "If that email has an account, we've sent a reset link." };
+    try {
+      const { email } = req.body || {};
+      if (typeof email !== "string" || !EMAIL_RE.test(email.trim())) {
+        return res.status(400).json({ message: "Enter a valid email address" });
+      }
+      const normalizedEmail = email.trim().toLowerCase();
+      if (!resetRequestAllowed(normalizedEmail)) {
+        // Still generic — a 429 here would itself confirm the email exists
+        // to an attacker probing which addresses are registered.
+        return res.json(GENERIC);
+      }
+
+      const user = await authStorage.getUserByEmail(normalizedEmail);
+      if (user?.passwordHash) {
+        const { raw, hash } = generateOpaqueToken();
+        await authStorage.createPasswordResetToken(user.id, hash, new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS));
+        const resetUrl = `${process.env.PUBLIC_APP_URL || "http://localhost:5000"}/reset-password?token=${raw}`;
+        if (resendConfigured()) {
+          sendViaResend({
+            to: normalizedEmail,
+            subject: "Reset your Destira password",
+            text: `Someone (hopefully you) asked to reset your Destira password.\n\n${resetUrl}\n\nThis link works once and expires in an hour. If you didn't ask for this, ignore this email — your password hasn't changed.`,
+          }).catch((e) => console.error("[forgot-password] send failed:", e));
+        } else {
+          console.log(`[forgot-password] (no-op, RESEND_API_KEY not set) reset link for ${normalizedEmail}: ${resetUrl}`);
+        }
+      }
+      res.json(GENERIC);
+    } catch (error) {
+      console.error("Forgot-password error:", error);
+      // Even a server error stays generic on this endpoint.
+      res.json(GENERIC);
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { token, password } = req.body || {};
+      if (typeof token !== "string" || !token) {
+        return res.status(400).json({ message: "Invalid or expired reset link" });
+      }
+      if (typeof password !== "string" || password.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters" });
+      }
+      const row = await authStorage.getPasswordResetTokenByHash(hashOpaqueToken(token));
+      if (!row || row.usedAt || row.expiresAt < new Date()) {
+        return res.status(400).json({ message: "Invalid or expired reset link" });
+      }
+      await authStorage.markPasswordResetTokenUsed(row.id);
+      const passwordHash = await hashPassword(password);
+      await authStorage.updateUser(row.userId, { passwordHash });
+      clearAttempts((await authStorage.getUser(row.userId))?.email?.toLowerCase() || "");
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Reset-password error:", error);
+      res.status(500).json({ message: "Failed to reset password" });
     }
   });
 

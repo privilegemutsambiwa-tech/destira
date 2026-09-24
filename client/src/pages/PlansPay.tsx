@@ -11,6 +11,7 @@ import {
   WALLET_PAY_METHODS,
   type PayMethod,
 } from "@/hooks/use-payments";
+import { getFromRoute, withFrom } from "@/lib/from-route";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 const RESEND_AFTER_MS = 45_000;
@@ -43,6 +44,11 @@ export default function PlansPay() {
   const tierParam = params.get("tier");
   const returnRef = params.get("ref");
   const sourceFeature = params.get("feature") || undefined;
+  // Forwarded from Plans.tsx (which forwarded it from whoever opened Plans
+  // in the first place) — a hosted-checkout return trip loses it, since the
+  // gateway's own redirect URL only round-trips `ref`; "/discover" is a
+  // reasonable landing spot in that one case, not the whole-app default.
+  const from = getFromRoute(search, "/discover");
   const periodParam = params.get("period");
   const period: BillingPeriod = (BILLING_PERIODS as readonly string[]).includes(periodParam as string)
     ? (periodParam as BillingPeriod)
@@ -114,16 +120,16 @@ export default function PlansPay() {
     return (
       <Shell>
         <p className="text-vf-muted text-[14px]">That plan isn't here.</p>
-        <button onClick={() => setLocation("/plans")} className="mt-3 text-[13px] text-vf-ember">Back to plans</button>
+        <button onClick={() => setLocation(withFrom("/plans", from))} className="mt-3 text-[13px] text-vf-ember">Back to plans</button>
       </Shell>
     );
   }
 
-  const pay = () => {
+  const pay = (opts?: { resend?: boolean }) => {
     setStartedAt(Date.now());
     const needsPhone = !!method && WALLET_PAY_METHODS.has(method) && !walletHandledByNardoPay;
     initiate.mutate(
-      { tier, period, method: method!, phone: needsPhone ? phone : undefined, sourceFeature },
+      { tier, period, method: method!, phone: needsPhone ? phone : undefined, sourceFeature, resend: opts?.resend },
       {
         onSuccess: (r) => {
           setPaymentId(r.paymentId);
@@ -167,7 +173,7 @@ export default function PlansPay() {
           </ul>
         </div>
         <button
-          onClick={() => setLocation("/discover")}
+          onClick={() => setLocation(from)}
           className="mt-6 h-11 px-6 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
           data-testid="button-into-app"
         >
@@ -196,7 +202,7 @@ export default function PlansPay() {
           >
             Try again
           </button>
-          <button onClick={() => setLocation("/plans")} className="h-11 px-4 text-[13px] text-vf-muted hover:text-vf-text">
+          <button onClick={() => setLocation(withFrom("/plans", from))} className="h-11 px-4 text-[13px] text-vf-muted hover:text-vf-text">
             Back to plans
           </button>
         </div>
@@ -259,13 +265,13 @@ export default function PlansPay() {
         <div className="flex gap-3 mt-6">
           <button
             disabled={!canResend || initiate.isPending}
-            onClick={() => { setPaymentId(null); setStartedAt(null); pay(); }}
+            onClick={() => { setPaymentId(null); setStartedAt(null); pay({ resend: true }); }}
             className="h-10 px-4 rounded-full border border-vf-line text-[13px] text-vf-text hover:border-vf-text/25 disabled:opacity-40 transition-colors"
             data-testid="button-resend-prompt"
           >
             {canResend ? "Send the prompt again" : `Resend in ${Math.ceil((RESEND_AFTER_MS - waited) / 1000)}s`}
           </button>
-          <button onClick={() => setLocation("/plans")} className="h-10 px-3 text-[13px] text-vf-muted hover:text-vf-text">
+          <button onClick={() => setLocation(withFrom("/plans", from))} className="h-10 px-3 text-[13px] text-vf-muted hover:text-vf-text">
             Cancel
           </button>
         </div>
@@ -276,7 +282,7 @@ export default function PlansPay() {
   // ── choose method ──
   return (
     <Shell>
-      <button onClick={() => setLocation("/plans")} className="text-[13px] text-vf-muted hover:text-vf-text transition-colors">
+      <button onClick={() => setLocation(withFrom("/plans", from))} className="text-[13px] text-vf-muted hover:text-vf-text transition-colors">
         ← Plans
       </button>
       <div className={`${EYEBROW} mt-6`}>
@@ -338,7 +344,7 @@ export default function PlansPay() {
           initiate.isPending ||
           (!!method && WALLET_PAY_METHODS.has(method) && !walletHandledByNardoPay && !/^0?7\d{8}$/.test(phone))
         }
-        onClick={pay}
+        onClick={() => pay()}
         className="mt-6 inline-flex items-center justify-center gap-2 h-12 px-7 rounded-full bg-vf-ember text-vf-ink font-bold text-[15px] btn-press hover:bg-[var(--vf-ember-soft)] disabled:opacity-40 transition-colors"
         data-testid="button-pay"
       >

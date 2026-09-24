@@ -167,7 +167,7 @@ export interface IStorage {
   processJoinRequest(id: number, processedBy: string, status: string): Promise<GroupJoinRequest>;
   createInviteLink(groupId: number, createdBy: string, token: string, expiresAt?: Date): Promise<GroupInviteLink>;
   getInviteLink(token: string): Promise<GroupInviteLink | undefined>;
-  revokeInviteLink(id: number): Promise<void>;
+  revokeInviteLink(id: number, groupId: number): Promise<void>;
   deactivateGroupInviteLinks(groupId: number): Promise<void>;
   getGroupInviteLinks(groupId: number): Promise<GroupInviteLink[]>;
   getActiveGroupInviteLink(groupId: number): Promise<GroupInviteLink | undefined>;
@@ -200,13 +200,13 @@ export interface IStorage {
   updateProfilePrompts(userId: string, prompts: { q: string; a: string }[]): Promise<Profile>;
   getProfileWeekStats(userId: string): Promise<{ twinTalks: number; readsOver80: number; meetsSet: number }>;
 
-  addTwinMemory(userId: string, message: string, role: string, useForTraining?: boolean): Promise<TwinMemoryEntry>;
+  addTwinMemory(userId: string, message: string, role: string): Promise<TwinMemoryEntry>;
   getTwinMemory(userId: string, limit?: number): Promise<TwinMemoryEntry[]>;
   updateTwinTrainingOptOut(userId: string, useForTraining: boolean): Promise<void>;
 
   createNotification(userId: string, type: string, title: string, body: string): Promise<TwinNotification>;
   getNotifications(userId: string): Promise<TwinNotification[]>;
-  markNotificationRead(id: number): Promise<void>;
+  markNotificationRead(id: number, userId: string): Promise<void>;
   getUnreadNotificationCount(userId: string): Promise<number>;
 
   createSubscription(userId: string, tier: string, stripeSubId?: string): Promise<Subscription>;
@@ -1081,8 +1081,8 @@ export class DatabaseStorage implements IStorage {
     return link;
   }
 
-  async revokeInviteLink(id: number): Promise<void> {
-    await db.update(groupInviteLinks).set({ isActive: false }).where(eq(groupInviteLinks.id, id));
+  async revokeInviteLink(id: number, groupId: number): Promise<void> {
+    await db.update(groupInviteLinks).set({ isActive: false }).where(and(eq(groupInviteLinks.id, id), eq(groupInviteLinks.groupId, groupId)));
   }
 
   // Called right before minting a new link so a group only ever has one live
@@ -1422,7 +1422,9 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async addTwinMemory(userId: string, message: string, role: string, useForTraining: boolean = true): Promise<TwinMemoryEntry> {
+  async addTwinMemory(userId: string, message: string, role: string): Promise<TwinMemoryEntry> {
+    const profile = await this.getProfile(userId);
+    const useForTraining = !profile?.twinTrainingOptOut;
     const [entry] = await db.insert(twinMemory).values({ userId, message, role, useForTraining }).returning();
     return entry;
   }
@@ -1435,6 +1437,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateTwinTrainingOptOut(userId: string, useForTraining: boolean): Promise<void> {
+    await db.update(profiles).set({ twinTrainingOptOut: !useForTraining }).where(eq(profiles.userId, userId));
     await db.update(twinMemory)
       .set({ useForTraining })
       .where(eq(twinMemory.userId, userId));
@@ -1451,8 +1454,8 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(twinNotifications.createdAt));
   }
 
-  async markNotificationRead(id: number): Promise<void> {
-    await db.update(twinNotifications).set({ read: true }).where(eq(twinNotifications.id, id));
+  async markNotificationRead(id: number, userId: string): Promise<void> {
+    await db.update(twinNotifications).set({ read: true }).where(and(eq(twinNotifications.id, id), eq(twinNotifications.userId, userId)));
   }
 
   async getUnreadNotificationCount(userId: string): Promise<number> {

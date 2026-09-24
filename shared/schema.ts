@@ -67,6 +67,13 @@ export const profiles = pgTable("profiles", {
   disclosureSettings: jsonb("disclosure_settings").$type<Record<string, string>>(),
   // Free-text user directive to the twin — instructions, NOT data. Never quoted back.
   disclosureDirective: text("disclosure_directive"),
+  // Single source of truth for "use my twin conversations to improve the
+  // model" — false (default) means opted in, matching today's behavior.
+  // addTwinMemory() reads this for every new memory row; the training-opt-out
+  // endpoint also bulk-updates existing twinMemory rows for consistency when
+  // this flips, but this column (not the per-row flag) is what a future
+  // memory entry actually checks.
+  twinTrainingOptOut: boolean("twin_training_opt_out").notNull().default(false),
   // Clears the "Story replies" chat filter's unread badge — everything newer
   // than this on any of the user's own stories counts as unread.
   storyRepliesReadAt: timestamp("story_replies_read_at"),
@@ -377,6 +384,11 @@ export const initiatePaymentSchema = z.object({
   method: paymentMethodEnum,
   phone: z.string().trim().max(20).optional(),
   sourceFeature: z.string().max(60).optional(),
+  // "Send the prompt again" — forces a genuine new provider.initiate() call
+  // instead of the idempotency short-circuit handing back the still-pending
+  // row from the first attempt untouched (which used to make resend a
+  // silent no-op for the first 15 minutes).
+  resend: z.boolean().optional(),
 });
 export type InitiatePaymentInput = z.infer<typeof initiatePaymentSchema>;
 

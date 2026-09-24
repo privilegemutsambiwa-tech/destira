@@ -16,6 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { StoryViewer, OwnStoryViewer, AddStoryButton } from "@/components/story-viewer";
 import { PhotoLightbox } from "@/components/photo-lightbox";
 import { avatarColor } from "@/lib/avatar-color";
+import { withFrom } from "@/lib/from-route";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
@@ -681,7 +682,7 @@ export default function Discover() {
           <h3 className="font-serif text-xl mb-2 text-vf-text">That's today's likes</h3>
           <p className="text-sm text-vf-muted">{likesGate.line || copy.line}</p>
           <button
-            onClick={() => setLocation(`/plans?feature=daily_likes`)}
+            onClick={() => setLocation(withFrom(`/plans?feature=daily_likes`, "/discover"))}
             className="mt-5 h-11 px-6 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
             data-testid="button-discover-likes-upgrade"
           >
@@ -759,7 +760,7 @@ export default function Discover() {
       setLocation(`/interviews/${interview.id}/chat?from=/discover`);
     } catch (err: any) {
       if (err instanceof UpgradeRequiredError) {
-        setLocation("/plans?feature=start_interview");
+        setLocation(withFrom("/plans?feature=start_interview", "/discover"));
       } else {
         toast({
           title: "Error",
@@ -838,16 +839,6 @@ export default function Discover() {
 
   const doLike = async (targetProfile: typeof currentProfile) => {
     try {
-      await fetch("/api/likes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-        credentials: "include",
-      });
-    } catch {
-      // non-critical, continue with like
-    }
-    try {
       await createMatch.mutateAsync(targetProfile.userId);
       // The deck-stops-at-the-cap block above reads this same query — without
       // invalidating it, a like that lands exactly on the limit wouldn't lock
@@ -861,8 +852,14 @@ export default function Discover() {
       if (err instanceof Error && err.message?.includes("already exists")) {
         toast({ title: "Already Connected", description: "You already have a match request with this person." });
       } else if (err instanceof Error && err.message?.includes("upgradeRequired")) {
+        // The like didn't actually happen — bring the card back rather than
+        // leaving it removed from the deck until the next reload.
+        setEvaluatedIds((prev) => { const next = new Set(prev); next.delete(targetProfile.userId); return next; });
         paywall.guard("daily_likes", () => {});
       } else {
+        // Same reasoning — a failed like shouldn't silently vanish the
+        // profile from the deck for the rest of the session.
+        setEvaluatedIds((prev) => { const next = new Set(prev); next.delete(targetProfile.userId); return next; });
         toast({ title: "Could not like", description: "Something went wrong. Please try again.", variant: "destructive" });
       }
     }
@@ -1264,7 +1261,7 @@ export default function Discover() {
               </div>
 
               <button
-                onClick={() => setLocation("/plans")}
+                onClick={() => setLocation(withFrom("/plans", "/discover"))}
                 className="text-left rounded-[20px] border border-dashed border-vf-gold/35 bg-vf-gold/5 p-4 flex flex-col justify-center gap-2 hover:bg-vf-gold/[0.08] transition-colors flex-1 min-w-[220px]"
                 data-testid="card-upgrade-teaser"
                 style={{ height: 196 }}
@@ -1297,7 +1294,7 @@ export default function Discover() {
             } catch (err: any) {
               if (err instanceof UpgradeRequiredError) {
                 setViewingCardMeta(null);
-                setLocation("/plans?feature=start_interview");
+                setLocation(withFrom("/plans?feature=start_interview", "/discover"));
               } else {
                 toast({ title: "Could not start interview", description: err?.message, variant: "destructive" });
               }
