@@ -25,6 +25,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { avatarColor } from "@/lib/avatar-color";
 
 const PRIVACY_LABELS: Record<string, { icon: any; label: string }> = {
   "open": { icon: Globe, label: "Open" },
@@ -662,8 +663,8 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                   <div key={member.id} className="flex items-center justify-between gap-2 py-2.5" style={{ borderTop: `1px solid ${LINE}` }} data-testid={`member-${member.id}`}>
                     <div className="flex items-center gap-3 min-w-0">
                       <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold text-foreground"
-                        style={{ background: ELEVATED, border: `1px solid ${LINE}` }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold text-white"
+                        style={{ background: avatarColor(member.userId) }}
                       >
                         {member.nickname?.[0]?.toUpperCase() || "?"}
                       </div>

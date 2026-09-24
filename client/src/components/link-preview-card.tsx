@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Users, Sparkles, ExternalLink, Loader2 } from "lucide-react";
 import { parseDestiraLink } from "@/lib/link-preview";
+import { useToast } from "@/hooks/use-toast";
 
 const SURFACE = "var(--vf-surface)";
 const LINE = "var(--vf-line)";
@@ -12,6 +13,7 @@ const EMBER = "hsl(var(--vf-ember))";
 
 interface InvitePreview {
   valid: boolean;
+  reason?: "invalid" | "expired";
   name?: string;
   description?: string | null;
   photoUrl?: string | null;
@@ -34,6 +36,7 @@ function CardShell({ onClick, children }: { onClick: () => void; children: React
 
 function GroupInviteCard({ token }: { token: string }) {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const { data, isLoading } = useQuery<InvitePreview>({
     queryKey: ["/api/groups/join-by-invite", token, "preview"],
     queryFn: async () => {
@@ -52,8 +55,17 @@ function GroupInviteCard({ token }: { token: string }) {
   }
 
   if (!data?.valid) {
+    // Already known to be dead — no reason to send the tap into a full page
+    // navigation for that. A quick, dismissible toast and nothing else.
     return (
-      <CardShell onClick={() => setLocation(`/join/${token}`)}>
+      <CardShell
+        onClick={() =>
+          toast({
+            title: data?.reason === "expired" ? "This invite has expired" : "This invite link isn't valid",
+            description: "Ask whoever sent it for a fresh one.",
+          })
+        }
+      >
         <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--vf-elevated)" }}>
           <Users className="w-5 h-5" style={{ color: MUTED }} />
         </div>

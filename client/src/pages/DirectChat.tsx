@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { parseDestiraLink } from "@/lib/link-preview";
 import { LinkPreviewCard } from "@/components/link-preview-card";
+import { avatarColor } from "@/lib/avatar-color";
 
 // A lower-pressure first step than a cold 1:1 thread: if this pair already
 // shares Lounges, point at them; otherwise suggest ones the other person is
@@ -172,7 +173,10 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
           <ArrowLeft className="w-5 h-5 text-vf-text" />
         </Button>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center font-serif text-lg bg-vf-surface2 text-vf-text">
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center font-serif text-lg text-white"
+            style={{ background: avatarColor(match?.otherProfile?.userId) }}
+          >
             {otherName[0]}
           </div>
           <div>

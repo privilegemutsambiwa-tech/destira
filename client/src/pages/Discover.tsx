@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { StoryViewer, OwnStoryViewer, AddStoryButton } from "@/components/story-viewer";
 import { PhotoLightbox } from "@/components/photo-lightbox";
+import { avatarColor } from "@/lib/avatar-color";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
@@ -58,7 +59,7 @@ type GalleryPhoto = {
 // The photo pane as a stepped gallery. Mirrors StoryViewer's vocabulary —
 // segment ticks up top, tap the left/right third, arrow keys, hover chevrons on
 // desktop. Stepping never advances the profile; it only moves within this card.
-function CardGallery({ photos, initial }: { photos: GalleryPhoto[]; initial: string }) {
+function CardGallery({ photos, initial, seed }: { photos: GalleryPhoto[]; initial: string; seed?: string }) {
   const [idx, setIdx] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const count = photos.length;
@@ -94,8 +95,8 @@ function CardGallery({ photos, initial }: { photos: GalleryPhoto[]; initial: str
 
   if (count === 0) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-vf-surface2">
-        <span className="font-serif text-vf-text/20" style={{ fontSize: "96px" }}>
+      <div className="absolute inset-0 flex items-center justify-center" style={{ background: avatarColor(seed) }}>
+        <span className="font-serif text-white/90" style={{ fontSize: "96px" }}>
           {initial}
         </span>
       </div>
@@ -925,7 +926,7 @@ export default function Discover() {
                 resonance medallion below can sit right on the seam between
                 them without being cut off by either pane's own overflow. */}
             <div className="relative min-h-[320px] md:min-h-[440px] rounded-t-[26px] md:rounded-t-none md:rounded-l-[26px] overflow-hidden">
-              <CardGallery photos={galleryPhotos} initial={currentProfile.displayName?.[0] || "?"} />
+              <CardGallery photos={galleryPhotos} initial={currentProfile.displayName?.[0] || "?"} seed={currentProfile.userId} />
 
               <div
                 className="absolute inset-x-0 bottom-0 pointer-events-none bg-gradient-to-t from-vf-scrim to-transparent"
@@ -1237,8 +1238,8 @@ export default function Discover() {
                       {p.coverPhotoUrl ? (
                         <img src={p.coverPhotoUrl} alt={p.displayName} className="absolute inset-0 w-full h-full object-cover" />
                       ) : (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="font-serif text-vf-text/20 text-5xl">{p.displayName?.[0] || "?"}</span>
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ background: avatarColor(p.userId) }}>
+                          <span className="font-serif text-white/90 text-5xl">{p.displayName?.[0] || "?"}</span>
                         </div>
                       )}
                       <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-vf-scrim to-transparent pointer-events-none" />

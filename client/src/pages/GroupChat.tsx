@@ -30,6 +30,7 @@ import { usePaywall } from "@/hooks/use-paywall";
 import { apiRequest } from "@/lib/queryClient";
 import { parseDestiraLink } from "@/lib/link-preview";
 import { LinkPreviewCard } from "@/components/link-preview-card";
+import { avatarColor } from "@/lib/avatar-color";
 
 interface MessageAction {
   icon: React.ReactNode;
@@ -534,7 +535,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                     ) : (
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-2 self-end"
-                        style={{ background: ELEVATED, border: `1px solid ${LINE}`, fontSize: "12px", fontWeight: 600, color: MUTED }}
+                        style={{ background: avatarColor(msg.userId), fontSize: "12px", fontWeight: 600, color: "#FFFFFF" }}
                       >
                         {initials}
                       </div>
