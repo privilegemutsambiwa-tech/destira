@@ -28,6 +28,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
 import { usePaywall } from "@/hooks/use-paywall";
 import { apiRequest } from "@/lib/queryClient";
+import { parseDestiraLink } from "@/lib/link-preview";
+import { LinkPreviewCard } from "@/components/link-preview-card";
 
 interface MessageAction {
   icon: React.ReactNode;
@@ -570,7 +572,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                     >
                       <PopoverTrigger asChild>
                         <div
-                          className={`px-4 py-2.5 text-sm leading-relaxed ${isDeleted ? "" : "cursor-pointer"}`}
+                          className={`px-4 py-2.5 text-sm leading-relaxed break-words ${isDeleted ? "" : "cursor-pointer"}`}
                           style={{
                             borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
                             ...(isDeleted
@@ -617,6 +619,8 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                             <video src={msg.mediaUrl} className="rounded-lg max-w-[250px] max-h-[300px]" controls data-testid={`video-${msg.id}`} />
                           ) : msg.contentType === "poll" ? (
                             <PollBubble messageId={msg.id} groupId={groupId} />
+                          ) : parseDestiraLink(msg.content) ? (
+                            <LinkPreviewCard content={msg.content} />
                           ) : (
                             msg.content
                           )}
@@ -625,8 +629,9 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                       {!isDeleted && (
                         <PopoverContent
                           className="w-auto p-2"
-                          side={isMe ? "left" : "right"}
-                          align="start"
+                          side="bottom"
+                          align={isMe ? "end" : "start"}
+                          collisionPadding={12}
                           style={{ background: SURFACE2, border: `1px solid ${LINE}` }}
                         >
                           <div className="flex items-center gap-1 mb-2 flex-wrap">

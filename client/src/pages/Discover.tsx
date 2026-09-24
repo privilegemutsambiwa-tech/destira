@@ -2,7 +2,7 @@
 import { LayoutShell } from "@/components/layout-shell";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
-import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag } from "lucide-react";
+import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2 } from "lucide-react";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useDiscoverPass, useFeedStories, useProfileCompletion, UpgradeRequiredError } from "@/hooks/use-interactions";
 import { useTwinReadiness, useDismissReminder } from "@/hooks/use-onboarding";
 import { LIMITS, gateCopy } from "@shared/entitlements";
@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { StoryViewer, OwnStoryViewer, AddStoryButton } from "@/components/story-viewer";
+import { PhotoLightbox } from "@/components/photo-lightbox";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
@@ -59,6 +60,7 @@ type GalleryPhoto = {
 // desktop. Stepping never advances the profile; it only moves within this card.
 function CardGallery({ photos, initial }: { photos: GalleryPhoto[]; initial: string }) {
   const [idx, setIdx] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const count = photos.length;
 
   useEffect(() => {
@@ -165,6 +167,25 @@ function CardGallery({ photos, initial }: { photos: GalleryPhoto[]; initial: str
             {idx + 1}/{count}
           </span>
         </>
+      )}
+
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setLightboxOpen(true); }}
+        aria-label="View full photo"
+        className="absolute bottom-3 left-3 z-20 w-8 h-8 rounded-full flex items-center justify-center"
+        style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)" }}
+        data-testid="button-expand-photo"
+      >
+        <Maximize2 className="w-3.5 h-3.5 text-white" />
+      </button>
+
+      {lightboxOpen && (
+        <PhotoLightbox
+          photos={photos.map((ph) => ({ url: ph.w1600 ?? ph.url }))}
+          initialIndex={idx}
+          onClose={() => setLightboxOpen(false)}
+        />
       )}
     </div>
   );

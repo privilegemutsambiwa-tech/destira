@@ -16,11 +16,13 @@ import {
   useIncomingLikes,
   useStartInterview,
   useUnmatch,
+  useTwinTalkSummary,
   UpgradeRequiredError,
 } from "@/hooks/use-interactions";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { resonanceRead, twinTranscript, vouches, overlap, distanceKm } from "@/lib/profile-derived";
+import { resonanceRead, vouches, overlap, distanceKm } from "@/lib/profile-derived";
+import { PhotoLightbox } from "@/components/photo-lightbox";
 
 /** Small mono "Edit" affordance for an editable region in the preview. Quiet
  *  by default (visible-but-unobtrusive on touch, no hover to reveal it),
@@ -88,6 +90,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const { data: incoming } = useIncomingLikes();
   const { data: myReadiness } = useTwinReadiness();
   const { data: transcriptGate } = useGate("read_transcript");
+  const { data: twinTalk } = useTwinTalkSummary(userId);
   const paywall = usePaywall();
   const startInterview = useStartInterview();
   const unmatch = useUnmatch();
@@ -99,6 +102,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const [editingAnswers, setEditingAnswers] = useState(false);
   const [answerDrafts, setAnswerDrafts] = useState<Record<number, string>>({});
   const [savingAnswerId, setSavingAnswerId] = useState<number | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const match = useMemo(() => {
     const ask = (outgoing?.asks || []).find((a: any) => a.toUserId === userId);
@@ -137,6 +141,20 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const galleryPhotos = photos.filter((p: any) => p.role === "gallery" || (!p.role && !p.isMainProfilePhoto));
   const coverUrl = coverPhoto?.photoUrl || profile.coverPhotoUrl || null;
   const portraitUrl = portraitPhoto?.photoUrl || profile.user?.profileImageUrl || null;
+  // Full, uncropped view for the lightbox — cover, then portrait, then the
+  // gallery grid, in the same order they appear on the page. Prefers the
+  // w1600 derivative (full photo, just not the original file size) over the
+  // raw upload for load time; falls back to whatever URL each section
+  // already uses when there's no derivative on record.
+  const fullPhotoUrl = (p: any, fallback: string | null) => p?.variants?.w1600 || p?.photoUrl || fallback;
+  const lightboxPhotos = [
+    coverUrl ? { url: fullPhotoUrl(coverPhoto, coverUrl) } : null,
+    portraitUrl ? { url: fullPhotoUrl(portraitPhoto, portraitUrl) } : null,
+    ...galleryPhotos.map((p: any) => ({ url: fullPhotoUrl(p, p.photoUrl) })),
+  ].filter((p): p is { url: string } => !!p);
+  const coverLightboxIndex = coverUrl ? 0 : -1;
+  const portraitLightboxIndex = portraitUrl ? (coverUrl ? 1 : 0) : -1;
+  const galleryLightboxOffset = (coverUrl ? 1 : 0) + (portraitUrl ? 1 : 0);
   const coverPos = coverPhoto
     ? `${Math.round((coverPhoto.coverFocalX ?? 0.5) * 100)}% ${Math.round((coverPhoto.coverFocalY ?? 0.5) * 100)}%`
     : "center";
@@ -151,7 +169,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     .join(" · ");
 
   const read = resonanceRead(profile);
-  const transcript = twinTranscript(userId);
+  const transcript = twinTalk?.exists && twinTalk.lines?.length ? { lines: twinTalk.lines, total: twinTalk.total ?? twinTalk.lines.length } : null;
   const vouchList = vouches(userId);
   const overlapChips = overlap(mine, profile, groups.filter((g: any) => g.viewerIsMember));
   const bioText = profile.aboutMe || profile.bio || "";
@@ -240,8 +258,10 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const Header = (
     <div>
       <div
-        className="relative w-full rounded-[20px] border border-vf-line overflow-hidden bg-vf-surface2"
+        className={`relative w-full rounded-[20px] border border-vf-line overflow-hidden bg-vf-surface2 ${coverUrl ? "cursor-pointer" : ""}`}
         style={{ aspectRatio: "21 / 9" }}
+        onClick={() => coverUrl && setLightboxIndex(coverLightboxIndex)}
+        data-testid="button-view-cover-photo"
       >
         {coverUrl ? (
           <img src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: coverPos }} />
@@ -273,8 +293,10 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
         style={!hasCover ? { marginTop: 0 } : undefined}
       >
         <div
-          className="shrink-0 overflow-hidden bg-vf-surface2 w-[120px] lg:w-[196px]"
+          className={`shrink-0 overflow-hidden bg-vf-surface2 w-[120px] lg:w-[196px] ${portraitUrl ? "cursor-pointer" : ""}`}
           style={{ aspectRatio: "4 / 5", borderRadius: "12px", boxShadow: "0 18px 50px rgba(0,0,0,.55)", outline: "4px solid #0C0910" }}
+          onClick={() => portraitUrl && setLightboxIndex(portraitLightboxIndex)}
+          data-testid="button-view-portrait-photo"
         >
           {portraitUrl ? (
             <img src={portraitUrl} alt={name} className="h-full w-full object-cover" />
@@ -541,8 +563,14 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
         </div>
         {galleryPhotos.length ? (
           <div className="grid grid-cols-3 gap-2.5">
-            {galleryPhotos.slice(0, 9).map((p: any) => (
-              <div key={p.id} className="overflow-hidden bg-vf-surface2" style={{ aspectRatio: "4 / 5", borderRadius: "12px" }}>
+            {galleryPhotos.slice(0, 9).map((p: any, i: number) => (
+              <div
+                key={p.id}
+                className="overflow-hidden bg-vf-surface2 cursor-pointer"
+                style={{ aspectRatio: "4 / 5", borderRadius: "12px" }}
+                onClick={() => setLightboxIndex(galleryLightboxOffset + i)}
+                data-testid={`button-view-gallery-photo-${p.id}`}
+              >
                 <img src={p.photoUrl} alt="" className="h-full w-full object-cover" />
               </div>
             ))}
@@ -654,7 +682,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
             <div className="mt-4 flex flex-col gap-3.5">
               {shown.map((l, i) => (
                 <div key={i}>
-                  <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">{l.who === "hers" ? "Hers" : "Yours"}</div>
+                  <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">{l.who === "viewer" ? "You" : name}</div>
                   <p className="text-[14px] text-vf-soft" style={{ lineHeight: 1.55 }}>{l.text}</p>
                 </div>
               ))}
@@ -747,6 +775,13 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
         </div>
       </div>
       {paywall.sheet}
+      {lightboxIndex !== null && lightboxPhotos.length > 0 && (
+        <PhotoLightbox
+          photos={lightboxPhotos}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
     </ViewShell>
   );
 }

@@ -13,6 +13,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { parseDestiraLink } from "@/lib/link-preview";
+import { LinkPreviewCard } from "@/components/link-preview-card";
 
 // A lower-pressure first step than a cold 1:1 thread: if this pair already
 // shares Lounges, point at them; otherwise suggest ones the other person is
@@ -192,16 +194,17 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
         ) : messages && messages.length > 0 ? (
           messages.map((msg: any) => {
             const isMe = msg.senderId === user?.id;
+            const link = parseDestiraLink(msg.content);
             const bubble = (
               <div
-                className={`max-w-[80%] px-4 py-2.5 text-sm leading-relaxed ${isMe ? "" : "cursor-pointer"} ${
+                className={`max-w-[80%] px-4 py-2.5 text-sm leading-relaxed break-words ${isMe ? "" : "cursor-pointer"} ${
                   isMe
                     ? "rounded-[18px] rounded-br-[6px] bg-vf-ember text-vf-ink font-medium"
                     : "rounded-[18px] rounded-bl-[6px] border border-vf-line bg-vf-surface text-vf-text"
                 }`}
                 data-testid={`message-${msg.id}`}
               >
-                {msg.content}
+                {link ? <LinkPreviewCard content={msg.content} /> : msg.content}
               </div>
             );
             return (
@@ -216,7 +219,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
                 ) : (
                   <Popover open={activeMessageId === msg.id} onOpenChange={(open) => setActiveMessageId(open ? msg.id : null)}>
                     <PopoverTrigger asChild>{bubble}</PopoverTrigger>
-                    <PopoverContent className="w-auto p-1" side="right" align="start">
+                    <PopoverContent className="w-auto p-1" side="bottom" align="start" collisionPadding={12}>
                       <button
                         onClick={() => {
                           setReportTarget({ userId: msg.senderId, messageId: msg.id });

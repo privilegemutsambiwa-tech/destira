@@ -139,6 +139,7 @@ export interface IStorage {
   getInterviews(userId: string): Promise<Interview[]>;
   getInterview(id: number): Promise<Interview | undefined>;
   updateInterviewTranscript(id: number, transcript: string): Promise<Interview>;
+  updateInterviewSummary(id: number, summary: string): Promise<Interview>;
   updateInterviewStatus(id: number, status: string): Promise<Interview>;
   getInterviewsWithProfiles(userId: string): Promise<any[]>;
 
@@ -881,6 +882,14 @@ export class DatabaseStorage implements IStorage {
   async updateInterviewTranscript(id: number, transcript: string): Promise<Interview> {
     const [updated] = await db.update(interviews)
       .set({ transcript, updatedAt: new Date() })
+      .where(eq(interviews.id, id))
+      .returning();
+    return updated;
+  }
+
+  async updateInterviewSummary(id: number, summary: string): Promise<Interview> {
+    const [updated] = await db.update(interviews)
+      .set({ summary })
       .where(eq(interviews.id, id))
       .returning();
     return updated;

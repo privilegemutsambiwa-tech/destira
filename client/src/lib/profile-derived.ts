@@ -1,11 +1,13 @@
 // Derived / placeholder reads for the /u/:userId profile view.
 //
-// Four of these stand in for data the backend doesn't serve yet (see
+// Some of these stand in for data the backend doesn't serve yet (see
 // docs/redesign-handoff.md §4). Each is a single function so it becomes real
 // with one swap: point it at a query instead of the deterministic stub.
+// "When your twins talked" used to live here too (a MOCK deterministic
+// transcript) — it's now real, served by GET /api/interviews/twin-talk/:id
+// (see useTwinTalkSummary), summarizing an actual interview transcript.
 //   - resonanceRead:  real when the profile carries numeric traits; a stable
 //                     derived read otherwise (no invented pairwise score).
-//   - twinTranscript: MOCK — nothing persists twin↔twin exchanges yet.
 //   - vouches:        MOCK — the `vouches` table does not exist yet. Returns []
 //                     so the block simply doesn't render.
 //   - overlap:        REAL only — shared groups + genuinely matching preference
@@ -69,48 +71,6 @@ export function resonanceRead(profile: any): ResonanceRead {
   const score = Math.round(axes.reduce((s, a) => s + a.value, 0) / axes.length);
   const summary = SUMMARIES[hash((profile?.userId ?? "x") + "s") % SUMMARIES.length];
   return { score, axes, summary };
-}
-
-export interface TwinTranscript {
-  lines: { who: "hers" | "yours"; text: string }[];
-  total: number;
-}
-
-const TRANSCRIPTS: TwinTranscript[] = [
-  {
-    lines: [
-      { who: "hers", text: "She won't do the 2am text thing. If you're out, you're out, and you tell her the next morning." },
-      { who: "yours", text: "That's fine by him — he's the same. He'd rather one real conversation a week than constant pinging." },
-      { who: "hers", text: "What she can't stand is being managed. Don't tell her how to feel about something." },
-      { who: "yours", text: "He hears that. He tends to problem-solve out loud and has been told it lands as dismissive." },
-      { who: "hers", text: "Then they'd have to be honest about that early, not six months in." },
-    ],
-    total: 14,
-  },
-  {
-    lines: [
-      { who: "hers", text: "She's moved cities twice for other people and won't do it a third time. That's not up for discussion." },
-      { who: "yours", text: "He's not asking anyone to move. He likes where he is and wants someone who feels the same about their own place." },
-      { who: "hers", text: "Good. Long-distance for a while she could do; open-ended, she couldn't." },
-      { who: "yours", text: "He'd want a plan too. Not a ring, just a direction." },
-    ],
-    total: 11,
-  },
-  {
-    lines: [
-      { who: "hers", text: "Kids are a maybe, not a no — but not for a few years, and not as a fix for anything." },
-      { who: "yours", text: "Same page. He wants to actually know someone first. The rest can wait." },
-      { who: "hers", text: "She's wary of people who say that and mean 'never'." },
-      { who: "yours", text: "Fair. He means it as 'not yet' and would say so plainly if that changed." },
-    ],
-    total: 16,
-  },
-];
-
-/** MOCK. Two lines of a twin↔twin exchange, keyed to the profile so it's
- *  stable. Swap for a real query once exchanges are persisted (handoff §4.3). */
-export function twinTranscript(userId: string): TwinTranscript {
-  return TRANSCRIPTS[hash(userId + "t") % TRANSCRIPTS.length];
 }
 
 export interface Vouch {

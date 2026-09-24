@@ -236,6 +236,27 @@ export function useStartInterview() {
   });
 }
 
+export interface TwinTalkSummary {
+  exists: boolean;
+  lines?: { who: "viewer" | "target"; text: string }[];
+  total?: number;
+}
+
+/** Real recap of an actual interview the caller had with `otherUserId`'s
+ *  twin — { exists: false } when no real interview has happened yet, so the
+ *  caller can hide the section rather than show anything invented. */
+export function useTwinTalkSummary(otherUserId?: string) {
+  return useQuery<TwinTalkSummary>({
+    queryKey: ["/api/interviews/twin-talk", otherUserId],
+    enabled: !!otherUserId,
+    queryFn: async () => {
+      const res = await fetch(`/api/interviews/twin-talk/${otherUserId}`, { credentials: "include" });
+      if (!res.ok) return { exists: false };
+      return res.json();
+    },
+  });
+}
+
 export function useInterviewChat(interviewId: number) {
   return useMutation({
     mutationFn: async (message: string) => {

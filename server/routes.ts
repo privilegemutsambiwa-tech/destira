@@ -1297,6 +1297,63 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Real summary of an actual interview the caller had with someone else's
+  // twin — never invented. { exists: false } when no real interview (or not
+  // enough of one) exists yet, so the client hides the section entirely
+  // rather than showing generic/fabricated content.
+  app.get("/api/interviews/twin-talk/:otherUserId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const otherUserId = req.params.otherUserId;
+    try {
+      const interview = await storage.getInterviewBetween(userId, otherUserId);
+      if (!interview || !interview.transcript) return res.json({ exists: false });
+
+      let history: Array<{ role: string; content: string }> = [];
+      try {
+        history = JSON.parse(interview.transcript);
+      } catch {
+        history = [];
+      }
+      const realExchanges = history.filter((h) => h.role === "user" || h.role === "assistant");
+      if (realExchanges.length < 2) return res.json({ exists: false });
+
+      let lines: Array<{ who: "viewer" | "target"; text: string }> | null = null;
+      if (interview.summary) {
+        try {
+          const cached = JSON.parse(interview.summary);
+          if (Array.isArray(cached?.lines)) lines = cached.lines;
+        } catch {}
+      }
+
+      if (!lines) {
+        const targetProfile = await storage.getProfile(otherUserId);
+        const completion = await completeText(
+          [
+            {
+              role: "system",
+              content: `You summarize a real interview between a person and someone else's AI Twin into a short, honest highlight recap — 3 to 5 short lines alternating between the two sides, using ONLY real content from the transcript given (never invent details, never add anything not actually said). Return JSON: {"lines":[{"who":"viewer"|"target","text":"..."}]}. "viewer" is the person who asked questions (transcript role "user"); "target" is the twin answering on the profile owner's behalf (transcript role "assistant"). Write each line in third person recapping what was actually said (not a direct quote), warm and natural, under 140 characters each.`,
+            },
+            { role: "user", content: JSON.stringify({ targetName: targetProfile?.displayName, transcript: history }) },
+          ],
+          { json: true, maxTokens: 600 },
+        );
+        try {
+          const parsed = JSON.parse(completion.text || "{}");
+          lines = Array.isArray(parsed?.lines) ? parsed.lines.slice(0, 5) : [];
+        } catch {
+          lines = [];
+        }
+        storage.updateInterviewSummary(interview.id, JSON.stringify({ lines })).catch(() => {});
+      }
+
+      res.json({ exists: true, lines, total: realExchanges.length });
+    } catch (e) {
+      console.error("Twin talk summary error:", e);
+      res.status(500).json({ exists: false });
+    }
+  });
+
   app.post("/api/interviews", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -2656,7 +2713,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   app.post("/api/groups/join-by-invite/:token", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
-    const { token } = req.params;
+    // The client always sends the full "<groupId>-<token>" composite (same
+    // shape as the URL param everywhere else — see the GET preview handler
+    // below, which already stripped this the same way). Without this, every
+    // real invite link 404'd here even though its preview resolved fine.
+    const rawParam = req.params.token || "";
+    const dashIdx = rawParam.indexOf("-");
+    const token = dashIdx > 0 ? rawParam.slice(dashIdx + 1) : rawParam;
     try {
       const link = await storage.getInviteLink(token);
       if (!link || !link.isActive) return res.status(404).json({ message: "Invalid or expired invite link" });
