@@ -174,7 +174,10 @@ function StoriesCarousel() {
   const { data: stories } = useFeedStories();
   const { user } = useAuth();
   const typedUser = user as User | null;
-  const [viewingStory, setViewingStory] = useState<{ stories: any[]; displayName: string; photoUrl: string } | null>(null);
+  // Just the id, not a value snapshot — so a like/comment/view invalidating
+  // the feed query actually reaches the still-open viewer instead of it
+  // rendering whatever `stories` array looked like the moment it was tapped.
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [showOwnStoryViewer, setShowOwnStoryViewer] = useState(false);
   const [showStoryCreator, setShowStoryCreator] = useState(false);
 
@@ -201,8 +204,17 @@ function StoriesCarousel() {
       }
       byUser[s.userId].stories.push(s);
     });
-    return Object.values(byUser);
+    const groups = Object.values(byUser);
+    // Anyone with at least one story you haven't opened yet sorts to the
+    // front (in the server's newest-first order among themselves); everyone
+    // whose stories are all already viewed rotates to the back, in that same
+    // relative order. A stable sort (guaranteed by the spec since ES2019)
+    // makes this a clean partition rather than a real re-sort.
+    const hasUnviewed = (g: { stories: any[] }) => g.stories.some((s) => !s.viewedByMe);
+    return [...groups].sort((a, b) => (hasUnviewed(b) ? 1 : 0) - (hasUnviewed(a) ? 1 : 0));
   }, [stories]);
+
+  const viewingGroup = viewingUserId ? grouped.find((g) => g.userId === viewingUserId) || null : null;
 
   const STORY_SIZE = 56;
 
@@ -267,14 +279,16 @@ function StoriesCarousel() {
           </button>
         )}
 
-        {grouped.map((u) => (
+        {grouped.map((u) => {
+          const hasUnviewed = u.stories.some((s: any) => !s.viewedByMe);
+          return (
           <button
             key={u.userId}
-            onClick={() => setViewingStory(u)}
+            onClick={() => setViewingUserId(u.userId)}
             className="flex flex-col items-center gap-1.5 shrink-0"
             data-testid={`story-avatar-${u.userId}`}
           >
-            <div className="story-ring-active p-[2.5px] rounded-full" style={{ width: `${STORY_SIZE}px`, height: `${STORY_SIZE}px` }}>
+            <div className={`${hasUnviewed ? "story-ring-active" : "story-ring-inactive"} p-[2.5px] rounded-full`} style={{ width: `${STORY_SIZE}px`, height: `${STORY_SIZE}px` }}>
               <div className="w-full h-full rounded-full overflow-hidden" style={{ background: "var(--vf-surface2)" }}>
                 <Avatar className="w-full h-full">
                   {u.photoUrl ? (
@@ -291,16 +305,17 @@ function StoriesCarousel() {
               {u.displayName.split(" ")[0]}
             </span>
           </button>
-        ))}
+          );
+        })}
       </div>
 
-      {viewingStory && (
+      {viewingGroup && (
         <StoryViewer
-          stories={viewingStory.stories}
+          stories={viewingGroup.stories}
           initialIndex={0}
-          onClose={() => setViewingStory(null)}
-          userName={viewingStory.displayName}
-          profileImageUrl={viewingStory.photoUrl}
+          onClose={() => setViewingUserId(null)}
+          userName={viewingGroup.displayName}
+          profileImageUrl={viewingGroup.photoUrl}
         />
       )}
 
@@ -478,7 +493,10 @@ export default function Discover() {
   const [filter, setFilter] = useState<FilterChip>(getInitialFilter);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
-  const [viewingCardStory, setViewingCardStory] = useState<{ stories: any[]; displayName: string; photoUrl: string; userId: string } | null>(null);
+  // Stable bits only (name/photo don't change from a like/comment/view) — the
+  // actual `stories` array is derived live from storiesByUserId below, so an
+  // invalidated feed query reaches this viewer while it's still open.
+  const [viewingCardMeta, setViewingCardMeta] = useState<{ userId: string; displayName: string; photoUrl: string } | null>(null);
   const paywall = usePaywall();
   const [confirm, setConfirm] = useState<"block" | "report" | null>(null);
   const [reportReason, setReportReason] = useState("");
@@ -541,6 +559,8 @@ export default function Discover() {
     return map;
   }, [feedStories]);
 
+  const viewingCardStories = viewingCardMeta ? storiesByUserId[viewingCardMeta.userId] : null;
+
   // Under the active filter, before this session's evaluations thin it out
   // — the stable denominator for the "N of total" counter below. Excludes
   // evaluatedIds on purpose: the counter's total shouldn't shrink every time
@@ -582,11 +602,10 @@ export default function Discover() {
     const userId: string = profile.userId;
     const stories = storiesByUserId[userId];
     if (!stories || stories.length === 0) return;
-    setViewingCardStory({
-      stories,
+    setViewingCardMeta({
+      userId,
       displayName: profile.displayName || "User",
       photoUrl: profile.user?.profileImageUrl || "",
-      userId,
     });
   }, [storiesByUserId]);
 
@@ -1192,21 +1211,21 @@ export default function Discover() {
         )}
       </div>
 
-      {viewingCardStory && (
+      {viewingCardMeta && viewingCardStories && viewingCardStories.length > 0 && (
         <StoryViewer
-          stories={viewingCardStory.stories}
+          stories={viewingCardStories}
           initialIndex={0}
-          onClose={() => setViewingCardStory(null)}
-          userName={viewingCardStory.displayName}
-          profileImageUrl={viewingCardStory.photoUrl}
+          onClose={() => setViewingCardMeta(null)}
+          userName={viewingCardMeta.displayName}
+          profileImageUrl={viewingCardMeta.photoUrl}
           onInterviewTwin={async () => {
             try {
-              const interview = await startInterview.mutateAsync(viewingCardStory.userId);
-              setViewingCardStory(null);
+              const interview = await startInterview.mutateAsync(viewingCardMeta.userId);
+              setViewingCardMeta(null);
               setLocation(`/interviews/${interview.id}/chat?from=/discover`);
             } catch (err: any) {
               if (err instanceof UpgradeRequiredError) {
-                setViewingCardStory(null);
+                setViewingCardMeta(null);
                 setLocation("/plans?feature=start_interview");
               } else {
                 toast({ title: "Could not start interview", description: err?.message, variant: "destructive" });

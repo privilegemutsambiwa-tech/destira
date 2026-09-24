@@ -4063,6 +4063,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
           media,
           likeCount: likes.length,
           viewCount: views.length,
+          likedByMe: likes.some((l: any) => l.userId === userId),
+          viewedByMe: views.some((v: any) => v.userId === userId),
         };
       }));
       const enriched = enrichedAll.filter((s) =>

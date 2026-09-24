@@ -26,6 +26,8 @@ interface StoryData {
   media: StoryMedia[];
   likeCount?: number;
   viewCount?: number;
+  likedByMe?: boolean;
+  viewedByMe?: boolean;
 }
 
 export type OwnStory = StoryData & { viewCount: number; likeCount: number; commentCount?: number };
@@ -95,16 +97,19 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const touchStartY = useRef<number | null>(null);
   const viewTrackedRef = useRef<Set<number>>(new Set());
+  const commentInputRef = useRef<HTMLInputElement>(null);
 
   const currentStory = stories[currentIndex];
   const currentMedia = currentStory?.media?.[0];
 
+  // Toggles based on the story's own likedByMe flag, not local state — so the
+  // button always reflects what the server actually has once the feed
+  // refetches, instead of drifting from it after a fast double-tap.
   const likeMutation = useMutation({
-    mutationFn: async (storyId: number) => {
-      await apiRequest("POST", `/api/stories/${storyId}/like`);
+    mutationFn: async ({ storyId, liked }: { storyId: number; liked: boolean }) => {
+      await apiRequest(liked ? "DELETE" : "POST", `/api/stories/${storyId}/like`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories/feed"] });
     },
   });
@@ -131,7 +136,6 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
     },
     onSuccess: () => {
       setCommentText("");
-      queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories/feed"] });
     },
     onError: (err) => {
@@ -142,6 +146,9 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
   const viewMutation = useMutation({
     mutationFn: async (storyId: number) => {
       await apiRequest("POST", `/api/stories/${storyId}/view`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/stories/feed"] });
     },
   });
 
@@ -338,16 +345,17 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
           )}
           <div className="flex items-center gap-2 mb-2">
             <button
-              className="w-8 h-8 flex items-center justify-center text-white"
-              onClick={() => likeMutation.mutate(currentStory.id)}
+              className="w-8 h-8 flex items-center justify-center"
+              style={{ color: currentStory.likedByMe ? "#FF6B4A" : "#FFFFFF" }}
+              onClick={() => likeMutation.mutate({ storyId: currentStory.id, liked: !!currentStory.likedByMe })}
               disabled={likeMutation.isPending}
               data-testid="button-like-story"
             >
-              <Heart className="w-5 h-5" />
+              <Heart className="w-5 h-5" fill={currentStory.likedByMe ? "#FF6B4A" : "none"} />
             </button>
             <button
               className="w-8 h-8 flex items-center justify-center text-white"
-              onClick={() => setIsPaused((p) => !p)}
+              onClick={() => { setIsPaused(true); commentInputRef.current?.focus(); }}
               data-testid="button-comment-story"
             >
               <MessageCircle className="w-5 h-5" />
@@ -361,6 +369,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
           </div>
           <div className="flex items-center gap-2">
             <Input
+              ref={commentInputRef}
               placeholder="Send a comment..."
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}

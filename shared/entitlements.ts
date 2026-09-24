@@ -35,7 +35,8 @@ export interface TierLimits {
   /** see the names/profiles of people who viewed or liked your story (not just the count) */
   seeStoryEngagers: boolean;
   /** replies you can post to other people's stories per rolling 7 days; null = no limit.
-   *  Reading replies to your OWN stories is never capped, on any tier. */
+   *  Reading replies to your OWN stories is never capped, on any tier. Free is
+   *  0 — commenting on someone's story is a paying-tier-only action. */
   storyRepliesPerWeek: number | null;
   /** "Request Private Chat" from inside a Lounge, per rolling 7 days; free is
    *  0 — this is a paying-tier-only action, not just metered lower for free. */
@@ -53,7 +54,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
     groupsCreatedMax: 0,
     canHostEvent: false,
     seeStoryEngagers: false,
-    storyRepliesPerWeek: 10,
+    storyRepliesPerWeek: 0,
     groupChatRequestsPerWeek: 0,
   },
   spark: {
@@ -66,7 +67,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
     groupsCreatedMax: 0,
     canHostEvent: false,
     seeStoryEngagers: true,
-    storyRepliesPerWeek: 30,
+    storyRepliesPerWeek: 20,
     groupChatRequestsPerWeek: 5,
   },
   flame: {
@@ -79,7 +80,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
     groupsCreatedMax: 3,
     canHostEvent: true,
     seeStoryEngagers: true,
-    storyRepliesPerWeek: null,
+    storyRepliesPerWeek: 60,
     groupChatRequestsPerWeek: 20,
   },
   ember: {
