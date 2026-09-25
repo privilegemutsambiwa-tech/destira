@@ -65,7 +65,7 @@ export default function PlansPay() {
   // `ref` — the gateway's own redirect URL never carries our `tier` query
   // param — so on that leg we fall back to the tier the server already has
   // on the payment row itself rather than showing a false "not here" dead end.
-  const { data: status } = usePaymentStatus(paymentId, paymentId != null);
+  const { data: status, isError: statusCheckFailing } = usePaymentStatus(paymentId, paymentId != null);
   const effectiveTierParam = tierParam || status?.tier || null;
   const card = useMemo(() => PLAN_CARDS.find((c) => c.tier === effectiveTierParam), [effectiveTierParam]);
   const tier = card?.tier as "spark" | "flame" | "ember" | undefined;
@@ -251,9 +251,19 @@ export default function PlansPay() {
         )}
         <div className="flex items-center gap-2.5 mt-6 text-[13px] text-vf-muted">
           <Loader2 className="w-4 h-4 animate-spin" />
-          Waiting for the gateway…
+          {statusCheckFailing ? "Having trouble checking — retrying…" : "Waiting for the gateway…"}
           {status?.rawStatus ? <span className="text-vf-faint">({status.rawStatus})</span> : null}
         </div>
+        {statusCheckFailing && (
+          // Distinct from the gateway genuinely still pending: this means
+          // OUR status check is failing (network blip, session hiccup), not
+          // that the payment itself hasn't gone through — telling them apart
+          // avoids someone thinking their money is stuck when it's really
+          // just our polling that's stuck.
+          <p className="text-[12.5px] text-vf-faint mt-2 leading-[1.5]">
+            This is just us checking in, not the payment — if you already approved it, it'll still go through.
+          </p>
+        )}
 
         {waited > RESEND_AFTER_MS * 1.6 && (
           <div className="mt-5 rounded-[14px] border border-vf-line bg-vf-surface2 p-3.5 text-[12.5px] text-vf-muted leading-[1.55]">

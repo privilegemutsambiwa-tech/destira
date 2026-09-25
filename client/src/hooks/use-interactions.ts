@@ -5,7 +5,10 @@ export function useIncomingLikes() {
     queryKey: ["/api/likes/incoming"],
     queryFn: async () => {
       const res = await fetch("/api/likes/incoming", { credentials: "include" });
-      if (!res.ok) return { likes: [], totalCount: 0 };
+      // A failed load must surface as an error, not a fake empty list — an
+      // empty list here reads as "nobody likes you," which is a different
+      // (and false) claim from "we couldn't check."
+      if (!res.ok) throw new Error("Failed to load likes");
       return res.json();
     },
   });
@@ -16,7 +19,7 @@ export function useOutgoingLikes() {
     queryKey: ["/api/likes/outgoing"],
     queryFn: async () => {
       const res = await fetch("/api/likes/outgoing", { credentials: "include" });
-      if (!res.ok) return { asks: [], totalCount: 0 };
+      if (!res.ok) throw new Error("Failed to load asks");
       return res.json();
     },
   });

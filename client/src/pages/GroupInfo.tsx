@@ -139,7 +139,6 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   const isAdmin = group?.myRole === "owner" || group?.myRole === "admin";
 
   const currentMember = (members || []).find((m: { userId: string; isMuted?: boolean; role?: string }) => m.userId === user?.id);
-  const actuallyMuted = isMuted !== null ? isMuted : (currentMember?.isMuted ?? false);
 
   const sortedMembers = [...(members || [])].sort((a: any, b: any) => {
     const order: Record<string, number> = { owner: 0, admin: 1, member: 2 };

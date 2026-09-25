@@ -541,6 +541,7 @@ export default function TwinChat() {
           variant="ghost"
           size="icon"
           onClick={() => setLocation(backRoute)}
+          aria-label="Back"
           data-testid="button-back-twin"
         >
           <ArrowLeft className="w-5 h-5 text-vf-text" />

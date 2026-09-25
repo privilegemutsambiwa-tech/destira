@@ -97,12 +97,14 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
 
         if (interview.transcript) {
           try {
-            const history: { role: string; content: string }[] = JSON.parse(interview.transcript);
+            const history: { role: string; content: string; ts?: string }[] = JSON.parse(interview.transcript);
             const restored: Message[] = history.map((h, idx) => ({
               id: idx + 1,
               text: h.content,
               sender: h.role === "user" ? "user" as const : "ai" as const,
-              timestamp: new Date(),
+              // Older transcripts predate per-turn timestamps — fall back to
+              // now rather than fabricate a false history for those.
+              timestamp: h.ts ? new Date(h.ts) : new Date(),
               status: "delivered" as const,
             }));
             setMessages(restored);
@@ -325,6 +327,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
             variant="ghost"
             size="icon"
             onClick={() => setLocation(backRoute)}
+            aria-label="Back"
             data-testid="button-back"
           >
             <ArrowLeft className="w-5 h-5 text-vf-ember" />

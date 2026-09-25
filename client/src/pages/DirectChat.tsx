@@ -173,7 +173,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
   return (
     <div className="h-dvh flex flex-col bg-vf-ink">
       <div className="border-b border-vf-line px-4 py-3 flex items-center gap-4 sticky top-0 z-10 bg-vf-ink">
-        <Button variant="ghost" size="icon" onClick={() => setLocation(backRoute)} data-testid="button-back">
+        <Button variant="ghost" size="icon" onClick={() => setLocation(backRoute)} aria-label="Back" data-testid="button-back">
           <ArrowLeft className="w-5 h-5 text-vf-text" />
         </Button>
         <div className="flex items-center gap-3">
@@ -183,12 +183,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
           >
             {otherName[0]}
           </div>
-          <div>
-            <h2 className="text-sm text-vf-text" data-testid="text-chat-name">{otherName}</h2>
-            <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: "#22C55E" }}>
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "#22C55E" }} /> Online
-            </p>
-          </div>
+          <h2 className="text-sm text-vf-text" data-testid="text-chat-name">{otherName}</h2>
         </div>
       </div>
 

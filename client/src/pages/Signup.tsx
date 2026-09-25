@@ -82,11 +82,14 @@ export default function Signup() {
     }
   }, [progress]);
 
-  // If the account already exists (came back after step 1), don't sit on step 1.
+  // The account is created for good in step 1 — there's no "undo" to go
+  // back to. Without `step` in the deps, this only fired once on mount and
+  // never again, so clicking Back on step 2 (which just sets step:1) would
+  // leave the stale create-account form showing instead of bouncing forward.
   useEffect(() => {
     if (!isLoading && user && step === 1) patch({ step: 2 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, isLoading]);
+  }, [user, isLoading, step]);
 
   const pwScore = useMemo(() => passwordScore(password), [password]);
 
@@ -351,7 +354,7 @@ export default function Signup() {
                   Log in
                 </button>
               </>
-            ) : (
+            ) : user ? null : (
               <button onClick={() => patch({ step: step - 1 })} className="text-vf-muted hover:text-vf-text transition-colors" data-testid="button-signup-back">
                 ← Back
               </button>

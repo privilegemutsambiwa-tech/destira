@@ -88,6 +88,7 @@ export default function PhotoManager() {
   }>(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const focalTimer = useRef<number | null>(null);
 
@@ -200,6 +201,7 @@ export default function PhotoManager() {
   };
 
   const del = async (photoId: number) => {
+    setConfirmDeleteId(null);
     try {
       await fetch(`/api/photos/${photoId}`, { method: "DELETE", credentials: "include" });
       if (selectedId === photoId) setSelectedId(null);
@@ -327,11 +329,45 @@ export default function PhotoManager() {
                   commitFocal(selected.id, role, x, y);
                 }}
                 onNudge={nudgeFocal}
-                onDelete={() => del(selected.id)}
+                onDelete={() => setConfirmDeleteId(selected.id)}
                 onClose={() => setSelectedId(null)}
               />
             )}
           </>
+        )}
+
+        {confirmDeleteId !== null && (
+          <div
+            className="fixed inset-0 flex items-center justify-center z-[100] p-4"
+            style={{ background: "rgba(8,6,11,.82)", backdropFilter: "blur(14px)" }}
+            onClick={() => setConfirmDeleteId(null)}
+          >
+            <div
+              className="w-full max-w-[400px] rounded-[20px] border border-vf-line bg-vf-surface p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="font-serif font-normal text-[20px] text-vf-text mb-1.5">Delete this photo?</h2>
+              <p className="text-[13.5px] leading-relaxed text-vf-muted mb-5">
+                This can't be undone. If it's your cover or portrait, that spot will be empty until you set another.
+              </p>
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="flex-1 h-11 rounded-full border border-vf-text/14 text-[14px] text-vf-muted hover:text-vf-text transition-colors"
+                  data-testid="button-confirm-cancel"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => del(confirmDeleteId)}
+                  className="flex-1 h-11 rounded-full text-[14px] font-semibold bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors"
+                  data-testid="button-confirm-action"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         <input

@@ -1066,6 +1066,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
   const { toast } = useToast();
   const cancelSub = useCancelSubscription();
   const { data: sub } = useSubscription();
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const raw = profile?.subscriptionTier ?? "free";
   const tier: "free" | "spark" | "flame" | "ember" =
     raw === "plus" ? "flame" : raw === "vip" ? "ember" : (["spark", "flame", "ember"].includes(raw) ? raw : "free");
@@ -1092,6 +1093,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
   };
 
   return (
+    <>
     <Panel title="Manage Billing" onBack={onBack}>
       <div className="vf-card" style={{ margin: "16px", borderRadius: "16px", background: CARD, padding: "20px" }}>
         <div className="flex items-start justify-between mb-2">
@@ -1140,18 +1142,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
             style={{ ...ROW_STYLE, borderBottom: "none", width: "100%", textAlign: "left", background: "transparent", border: "none" }}
             data-testid="row-cancel-plan"
             disabled={cancelSub.isPending}
-            onClick={() => {
-              if (!window.confirm(`Cancel ${tierInfo.label}? You keep it until the paid period ends, then you're on Free.`)) return;
-              cancelSub.mutate(undefined, {
-                onSuccess: (r) =>
-                  toast({
-                    title: "Cancelled",
-                    description: r.endsAt
-                      ? `You're on ${tierInfo.label} until ${new Date(r.endsAt).toLocaleDateString()}, then Free.`
-                      : "You're back on Free.",
-                  }),
-              });
-            }}
+            onClick={() => setShowCancelDialog(true)}
           >
             <div className="flex-1">
               <p className="text-sm font-medium text-foreground">Cancel subscription</p>
@@ -1166,6 +1157,48 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
         Questions? Email <span style={{ color: EMBER }}>support@destira.date</span>
       </p>
     </Panel>
+
+    <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+      <DialogContent style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "20px" }}>
+        <DialogHeader>
+          <DialogTitle style={{ ...SERIF, color: TEXT }}>Cancel {tierInfo.label}?</DialogTitle>
+          <DialogDescription style={{ color: MUTED }}>
+            You keep it until the paid period ends, then you're on Free.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2">
+          <button
+            className="px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-150 hover:bg-vf-elevated"
+            style={{ color: MUTED }}
+            onClick={() => setShowCancelDialog(false)}
+            data-testid="button-cancel-cancel-plan"
+          >
+            Keep plan
+          </button>
+          <button
+            disabled={cancelSub.isPending}
+            className="px-4 py-2 text-sm font-semibold text-foreground vf-btn-primary"
+            style={{ background: "#EF4444", borderRadius: "10px", border: "none" }}
+            onClick={() => {
+              setShowCancelDialog(false);
+              cancelSub.mutate(undefined, {
+                onSuccess: (r) =>
+                  toast({
+                    title: "Cancelled",
+                    description: r.endsAt
+                      ? `You're on ${tierInfo.label} until ${new Date(r.endsAt).toLocaleDateString()}, then Free.`
+                      : "You're back on Free.",
+                  }),
+              });
+            }}
+            data-testid="button-confirm-cancel-plan"
+          >
+            {cancelSub.isPending ? "Cancelling..." : "Cancel subscription"}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
@@ -1805,8 +1838,11 @@ export default function Settings() {
   const deleteMutation = useMutation({
     mutationFn: () => apiRequest("DELETE", "/api/account", { confirmation: "DELETE" }),
     onSuccess: () => {
-      toast({ title: "Account deleted" });
-      logout();
+      toast({ title: "Account deleted", description: "All your data has been erased." });
+      // Straight to "/", not logout() — the account row is already gone, so
+      // routing through /api/logout would just be an extra round trip for
+      // nothing (matches the Data & Privacy panel's delete flow below).
+      window.location.href = "/";
     },
     onError: () => toast({ title: "Failed to delete account", variant: "destructive" }),
   });

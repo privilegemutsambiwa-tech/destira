@@ -131,12 +131,18 @@ function AuthenticatedHome() {
 
 function Router() {
   const { user, isLoading } = useAuth();
+  const [location] = useLocation();
 
   if (isLoading) {
     return <DestiraLoadingScreen />;
   }
 
+  // Public routes (Landing/Login/Signup/...) don't go through ProtectedRoute,
+  // so without a key here a crash on one of them (e.g. Login) would leave a
+  // stale error screen showing after navigating to another (e.g. Signup) —
+  // same resetKey-on-route-change fix ProtectedRoute already has below.
   return (
+    <ErrorBoundary resetKey={location}>
     <Suspense fallback={<DestiraLoadingScreen />}>
     <Switch>
       <Route path="/" component={user ? AuthenticatedHome : Landing} />
@@ -233,6 +239,7 @@ function Router() {
       <Route component={NotFound} />
     </Switch>
     </Suspense>
+    </ErrorBoundary>
   );
 }
 

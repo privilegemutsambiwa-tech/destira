@@ -268,6 +268,18 @@ function PassButton({ onClick, pending }: { onClick: () => void; pending?: boole
   );
 }
 
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="text-center py-20 px-6">
+      <p className="font-serif text-vf-text mb-2" style={{ fontSize: "22px" }}>Couldn't load this.</p>
+      <p className="text-sm text-vf-muted max-w-xs mx-auto">Check your connection and try again.</p>
+      <button onClick={onRetry} className="mt-4 text-sm font-medium text-vf-ember" data-testid="button-retry">
+        Try again
+      </button>
+    </div>
+  );
+}
+
 function EmptyState({ title, body }: { title: string; body: string }) {
   const [, setLocation] = useLocation();
   return (
@@ -296,8 +308,8 @@ export default function Matches() {
     photoUrl?: string | null;
   } | null>(null);
 
-  const { data: incoming, isLoading: incomingLoading } = useIncomingLikes();
-  const { data: outgoing, isLoading: outgoingLoading } = useOutgoingLikes();
+  const { data: incoming, isLoading: incomingLoading, isError: incomingError, refetch: refetchIncoming } = useIncomingLikes();
+  const { data: outgoing, isLoading: outgoingLoading, isError: outgoingError, refetch: refetchOutgoing } = useOutgoingLikes();
   const { data: chatRequests, isLoading: crLoading } = useChatRequests();
   const likeBack = useLikeBack();
   const respondToMatch = useRespondToMatch();
@@ -405,6 +417,8 @@ export default function Matches() {
       {activeTab === "waiting" && (
         waitingLoading ? (
           <div className="flex justify-center p-12"><Loader2 className="w-6 h-6 animate-spin text-vf-muted" /></div>
+        ) : incomingError ? (
+          <ErrorState onRetry={() => refetchIncoming()} />
         ) : waitingCount === 0 ? (
           <EmptyState
             title="Nobody is waiting on you yet."
@@ -469,6 +483,8 @@ export default function Matches() {
       {activeTab === "asked" && (
         outgoingLoading ? (
           <div className="flex justify-center p-12"><Loader2 className="w-6 h-6 animate-spin text-vf-muted" /></div>
+        ) : outgoingError ? (
+          <ErrorState onRetry={() => refetchOutgoing()} />
         ) : asks.length === 0 ? (
           <EmptyState
             title="You haven't asked anyone yet."

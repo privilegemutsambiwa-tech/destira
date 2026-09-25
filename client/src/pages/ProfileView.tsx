@@ -283,10 +283,17 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
         className={`relative w-full rounded-[20px] border border-vf-line overflow-hidden bg-vf-surface2 ${coverUrl ? "cursor-pointer" : ""}`}
         style={{ aspectRatio: "21 / 9" }}
         onClick={() => coverUrl && setLightboxIndex(coverLightboxIndex)}
+        role={coverUrl ? "button" : undefined}
+        tabIndex={coverUrl ? 0 : undefined}
+        onKeyDown={(e) => {
+          if (!coverUrl) return;
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLightboxIndex(coverLightboxIndex); }
+        }}
+        aria-label={coverUrl ? `View ${name}'s cover photo` : undefined}
         data-testid="button-view-cover-photo"
       >
         {coverUrl ? (
-          <img src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: coverPos }} />
+          <img src={coverUrl} alt={`${name}'s cover photo`} className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: coverPos }} />
         ) : (
           // Real no-cover state — flat warm surface + a mono label, not a
           // scrim over nothing (that read as a broken image / grey wash).
@@ -318,6 +325,13 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
           className={`shrink-0 overflow-hidden bg-vf-surface2 w-[120px] lg:w-[196px] ${portraitUrl ? "cursor-pointer" : ""}`}
           style={{ aspectRatio: "4 / 5", borderRadius: "12px", boxShadow: "0 18px 50px rgba(0,0,0,.55)", outline: "4px solid #0C0910" }}
           onClick={() => portraitUrl && setLightboxIndex(portraitLightboxIndex)}
+          role={portraitUrl ? "button" : undefined}
+          tabIndex={portraitUrl ? 0 : undefined}
+          onKeyDown={(e) => {
+            if (!portraitUrl) return;
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLightboxIndex(portraitLightboxIndex); }
+          }}
+          aria-label={portraitUrl ? `View ${name}'s portrait photo` : undefined}
           data-testid="button-view-portrait-photo"
         >
           {portraitUrl ? (
@@ -591,6 +605,12 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
                 className="overflow-hidden bg-vf-surface2 cursor-pointer"
                 style={{ aspectRatio: "4 / 5", borderRadius: "12px" }}
                 onClick={() => setLightboxIndex(galleryLightboxOffset + i)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLightboxIndex(galleryLightboxOffset + i); }
+                }}
+                aria-label={`View ${name}'s photo ${i + 1}`}
                 data-testid={`button-view-gallery-photo-${p.id}`}
               >
                 <img src={p.photoUrl} alt="" className="h-full w-full object-cover" />

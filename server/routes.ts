@@ -1716,12 +1716,12 @@ Only include structured_updates fields if the conversation clearly reveals them.
     const targetProfile = await storage.getProfile(interview.targetId);
     if (!targetProfile) return res.status(404).json({ message: "Target profile not found" });
 
-    let history: { role: string; content: string }[] = [];
+    let history: { role: string; content: string; ts?: string }[] = [];
     try {
       if (interview.transcript) history = JSON.parse(interview.transcript);
     } catch (e) { history = []; }
 
-    history.push({ role: "user", content: message });
+    history.push({ role: "user", content: message, ts: new Date().toISOString() });
 
     const systemPrompt = await buildInterviewSystemPrompt(targetProfile);
 
@@ -1760,7 +1760,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         }
 
         fullResponse = await finalizeInterviewReply(fullResponse, targetProfile, message);
-        history.push({ role: "assistant", content: fullResponse });
+        history.push({ role: "assistant", content: fullResponse, ts: new Date().toISOString() });
         await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
         logLlmCall({ callType: "interview_chat", userId, fallbackInputText: message, fallbackOutputText: fullResponse }).catch(() => {});
 
@@ -1779,7 +1779,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
 
         let aiResponse = completion.text || "I'd love to tell you more about that in person!";
         aiResponse = await finalizeInterviewReply(aiResponse, targetProfile, message);
-        history.push({ role: "assistant", content: aiResponse });
+        history.push({ role: "assistant", content: aiResponse, ts: new Date().toISOString() });
         await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
         logLlmCall({
           callType: "interview_chat",
@@ -1793,7 +1793,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
     } catch (e) {
       console.error("AI Twin chat error:", e);
       const fallback = "That's a great question! I'd love to share more about that when we connect in person.";
-      history.push({ role: "assistant", content: fallback });
+      history.push({ role: "assistant", content: fallback, ts: new Date().toISOString() });
       await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
       // `error: true` lets the client tell a genuine AI outage apart from a
       // real reply — without it, a full backend outage silently looks like
