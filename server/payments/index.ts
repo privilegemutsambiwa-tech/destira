@@ -235,59 +235,74 @@ export async function sweepStuckPayments(): Promise<number> {
 // Idempotent. Writes the payment as paid, creates/extends the subscription,
 // sets profiles.subscriptionTier. Features are live on the next request — no
 // logout.
+//
+// The client's 3s poll and the gateway's webhook can both call this for the
+// same paymentId within milliseconds of each other. The whole thing runs
+// inside one transaction with a row lock on the payments row (`for("update")`,
+// same pattern as server/events.ts/server/admin/team.ts) so a second caller
+// blocks until the first one's write commits, then sees status === "paid"
+// and returns immediately — without the lock, both could pass the
+// status-check before either writes and double-extend currentPeriodEnd.
 export async function activateFromPayment(paymentId: number): Promise<void> {
-  const [pay] = await db.select().from(payments).where(eq(payments.id, paymentId));
-  if (!pay || pay.status === "paid") return;
-  const tier = pay.tier as "spark" | "flame" | "ember";
-  const period = (pay.period || "monthly") as BillingPeriod;
-  const durationMs = PERIOD_DAYS[period] * 24 * 60 * 60 * 1000;
+  const result = await db.transaction(async (tx) => {
+    const [pay] = await tx.select().from(payments).where(eq(payments.id, paymentId)).for("update");
+    if (!pay || pay.status === "paid") return null;
+    const tier = pay.tier as "spark" | "flame" | "ember";
+    const period = (pay.period || "monthly") as BillingPeriod;
+    const durationMs = PERIOD_DAYS[period] * 24 * 60 * 60 * 1000;
 
-  const now = new Date();
-  const periodEnd = new Date(now.getTime() + durationMs);
+    const now = new Date();
+    const periodEnd = new Date(now.getTime() + durationMs);
 
-  const [existingSub] = await db.select().from(subscriptions).where(eq(subscriptions.userId, pay.userId));
-  let subId: number;
-  if (existingSub) {
-    const base =
-      existingSub.currentPeriodEnd && existingSub.currentPeriodEnd.getTime() > now.getTime()
-        ? existingSub.currentPeriodEnd
-        : now;
-    const [s] = await db
-      .update(subscriptions)
-      .set({
-        tier,
-        period,
-        status: "active",
-        cancelAtPeriodEnd: false,
-        provider: pay.provider,
-        providerReference: pay.providerReference,
-        currentPeriodStart: now,
-        currentPeriodEnd: new Date(base.getTime() + durationMs),
-        updatedAt: now,
-      })
-      .where(eq(subscriptions.id, existingSub.id))
-      .returning();
-    subId = s.id;
-  } else {
-    const [s] = await db
-      .insert(subscriptions)
-      .values({
-        userId: pay.userId,
-        tier,
-        period,
-        status: "active",
-        provider: pay.provider,
-        providerReference: pay.providerReference,
-        currentPeriodStart: now,
-        currentPeriodEnd: periodEnd,
-      })
-      .returning();
-    subId = s.id;
-  }
+    const [existingSub] = await tx.select().from(subscriptions).where(eq(subscriptions.userId, pay.userId));
+    let subId: number;
+    if (existingSub) {
+      const base =
+        existingSub.currentPeriodEnd && existingSub.currentPeriodEnd.getTime() > now.getTime()
+          ? existingSub.currentPeriodEnd
+          : now;
+      const [s] = await tx
+        .update(subscriptions)
+        .set({
+          tier,
+          period,
+          status: "active",
+          cancelAtPeriodEnd: false,
+          provider: pay.provider,
+          providerReference: pay.providerReference,
+          currentPeriodStart: now,
+          currentPeriodEnd: new Date(base.getTime() + durationMs),
+          updatedAt: now,
+        })
+        .where(eq(subscriptions.id, existingSub.id))
+        .returning();
+      subId = s.id;
+    } else {
+      const [s] = await tx
+        .insert(subscriptions)
+        .values({
+          userId: pay.userId,
+          tier,
+          period,
+          status: "active",
+          provider: pay.provider,
+          providerReference: pay.providerReference,
+          currentPeriodStart: now,
+          currentPeriodEnd: periodEnd,
+        })
+        .returning();
+      subId = s.id;
+    }
 
-  await db.update(payments).set({ status: "paid", subscriptionId: subId }).where(eq(payments.id, paymentId));
-  await db.update(profiles).set({ subscriptionTier: tier }).where(eq(profiles.userId, pay.userId));
-  await alertPaymentSuccess({ userId: pay.userId, tier, amountCents: pay.amount, method: pay.provider, phoneMasked: pay.phoneNumberMasked });
+    await tx.update(payments).set({ status: "paid", subscriptionId: subId }).where(eq(payments.id, paymentId));
+    await tx.update(profiles).set({ subscriptionTier: tier }).where(eq(profiles.userId, pay.userId));
+    return { userId: pay.userId, tier, amountCents: pay.amount, method: pay.provider, phoneMasked: pay.phoneNumberMasked };
+  });
+
+  // The success alert is a side effect outside the DB, deliberately fired
+  // only when THIS call actually did the activating (result is null for the
+  // call that lost the race) — never once per racing caller.
+  if (result) await alertPaymentSuccess(result);
 }
 
 // Cancel: as easy as subscribing. Keep the tier until the paid period ends,

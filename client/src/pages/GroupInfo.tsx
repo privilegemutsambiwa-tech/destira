@@ -26,6 +26,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { avatarColor } from "@/lib/avatar-color";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 const PRIVACY_LABELS: Record<string, { icon: any; label: string }> = {
   "open": { icon: Globe, label: "Open" },
@@ -128,8 +129,11 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
 
   const toggleMute = useToggleMute(groupId);
   const addGroupMember = useAddGroupMember(groupId);
-  const { data: userSearchResults } = useSearchUsers(addMemberQuery);
-  const { data: messageSearchResults } = useSearchGroupMessages(groupId, searchQuery);
+  // Debounced — these used to fire a request on every keystroke.
+  const debouncedAddMemberQuery = useDebouncedValue(addMemberQuery);
+  const debouncedSearchQuery = useDebouncedValue(searchQuery);
+  const { data: userSearchResults } = useSearchUsers(debouncedAddMemberQuery);
+  const { data: messageSearchResults } = useSearchGroupMessages(groupId, debouncedSearchQuery);
 
   const isOwner = group?.myRole === "owner";
   const isAdmin = group?.myRole === "owner" || group?.myRole === "admin";

@@ -3750,7 +3750,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     try {
       const threads: any[] = [];
 
-      if (filter === "all" || filter === "match" || filter === "matches") {
+      // The two blocks below (matches, AI Twin interviews) are completely
+      // independent — both used to run one after the other for the common
+      // filter="all" case, roughly doubling this endpoint's latency for no
+      // reason. Each is wrapped so Promise.all can run them concurrently.
+      const loadMatchThreads = async (): Promise<any[]> => {
+        if (!(filter === "all" || filter === "match" || filter === "matches")) return [];
         const userMatches = await storage.getMatchesWithProfiles(userId);
         const matchThreads = await Promise.all(
           userMatches
@@ -3759,9 +3764,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
               // getDirectMessages orders oldest-first for rendering the
               // conversation — getLastDirectMessage is the DESC/LIMIT-1 query
               // that actually gets the newest message, so the preview
-              // doesn't get stuck on the first message ever sent.
-              const lastMsg = await storage.getLastDirectMessage(m.id);
-              const unreadCount = await storage.getUnreadDirectMessageCount(m.id, userId);
+              // doesn't get stuck on the first message ever sent. These two
+              // are independent per-match queries, so they run concurrently
+              // too instead of doubling the wait for every match.
+              const [lastMsg, unreadCount] = await Promise.all([
+                storage.getLastDirectMessage(m.id),
+                storage.getUnreadDirectMessageCount(m.id, userId),
+              ]);
               return {
                 id: `match_${m.id}`,
                 type: "match",
@@ -3793,10 +3802,11 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
             existing.unreadCount += t.unreadCount;
           }
         }
-        threads.push(...byPartner.values());
-      }
+        return [...byPartner.values()];
+      };
 
-      if (filter === "all" || filter === "ai_twin_interview" || filter === "ai_twin") {
+      const loadInterviewThreads = async (): Promise<any[]> => {
+        if (!(filter === "all" || filter === "ai_twin_interview" || filter === "ai_twin")) return [];
         const userInterviews = await storage.getInterviewsWithProfiles(userId);
         const interviewThreads = userInterviews.map((iv: any) => {
           let lastMsg = "";
@@ -3828,14 +3838,17 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         // idempotent going forward), so historical duplicates can still exist
         // — collapse to one thread per partner, keeping whichever interview
         // was active most recently.
-        const byPartner = new Map<string, any>();
+        const byInterviewPartner = new Map<string, any>();
         for (const t of interviewThreads.sort(
           (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),
         )) {
-          if (!byPartner.has(t.partnerId)) byPartner.set(t.partnerId, t);
+          if (!byInterviewPartner.has(t.partnerId)) byInterviewPartner.set(t.partnerId, t);
         }
-        threads.push(...byPartner.values());
-      }
+        return [...byInterviewPartner.values()];
+      };
+
+      const [matchThreads, interviewThreads] = await Promise.all([loadMatchThreads(), loadInterviewThreads()]);
+      threads.push(...matchThreads, ...interviewThreads);
 
       // A dedicated tab, not folded into "all" — replies to your stories are
       // a different relationship than a match or a twin interview, and

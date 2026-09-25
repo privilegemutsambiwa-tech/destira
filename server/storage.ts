@@ -535,7 +535,11 @@ export class DatabaseStorage implements IStorage {
         // edit it in Settings. A card with a blank name is never
         // acceptable, so fall back to the account's own first name.
         displayName: r.displayName || r.user?.firstName || "Someone",
-        coverPhotoUrl: lead?.w1600 ?? lead?.url ?? r.coverPhotoUrl ?? r.user?.profileImageUrl ?? null,
+        // w800, not w1600 — this field backs the story-ring thumbnail (44px)
+        // and the "Next up" fan cards (132px wide), both far smaller than a
+        // 1600px image; the full photos[] array (used by the main card and
+        // the lightbox) already carries its own w1600 separately.
+        coverPhotoUrl: lead?.w800 ?? lead?.w1600 ?? lead?.url ?? r.coverPhotoUrl ?? r.user?.profileImageUrl ?? null,
         photos,
         answers: answersByUser.get(r.userId) ?? [],
         interests: interestsByUser.get(r.userId) ?? [],
@@ -809,22 +813,99 @@ export class DatabaseStorage implements IStorage {
     return match;
   }
 
+  // Was a genuine N+1: one getProfileWithUser call per match, and each of
+  // those re-fetched the VIEWER's own profile again too (for the distance
+  // calc) — so a page with 20 matches ran roughly 40+ queries here alone,
+  // and this function is called independently by /api/matches,
+  // /api/likes/incoming, and /api/likes/outgoing, multiplying it further on
+  // a single chat-list load. Batches the "other" profiles into one query,
+  // fetches the viewer's own profile once, and resolves photos for the
+  // whole batch in one query — same output shape as the old per-match
+  // getProfileWithUser(otherUserId, userId) call.
   async getMatchesWithProfiles(userId: string): Promise<any[]> {
     const userMatches = await this.getMatches(userId);
-    const result = [];
-    for (const match of userMatches) {
+    const visible = userMatches.filter((match) => {
       const isUser1 = match.user1Id === userId;
-      if (isUser1 && match.user1DeletedChat) continue;
-      if (!isUser1 && match.user2DeletedChat) continue;
+      return isUser1 ? !match.user1DeletedChat : !match.user2DeletedChat;
+    });
+    if (visible.length === 0) return [];
+
+    const otherIds = Array.from(new Set(visible.map((m) => (m.user1Id === userId ? m.user2Id : m.user1Id))));
+    const [rows, viewer] = await Promise.all([
+      db
+        .select({
+          id: profiles.id,
+          userId: profiles.userId,
+          displayName: profiles.displayName,
+          bio: profiles.bio,
+          aboutMe: profiles.aboutMe,
+          age: profiles.age,
+          gender: profiles.gender,
+          location: profiles.location,
+          locationName: profiles.locationName,
+          _lat: profiles.locationLat,
+          _lng: profiles.locationLng,
+          showDistance: profiles.showDistance,
+          personalityProfile: profiles.personalityProfile,
+          twinPersona: profiles.twinPersona,
+          prompts: profiles.prompts,
+          coverPhotoUrl: profiles.coverPhotoUrl,
+          isVerified: profiles.isVerified,
+          verificationStatus: profiles.verificationStatus,
+          subscriptionTier: profiles.subscriptionTier,
+          onboardingCompleted: profiles.onboardingCompleted,
+          isPublic: profiles.isPublic,
+          createdAt: profiles.createdAt,
+          user: { id: users.id, firstName: users.firstName, lastName: users.lastName, profileImageUrl: users.profileImageUrl },
+        })
+        .from(profiles)
+        .innerJoin(users, eq(profiles.userId, users.id))
+        .where(inArray(profiles.userId, otherIds)),
+      this.getProfile(userId),
+    ]);
+
+    const vLat = viewer?.locationLat ? parseFloat(String(viewer.locationLat)) : null;
+    const vLng = viewer?.locationLng ? parseFloat(String(viewer.locationLng)) : null;
+
+    const photoEntries = rows.map((r) => ({
+      userId: r.userId,
+      isPublic: r.isPublic,
+      coverPhotoUrl: r.coverPhotoUrl ?? null,
+      profileImageUrl: r.user?.profileImageUrl ?? null,
+    }));
+    const resolvedPhotos = await this.resolveProfilePhotos(photoEntries);
+
+    const profileByUserId = new Map(
+      rows.map((r) => {
+        const { _lat, _lng, showDistance, ...rest } = r;
+        let distanceKm: number | null = null;
+        if (showDistance && vLat !== null && vLng !== null) {
+          const pLat = _lat ? parseFloat(String(_lat)) : null;
+          const pLng = _lng ? parseFloat(String(_lng)) : null;
+          if (pLat !== null && pLng !== null) distanceKm = Math.round(haversineKm(vLat, vLng, pLat, pLng));
+        }
+        return [
+          r.userId,
+          {
+            ...rest,
+            showDistance,
+            distanceKm,
+            locationName: showDistance ? rest.locationName : null,
+            coverPhotoUrl: resolvedPhotos.get(r.userId) ?? rest.coverPhotoUrl ?? null,
+          },
+        ] as const;
+      }),
+    );
+
+    return visible.map((match) => {
+      const isUser1 = match.user1Id === userId;
       const otherUserId = isUser1 ? match.user2Id : match.user1Id;
-      const otherProfile = await this.getProfileWithUser(otherUserId, userId);
-      result.push({
+      return {
         ...match,
-        otherProfile: otherProfile || null,
+        otherProfile: profileByUserId.get(otherUserId) || null,
         isRequester: isUser1,
-      });
-    }
-    return result;
+      };
+    });
   }
 
   async softDeleteChat(matchId: number, userId: string): Promise<Match> {

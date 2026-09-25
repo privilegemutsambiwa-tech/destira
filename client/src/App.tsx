@@ -15,39 +15,45 @@ import { useEffect, useLayoutEffect, lazy, Suspense } from "react";
 // cookie, own QueryClient, own auth; see client/src/admin/.
 const AdminConsoleRoot = lazy(() => import("@/admin"));
 
+// Code-split per route instead of one eager bundle — a first-time visitor
+// used to download every screen's JS (Discover, every chat surface, events,
+// onboarding, settings...) before Landing ever painted. NotFound and Landing
+// stay eager: NotFound is tiny and used as a fallback everywhere, Landing is
+// what an unauthenticated first visit actually renders, so lazy-loading it
+// would just move the same wait earlier instead of removing it.
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
-import Login from "@/pages/Login";
-import ForgotPassword from "@/pages/ForgotPassword";
-import ResetPassword from "@/pages/ResetPassword";
-import Signup from "@/pages/Signup";
-import AuthCallback from "@/pages/AuthCallback";
-import Onboarding from "@/pages/Onboarding";
-import Profile from "@/pages/Profile";
-import ProfileView from "@/pages/ProfileView";
-import Matches from "@/pages/Matches";
-import Discover from "@/pages/Discover";
-import Interviews from "@/pages/Interviews";
-import InterviewChat from "@/pages/InterviewChat";
-import Lounge from "@/pages/Lounge";
-import Events from "@/pages/Events";
-import EventDetail from "@/pages/EventDetail";
-import EventPreferences from "@/pages/EventPreferences";
-import HostEvent from "@/pages/HostEvent";
-import PhotoManager from "@/pages/PhotoManager";
-import ProfilePreview from "@/pages/ProfilePreview";
-import ProfilePreviewFrame from "@/pages/ProfilePreviewFrame";
-import DirectChat from "@/pages/DirectChat";
-import TwinChat from "@/pages/TwinChat";
-import TwinDisclosure from "@/pages/TwinDisclosure";
-import Essentials from "@/pages/Essentials";
-import Plans from "@/pages/Plans";
-import PlansPay from "@/pages/PlansPay";
-import GroupChatPage from "@/pages/GroupChat";
-import GroupInfoPage from "@/pages/GroupInfo";
-import GroupSettings from "@/pages/GroupSettings";
-import JoinGroup from "@/pages/JoinGroup";
-import Settings from "@/pages/Settings";
+const Login = lazy(() => import("@/pages/Login"));
+const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
+const Signup = lazy(() => import("@/pages/Signup"));
+const AuthCallback = lazy(() => import("@/pages/AuthCallback"));
+const Onboarding = lazy(() => import("@/pages/Onboarding"));
+const Profile = lazy(() => import("@/pages/Profile"));
+const ProfileView = lazy(() => import("@/pages/ProfileView"));
+const Matches = lazy(() => import("@/pages/Matches"));
+const Discover = lazy(() => import("@/pages/Discover"));
+const Interviews = lazy(() => import("@/pages/Interviews"));
+const InterviewChat = lazy(() => import("@/pages/InterviewChat"));
+const Lounge = lazy(() => import("@/pages/Lounge"));
+const Events = lazy(() => import("@/pages/Events"));
+const EventDetail = lazy(() => import("@/pages/EventDetail"));
+const EventPreferences = lazy(() => import("@/pages/EventPreferences"));
+const HostEvent = lazy(() => import("@/pages/HostEvent"));
+const PhotoManager = lazy(() => import("@/pages/PhotoManager"));
+const ProfilePreview = lazy(() => import("@/pages/ProfilePreview"));
+const ProfilePreviewFrame = lazy(() => import("@/pages/ProfilePreviewFrame"));
+const DirectChat = lazy(() => import("@/pages/DirectChat"));
+const TwinChat = lazy(() => import("@/pages/TwinChat"));
+const TwinDisclosure = lazy(() => import("@/pages/TwinDisclosure"));
+const Essentials = lazy(() => import("@/pages/Essentials"));
+const Plans = lazy(() => import("@/pages/Plans"));
+const PlansPay = lazy(() => import("@/pages/PlansPay"));
+const GroupChatPage = lazy(() => import("@/pages/GroupChat"));
+const GroupInfoPage = lazy(() => import("@/pages/GroupInfo"));
+const GroupSettings = lazy(() => import("@/pages/GroupSettings"));
+const JoinGroup = lazy(() => import("@/pages/JoinGroup"));
+const Settings = lazy(() => import("@/pages/Settings"));
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
   const { user, isLoading } = useAuth();
@@ -131,6 +137,7 @@ function Router() {
   }
 
   return (
+    <Suspense fallback={<DestiraLoadingScreen />}>
     <Switch>
       <Route path="/" component={user ? AuthenticatedHome : Landing} />
       <Route path="/login" component={Login} />
@@ -225,6 +232,7 @@ function Router() {
 
       <Route component={NotFound} />
     </Switch>
+    </Suspense>
   );
 }
 

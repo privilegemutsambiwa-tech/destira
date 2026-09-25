@@ -242,12 +242,19 @@ export default function HostEvent() {
     setBusy(true);
     try {
       const ev = await host.mutateAsync(payload);
-      for (const file of d.photos.slice(0, 6)) {
-        try {
-          await addPhoto.mutateAsync({ eventId: ev.id, file });
-        } catch (e: any) {
-          toast({ title: "A photo didn't upload", description: e.message, variant: "destructive" });
-        }
+      // Parallel, not one-at-a-time — up to 6 independent uploads used to
+      // run sequentially, needlessly slowing down "Put it up" on exactly
+      // the step people are most eager to finish.
+      const results = await Promise.allSettled(
+        d.photos.slice(0, 6).map((file) => addPhoto.mutateAsync({ eventId: ev.id, file })),
+      );
+      const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+      if (failures.length > 0) {
+        toast({
+          title: failures.length === 1 ? "A photo didn't upload" : `${failures.length} photos didn't upload`,
+          description: failures[0].reason?.message,
+          variant: "destructive",
+        });
       }
       if (d.video) {
         try {

@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
 import { RefineWithAI } from "@/components/refine-with-ai";
 import { useCheckNickname } from "@/hooks/use-interactions";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
   useOnboarding,
   useSaveOnboardingAnswer,
@@ -466,7 +467,8 @@ function NicknameStep({
   onNext: () => void;
   onExit: () => void;
 }) {
-  const { data: check, isFetching } = useCheckNickname(value);
+  const debouncedValue = useDebouncedValue(value);
+  const { data: check, isFetching } = useCheckNickname(debouncedValue);
   const [touched, setTouched] = useState(false);
   const validFormat = /^[a-zA-Z0-9_]{3,20}$/.test(value);
   const available = check?.available === true;
