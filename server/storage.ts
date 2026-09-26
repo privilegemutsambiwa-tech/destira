@@ -22,7 +22,7 @@ import {
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import type { PhotoRole } from "@shared/schema";
-import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lt, lte, inArray, notInArray, isNotNull } from "drizzle-orm";
+import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lt, lte, inArray, notInArray, isNotNull, isNull } from "drizzle-orm";
 
 export class PhotoNotFoundError extends Error {
   constructor() { super("Photo not found"); }
@@ -294,6 +294,12 @@ export interface IStorage {
 
 
   updateGroupMemberMute(groupId: number, userId: string, isMuted: boolean): Promise<GroupMember>;
+  markGroupMessagesSeen(groupId: number, userId: string, messageId: number): Promise<void>;
+  getGroupMessageReadInfo(
+    groupId: number,
+    messageId: number,
+    excludeUserId: string,
+  ): Promise<{ readCount: number; totalCount: number; readerNames: string[] }>;
   isGroupNicknameTaken(nickname: string): Promise<boolean>;
   isGroupNicknameTakenByOther(nickname: string, currentUserId: string): Promise<boolean>;
   suggestAvailableGroupNicknames(base: string, count?: number): Promise<string[]>;
@@ -2352,6 +2358,44 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
       .returning();
     return updated;
+  }
+
+  // "Read" for a group is tracked the same coarse way as a chat app's blue
+  // ticks on a group thread: one watermark per member (the newest message
+  // id they've had the thread open for), not a row per message per member.
+  // Never regresses — a client re-opening an old message shouldn't rewind
+  // someone's watermark backwards.
+  async markGroupMessagesSeen(groupId: number, userId: string, messageId: number): Promise<void> {
+    await db.update(groupMembers)
+      .set({ lastSeenMessageId: messageId })
+      .where(and(
+        eq(groupMembers.groupId, groupId),
+        eq(groupMembers.userId, userId),
+        or(isNull(groupMembers.lastSeenMessageId), lt(groupMembers.lastSeenMessageId, messageId)),
+      ));
+  }
+
+  // "Read by" for one message: everyone else in the group whose watermark
+  // has reached at least this message's id. `readerNames` is capped — this
+  // is meant for a short "seen by Faith, Farai and 3 others" style readout,
+  // not a full audit list for a group that could have hundreds of members.
+  async getGroupMessageReadInfo(
+    groupId: number,
+    messageId: number,
+    excludeUserId: string,
+  ): Promise<{ readCount: number; totalCount: number; readerNames: string[] }> {
+    const members = await db.select({
+      nickname: groupMembers.nickname,
+      lastSeenMessageId: groupMembers.lastSeenMessageId,
+    })
+      .from(groupMembers)
+      .where(and(eq(groupMembers.groupId, groupId), ne(groupMembers.userId, excludeUserId)));
+    const readers = members.filter((m) => m.lastSeenMessageId !== null && m.lastSeenMessageId >= messageId);
+    return {
+      readCount: readers.length,
+      totalCount: members.length,
+      readerNames: readers.slice(0, 20).map((m) => m.nickname || "Someone"),
+    };
   }
 
   async isGroupNicknameTaken(nickname: string): Promise<boolean> {

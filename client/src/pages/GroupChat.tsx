@@ -14,14 +14,15 @@ import {
   ArrowLeft, Send, Info, Loader2, Paperclip, BarChart3,
   Heart, ThumbsUp, ThumbsDown, Laugh, Flame, Star,
   Reply, Copy, Trash2, X, Plus, Users, Image as ImageIcon,
-  MessageSquarePlus, Crown, Flag
+  MessageSquarePlus, Crown, Flag, CheckCheck
 } from "lucide-react";
 import {
   useGroup, useEnrichedGroupMessages, useSendGroupMessage,
   useCreatePoll, usePollByMessage, useVotePoll,
   useAddReaction, useRemoveReaction, useDeleteOwnMessage,
   useDeleteGroupMessage, useJoinGroup, useLeaveGroup,
-  useStarMessage, useUnstarMessage, useCreateChatRequest
+  useStarMessage, useUnstarMessage, useCreateChatRequest,
+  useMarkGroupSeen, useGroupMessageReadInfo
 } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -266,6 +267,47 @@ function PollComposerDialog({ groupId, open, onClose }: { groupId: number; open:
   );
 }
 
+// Groups can have far more members than a "who's seen this" list should try
+// to enumerate, so this leads with the count and only lists names up to the
+// cap the API already applies — never a claim that the list is exhaustive.
+function MessageInfoDialog({ groupId, messageId, onClose }: { groupId: number; messageId: number | null; onClose: () => void }) {
+  const { data, isLoading, isError } = useGroupMessageReadInfo(groupId, messageId);
+  return (
+    <Dialog open={messageId !== null} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Message info</DialogTitle>
+          <DialogDescription>Who's seen this message so far.</DialogDescription>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="w-5 h-5 animate-spin" style={{ color: MUTED }} />
+          </div>
+        ) : isError || !data ? (
+          <p className="text-sm py-4" style={{ color: MUTED }}>Couldn't load this right now.</p>
+        ) : (
+          <div className="py-2">
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCheck className="w-4 h-4" style={{ color: EMBER }} />
+              <p className="text-sm font-medium" style={{ color: TEXT }} data-testid="text-message-info-count">
+                Seen by {data.readCount} of {data.totalCount} member{data.totalCount === 1 ? "" : "s"}
+              </p>
+            </div>
+            {data.readerNames.length > 0 ? (
+              <p className="text-sm" style={{ color: MUTED }}>
+                {data.readerNames.join(", ")}
+                {data.readCount > data.readerNames.length ? ` and ${data.readCount - data.readerNames.length} more` : ""}
+              </p>
+            ) : (
+              <p className="text-sm" style={{ color: MUTED }}>No one else has seen it yet.</p>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function GroupChatPage({ params }: { params?: { groupId?: string } }) {
   const groupId = Number(params?.groupId);
   const [, setLocation] = useLocation();
@@ -289,11 +331,13 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   const unstarMessage = useUnstarMessage(groupId);
   const createChatRequest = useCreateChatRequest();
   const paywall = usePaywall();
+  const markSeen = useMarkGroupSeen(groupId);
 
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<any>(null);
   const [activeMessageId, setActiveMessageId] = useState<number | null>(null);
   const [showPollDialog, setShowPollDialog] = useState(false);
+  const [messageInfoId, setMessageInfoId] = useState<number | null>(null);
   const [reportTarget, setReportTarget] = useState<{ userId: string; messageId: number } | null>(null);
   const [reportReason, setReportReason] = useState("");
   const [reportBusy, setReportBusy] = useState(false);
@@ -317,6 +361,16 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
     }
   }, [messages, highlightMsgId]);
   useKeyboardScroll(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
+
+  // Advances this viewer's own read watermark once they've actually been
+  // shown the latest message — mirrors the read-marking-on-real-view
+  // reasoning already used for stories, just for "message info" read counts
+  // instead of a view counter.
+  const latestMessageId = messages && messages.length > 0 ? messages[messages.length - 1].id : null;
+  useEffect(() => {
+    if (isMember && latestMessageId !== null) markSeen.mutate(latestMessageId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMember, latestMessageId]);
 
   const messagesMap = useMemo(() => {
     const map: Record<number, any> = {};
@@ -680,6 +734,12 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                                 testId: `action-copy-${msg.id}`,
                               }] : []),
                               ...(isMe ? [{
+                                icon: <CheckCheck className="w-4 h-4 mr-2" />,
+                                label: "Message info",
+                                onClick: () => { setMessageInfoId(msg.id); setActiveMessageId(null); },
+                                testId: `action-message-info-${msg.id}`,
+                              }] : []),
+                              ...(isMe ? [{
                                 icon: <Trash2 className="w-4 h-4 mr-2" />,
                                 label: "Delete",
                                 onClick: () => handleDeleteOwn(msg.id),
@@ -905,6 +965,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
       </div>
 
       <PollComposerDialog groupId={groupId} open={showPollDialog} onClose={() => setShowPollDialog(false)} />
+      <MessageInfoDialog groupId={groupId} messageId={messageInfoId} onClose={() => setMessageInfoId(null)} />
       {paywall.sheet}
 
       <Dialog open={!!reportTarget} onOpenChange={(v) => { if (!v) { setReportTarget(null); setReportReason(""); } }}>

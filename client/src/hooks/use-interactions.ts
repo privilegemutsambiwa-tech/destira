@@ -527,6 +527,38 @@ export function useSendGroupMessage(groupId: number) {
   });
 }
 
+// Fire-and-forget: advances the caller's own read watermark for a group
+// thread. No cache invalidation of its own — nothing on screen depends on
+// the caller's OWN read state, only on what other people's read states add
+// up to (useGroupMessageReadInfo, queried on demand from "Message info").
+export function useMarkGroupSeen(groupId: number) {
+  return useMutation({
+    mutationFn: async (messageId: number) => {
+      await fetch(`/api/groups/${groupId}/seen`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId }),
+        credentials: "include",
+      });
+    },
+  });
+}
+
+// Only fetched when a sender actually opens "Message info" for one of their
+// own messages (enabled gate at the call site) — not something to poll or
+// prefetch for every message in the thread.
+export function useGroupMessageReadInfo(groupId: number, messageId: number | null) {
+  return useQuery({
+    queryKey: ["/api/groups", groupId, "messages", messageId, "read-info"],
+    queryFn: async () => {
+      const res = await fetch(`/api/groups/${groupId}/messages/${messageId}/read-info`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load read info");
+      return res.json() as Promise<{ readCount: number; totalCount: number; readerNames: string[] }>;
+    },
+    enabled: messageId !== null,
+  });
+}
+
 export function useDeleteGroupMessage(groupId: number) {
   const queryClient = useQueryClient();
   return useMutation({

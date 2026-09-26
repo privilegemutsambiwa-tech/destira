@@ -2994,6 +2994,42 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // The client calls this once it's actually shown someone the latest
+  // message in a group thread (mirrors how a match's read-state is only
+  // advanced by real viewing, not by the request that fetched the messages).
+  app.post("/api/groups/:id/seen", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    const messageId = parseInt(req.body?.messageId);
+    if (!Number.isFinite(messageId)) return res.status(400).json({ message: "messageId is required" });
+    try {
+      if (!(await storage.isGroupMember(groupId, userId))) return res.sendStatus(403);
+      await storage.markGroupMessagesSeen(groupId, userId, messageId);
+      res.sendStatus(204);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to update read status" });
+    }
+  });
+
+  app.get("/api/groups/:id/messages/:messageId/read-info", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    const messageId = parseInt(req.params.messageId);
+    try {
+      if (!(await storage.isGroupMember(groupId, userId))) return res.sendStatus(403);
+      const message = await storage.getGroupMessage(messageId);
+      if (!message || message.groupId !== groupId) return res.status(404).json({ message: "Message not found" });
+      // Excludes the sender, not the caller — "how many people have read
+      // this" is about everyone ELSE in the group, regardless of who's asking.
+      const info = await storage.getGroupMessageReadInfo(groupId, messageId, message.userId);
+      res.json(info);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch read info" });
+    }
+  });
+
   app.post("/api/groups/:id/leave", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);

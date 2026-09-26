@@ -239,7 +239,7 @@ function StoriesCarousel() {
 
   const viewingGroup = viewingUserId ? grouped.find((g) => g.userId === viewingUserId) || null : null;
 
-  const STORY_SIZE = 56;
+  const STORY_SIZE = 72;
 
   return (
     <>
@@ -269,7 +269,7 @@ function StoriesCarousel() {
             <span
               style={{
                 fontSize: "11px",
-                maxWidth: "56px",
+                maxWidth: `${STORY_SIZE}px`,
                 textAlign: "center",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -324,7 +324,7 @@ function StoriesCarousel() {
                 </Avatar>
               </div>
             </div>
-            <span style={{ fontSize: "11px", color: "var(--vf-muted)", maxWidth: "56px", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: "11px", color: "var(--vf-muted)", maxWidth: `${STORY_SIZE}px`, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {u.displayName.split(" ")[0]}
             </span>
           </button>

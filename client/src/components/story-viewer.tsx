@@ -93,15 +93,30 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
   const [progress, setProgress] = useState(0);
   const [commentText, setCommentText] = useState("");
   const [isPaused, setIsPaused] = useState(false);
+  // A photo story used to start counting down (and could finish) before the
+  // image had even finished loading on a slow connection — this tracks
+  // whether the current story's media is actually ready to look at, and the
+  // timer below waits for it. Text stories have nothing to load, so they
+  // start "loaded" immediately.
+  const [imageLoaded, setImageLoaded] = useState(false);
   const [replyCapError, setReplyCapError] = useState<UpgradeRequiredError | null>(null);
   const [, setLocation] = useLocation();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const touchStartY = useRef<number | null>(null);
   const viewTrackedRef = useRef<Set<number>>(new Set());
+  // Distinguishes a press-and-hold (pause, don't navigate) from a quick tap
+  // (navigate prev/next) on the same tap area — a hold is only recognized
+  // once the pointer's been down longer than HOLD_DELAY_MS.
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isHoldRef = useRef(false);
   const commentInputRef = useRef<HTMLInputElement>(null);
 
   const currentStory = stories[currentIndex];
   const currentMedia = currentStory?.media?.[0];
+
+  useEffect(() => {
+    setImageLoaded(!currentMedia?.url);
+  }, [currentStory?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Toggles based on the story's own likedByMe flag, not local state — so the
   // button always reflects what the server actually has once the feed
@@ -177,7 +192,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
   }, [currentStory?.id]);
 
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || !imageLoaded) return;
     const DURATION = 5000;
     const INTERVAL = 50;
     const increment = (INTERVAL / DURATION) * 100;
@@ -188,7 +203,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
       });
     }, INTERVAL);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [currentIndex, isPaused, goNext]);
+  }, [currentIndex, isPaused, imageLoaded, goNext]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -208,7 +223,28 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
     }
   };
 
-  const handleAreaClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const HOLD_DELAY_MS = 180;
+
+  // Press-and-hold pauses (mirrors the reply-box focus pause below) instead
+  // of navigating; releasing before the hold threshold is a normal prev/next
+  // tap. Pointer events (not click) so the same logic covers touch and mouse.
+  const handleAreaPointerDown = () => {
+    isHoldRef.current = false;
+    holdTimerRef.current = setTimeout(() => {
+      isHoldRef.current = true;
+      setIsPaused(true);
+    }, HOLD_DELAY_MS);
+  };
+
+  const endHold = () => {
+    if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+    if (isHoldRef.current) { isHoldRef.current = false; setIsPaused(false); }
+  };
+
+  const handleAreaPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const wasHold = isHoldRef.current;
+    endHold();
+    if (wasHold) return; // release after a hold resumes playback, doesn't navigate
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     if (x < rect.width / 3) goPrev();
@@ -280,7 +316,10 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
 
         <div
           className="flex-1 flex items-center justify-center cursor-pointer select-none"
-          onClick={handleAreaClick}
+          onPointerDown={handleAreaPointerDown}
+          onPointerUp={handleAreaPointerUp}
+          onPointerLeave={endHold}
+          onPointerCancel={endHold}
           data-testid="story-tap-area"
         >
           {isTextStory ? (
@@ -293,7 +332,13 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
               </p>
             </div>
           ) : currentMedia?.url ? (
-            <img src={currentMedia.url} alt={currentMedia.caption || "Story"} className="w-full h-full object-contain" data-testid={`img-story-${currentStory.id}`} />
+            <img
+              src={currentMedia.url}
+              alt={currentMedia.caption || "Story"}
+              className="w-full h-full object-contain"
+              onLoad={() => setImageLoaded(true)}
+              data-testid={`img-story-${currentStory.id}`}
+            />
           ) : null}
 
           {currentMedia?.caption && !isTextStory && (
@@ -449,12 +494,19 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
   const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const [engagerSheet, setEngagerSheet] = useState<"viewers" | "likers" | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isHoldRef = useRef(false);
   const [, setLocation] = useLocation();
 
   const currentStory = stories[currentIndex];
   const currentMedia = currentStory?.media?.[0];
+
+  useEffect(() => {
+    setImageLoaded(!currentMedia?.url);
+  }, [currentStory?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -483,7 +535,7 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
   }, [currentIndex]);
 
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || !imageLoaded) return;
     const DURATION = 5000;
     const INTERVAL = 50;
     const increment = (INTERVAL / DURATION) * 100;
@@ -494,7 +546,7 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
       });
     }, INTERVAL);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [currentIndex, isPaused, goNext]);
+  }, [currentIndex, isPaused, imageLoaded, goNext]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -506,7 +558,25 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
     return () => window.removeEventListener("keydown", handleKey);
   }, [goNext, goPrev, onClose]);
 
-  const handleAreaClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const HOLD_DELAY_MS = 180;
+
+  const handleAreaPointerDown = () => {
+    isHoldRef.current = false;
+    holdTimerRef.current = setTimeout(() => {
+      isHoldRef.current = true;
+      setIsPaused(true);
+    }, HOLD_DELAY_MS);
+  };
+
+  const endHold = () => {
+    if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+    if (isHoldRef.current) { isHoldRef.current = false; setIsPaused(false); }
+  };
+
+  const handleAreaPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const wasHold = isHoldRef.current;
+    endHold();
+    if (wasHold) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     if (x < rect.width / 3) goPrev();
@@ -581,7 +651,10 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
 
         <div
           className="flex-1 flex items-center justify-center cursor-pointer select-none"
-          onClick={handleAreaClick}
+          onPointerDown={handleAreaPointerDown}
+          onPointerUp={handleAreaPointerUp}
+          onPointerLeave={endHold}
+          onPointerCancel={endHold}
           data-testid="own-story-tap-area"
         >
           {isTextStory ? (
@@ -594,7 +667,13 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
               </p>
             </div>
           ) : currentMedia?.url ? (
-            <img src={currentMedia.url} alt={currentMedia.caption || "Your Story"} className="w-full h-full object-contain" data-testid={`img-own-story-${currentStory.id}`} />
+            <img
+              src={currentMedia.url}
+              alt={currentMedia.caption || "Your Story"}
+              className="w-full h-full object-contain"
+              onLoad={() => setImageLoaded(true)}
+              data-testid={`img-own-story-${currentStory.id}`}
+            />
           ) : null}
         </div>
 
