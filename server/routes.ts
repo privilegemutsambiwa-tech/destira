@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage, PhotoNotFoundError, PhotoTooSmallError, genderMatchesSeeking } from "./storage";
+import { storage, PhotoNotFoundError, PhotoTooSmallError, genderMatchesSeeking, type DiscoverCursor } from "./storage";
 import { setupAuth, registerAuthRoutes, authStorage, createSessionUser, hashPassword, verifyPassword } from "./replit_integrations/auth";
 import { z } from "zod";
 import { ai, AI_MODEL, completeText, stripAiWrapper } from "./ai";
@@ -206,8 +206,23 @@ export async function registerRoutes(
       const lng = req.query.lng ? parseFloat(req.query.lng as string) : undefined;
       const userLat = lat !== undefined && !isNaN(lat) ? lat : undefined;
       const userLng = lng !== undefined && !isNaN(lng) ? lng : undefined;
-      const discoverable = await storage.getDiscoverableProfiles(userId, filter, userLat, userLng);
-      res.json(discoverable);
+      // Opaque to the client on purpose — just whatever this endpoint handed
+      // back as `nextCursor` on the previous page, round-tripped verbatim.
+      let cursor: DiscoverCursor | null = null;
+      if (typeof req.query.cursor === "string" && req.query.cursor) {
+        try {
+          const parsed = JSON.parse(Buffer.from(req.query.cursor, "base64url").toString("utf8"));
+          if (parsed && typeof parsed.createdAt === "string" && typeof parsed.id === "number") cursor = parsed;
+        } catch {
+          // A malformed/tampered cursor just restarts from the top rather
+          // than 500ing — never trusted for anything but a paging position.
+        }
+      }
+      const limitParam = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+      const limit = limitParam && limitParam > 0 && limitParam <= 50 ? limitParam : undefined;
+      const { profiles: discoverable, nextCursor } = await storage.getDiscoverableProfiles(userId, filter, userLat, userLng, cursor, limit);
+      const nextCursorEncoded = nextCursor ? Buffer.from(JSON.stringify(nextCursor), "utf8").toString("base64url") : null;
+      res.json({ profiles: discoverable, nextCursor: nextCursorEncoded });
     } catch (e) {
       console.error("Discover error:", e);
       res.status(500).json({ message: "Failed to fetch profiles" });

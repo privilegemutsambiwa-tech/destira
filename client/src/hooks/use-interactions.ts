@@ -1,4 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 export function useIncomingLikes() {
   return useQuery({
@@ -275,21 +276,36 @@ export function useInterviewChat(interviewId: number) {
   });
 }
 
+// The deck only ever shows the current card plus 2 "next up" previews, so
+// there's no reason to fetch (and for every candidate, enrich with photos/
+// answers/interests) every eligible profile in the database up front — that
+// cost used to scale with total users, not with what's actually on screen.
+// Pages are fetched a `limit`-sized page at a time and flattened back into a
+// single array here so existing callers see the same shape as the old
+// one-shot fetch; Discover.tsx just needs to call fetchNextPage() as the
+// flattened list runs low.
 export function useDiscoverProfiles(filter?: string, userLat?: number | null, userLng?: number | null) {
-  const params = new URLSearchParams();
-  if (filter && filter !== "all") params.set("filter", filter);
-  if (userLat !== null && userLat !== undefined) params.set("lat", String(userLat));
-  if (userLng !== null && userLng !== undefined) params.set("lng", String(userLng));
-  const qs = params.toString();
-  const url = qs ? `/api/profiles/discover?${qs}` : "/api/profiles/discover";
-  return useQuery({
+  const query = useInfiniteQuery({
     queryKey: ["/api/profiles/discover", filter ?? "all", userLat ?? null, userLng ?? null],
-    queryFn: async () => {
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams();
+      if (filter && filter !== "all") params.set("filter", filter);
+      if (userLat !== null && userLat !== undefined) params.set("lat", String(userLat));
+      if (userLng !== null && userLng !== undefined) params.set("lng", String(userLng));
+      if (pageParam) params.set("cursor", pageParam);
+      const qs = params.toString();
+      const url = qs ? `/api/profiles/discover?${qs}` : "/api/profiles/discover";
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch profiles");
-      return res.json();
+      return res.json() as Promise<{ profiles: any[]; nextCursor: string | null }>;
     },
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
+
+  const data = useMemo(() => query.data?.pages.flatMap((p) => p.profiles) ?? undefined, [query.data]);
+
+  return { ...query, data };
 }
 
 export function useDirectMessages(matchId: number) {

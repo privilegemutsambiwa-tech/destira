@@ -537,7 +537,7 @@ export default function Discover() {
   // trade places forever instead of the viewer ever reaching the rest of
   // the deck — this was the actual bug, not the backend candidate list).
   const [deckOrder, setDeckOrder] = useState<string[]>([]);
-  const { data: rawProfiles, isLoading } = useDiscoverProfiles(filter, userLat, userLng);
+  const { data: rawProfiles, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useDiscoverProfiles(filter, userLat, userLng);
   const { data: feedStories } = useFeedStories();
   const startInterview = useStartInterview();
   const createMatch = useCreateMatch();
@@ -632,6 +632,17 @@ export default function Discover() {
   // `profiles` above (via evaluatedIds), so there's no index to advance,
   // just a new [0] once the set changes.
   const currentProfile = profiles[0];
+
+  // The server now sends the deck a page at a time (see useDiscoverProfiles)
+  // instead of every eligible profile in one shot — so the deck needs to ask
+  // for more before it actually runs dry. 5 is comfortably more than the
+  // current card + the 2 "next up" previews the UI ever shows at once, so
+  // this fires well before someone could out-swipe what's loaded.
+  useEffect(() => {
+    if (profiles.length <= 5 && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [profiles.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   useEffect(() => {
     isActingRef.current = false;
