@@ -197,13 +197,19 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
     const INTERVAL = 50;
     const increment = (INTERVAL / DURATION) * 100;
     timerRef.current = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) { goNext(); return 0; }
-        return prev + increment;
-      });
+      // Pure — no goNext() here. Calling a prop like onClose from inside a
+      // setState updater runs it during React's render/reconciliation pass,
+      // which is exactly the "cannot update a component while rendering a
+      // different component" case; advancing is handled by the effect below
+      // reacting to the resulting progress value instead.
+      setProgress((prev) => Math.min(prev + increment, 100));
     }, INTERVAL);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [currentIndex, isPaused, imageLoaded, goNext]);
+  }, [currentIndex, isPaused, imageLoaded]);
+
+  useEffect(() => {
+    if (progress >= 100) goNext();
+  }, [progress, goNext]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -540,13 +546,16 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
     const INTERVAL = 50;
     const increment = (INTERVAL / DURATION) * 100;
     timerRef.current = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) { goNext(); return 0; }
-        return prev + increment;
-      });
+      // Pure — see StoryViewer's identical timer effect above for why
+      // goNext() (which can call the parent's onClose) doesn't belong here.
+      setProgress((prev) => Math.min(prev + increment, 100));
     }, INTERVAL);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [currentIndex, isPaused, imageLoaded, goNext]);
+  }, [currentIndex, isPaused, imageLoaded]);
+
+  useEffect(() => {
+    if (progress >= 100) goNext();
+  }, [progress, goNext]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
