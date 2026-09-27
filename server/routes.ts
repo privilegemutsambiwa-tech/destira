@@ -213,7 +213,9 @@ export async function registerRoutes(
       if (typeof req.query.cursor === "string" && req.query.cursor) {
         try {
           const parsed = JSON.parse(Buffer.from(req.query.cursor, "base64url").toString("utf8"));
-          if (parsed && typeof parsed.createdAt === "string" && typeof parsed.id === "number") cursor = parsed;
+          const isCreatedAtCursor = parsed && typeof parsed.createdAt === "string" && typeof parsed.id === "number";
+          const isSortKeyCursor = parsed && typeof parsed.sortKey === "number" && typeof parsed.id === "number";
+          if (isCreatedAtCursor || isSortKeyCursor) cursor = parsed;
         } catch {
           // A malformed/tampered cursor just restarts from the top rather
           // than 500ing — never trusted for anything but a paging position.
@@ -221,12 +223,36 @@ export async function registerRoutes(
       }
       const limitParam = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
       const limit = limitParam && limitParam > 0 && limitParam <= 50 ? limitParam : undefined;
-      const { profiles: discoverable, nextCursor } = await storage.getDiscoverableProfiles(userId, filter, userLat, userLng, cursor, limit);
+      // One per Discover mount, generated client-side — same seed for every
+      // page of one load (so scrolling doesn't reorder cards underneath the
+      // viewer), a fresh one next time they open Discover (so the deck
+      // actually reshuffles instead of always starting the same way).
+      const seed = typeof req.query.seed === "string" ? req.query.seed.slice(0, 100) : undefined;
+      const { profiles: discoverable, nextCursor } = await storage.getDiscoverableProfiles(userId, filter, userLat, userLng, cursor, limit, seed);
       const nextCursorEncoded = nextCursor ? Buffer.from(JSON.stringify(nextCursor), "utf8").toString("base64url") : null;
       res.json({ profiles: discoverable, nextCursor: nextCursorEncoded });
     } catch (e) {
       console.error("Discover error:", e);
       res.status(500).json({ message: "Failed to fetch profiles" });
+    }
+  });
+
+  // Read-only preview for the "out of people? widen your search" prompt —
+  // the client only calls this once the deck's actually run dry, and applies
+  // a chosen option through the existing POST /api/settings/discovery route
+  // rather than this one doing any writing itself.
+  app.get("/api/profiles/discover/expand-options", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const lat = req.query.lat ? parseFloat(req.query.lat as string) : undefined;
+      const lng = req.query.lng ? parseFloat(req.query.lng as string) : undefined;
+      const userLat = lat !== undefined && !isNaN(lat) ? lat : undefined;
+      const userLng = lng !== undefined && !isNaN(lng) ? lng : undefined;
+      res.json(await storage.getDiscoverExpandOptions(userId, userLat, userLng));
+    } catch (e) {
+      console.error("Discover expand-options error:", e);
+      res.status(500).json({ message: "Failed to load options" });
     }
   });
 

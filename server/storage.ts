@@ -104,10 +104,29 @@ function seekingIncludesGender(seekingGenders: string[], gender: string | null):
   return seekingGenders.includes("everyone") || genderMatchesSeeking(gender, seekingGenders);
 }
 
-// Keyset cursor for Discover pagination: (createdAt, id) — id is a serial PK
-// so it's a collision-free tiebreaker for rows sharing the same createdAt
-// instant, without needing a separate sequence or opaque offset.
-export type DiscoverCursor = { createdAt: string; id: number };
+// Keyset cursor for Discover pagination. The "new" filter walks (createdAt,
+// id) literally — it's an explicit ask for newest-first. Every other filter
+// walks (sortKey, id) instead: sortKey is the per-request shuffled, tier-
+// weighted rank (see sortKeyExpr below), not a stored column. Either way
+// `id` (a serial PK) is the tiebreaker so two rows sharing an otherwise-equal
+// key still sort and paginate deterministically.
+export type DiscoverCursor = { createdAt: string; id: number } | { sortKey: number; id: number };
+
+// A per-tier weight for how often a profile surfaces in someone else's
+// Discover deck — higher tiers rank earlier more OFTEN, not always; nobody's
+// guaranteed the top slot every session, or free users would never be seen.
+// Implements the standard weighted-random-order trick: for U ~ Uniform(0,1),
+// -ln(U)/weight is exponentially distributed with rate `weight`, so sorting
+// by it ascending gives an expected rank inversely proportional to weight
+// while still being genuinely random per viewer per load. hashtext() derives
+// a stable-for-this-request "random" U from (candidate id, per-load seed),
+// so re-fetching the same page mid-scroll can't reorder cards underneath a
+// viewer, but a fresh Discover load (new seed) reshuffles.
+const TIER_WEIGHT_SQL = sql`(CASE ${profiles.subscriptionTier} WHEN 'ember' THEN 4.0 WHEN 'flame' THEN 2.5 WHEN 'spark' THEN 1.5 ELSE 1.0 END)`;
+function sortKeyExpr(seed: string) {
+  const rand01 = sql`((hashtext(${profiles.userId} || ${seed}) + 2147483648)::double precision / 4294967296.0)`;
+  return sql<number>`(-ln(GREATEST(${rand01}, 0.0000001)) / ${TIER_WEIGHT_SQL})`;
+}
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -129,7 +148,12 @@ export interface IStorage {
     userLng?: number,
     cursor?: DiscoverCursor | null,
     limit?: number,
+    seed?: string,
   ): Promise<{ profiles: any[]; nextCursor: DiscoverCursor | null }>;
+  getDiscoverExpandOptions(excludeUserId: string, userLat?: number, userLng?: number): Promise<{
+    distance: { currentKm: number | null; options: { km: number; additionalCount: number }[] } | null;
+    age: { currentMin: number | null; currentMax: number | null; options: { min: number; max: number; additionalCount: number }[] } | null;
+  }>;
   getProfileWithUser(userId: string, viewerId?: string): Promise<any>;
   getPublicAnswers(userId: string, limit?: number): Promise<Array<{ questionId: number; question: string; answer: string }>>;
   getGroupsForUser(targetUserId: string, viewerUserId: string): Promise<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean; categoryTags: string[] | null }>>;
@@ -409,8 +433,13 @@ export class DatabaseStorage implements IStorage {
     userLng?: number,
     cursor?: DiscoverCursor | null,
     limit: number = 25,
+    seed: string = "",
   ): Promise<{ profiles: any[]; nextCursor: DiscoverCursor | null }> {
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    // Falls back to the requester's own id when the client sends no seed —
+    // still gives a real (if unchanging-until-a-seed-shows-up) shuffle rather
+    // than erroring, but every real Discover load is expected to pass one.
+    const shuffleSeed = seed || excludeUserId;
 
     const requesterProfile = await this.getProfile(excludeUserId);
     const maxDistanceKm = requesterProfile?.maxDistanceKm ?? null;
@@ -478,16 +507,21 @@ export class DatabaseStorage implements IStorage {
       excludedArray.length > 0 ? notInArray(profiles.userId, excludedArray) : undefined,
     );
 
-    const ascending = filter !== "new";
+    // "new" is a literal, explicit ask for newest-first — never shuffled or
+    // tier-weighted, since someone choosing it wants to see genuinely new
+    // signups. Every other filter uses the shuffled, tier-weighted sortKey.
+    const useShuffle = filter !== "new";
+    const ascending = useShuffle; // sortKey sorts ascending (smaller wins); createdAt-desc is the only descending path
+    const sortKey = sortKeyExpr(shuffleSeed);
 
     // Age/gender-reciprocity/distance can't be pushed into SQL as cleanly
     // (distance needs the haversine math below; gender reciprocity needs to
     // check both sides' arrays), so a batch can come back with fewer usable
     // candidates than its raw row count — the loop below keeps pulling
-    // batches, walking the same (createdAt, id) keyset forward, until it has
-    // a full page or genuinely runs out of rows. `id` (a serial PK) is the
-    // tiebreaker so two rows sharing a createdAt instant still sort and
-    // paginate deterministically.
+    // batches, walking the same keyset forward, until it has a full page or
+    // genuinely runs out of rows. `id` (a serial PK) is the tiebreaker so two
+    // rows sharing an otherwise-equal key still sort and paginate
+    // deterministically.
     const BATCH_SIZE = Math.max(limit * 2, 40);
     const MAX_BATCHES = 25; // ~1000 rows/request cap — a safety valve, not a normal case
     let cur: DiscoverCursor | null = cursor ?? null;
@@ -496,9 +530,11 @@ export class DatabaseStorage implements IStorage {
 
     for (let i = 0; i < MAX_BATCHES && shapedAccum.length < limit && !exhausted; i++) {
       const cursorClause = cur
-        ? ascending
-          ? or(gt(profiles.createdAt, new Date(cur.createdAt)), and(eq(profiles.createdAt, new Date(cur.createdAt)), gt(profiles.id, cur.id)))
-          : or(lt(profiles.createdAt, new Date(cur.createdAt)), and(eq(profiles.createdAt, new Date(cur.createdAt)), lt(profiles.id, cur.id)))
+        ? useShuffle && "sortKey" in cur
+          ? or(sql`${sortKey} > ${cur.sortKey}`, and(sql`${sortKey} = ${cur.sortKey}`, gt(profiles.id, cur.id)))
+          : !useShuffle && "createdAt" in cur
+            ? or(lt(profiles.createdAt, new Date(cur.createdAt)), and(eq(profiles.createdAt, new Date(cur.createdAt)), lt(profiles.id, cur.id)))
+            : undefined
         : undefined;
 
       const rawBatch = await db
@@ -519,6 +555,7 @@ export class DatabaseStorage implements IStorage {
           onboardingCompleted: profiles.onboardingCompleted,
           isPublic: profiles.isPublic,
           createdAt: profiles.createdAt,
+          sortKey,
           _lat: profiles.locationLat,
           _lng: profiles.locationLng,
           locationName: profiles.locationName,
@@ -535,13 +572,13 @@ export class DatabaseStorage implements IStorage {
         .from(profiles)
         .innerJoin(users, eq(profiles.userId, users.id))
         .where(cursorClause ? and(filterCondition, cursorClause) : filterCondition)
-        .orderBy(ascending ? asc(profiles.createdAt) : desc(profiles.createdAt), ascending ? asc(profiles.id) : desc(profiles.id))
+        .orderBy(useShuffle ? asc(sortKey) : desc(profiles.createdAt), useShuffle ? asc(profiles.id) : desc(profiles.id))
         .limit(BATCH_SIZE);
 
       if (rawBatch.length === 0) { exhausted = true; break; }
       if (rawBatch.length < BATCH_SIZE) exhausted = true;
       const lastRaw = rawBatch[rawBatch.length - 1];
-      cur = { createdAt: lastRaw.createdAt!.toISOString(), id: lastRaw.id };
+      cur = useShuffle ? { sortKey: lastRaw.sortKey, id: lastRaw.id } : { createdAt: lastRaw.createdAt!.toISOString(), id: lastRaw.id };
 
       const shapedBatch = rawBatch
         .filter(row => {
@@ -593,15 +630,16 @@ export class DatabaseStorage implements IStorage {
     // row fetched, so the next request re-examines (cheaply — filtering is
     // deterministic) whatever was fetched-but-not-yet-sent instead of
     // skipping it.
+    const cursorFor = (row: any): DiscoverCursor =>
+      useShuffle ? { sortKey: row.sortKey, id: row.id } : { createdAt: (row.createdAt as Date).toISOString(), id: row.id };
+
     let page = shapedAccum;
     let nextCursor: DiscoverCursor | null = null;
     if (shapedAccum.length > limit) {
       page = shapedAccum.slice(0, limit);
-      const last = page[page.length - 1];
-      nextCursor = { createdAt: (last.createdAt as Date).toISOString(), id: last.id };
+      nextCursor = cursorFor(page[page.length - 1]);
     } else if (shapedAccum.length === limit && !exhausted) {
-      const last = shapedAccum[shapedAccum.length - 1];
-      nextCursor = { createdAt: (last.createdAt as Date).toISOString(), id: last.id };
+      nextCursor = cursorFor(shapedAccum[shapedAccum.length - 1]);
     }
 
     // Attach everything the card is allowed to show — only for this page's
@@ -636,6 +674,124 @@ export class DatabaseStorage implements IStorage {
       };
     });
     return { profiles: profilesOut, nextCursor };
+  }
+
+  // "You're out of people — want to see further/wider?" support. Reuses the
+  // same eligibility rules as getDiscoverableProfiles (excluded ids, active/
+  // onboarded/public, reciprocal gender) but skips its batched pagination —
+  // the eligible pool is small enough at this app's scale to just pull once
+  // and count in memory, which is far simpler than re-deriving these same
+  // counts through SQL distance math for a feature that's only ever shown
+  // once someone's actually run the deck dry.
+  async getDiscoverExpandOptions(excludeUserId: string, userLat?: number, userLng?: number): Promise<{
+    distance: { currentKm: number | null; options: { km: number; additionalCount: number }[] } | null;
+    age: { currentMin: number | null; currentMax: number | null; options: { min: number; max: number; additionalCount: number }[] } | null;
+  }> {
+    const requesterProfile = await this.getProfile(excludeUserId);
+    if (!requesterProfile?.gender || !(requesterProfile.seekingGenders as string[] | null)?.length) {
+      return { distance: null, age: null };
+    }
+    const requesterGender = requesterProfile.gender;
+    const requesterSeekingGenders = requesterProfile.seekingGenders as string[];
+    const maxDistanceKm = requesterProfile.maxDistanceKm ?? null;
+    const ageMin = requesterProfile.ageMinPreference ?? null;
+    const ageMax = requesterProfile.ageMaxPreference ?? null;
+
+    const [blockedByRequester, blockedOfRequester, evaluatedMatches, passed] = await Promise.all([
+      db.select({ blockedId: blockedUsers.blockedId }).from(blockedUsers).where(eq(blockedUsers.blockerId, excludeUserId)),
+      db.select({ blockerId: blockedUsers.blockerId }).from(blockedUsers).where(eq(blockedUsers.blockedId, excludeUserId)),
+      db.select({ user1Id: matches.user1Id, user2Id: matches.user2Id }).from(matches).where(or(eq(matches.user1Id, excludeUserId), eq(matches.user2Id, excludeUserId))),
+      db.select({ targetId: discoverPasses.targetId }).from(discoverPasses).where(eq(discoverPasses.userId, excludeUserId)),
+    ]);
+    const excludedIds = new Set([
+      excludeUserId,
+      ...blockedByRequester.map((r) => r.blockedId),
+      ...blockedOfRequester.map((r) => r.blockerId),
+      ...evaluatedMatches.map((m) => (m.user1Id === excludeUserId ? m.user2Id : m.user1Id)),
+      ...passed.map((p) => p.targetId),
+    ]);
+    const excludedArray = Array.from(excludedIds);
+
+    const rows = await db
+      .select({
+        userId: profiles.userId,
+        age: profiles.age,
+        gender: profiles.gender,
+        seekingGenders: profiles.seekingGenders,
+        _lat: profiles.locationLat,
+        _lng: profiles.locationLng,
+        showDistance: profiles.showDistance,
+      })
+      .from(profiles)
+      .where(
+        and(
+          ne(profiles.userId, excludeUserId),
+          eq(profiles.onboardingCompleted, true),
+          eq(profiles.isPublic, true),
+          eq(profiles.moderationStatus, "active"),
+          isNotNull(profiles.gender),
+          isNotNull(profiles.seekingGenders),
+          excludedArray.length > 0 ? notInArray(profiles.userId, excludedArray) : undefined,
+        ),
+      );
+
+    const candidates = rows
+      .filter((row) => {
+        const candidateSeekingGenders = (row.seekingGenders ?? []) as string[];
+        if (!row.gender || candidateSeekingGenders.length === 0) return false;
+        if (!seekingIncludesGender(requesterSeekingGenders, row.gender)) return false;
+        if (!seekingIncludesGender(candidateSeekingGenders, requesterGender)) return false;
+        return true;
+      })
+      .map((row) => {
+        let distanceKm: number | null = null;
+        if (row.showDistance && userLat !== undefined && userLng !== undefined && row._lat && row._lng) {
+          distanceKm = haversineKm(userLat, userLng, parseFloat(String(row._lat)), parseFloat(String(row._lng)));
+        }
+        return { age: row.age, distanceKm };
+      });
+
+    const passesAge = (c: { age: number | null }, min: number | null, max: number | null) => {
+      if (min !== null && c.age !== null && c.age < min) return false;
+      if (max !== null && c.age !== null && c.age > max) return false;
+      return true;
+    };
+    const passesDistance = (c: { distanceKm: number | null }, km: number | null) =>
+      km === null || c.distanceKm === null || c.distanceKm <= km;
+    const passesCurrent = (c: { age: number | null; distanceKm: number | null }) =>
+      passesAge(c, ageMin, ageMax) && passesDistance(c, maxDistanceKm);
+    const currentCount = candidates.filter(passesCurrent).length;
+
+    let distance: { currentKm: number | null; options: { km: number; additionalCount: number }[] } | null = null;
+    if (maxDistanceKm !== null) {
+      const steps = [maxDistanceKm + 30, maxDistanceKm + 80];
+      const options = steps
+        .map((km) => ({
+          km,
+          count: candidates.filter((c) => passesAge(c, ageMin, ageMax) && passesDistance(c, km)).length,
+        }))
+        // Only offer a step that would actually show more people than today.
+        .filter((o) => o.count > currentCount)
+        .map((o) => ({ km: o.km, additionalCount: o.count - currentCount }));
+      if (options.length > 0) distance = { currentKm: maxDistanceKm, options };
+    }
+
+    let age: { currentMin: number | null; currentMax: number | null; options: { min: number; max: number; additionalCount: number }[] } | null = null;
+    if (ageMin !== null || ageMax !== null) {
+      const bumps = [5, 10];
+      const options = bumps
+        .map((b) => {
+          const min = ageMin !== null ? Math.max(18, ageMin - b) : null;
+          const max = ageMax !== null ? ageMax + b : null;
+          const count = candidates.filter((c) => passesAge(c, min, max) && passesDistance(c, maxDistanceKm)).length;
+          return { min: min ?? 18, max: max ?? 99, count };
+        })
+        .filter((o) => o.count > currentCount)
+        .map((o) => ({ min: o.min, max: o.max, additionalCount: o.count - currentCount }));
+      if (options.length > 0) age = { currentMin: ageMin, currentMax: ageMax, options };
+    }
+
+    return { distance, age };
   }
 
   // Full ordered photo arrays for the Discover gallery — cover, then portrait,

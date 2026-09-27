@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 export function useIncomingLikes() {
   return useQuery({
@@ -285,14 +285,22 @@ export function useInterviewChat(interviewId: number) {
 // one-shot fetch; Discover.tsx just needs to call fetchNextPage() as the
 // flattened list runs low.
 export function useDiscoverProfiles(filter?: string, userLat?: number | null, userLng?: number | null) {
+  // One shuffle seed per mount of this hook (i.e. per Discover page load) —
+  // stable across pagination and re-renders within that load (so scrolling
+  // doesn't reorder cards underneath the viewer), fresh next time Discover
+  // mounts again (a new login, or just navigating back to it), which is what
+  // actually makes the deck reshuffle instead of always opening the same way.
+  const [seed] = useState(() => Math.random().toString(36).slice(2));
+
   const query = useInfiniteQuery({
-    queryKey: ["/api/profiles/discover", filter ?? "all", userLat ?? null, userLng ?? null],
+    queryKey: ["/api/profiles/discover", filter ?? "all", userLat ?? null, userLng ?? null, seed],
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }) => {
       const params = new URLSearchParams();
       if (filter && filter !== "all") params.set("filter", filter);
       if (userLat !== null && userLat !== undefined) params.set("lat", String(userLat));
       if (userLng !== null && userLng !== undefined) params.set("lng", String(userLng));
+      params.set("seed", seed);
       if (pageParam) params.set("cursor", pageParam);
       const qs = params.toString();
       const url = qs ? `/api/profiles/discover?${qs}` : "/api/profiles/discover";
@@ -306,6 +314,29 @@ export function useDiscoverProfiles(filter?: string, userLat?: number | null, us
   const data = useMemo(() => query.data?.pages.flatMap((p) => p.profiles) ?? undefined, [query.data]);
 
   return { ...query, data };
+}
+
+export type DiscoverExpandOptions = {
+  distance: { currentKm: number | null; options: { km: number; additionalCount: number }[] } | null;
+  age: { currentMin: number | null; currentMax: number | null; options: { min: number; max: number; additionalCount: number }[] } | null;
+};
+
+// Only meant to be fetched once the deck's actually run dry — Discover.tsx
+// gates `enabled` on that, not called speculatively on every load.
+export function useDiscoverExpandOptions(enabled: boolean, userLat?: number | null, userLng?: number | null) {
+  return useQuery({
+    queryKey: ["/api/profiles/discover/expand-options", userLat ?? null, userLng ?? null],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (userLat !== null && userLat !== undefined) params.set("lat", String(userLat));
+      if (userLng !== null && userLng !== undefined) params.set("lng", String(userLng));
+      const qs = params.toString();
+      const res = await fetch(`/api/profiles/discover/expand-options${qs ? `?${qs}` : ""}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load expand options");
+      return res.json() as Promise<DiscoverExpandOptions>;
+    },
+    enabled,
+  });
 }
 
 export function useDirectMessages(matchId: number) {

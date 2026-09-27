@@ -3,7 +3,7 @@ import { LayoutShell } from "@/components/layout-shell";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2 } from "lucide-react";
-import { useDiscoverProfiles, useStartInterview, useCreateMatch, useDiscoverPass, useFeedStories, useProfileCompletion, UpgradeRequiredError } from "@/hooks/use-interactions";
+import { useDiscoverProfiles, useDiscoverExpandOptions, useStartInterview, useCreateMatch, useDiscoverPass, useFeedStories, useProfileCompletion, UpgradeRequiredError } from "@/hooks/use-interactions";
 import { useTwinReadiness, useDismissReminder } from "@/hooks/use-onboarding";
 import { LIMITS, gateCopy } from "@shared/entitlements";
 import { usePaywall } from "@/hooks/use-paywall";
@@ -17,7 +17,7 @@ import { StoryViewer, OwnStoryViewer, AddStoryButton } from "@/components/story-
 import { PhotoLightbox } from "@/components/photo-lightbox";
 import { avatarColor } from "@/lib/avatar-color";
 import { withFrom } from "@/lib/from-route";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
 import type { User } from "@shared/models/auth";
@@ -506,6 +506,60 @@ function ProfileCompletionStrip() {
   );
 }
 
+// Shown once someone's evaluated everyone their current distance/age
+// preferences allow — offers to widen either, with a real count of how many
+// more people that would actually surface, so it's never a blind "try
+// widening" guess. Applies through the same POST /api/settings/discovery
+// Settings already uses, so this is just another entry point into the one
+// real preference-update path, not a parallel one.
+function ExpandSearchOptions({ userLat, userLng }: { userLat: number | null; userLng: number | null }) {
+  const { data, isLoading } = useDiscoverExpandOptions(true, userLat, userLng);
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const apply = useMutation({
+    mutationFn: (body: Record<string, number>) => apiRequest("POST", "/api/settings/discovery", body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+      qc.invalidateQueries({ queryKey: ["/api/profiles/discover"] });
+      qc.invalidateQueries({ queryKey: ["/api/profiles/discover/expand-options"] });
+      toast({ title: "Search widened" });
+    },
+    onError: () => toast({ title: "Couldn't update that", variant: "destructive" }),
+  });
+
+  if (isLoading || !data || (!data.distance && !data.age)) return null;
+
+  return (
+    <div className="mt-6 pt-6 border-t border-vf-line flex flex-col gap-3">
+      <p className="text-[13px] text-vf-muted">Nobody left within your current preferences. Want to see more?</p>
+      <div className="flex flex-col gap-2">
+        {data.distance?.options.map((o) => (
+          <button
+            key={`distance-${o.km}`}
+            onClick={() => apply.mutate({ maxDistanceKm: o.km })}
+            disabled={apply.isPending}
+            className="h-11 rounded-full border border-vf-line text-[13.5px] text-vf-text hover:border-vf-text/25 transition-colors disabled:opacity-50"
+            data-testid={`button-expand-distance-${o.km}`}
+          >
+            Extend to {o.km}km away <span className="text-vf-muted">(+{o.additionalCount})</span>
+          </button>
+        ))}
+        {data.age?.options.map((o) => (
+          <button
+            key={`age-${o.min}-${o.max}`}
+            onClick={() => apply.mutate({ ageMinPreference: o.min, ageMaxPreference: o.max })}
+            disabled={apply.isPending}
+            className="h-11 rounded-full border border-vf-line text-[13.5px] text-vf-text hover:border-vf-text/25 transition-colors disabled:opacity-50"
+            data-testid={`button-expand-age-${o.min}-${o.max}`}
+          >
+            Widen age range to {o.min}–{o.max} <span className="text-vf-muted">(+{o.additionalCount})</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Discover() {
   // Profiles liked or passed THIS session get pulled out of the deck the
   // instant you act on them — no waiting on a refetch to stop seeing someone
@@ -742,6 +796,7 @@ export default function Discover() {
                 Show everyone
               </button>
             )}
+            {filter === "all" && <ExpandSearchOptions userLat={userLat} userLng={userLng} />}
           </div>
         </div>
       </LayoutShell>
