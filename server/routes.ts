@@ -4,6 +4,7 @@ import { storage, PhotoNotFoundError, PhotoTooSmallError, genderMatchesSeeking, 
 import { setupAuth, registerAuthRoutes, authStorage, createSessionUser, hashPassword, verifyPassword } from "./replit_integrations/auth";
 import { z } from "zod";
 import { ai, AI_MODEL, completeText, stripAiWrapper } from "./ai";
+import { estimatePersonalityFromAnswers } from "./personality";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
 import { sql, eq, and, gt, lt, gte, desc, isNull, isNotNull, inArray } from "drizzle-orm";
@@ -1663,8 +1664,9 @@ ${PRIVACY_GUARDRAIL}`;
 {"summary": "A 2-3 sentence rolling summary of the conversation themes",
  "facts": ["fact 1", "fact 2", ...],
  "questions_answered_count": 0,
- "structured_updates": {"top_values": [], "interests": [], "relationship_goals": "", "humor_style": "", "communication_style": "", "lifestyle_patterns": [], "desired_partner_traits": [], "boundaries": ""}}
-Only include structured_updates fields if the conversation clearly reveals them. Facts should be specific, memorable insights. Return empty arrays/strings for fields not mentioned. For questions_answered_count: count how many of the user's messages meaningfully answer a personality/relationship question (not small talk).`,
+ "structured_updates": {"top_values": [], "interests": [], "relationship_goals": "", "humor_style": "", "communication_style": "", "lifestyle_patterns": [], "desired_partner_traits": [], "boundaries": ""},
+ "trait_signals": {"openness": 0, "conscientiousness": 0, "extraversion": 0, "agreeableness": 0, "neuroticism": 0}}
+Only include structured_updates fields if the conversation clearly reveals them. Facts should be specific, memorable insights. Return empty arrays/strings for fields not mentioned. For questions_answered_count: count how many of the user's messages meaningfully answer a personality/relationship question (not small talk). For trait_signals: an integer from -3 to 3 per trait — 0 unless this specific exchange clearly reveals something that nudges an existing personality read in that direction; small honest nudges, not one conversation's guess at the whole trait.`,
           },
           { role: "user", content: JSON.stringify(lastFew) },
         ],
@@ -1701,6 +1703,9 @@ Only include structured_updates fields if the conversation clearly reveals them.
         if (Object.keys(updates).length > 0) {
           await storage.upsertTwinProfileStructured(userId, updates);
         }
+      }
+      if (result.trait_signals) {
+        await storage.nudgePersonalityProfile(userId, result.trait_signals);
       }
       const answeredCount = typeof result.questions_answered_count === "number" ? Math.max(0, Math.min(result.questions_answered_count, 5)) : 0;
       if (answeredCount > 0) {
@@ -2242,6 +2247,18 @@ Only include structured_updates fields if the conversation clearly reveals them.
             .then((r) => storage.updateProfile(userId, { twinPersona: r.text || "" }))
             .then(() => seedOnboardingIntoTwinMemory(userId, answers))
             .catch((err) => console.error("Twin gen on complete failed:", err));
+
+          // Independent of the twin persona above — the Discover resonance
+          // panel used to be exclusive to hardcoded demo accounts (see
+          // server/personality.ts) because real onboarding never produced
+          // numeric traits at all. This gives every real profile the same
+          // real, answer-grounded read the moment they have enough answers
+          // to ground it in.
+          if (!profile.personalityProfile) {
+            estimatePersonalityFromAnswers(answers)
+              .then((traits) => traits && storage.updateProfile(userId, { personalityProfile: traits } as any))
+              .catch((err) => console.error("Personality estimate on complete failed:", err));
+          }
         }
       }
       res.json(readiness);
@@ -5374,7 +5391,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Unauthenticated by design (dev convenience — no session needed to reset
+  // local sample data), which is exactly why it must never be reachable in
+  // production: it's a public POST anyone could hit, and its only effect
+  // (once real groups exist) is a harmless no-op, but there's no legitimate
+  // reason to expose it there at all.
   app.post("/api/demo/seed", async (req, res) => {
+    if (process.env.NODE_ENV === "production") return res.sendStatus(404);
     try {
       await storage.seedDemoData();
       res.json({ message: "Demo data seeded successfully" });

@@ -21,6 +21,7 @@ import {
   type InviteRequest, type InsertInviteRequest
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
+import { coerceTraits, applyTraitSignals } from "./personality";
 import type { PhotoRole } from "@shared/schema";
 import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lt, lte, inArray, notInArray, isNotNull, isNull } from "drizzle-orm";
 
@@ -120,6 +121,7 @@ export interface IStorage {
   getProfile(userId: string): Promise<Profile | undefined>;
   createProfile(profile: InsertProfile & { userId: string }): Promise<Profile>;
   updateProfile(userId: string, updates: Partial<InsertProfile>): Promise<Profile>;
+  nudgePersonalityProfile(userId: string, signals: unknown): Promise<void>;
   getDiscoverableProfiles(
     excludeUserId: string,
     filter?: string,
@@ -348,6 +350,18 @@ export class DatabaseStorage implements IStorage {
       .where(eq(profiles.userId, userId))
       .returning();
     return updated;
+  }
+
+  // Applies small trait-signal nudges from a real twin-chat exchange on top
+  // of whatever Big Five baseline already exists — a no-op if there's no
+  // baseline yet (chat alone never invents one; see server/personality.ts).
+  async nudgePersonalityProfile(userId: string, signals: unknown): Promise<void> {
+    const [row] = await db.select({ personalityProfile: profiles.personalityProfile }).from(profiles).where(eq(profiles.userId, userId));
+    const current = coerceTraits(row?.personalityProfile);
+    if (!current) return;
+    const next = applyTraitSignals(current, signals);
+    if (!next) return;
+    await db.update(profiles).set({ personalityProfile: next }).where(eq(profiles.userId, userId));
   }
 
   // The photo a card / avatar should show, resolved so a missing role can never
@@ -1733,6 +1747,13 @@ export class DatabaseStorage implements IStorage {
     await this.createGroup("Book Club", "Discussing the latest sci-fi, fantasy, and literary fiction.", "interest");
     await this.createGroup("Foodies Unite", "Share your favorite recipes and restaurant discoveries.", "interest");
     await this.createGroup("Mindfulness & Growth", "For those on a journey of self-improvement and mindfulness.", "interest");
+
+    // Five fake dating profiles — fine for a fresh local/staging database so
+    // Discover isn't empty, never appropriate once real users can see them.
+    // This early-return guard means they'd only ever get seeded again if the
+    // groups table were wiped, but a real user's Discover feed is not the
+    // place to find out this guard has a hole in it.
+    if (process.env.NODE_ENV === "production") return;
 
     const demoUsers = [
       { id: "demo_sarah_001", email: "sarah@demo.vibeflow.app", firstName: "Sarah", lastName: "Chen", profileImageUrl: null },
