@@ -206,13 +206,21 @@ export async function listEvents(
   viewerId: string,
   filters: { groupId?: number; city?: string; from?: Date; to?: Date } = {},
 ): Promise<Array<Event & { resonance: ResonanceBlock; myStatus: AttendeeStatus | null }>> {
-  const conditions = [eq(events.status, "published")];
+  const conditions = [eq(events.status, "published"), eq(profiles.moderationStatus, "active")];
   if (filters.groupId != null) conditions.push(eq(events.groupId, filters.groupId));
   if (filters.city) conditions.push(eq(events.city, filters.city));
   if (filters.from) conditions.push(gte(events.startsAt, filters.from));
   if (filters.to) conditions.push(lte(events.startsAt, filters.to));
 
-  const rows = await db.select().from(events).where(and(...conditions)).orderBy(asc(events.startsAt));
+  // A host suspended/banned after their event auto-published must not stay
+  // reachable through it — same reasoning as getEventsFeed/searchEvents.
+  const rows = await db
+    .select({ event: events })
+    .from(events)
+    .innerJoin(profiles, eq(profiles.userId, events.hostUserId))
+    .where(and(...conditions))
+    .orderBy(asc(events.startsAt))
+    .then((r) => r.map((row) => row.event));
   const eventIds = rows.map((r) => r.id);
 
   const [blocks, myRows] = await Promise.all([
@@ -447,18 +455,54 @@ export async function adminRejectEvent(eventId: number, reason: string): Promise
   return cancelEventInternal(eventId, reason);
 }
 
+export type PendingReviewEvent = Event & {
+  hostName: string | null;
+  hostEmail: string | null;
+  hostModerationStatus: string | null;
+  photos: EventPhoto[];
+  startsAtPassed: boolean;
+};
+
 // Everything currently held for review — after the auto-publish change this
 // is exclusively private-residence events waiting on their host-verification
 // video/ID check, but the query itself doesn't assume that (any future
-// reason an event lands in pending_review shows up here too).
-export async function listPendingReviewEvents(): Promise<Array<Event & { hostName: string | null }>> {
+// reason an event lands in pending_review shows up here too). Returns
+// everything a reviewer needs to make the call without leaving this screen:
+// the host's email and moderation standing (a suspended/banned host's event
+// should never quietly get approved), every photo, and whether the event's
+// date has already slipped past while it sat waiting — approving that one
+// can't make it visible (see getEventsFeed's future-only filter).
+export async function listPendingReviewEvents(): Promise<PendingReviewEvent[]> {
   const rows = await db
-    .select({ event: events, hostName: profiles.displayName })
+    .select({
+      event: events,
+      hostName: profiles.displayName,
+      hostEmail: users.email,
+      hostModerationStatus: profiles.moderationStatus,
+    })
     .from(events)
     .leftJoin(profiles, eq(profiles.userId, events.hostUserId))
+    .leftJoin(users, eq(users.id, events.hostUserId))
     .where(eq(events.status, "pending_review"))
     .orderBy(asc(events.createdAt));
-  return rows.map((r) => ({ ...r.event, hostName: r.hostName }));
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.event.id);
+  const photoRows = await db.select().from(eventPhotos).where(inArray(eventPhotos.eventId, ids)).orderBy(asc(eventPhotos.sortOrder));
+  const photosByEvent = new Map<number, EventPhoto[]>();
+  for (const p of photoRows) {
+    const list = photosByEvent.get(p.eventId) ?? [];
+    list.push(p);
+    photosByEvent.set(p.eventId, list);
+  }
+  const now = Date.now();
+  return rows.map((r) => ({
+    ...r.event,
+    hostName: r.hostName,
+    hostEmail: r.hostEmail,
+    hostModerationStatus: r.hostModerationStatus,
+    photos: photosByEvent.get(r.event.id) ?? [],
+    startsAtPassed: r.event.startsAt ? new Date(r.event.startsAt).getTime() < now : false,
+  }));
 }
 
 export type HostedEventRow = SerializedEvent & {

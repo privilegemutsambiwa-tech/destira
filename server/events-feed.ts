@@ -203,11 +203,24 @@ export async function countEventsWithinDistance(userId: string, distanceKm: numb
   return n;
 }
 
+// Published, from a host who hasn't been suspended/banned since — a host
+// removed from every other real-user-facing surface (Discover, matches)
+// must not still be reachable through an old event that auto-published
+// before the moderation action landed.
+async function publishedEventsFromActiveHosts(extraConds: Parameters<typeof and> = []): Promise<Event[]> {
+  const rows = await db
+    .select({ event: events })
+    .from(events)
+    .innerJoin(profiles, eq(profiles.userId, events.hostUserId))
+    .where(and(eq(events.status, "published"), eq(profiles.moderationStatus, "active"), ...extraConds));
+  return rows.map((r) => r.event);
+}
+
 export async function getEventsFeed(userId: string): Promise<{ events: FeedEvent[]; moreThanShown: boolean }> {
   const prefs = await getOrCreatePreferences(userId);
   const ctx = await buildContext(userId);
 
-  const rows = await db.select().from(events).where(eq(events.status, "published"));
+  const rows = await publishedEventsFromActiveHosts();
 
   const scored = rows
     .map((event) => {
@@ -254,7 +267,7 @@ export async function searchEvents(
   const ctx = await buildContext(userId);
   const { from, to } = whenBounds(params.when, ctx.now);
 
-  const conds = [eq(events.status, "published")];
+  const conds: Parameters<typeof and> = [];
   if (params.q) {
     const like = `%${params.q}%`;
     conds.push(
@@ -270,7 +283,7 @@ export async function searchEvents(
   if (params.placeType?.length) conds.push(inArray(events.placeType, params.placeType));
   if (params.sober) conds.push(eq(events.isSober, true));
 
-  const rows = await db.select().from(events).where(and(...conds));
+  const rows = await publishedEventsFromActiveHosts(conds);
 
   const distanceCap = params.distanceKm ?? 100;
   const filtered = rows

@@ -73,7 +73,7 @@ export default function AdminEventsPending() {
                 <div>
                   <div style={{ fontSize: 15, color: TEXT, fontWeight: 600 }}>{ev.title}</div>
                   <div style={{ ...LABEL, marginTop: 4 }}>
-                    Hosted by {ev.hostName || ev.hostUserId.slice(0, 8)} · {ev.suburb}, {ev.city}
+                    Hosted by {ev.hostName || "(no display name)"} · {ev.hostEmail || ev.hostUserId.slice(0, 8)}
                   </div>
                   <div style={{ ...LABEL, marginTop: 2, color: FAINT }}>Submitted {formatDateTime(ev.createdAt)}</div>
                 </div>
@@ -83,14 +83,67 @@ export default function AdminEventsPending() {
                 </div>
               </div>
 
+              {ev.hostModerationStatus && ev.hostModerationStatus !== "active" && (
+                <div style={{ marginTop: 8, padding: "6px 10px", borderRadius: 8, background: `${EMBER}22`, color: EMBER, fontSize: 12.5, fontWeight: 600 }}>
+                  Host is {ev.hostModerationStatus} — approving this will not make it reachable to other users.
+                </div>
+              )}
+              {ev.startsAtPassed && (
+                <div style={{ marginTop: 8, padding: "6px 10px", borderRadius: 8, background: `${EMBER}22`, color: EMBER, fontSize: 12.5, fontWeight: 600 }}>
+                  This event's date ({formatDateTime(ev.startsAt)}) has already passed — approving it will not make it appear live.
+                </div>
+              )}
+
+              <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px", fontSize: 13, color: TEXT }}>
+                <Field label="Starts">{formatDateTime(ev.startsAt)}</Field>
+                <Field label="Location tier">{ev.locationTier}</Field>
+                <Field label="Address">{ev.addressLine || `${ev.suburb ?? ""}${ev.suburb && ev.city ? ", " : ""}${ev.city ?? ""}` || "—"}</Field>
+                <Field label="Venue">{ev.venueName || "—"}</Field>
+                <Field label="Seats">{ev.seatModel}{ev.seatCount ? ` · ${ev.seatCount}` : ""}</Field>
+                <Field label="Who's welcome">
+                  {ev.genderPolicy === "quota" ? `Quota — ${ev.menSlots ?? 0} men, ${ev.womenSlots ?? 0} women` : (ev.genderPolicy || "mixed")}
+                </Field>
+                <Field label="Cost">
+                  {ev.costModel === "contribute" && ev.contributionAmount ? `Contribute ${ev.contributionCurrency ?? "USD"} ${ev.contributionAmount}` : ev.costModel}
+                </Field>
+                <Field label="Contact">{ev.contactPhone || ev.contactWhatsapp || "—"}</Field>
+              </div>
+
+              {ev.description && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ ...LABEL, color: MUTED, marginBottom: 3 }}>Description</div>
+                  <div style={{ fontSize: 13.5, color: TEXT, whiteSpace: "pre-wrap" }}>{ev.description}</div>
+                </div>
+              )}
+
               {ev.hostVideoUrl && (
-                <video
-                  src={ev.hostVideoUrl}
-                  poster={ev.hostVideoPosterUrl || undefined}
-                  controls
-                  style={{ marginTop: 10, maxWidth: 320, borderRadius: 8, display: "block" }}
-                  data-testid={`pending-event-video-${ev.id}`}
-                />
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ ...LABEL, color: MUTED, marginBottom: 4 }}>Host verification video</div>
+                  <video
+                    src={ev.hostVideoUrl}
+                    poster={ev.hostVideoPosterUrl || undefined}
+                    controls
+                    style={{ maxWidth: 320, borderRadius: 8, display: "block" }}
+                    data-testid={`pending-event-video-${ev.id}`}
+                  />
+                </div>
+              )}
+
+              {Array.isArray(ev.photos) && ev.photos.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ ...LABEL, color: MUTED, marginBottom: 4 }}>Photos ({ev.photos.length})</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {ev.photos.map((p: any) => (
+                      <img
+                        key={p.id}
+                        src={p.url}
+                        alt={p.caption || ""}
+                        style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8, border: `1px solid ${LINE}` }}
+                        data-testid={`pending-event-photo-${ev.id}-${p.id}`}
+                      />
+                    ))}
+                  </div>
+                </div>
               )}
 
               {rejectingId === ev.id ? (
@@ -143,6 +196,15 @@ export default function AdminEventsPending() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <span style={{ color: MUTED }}>{label}: </span>
+      <span>{children}</span>
     </div>
   );
 }
