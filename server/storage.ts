@@ -320,6 +320,7 @@ export interface IStorage {
 
 
   updateGroupMemberMute(groupId: number, userId: string, isMuted: boolean): Promise<GroupMember>;
+  syncGroupNicknameForAllMemberships(userId: string, nickname: string): Promise<void>;
   markGroupMessagesSeen(groupId: number, userId: string, messageId: number): Promise<void>;
   getGroupMessageReadInfo(
     groupId: number,
@@ -2535,6 +2536,17 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
       .returning();
     return updated;
+  }
+
+  // groupMembers.nickname is a snapshot taken when someone joins — every
+  // group-message send and the member list both read it directly rather
+  // than re-resolving profiles.groupNickname live, so a chosen username
+  // changed later in Settings silently never showed up anywhere in a group
+  // someone had already joined. Called right after profiles.groupNickname
+  // is updated, so every existing membership picks up the new name
+  // immediately instead of only new joins seeing it.
+  async syncGroupNicknameForAllMemberships(userId: string, nickname: string): Promise<void> {
+    await db.update(groupMembers).set({ nickname }).where(eq(groupMembers.userId, userId));
   }
 
   // "Read" for a group is tracked the same coarse way as a chat app's blue

@@ -11,7 +11,7 @@
 // show as "not yet ready" rather than fabricating a personality.
 
 import { db } from "./db";
-import { questions, userAnswers, profiles, reminderDismissals, MIN_TWIN_ANSWERS } from "@shared/schema";
+import { questions, userAnswers, profiles, groupMembers, reminderDismissals, MIN_TWIN_ANSWERS } from "@shared/schema";
 import { and, eq, asc } from "drizzle-orm";
 
 export interface OnboardingQuestion {
@@ -133,6 +133,14 @@ export async function completeOnboarding(
     await db.update(profiles).set(patch).where(eq(profiles.userId, userId));
   } else {
     await db.insert(profiles).values({ userId, ...(patch as any) });
+  }
+  // Usually a no-op the first time through (nobody's joined a group before
+  // finishing onboarding yet), but completeOnboarding is explicitly
+  // idempotent/re-enterable — if this is a re-completion after already
+  // joining groups, any existing memberships must not keep showing the
+  // nickname from before this run.
+  if (typeof patch.groupNickname === "string") {
+    await db.update(groupMembers).set({ nickname: patch.groupNickname }).where(eq(groupMembers.userId, userId));
   }
 }
 

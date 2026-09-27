@@ -561,6 +561,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
 
       if (existing) {
         const updated = await storage.updateProfile(userId, safeCounted);
+        if (safeCounted.groupNickname) {
+          // Awaited, not fire-and-forget — it's one fast UPDATE, and awaiting
+          // it closes the window where sending a message right after
+          // changing the nickname could still pick up the old one.
+          await storage.syncGroupNicknameForAllMemberships(userId, safeCounted.groupNickname);
+        }
         if (isCompletingOnboarding && !existing.onboardingCompleted) {
           seedOnboardingIntoTwinMemory(userId, legacyPersonalityProfileToPairs(req.body.personalityProfile)).catch(() => {});
         }
@@ -629,6 +635,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         safeUpdate.groupNickname = nick;
       }
       const updated = await storage.updateProfile(userId, safeUpdate);
+      if (safeUpdate.groupNickname) {
+        await storage.syncGroupNicknameForAllMemberships(userId, safeUpdate.groupNickname);
+      }
       res.json(stripRawLocation(updated));
     } catch (err) {
       res.status(500).json({ message: "Error updating profile" });
