@@ -286,14 +286,6 @@ export async function createHostedEvent(hostUserId: string, data: HostEventInput
   const liveOrPending = recent.filter((r) => r.status === "published" || r.status === "pending_review");
   if (liveOrPending.length >= HOST_WEEKLY_LIMIT) throw new HostRateLimitError();
 
-  // First time this user has ever hosted -> hold it for a look. After one
-  // event has gone live, they publish straight away (still rate-limited).
-  const [prior] = await db
-    .select({ id: events.id })
-    .from(events)
-    .where(and(eq(events.createdByUserId, hostUserId), eq(events.status, "published")))
-    .limit(1);
-
   // v3: resolve place, compute the tier (never trust the client), and pull
   // venue name / address / suburb from a matched place.
   let placeVerified = false;
@@ -313,9 +305,12 @@ export async function createHostedEvent(hostUserId: string, data: HostEventInput
   }
   const locationTier = computeLocationTier({ placeVerified, isPrivateAddress: data.isPrivateAddress });
   const minAttendees = locationTier === "private_residence" ? PRIVATE_RESIDENCE_MIN_ATTENDEES : null;
-  // A private home never goes straight to 'published' — it needs the media /
-  // ID / numbers checks (Events v3 Conversation Three) before it can run.
-  const status = locationTier === "private_residence" ? "pending_review" : prior ? "published" : "pending_review";
+  // Every event auto-publishes immediately except a private home — that one
+  // case is a physical-safety check (host video/ID verification before
+  // sending anyone to a stranger's address), not a content-quality gate, so
+  // it's the one review this app still holds pre-publish. Everything else
+  // relies on the report + admin-takedown path instead of a review queue.
+  const status = locationTier === "private_residence" ? "pending_review" : "published";
 
   const centroid = await suburbCentroidFor(suburb, city);
 
@@ -388,16 +383,7 @@ export async function updateEvent(eventId: number, hostUserId: string, data: Par
   return updated;
 }
 
-export async function cancelHostedEvent(
-  eventId: number,
-  hostUserId: string,
-  reason: string,
-): Promise<Event> {
-  const [event] = await db.select().from(events).where(eq(events.id, eventId));
-  if (!event) throw new EventNotFoundError();
-  if (event.hostUserId !== hostUserId) throw new NotEventHostError();
-  if (event.status === "cancelled") return event;
-
+async function cancelEventInternal(eventId: number, reason: string): Promise<Event> {
   const [updated] = await db
     .update(events)
     .set({ status: "cancelled", cancelReason: reason, cancelledAt: new Date() })
@@ -418,12 +404,61 @@ export async function cancelHostedEvent(
       affected.map((a) => ({
         userId: a.userId,
         type: "event_cancelled",
-        title: `"${event.title}" was called off`,
+        title: `"${updated.title}" was called off`,
         body: reason,
       })),
     );
   }
   return updated;
+}
+
+export async function cancelHostedEvent(
+  eventId: number,
+  hostUserId: string,
+  reason: string,
+): Promise<Event> {
+  const [event] = await db.select().from(events).where(eq(events.id, eventId));
+  if (!event) throw new EventNotFoundError();
+  if (event.hostUserId !== hostUserId) throw new NotEventHostError();
+  if (event.status === "cancelled") return event;
+  return cancelEventInternal(eventId, reason);
+}
+
+// Admin-console counterparts to the moderator-only approveEvent above — these
+// skip the EVENT_MODERATOR_IDS check because the admin route itself is
+// already gated by requireAdmin(), a completely separate auth domain from
+// regular user accounts.
+export async function adminApproveEvent(eventId: number): Promise<Event> {
+  const [event] = await db.select().from(events).where(eq(events.id, eventId));
+  if (!event) throw new EventNotFoundError();
+  if (event.status !== "pending_review") return event;
+  const [updated] = await db
+    .update(events)
+    .set({ status: "published" })
+    .where(eq(events.id, eventId))
+    .returning();
+  return updated;
+}
+
+export async function adminRejectEvent(eventId: number, reason: string): Promise<Event> {
+  const [event] = await db.select().from(events).where(eq(events.id, eventId));
+  if (!event) throw new EventNotFoundError();
+  if (event.status === "cancelled") return event;
+  return cancelEventInternal(eventId, reason);
+}
+
+// Everything currently held for review — after the auto-publish change this
+// is exclusively private-residence events waiting on their host-verification
+// video/ID check, but the query itself doesn't assume that (any future
+// reason an event lands in pending_review shows up here too).
+export async function listPendingReviewEvents(): Promise<Array<Event & { hostName: string | null }>> {
+  const rows = await db
+    .select({ event: events, hostName: profiles.displayName })
+    .from(events)
+    .leftJoin(profiles, eq(profiles.userId, events.hostUserId))
+    .where(eq(events.status, "pending_review"))
+    .orderBy(asc(events.createdAt));
+  return rows.map((r) => ({ ...r.event, hostName: r.hostName }));
 }
 
 export type HostedEventRow = SerializedEvent & {

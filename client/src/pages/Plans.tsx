@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useSubscription } from "@/hooks/use-interactions";
 import { refreshPlanQueries } from "@/hooks/use-payments";
-import { consumePendingInvite } from "@/lib/pending-invite";
+import { consumePendingInvite, resolvePendingInviteRoute } from "@/lib/pending-invite";
 import { DestiraLockup } from "@/components/brand/logo";
 import { getFromRoute, withFrom } from "@/lib/from-route";
 import {
@@ -100,7 +100,7 @@ export default function Plans() {
   const close = () => {
     refreshPlanQueries(qc);
     const pendingInvite = consumePendingInvite();
-    if (pendingInvite) return setLocation(`/join/${pendingInvite}`);
+    if (pendingInvite) return setLocation(resolvePendingInviteRoute(pendingInvite));
     setLocation(intro ? "/discover" : from);
   };
 

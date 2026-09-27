@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { DestiraLoadingScreen } from "@/components/brand/logo";
-import { consumePendingInvite } from "@/lib/pending-invite";
+import { consumePendingInvite, resolvePendingInviteRoute } from "@/lib/pending-invite";
 import type { User } from "@shared/models/auth";
 
 // Landed on after Google hands control back to Supabase, which redirects
@@ -32,7 +32,7 @@ export default function AuthCallback() {
         queryClient.setQueryData(["/api/auth/user"], user);
 
         const pendingInvite = consumePendingInvite();
-        setLocation(pendingInvite ? `/join/${pendingInvite}` : "/discover");
+        setLocation(pendingInvite ? resolvePendingInviteRoute(pendingInvite) : "/discover");
       } catch {
         finishing.current = false;
         setError("Couldn't complete Google sign-in. Please try again.");

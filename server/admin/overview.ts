@@ -2,7 +2,7 @@
 // error rate, LLM spend, MRR — everything else lives behind nav.
 import type { Express } from "express";
 import { db } from "../db";
-import { reports, feedback, payments, metricDaily } from "@shared/schema";
+import { reports, feedback, payments, metricDaily, events } from "@shared/schema";
 import { eq, count, and, inArray, gte, lt, desc, like } from "drizzle-orm";
 import { adminRoute } from "./auth";
 import { SAFETY_CATEGORIES } from "@shared/admin";
@@ -47,6 +47,7 @@ export function registerAdminOverviewRoutes(app: Express) {
         [investigating],
         [safety],
         [openFeedback],
+        [pendingEvents],
         [failedPaymentsToday],
         mrr,
         llmToday,
@@ -67,6 +68,10 @@ export function registerAdminOverviewRoutes(app: Express) {
           .from(reports)
           .where(and(inArray(reports.category, SAFETY_CATEGORIES as unknown as string[]), inArray(reports.status, ["open", "investigating"]))),
         db.select({ n: count() }).from(feedback).where(eq(feedback.status, "open")),
+        // Live count, not a rollup metric like the others below — this is a
+        // queue that should always be near zero, so a day-over-day sparkline
+        // adds little; the nav badge just needs "is there anything to look at".
+        db.select({ n: count() }).from(events).where(eq(events.status, "pending_review")),
         db.select({ n: count() }).from(payments).where(and(gte(payments.createdAt, todayStart), eq(payments.status, "failed"))),
         latestValue("money.mrr_usd"),
         latestValue("llm.cost_usd_estimated"),
@@ -105,6 +110,7 @@ export function registerAdminOverviewRoutes(app: Express) {
         safetyReportsOpenYesterday: safetyYesterday,
         openFeedback: Number(openFeedback?.n ?? 0),
         openFeedbackYesterday,
+        pendingEvents: Number(pendingEvents?.n ?? 0),
         failedPaymentsToday: Number(failedPaymentsToday?.n ?? 0),
         failedPaymentsYesterday,
         mrrUsd: mrr, // from yesterday's rollup — see /api/admin/metrics/summary for the date

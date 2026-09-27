@@ -9,6 +9,7 @@ import { AdminShell, INK, TEXT } from "./AdminShell";
 import AdminOverview from "./AdminOverview";
 import AdminReports from "./AdminReports";
 import AdminReportDetail from "./AdminReportDetail";
+import AdminEventsPending from "./AdminEventsPending";
 import AdminFeedback from "./AdminFeedback";
 import AdminMetrics from "./AdminMetrics";
 import AdminEmailConfig from "./AdminEmailConfig";
@@ -65,6 +66,7 @@ function AdminApp() {
         <Route path="/console" component={AdminOverview} />
         <Route path="/console/reports" component={AdminReports} />
         <Route path="/console/reports/:id">{(params) => <AdminReportDetail id={params.id} />}</Route>
+        <Route path="/console/events" component={AdminEventsPending} />
         <Route path="/console/feedback" component={AdminFeedback} />
         <Route path="/console/metrics" component={AdminMetrics} />
         <Route path="/console/email" component={AdminEmailConfig} />

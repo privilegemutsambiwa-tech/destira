@@ -272,7 +272,7 @@ export default function HostEvent() {
         title: ev.status === "pending_review" ? "Sent for a quick look" : "Your event is live",
         description:
           ev.status === "pending_review"
-            ? "We give first events and private homes a once-over before they go public."
+            ? "Private homes get a quick once-over — verifying your video and ID — before the address goes public."
             : undefined,
       });
       setLocation(`/events/${ev.id}`);

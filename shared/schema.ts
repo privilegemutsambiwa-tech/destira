@@ -1063,7 +1063,8 @@ export const eventSearchQuerySchema = z.object({
 });
 
 // POST /api/events — what a host is allowed to set. The server owns
-// hostUserId, createdByUserId, status (first event -> pending_review), and
+// hostUserId, createdByUserId, status (published immediately, except a
+// private residence -> pending_review for the host video/ID check), and
 // lat/lng (derived from the suburb centroid). emberFirstPick is not
 // host-settable here.
 export const hostEventSchema = z

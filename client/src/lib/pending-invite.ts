@@ -28,3 +28,22 @@ export function consumePendingInvite(): string | null {
     return null;
   }
 }
+
+/** Same idea as a group invite, for a shared event link a signed-out visitor
+ *  opened (`/events/:id`) — the destination is stashed as `event:<id>` in the
+ *  SAME slot, so `consumePendingInvite`'s "one redirect checkpoint sees it"
+ *  guarantee still holds, without every checkpoint needing to know the
+ *  string could mean two different things. */
+export function stashPendingEvent(eventId: string | number) {
+  stashPendingInvite(`event:${eventId}`);
+}
+
+/** Turns a consumed pending-invite value into the route to land on —
+ *  every checkpoint that used to hardcode `/join/${pendingInvite}` should
+ *  call this instead, so a group token and an `event:<id>` value each land
+ *  in the right place. */
+export function resolvePendingInviteRoute(rawValue: string): string {
+  const eventMatch = rawValue.match(/^event:(\d+)$/);
+  if (eventMatch) return `/events/${eventMatch[1]}`;
+  return `/join/${rawValue}`;
+}

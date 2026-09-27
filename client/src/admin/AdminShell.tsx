@@ -92,6 +92,7 @@ function useIsMobile(breakpoint = 768): boolean {
 const NAV = [
   { href: "/console", label: "Overview" },
   { href: "/console/reports", label: "Reports", badgeKey: "openReports" as const },
+  { href: "/console/events", label: "Events", badgeKey: "pendingEvents" as const },
   { href: "/console/feedback", label: "Feedback", badgeKey: "openFeedback" as const },
   { href: "/console/metrics", label: "Metrics" },
   { href: "/console/email", label: "Email alerts" },
@@ -285,6 +286,7 @@ type OverviewSnapshot = {
   safetyReportsOpen: number;
   failedPaymentsToday: number;
   openFeedback: number;
+  pendingEvents: number;
 };
 
 export function AdminShell({ role, email, children }: { role: string; email?: string | null; children: React.ReactNode }) {
@@ -316,6 +318,7 @@ export function AdminShell({ role, email, children }: { role: string; email?: st
         overview.safetyReportsOpen > 0 ? { label: "safety-category open", n: overview.safetyReportsOpen } : null,
         overview.openReports > 0 ? { label: "open reports", n: overview.openReports } : null,
         overview.failedPaymentsToday > 0 ? { label: "failed payments today", n: overview.failedPaymentsToday } : null,
+        overview.pendingEvents > 0 ? { label: "events awaiting review", n: overview.pendingEvents } : null,
       ].filter(Boolean) as { label: string; n: number }[])
     : [];
 

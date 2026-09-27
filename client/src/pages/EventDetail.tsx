@@ -9,7 +9,7 @@ import { useGroups } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { useState } from "react";
-import { Loader2, ArrowLeft, Pencil, Flag, X } from "lucide-react";
+import { Loader2, ArrowLeft, Pencil, Flag, X, Share2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -78,14 +78,18 @@ export default function EventDetail({ params }: { params: { id: string } }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [reportBusy, setReportBusy] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareLink, setShareLink] = useState("");
 
   const submitEventReport = async () => {
     if (!event) return;
     setReportBusy(true);
     try {
-      await apiRequest("POST", `/api/users/${event.hostUserId}/report`, {
+      // Dedicated event-report endpoint, not the user-report one — reporting
+      // an event isn't the same as wanting to never see this host again, so
+      // unlike a profile report this deliberately doesn't auto-block them.
+      await apiRequest("POST", `/api/events/${event.id}/report`, {
         reason: reportReason.trim(),
-        evidence: [{ type: "event", id: event.id }],
       });
       toast({ title: "Report sent", description: "Our team will review it." });
       setReportOpen(false);
@@ -94,6 +98,37 @@ export default function EventDetail({ params }: { params: { id: string } }) {
       toast({ title: "Could not send report", variant: "destructive" });
     } finally {
       setReportBusy(false);
+    }
+  };
+
+  // The event's own URL doubles as its invite link — it's public once
+  // published, so (unlike a group) there's no separate token to mint first.
+  // A friend who isn't signed up yet still gets funneled back here after
+  // signup (see EventLinkGate / pending-invite.ts in App.tsx).
+  const handleShareEvent = async () => {
+    if (!event) return;
+    const url = `${window.location.origin}/events/${event.id}`;
+    const shareData = { title: event.title, text: `Come to "${event.title}" on Destira`, url };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        setShareLink(url);
+        setShareDialogOpen(true);
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setShareLink(url);
+      setShareDialogOpen(true);
+    }
+  };
+
+  const handleCopyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      toast({ title: "Link copied!" });
+    } catch {
+      toast({ title: "Could not copy link", variant: "destructive" });
     }
   };
 
@@ -161,7 +196,8 @@ export default function EventDetail({ params }: { params: { id: string } }) {
           <div className="mb-4 rounded-[14px] border border-vf-gold/30 bg-vf-gold/[0.06] px-4 py-3" data-testid="banner-review">
             <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">In review</div>
             <p className="text-[13.5px] text-vf-muted mt-1 leading-[1.5]">
-              Your first event gets a quick look before it goes public. Nobody else can see it yet.
+              Private homes get a quick once-over — verifying your video and ID — before the event goes public. Nobody
+              else can see it yet.
             </p>
           </div>
         )}
@@ -337,14 +373,25 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                 Open event chat
               </button>
             )}
-            {!isHost && event.status !== "cancelled" && (
-              <button
-                onClick={() => setReportOpen(true)}
-                className="inline-flex items-center gap-1.5 text-[12.5px] text-vf-faint hover:text-vf-text transition-colors self-start"
-                data-testid="button-report-event"
-              >
-                <Flag className="w-3.5 h-3.5" /> Report event
-              </button>
+            {event.status !== "cancelled" && (
+              <div className="flex items-center gap-4 self-start">
+                <button
+                  onClick={handleShareEvent}
+                  className="inline-flex items-center gap-1.5 text-[12.5px] text-vf-faint hover:text-vf-text transition-colors"
+                  data-testid="button-share-event"
+                >
+                  <Share2 className="w-3.5 h-3.5" /> Share
+                </button>
+                {!isHost && (
+                  <button
+                    onClick={() => setReportOpen(true)}
+                    className="inline-flex items-center gap-1.5 text-[12.5px] text-vf-faint hover:text-vf-text transition-colors"
+                    data-testid="button-report-event"
+                  >
+                    <Flag className="w-3.5 h-3.5" /> Report event
+                  </button>
+                )}
+              </div>
             )}
             {isHost && event.status !== "cancelled" && (
               <div className="border-t border-vf-line pt-4 flex flex-col gap-3">
@@ -553,6 +600,29 @@ export default function EventDetail({ params }: { params: { id: string } }) {
             </Button>
             <Button onClick={submitEventReport} disabled={reportBusy} data-testid="button-submit-event-report">
               {reportBusy ? "Sending…" : "Send report"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Share this event</DialogTitle>
+            <DialogDescription>
+              Anyone with this link can see the event — including a friend who isn't on Destira yet. They'll be
+              asked to sign up before they can request a seat.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2 rounded-[12px] border border-vf-line bg-vf-surface2 p-3 text-[13px] text-vf-text break-all" data-testid="text-event-share-link">
+            {shareLink}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShareDialogOpen(false)} data-testid="button-close-event-share">
+              Close
+            </Button>
+            <Button onClick={handleCopyShareLink} data-testid="button-copy-event-share-link">
+              Copy link
             </Button>
           </DialogFooter>
         </DialogContent>

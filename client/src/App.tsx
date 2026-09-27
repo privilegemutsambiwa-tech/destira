@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
 import { DestiraLoadingScreen } from "@/components/brand/logo";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { consumePendingInvite } from "@/lib/pending-invite";
+import { consumePendingInvite, resolvePendingInviteRoute, stashPendingEvent } from "@/lib/pending-invite";
 import { useEffect, useLayoutEffect, lazy, Suspense } from "react";
 
 // Code-split and NOT linked from anywhere in the member app (no nav item, no
@@ -99,6 +99,21 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
   );
 }
 
+// A shared event link is worthless to a friend who isn't signed in yet if it
+// just dead-ends at ProtectedRoute's generic redirect to "/" — this stashes
+// which event they came for (same slot pending-invite.ts already uses for
+// group links) before that happens, so Login/Signup send them back here
+// once they're in, instead of the default landing spot.
+function EventLinkGate({ params }: { params: { id?: string } }) {
+  const { user, isLoading } = useAuth();
+  useEffect(() => {
+    if (!isLoading && !user && params.id) {
+      stashPendingEvent(params.id);
+    }
+  }, [isLoading, user, params.id]);
+  return <ProtectedRoute component={EventDetail} params={params} />;
+}
+
 function AuthenticatedHome() {
   const { data: profile, isLoading } = useProfile();
   const [, setLocation] = useLocation();
@@ -114,7 +129,7 @@ function AuthenticatedHome() {
       // from a WhatsApp forward to actually join.
       const pendingInvite = consumePendingInvite();
       if (pendingInvite) {
-        setLocation(`/join/${pendingInvite}`);
+        setLocation(resolvePendingInviteRoute(pendingInvite));
       } else if (!profile || !profile.gender || !profile.seekingGenders?.length) {
         // Matching essentials come first — before the soul-mapping questions.
         setLocation("/essentials");
@@ -198,7 +213,7 @@ function Router() {
         <ProtectedRoute component={HostEvent} />
       </Route>
       <Route path="/events/:id">
-        {(params) => <ProtectedRoute component={EventDetail} params={params} />}
+        {(params) => <EventLinkGate params={params} />}
       </Route>
       <Route path="/lounge/group/:groupId/info">
         {(params) => <ProtectedRoute component={GroupInfoPage} params={params} />}

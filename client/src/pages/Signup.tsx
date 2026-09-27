@@ -7,7 +7,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { ageFromDob, MIN_AGE } from "@shared/essentials";
-import { consumePendingInvite } from "@/lib/pending-invite";
+import { consumePendingInvite, resolvePendingInviteRoute } from "@/lib/pending-invite";
 
 const INPUT =
   "w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-11 text-sm text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow";
@@ -100,7 +100,7 @@ export default function Signup() {
       /* noop */
     }
     const pendingInvite = consumePendingInvite();
-    setLocation(pendingInvite ? `/join/${pendingInvite}` : "/");
+    setLocation(pendingInvite ? resolvePendingInviteRoute(pendingInvite) : "/");
   };
 
   const handleGoogleSignup = async () => {

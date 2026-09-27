@@ -4966,6 +4966,43 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Distinct from POST /api/users/:id/report — reporting an event cites the
+  // event as evidence (the admin console's "unpublish_event" moderation
+  // action already knows how to act on that) but, unlike a profile report,
+  // deliberately does NOT auto-block the host: someone flagging one event
+  // (wrong address, feels unsafe, whatever) isn't necessarily saying they
+  // never want to interact with that person again.
+  app.post("/api/events/:id/report", async (req, res) => {
+    const reporterId = getUserId(req);
+    if (!reporterId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, 1000) : "";
+    const category = (REPORT_CATEGORIES as readonly string[]).includes(req.body?.category) ? req.body.category : "other";
+    try {
+      const event = await eventsService.getEventDetail(eventId, reporterId).catch(() => null);
+      if (!event) return res.status(404).json({ message: "Event not found" });
+      if (event.hostUserId === reporterId) return res.status(400).json({ message: "You can't report your own event" });
+      await storage.createAuditLog(reporterId, "event_reported", { eventId, reason, category });
+      const [newReport] = await db
+        .insert(reportsTable)
+        .values({
+          reporterId,
+          subjectId: event.hostUserId,
+          category,
+          freeText: reason || null,
+          evidence: [{ type: "event", id: String(eventId) }],
+        })
+        .returning();
+      const isSafety = category === "safety_escalation" || category === "underage_concern";
+      emailTemplates.alertReportFiled({ reportId: newReport.id, category, isSafety }).catch(() => {});
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Event report submission error:", err);
+      res.status(500).json({ message: "Failed to submit report" });
+    }
+  });
+
   app.post("/api/events/:id/cancel", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
