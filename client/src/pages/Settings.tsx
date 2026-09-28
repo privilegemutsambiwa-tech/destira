@@ -1956,6 +1956,7 @@ export default function Settings() {
           <ToggleRow icon={MessageSquare} label="Messages" value={notifEnabled("messages")} onChange={(v) => handleToggleNotifPref("messages", v)} testId="toggle-notif-messages" />
           <ToggleRow icon={Bell} label="Stories" value={notifEnabled("stories")} onChange={(v) => handleToggleNotifPref("stories", v)} testId="toggle-notif-stories" />
           <ToggleRow icon={Brain} label="Interview Requests" value={notifEnabled("interviews")} onChange={(v) => handleToggleNotifPref("interviews", v)} testId="toggle-notif-interviews" />
+          <ToggleRow icon={CalendarDays} label="Events Near You" value={notifEnabled("events")} onChange={(v) => handleToggleNotifPref("events", v)} testId="toggle-notif-events" />
         </div>
       ),
     },

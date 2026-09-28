@@ -195,6 +195,8 @@ export interface IStorage {
   updateGroupMemberRole(groupId: number, userId: string, role: string): Promise<GroupMember>;
   removeGroupMember(groupId: number, userId: string): Promise<void>;
   getGroupMessages(groupId: number, limit?: number, since?: Date): Promise<GroupMessage[]>;
+  getLatestGroupMessage(groupId: number, since?: Date): Promise<GroupMessage | undefined>;
+  getUnreadGroupMessageCount(groupId: number, since: Date | undefined, lastSeenMessageId: number | null): Promise<number>;
   getVisibleGroupMessages(groupId: number, userId: string, limit?: number): Promise<GroupMessage[]>;
   getGroupMessage(messageId: number): Promise<GroupMessage | undefined>;
   sendGroupMessage(groupId: number, userId: string, nickname: string, content: string, opts?: { contentType?: string; mediaUrl?: string; replyToMessageId?: number }): Promise<GroupMessage>;
@@ -1335,6 +1337,34 @@ export class DatabaseStorage implements IStorage {
       .where(where)
       .orderBy(asc(groupMessages.createdAt))
       .limit(limit);
+  }
+
+  // The actual newest message (for previews) — distinct from getGroupMessages,
+  // which is oldest-first for chat-history pagination. A naive
+  // getGroupMessages(groupId, 1, since) returns the OLDEST message since
+  // `since`, not the newest; that bug is exactly why Lounge previews used to
+  // freeze on the first message after a member joined.
+  async getLatestGroupMessage(groupId: number, since?: Date): Promise<GroupMessage | undefined> {
+    const where = since
+      ? and(eq(groupMessages.groupId, groupId), gte(groupMessages.createdAt, since))
+      : eq(groupMessages.groupId, groupId);
+    const [msg] = await db.select().from(groupMessages)
+      .where(where)
+      .orderBy(desc(groupMessages.createdAt))
+      .limit(1);
+    return msg;
+  }
+
+  // Unread count for one member's Lounge preview: visible messages (sent
+  // since they joined) newer than their read watermark. A null watermark
+  // means they've never opened the thread, so everything visible is unread.
+  async getUnreadGroupMessageCount(groupId: number, since: Date | undefined, lastSeenMessageId: number | null): Promise<number> {
+    const conds = since
+      ? [eq(groupMessages.groupId, groupId), gte(groupMessages.createdAt, since)]
+      : [eq(groupMessages.groupId, groupId)];
+    if (lastSeenMessageId != null) conds.push(gt(groupMessages.id, lastSeenMessageId));
+    const [row] = await db.select({ n: count() }).from(groupMessages).where(and(...conds));
+    return Number(row?.n ?? 0);
   }
 
   // What a given user is allowed to see: nothing unless they're a member, and

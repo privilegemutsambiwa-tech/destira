@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import {
-  ArrowLeft, Send, Info, Loader2, Paperclip, BarChart3,
+  ArrowLeft, Send, Info, Loader2, Paperclip, BarChart3, Dices,
   Heart, ThumbsUp, ThumbsDown, Laugh, Flame, Star,
   Reply, Copy, Trash2, X, Plus, Users, Image as ImageIcon,
   MessageSquarePlus, Crown, Flag, CheckCheck
@@ -19,6 +19,7 @@ import {
 import {
   useGroup, useEnrichedGroupMessages, useSendGroupMessage,
   useCreatePoll, usePollByMessage, useVotePoll,
+  useGameKinds, useGameBank, useCreateGame, useGameByMessage, useSubmitGameResponse, useRevealGame,
   useAddReaction, useRemoveReaction, useDeleteOwnMessage,
   useDeleteGroupMessage, useJoinGroup, useLeaveGroup,
   useStarMessage, useUnstarMessage, useCreateChatRequest,
@@ -267,6 +268,477 @@ function PollComposerDialog({ groupId, open, onClose }: { groupId: number; open:
   );
 }
 
+const GAME_ICON_LABEL: Record<string, string> = {
+  two_truths_one_lie: "🎭", would_you_rather: "🤔", this_or_that: "⚡",
+  never_have_i_ever: "🙈", most_likely_to: "🏆", trivia_round: "🧠",
+  category_sprint: "⏱️", emoji_charades: "🎬", icebreaker_roulette: "🎲",
+};
+
+function GameProgress({ state }: { state: any }) {
+  if (state.status === "revealed") return <span style={{ color: EMBER }}>Revealed</span>;
+  return <span style={{ color: MUTED }}>{state.responseCount} of {state.eligibleCount} answered</span>;
+}
+
+function ChoiceRound({ state, choices, onPick, resultsFor }: {
+  state: any;
+  choices: { key: string; label: string }[];
+  onPick: (key: string) => void;
+  resultsFor?: (key: string) => { count: number; pct: number } | null;
+}) {
+  const revealed = state.status === "revealed";
+  return (
+    <div className="space-y-1.5">
+      {choices.map((c) => {
+        const isMine = state.myResponse && Object.values(state.myResponse)[0] === c.key;
+        const res = revealed ? resultsFor?.(c.key) : null;
+        return (
+          <button
+            key={c.key}
+            onClick={() => !state.myResponse && onPick(c.key)}
+            disabled={!!state.myResponse}
+            className="w-full text-left p-2 text-xs relative overflow-hidden transition-colors"
+            style={{
+              borderRadius: "8px",
+              border: isMine ? "1px solid hsl(var(--vf-ember) / 0.6)" : `1px solid ${LINE}`,
+              background: isMine ? "hsl(var(--vf-ember) / 0.12)" : SURFACE2,
+            }}
+            data-testid={`game-choice-${c.key}`}
+          >
+            {res && <div className="absolute inset-0" style={{ width: `${res.pct}%`, background: "hsl(var(--vf-ember) / 0.1)" }} />}
+            <div className="relative flex items-center justify-between gap-2">
+              <span className={isMine ? "font-medium text-foreground" : "text-foreground/80"}>{c.label}</span>
+              {res && <span style={{ color: MUTED }}>{res.count} ({res.pct}%)</span>}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function GameBubble({ messageId, groupId }: { messageId: number; groupId: number }) {
+  const { data: state, isLoading } = useGameByMessage(messageId);
+  const respond = useSubmitGameResponse(groupId);
+  const reveal = useRevealGame(groupId);
+  const [draftText, setDraftText] = useState("");
+  const [draftPairChoices, setDraftPairChoices] = useState<Record<number, "a" | "b">>({});
+  const [draftAnswers, setDraftAnswers] = useState<Record<number, number>>({});
+
+  if (isLoading) return <Loader2 className="w-4 h-4 animate-spin" />;
+  if (!state) return null;
+
+  const submit = (response: any) => respond.mutate({ gameId: state.id, messageId, response });
+  const hasResponded = !!state.myResponse;
+  const revealed = state.status === "revealed";
+
+  return (
+    <div className="space-y-2 min-w-[220px]" data-testid={`game-bubble-${messageId}`}>
+      <p className="font-medium text-sm text-foreground">
+        {GAME_ICON_LABEL[state.kind] || "🎮"} {state.label}
+      </p>
+
+      {state.kind === "would_you_rather" && (
+        <>
+          <p className="text-xs" style={{ color: MUTED }}>{state.config.a} — or — {state.config.b}</p>
+          <ChoiceRound
+            state={state}
+            choices={[{ key: "a", label: state.config.a }, { key: "b", label: state.config.b }]}
+            onPick={(choice) => submit({ choice })}
+            resultsFor={(key) => revealed ? { count: key === "a" ? state.results.aCount : state.results.bCount, pct: key === "a" ? state.results.aPct : state.results.bPct } : null}
+          />
+        </>
+      )}
+
+      {state.kind === "never_have_i_ever" && (
+        <>
+          <p className="text-xs" style={{ color: MUTED }}>{state.config.statement}</p>
+          <ChoiceRound
+            state={state}
+            choices={[{ key: "have", label: "I have" }, { key: "havent", label: "I haven't" }]}
+            onPick={(choice) => submit({ choice })}
+            resultsFor={(key) => {
+              if (!revealed) return null;
+              const total = (state.results.haveCount + state.results.haventCount) || 1;
+              const count = key === "have" ? state.results.haveCount : state.results.haventCount;
+              return { count, pct: Math.round((count / total) * 100) };
+            }}
+          />
+        </>
+      )}
+
+      {state.kind === "two_truths_one_lie" && (
+        <ChoiceRound
+          state={state}
+          choices={state.config.statements.map((s: string, i: number) => ({ key: String(i), label: s }))}
+          onPick={(key) => submit({ guessIndex: Number(key) })}
+          resultsFor={(key) => {
+            if (!revealed) return null;
+            const count = state.results.guesses.filter((g: any) => g.guessIndex === Number(key)).length;
+            const total = state.results.guesses.length || 1;
+            return { count, pct: Math.round((count / total) * 100) };
+          }}
+        />
+      )}
+      {state.kind === "two_truths_one_lie" && revealed && (
+        <p className="text-xs" style={{ color: EMBER }}>
+          The lie was #{state.results.lieIndex + 1}. {state.results.correctGuessers.length ? `Guessed right: ${state.results.correctGuessers.join(", ")}` : "Nobody guessed it."}
+        </p>
+      )}
+
+      {state.kind === "most_likely_to" && (
+        <>
+          <p className="text-xs" style={{ color: MUTED }}>{state.config.prompt}</p>
+          <ChoiceRound
+            state={state}
+            choices={state.config.candidates.map((c: any) => ({ key: c.userId, label: c.nickname }))}
+            onPick={(targetUserId) => submit({ targetUserId })}
+            resultsFor={(key) => {
+              if (!revealed) return null;
+              const row = state.results.tally.find((t: any) => t.userId === key);
+              const total = state.results.tally.reduce((s: number, t: any) => s + t.votes, 0) || 1;
+              return { count: row?.votes ?? 0, pct: Math.round(((row?.votes ?? 0) / total) * 100) };
+            }}
+          />
+          {revealed && state.results.winner && (
+            <p className="text-xs" style={{ color: EMBER }}>🏆 {state.results.winner.nickname}</p>
+          )}
+        </>
+      )}
+
+      {state.kind === "this_or_that" && (
+        <div className="space-y-3">
+          {state.config.pairs.map((p: { a: string; b: string }, i: number) => {
+            const picked = hasResponded ? state.myResponse.choices?.[i] : draftPairChoices[i];
+            const res = revealed ? state.results[i] : null;
+            return (
+              <div key={i} className="flex items-center gap-2 text-xs">
+                {(["a", "b"] as const).map((side) => (
+                  <button
+                    key={side}
+                    disabled={hasResponded}
+                    onClick={() => setDraftPairChoices((cur) => ({ ...cur, [i]: side }))}
+                    className="flex-1 p-2 text-left relative overflow-hidden"
+                    style={{
+                      borderRadius: 8,
+                      border: picked === side ? "1px solid hsl(var(--vf-ember) / 0.6)" : `1px solid ${LINE}`,
+                      background: picked === side ? "hsl(var(--vf-ember) / 0.12)" : SURFACE2,
+                    }}
+                  >
+                    <span>{side === "a" ? p.a : p.b}</span>
+                    {res && <span className="ml-2" style={{ color: MUTED }}>{side === "a" ? res.aCount : res.bCount}</span>}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+          {!hasResponded && (
+            <Button
+              size="sm"
+              disabled={Object.keys(draftPairChoices).length < state.config.pairs.length || respond.isPending}
+              onClick={() => submit({ choices: state.config.pairs.map((_: any, i: number) => draftPairChoices[i]) })}
+              data-testid="button-submit-this-or-that"
+            >
+              Submit
+            </Button>
+          )}
+        </div>
+      )}
+
+      {state.kind === "trivia_round" && (
+        <div className="space-y-3">
+          {state.config.questions.map((q: { question: string; options: string[] }, i: number) => {
+            const picked = hasResponded ? state.myResponse.answers?.[i] : draftAnswers[i];
+            return (
+              <div key={i} className="space-y-1">
+                <p className="text-xs font-medium text-foreground">{i + 1}. {q.question}</p>
+                {q.options.map((opt, oi) => {
+                  const isCorrect = revealed && state.results.correctIndexes[i] === oi;
+                  return (
+                    <button
+                      key={oi}
+                      disabled={hasResponded}
+                      onClick={() => setDraftAnswers((cur) => ({ ...cur, [i]: oi }))}
+                      className="w-full text-left p-1.5 text-xs"
+                      style={{
+                        borderRadius: 6,
+                        border: isCorrect ? "1px solid hsl(var(--vf-mint) / 0.7)" : picked === oi ? "1px solid hsl(var(--vf-ember) / 0.6)" : `1px solid ${LINE}`,
+                        background: isCorrect ? "hsl(var(--vf-mint) / 0.12)" : picked === oi ? "hsl(var(--vf-ember) / 0.1)" : SURFACE2,
+                      }}
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+          {!hasResponded && (
+            <Button
+              size="sm"
+              disabled={Object.keys(draftAnswers).length < state.config.questions.length || respond.isPending}
+              onClick={() => submit({ answers: state.config.questions.map((_: any, i: number) => draftAnswers[i]) })}
+              data-testid="button-submit-trivia"
+            >
+              Submit answers
+            </Button>
+          )}
+          {revealed && (
+            <p className="text-xs" style={{ color: MUTED }}>
+              {state.results.scores.map((s: any) => `${s.nickname}: ${s.score}/${state.config.questions.length}`).join(" · ")}
+            </p>
+          )}
+        </div>
+      )}
+
+      {state.kind === "category_sprint" && (
+        <div className="space-y-2">
+          <p className="text-xs" style={{ color: MUTED }}>Category: {state.config.category} — list as many as you can</p>
+          {!hasResponded ? (
+            <div className="flex items-center gap-2">
+              <Input value={draftText} onChange={(e) => setDraftText(e.target.value)} placeholder="comma-separated..." className="text-xs h-8" data-testid="input-category-sprint" />
+              <Button size="sm" disabled={!draftText.trim() || respond.isPending} onClick={() => submit({ items: draftText.split(",").map((s) => s.trim()).filter(Boolean) })}>
+                Submit
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs" style={{ color: MUTED }}>Submitted — waiting on the rest of the group.</p>
+          )}
+          {revealed && (
+            <div className="space-y-1">
+              {state.results.leaderboard.map((row: any) => (
+                <p key={row.userId} className="text-xs" style={{ color: MUTED }}>
+                  <span className="text-foreground font-medium">{row.nickname}</span> ({row.uniqueCount} unique): {row.items.join(", ")}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {state.kind === "emoji_charades" && (
+        <div className="space-y-2">
+          <p className="text-2xl">{state.config.emoji}</p>
+          {!revealed ? (
+            <div className="flex items-center gap-2">
+              <Input value={draftText} onChange={(e) => setDraftText(e.target.value)} placeholder="Your guess..." className="text-xs h-8" data-testid="input-charades-guess" />
+              <Button size="sm" disabled={!draftText.trim() || respond.isPending} onClick={() => { submit({ guess: draftText.trim() }); setDraftText(""); }}>
+                Guess
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs" style={{ color: EMBER }}>
+              It was "{state.results.answer}" — {state.results.correctGuessers.length ? `guessed by ${state.results.correctGuessers.join(", ")}` : "nobody got it"}
+            </p>
+          )}
+          {state.canRevealEarly && (
+            <Button size="sm" variant="outline" onClick={() => reveal.mutate({ gameId: state.id, messageId })} data-testid="button-reveal-charades">
+              Reveal answer
+            </Button>
+          )}
+        </div>
+      )}
+
+      {state.kind === "icebreaker_roulette" && (
+        <div className="space-y-2">
+          <p className="text-xs" style={{ color: MUTED }}>{state.config.prompt}</p>
+          {!hasResponded && (
+            <div className="flex items-center gap-2">
+              <Input value={draftText} onChange={(e) => setDraftText(e.target.value)} placeholder="Your answer..." className="text-xs h-8" data-testid="input-icebreaker" />
+              <Button size="sm" disabled={!draftText.trim() || respond.isPending} onClick={() => { submit({ text: draftText.trim() }); setDraftText(""); }}>
+                Share
+              </Button>
+            </div>
+          )}
+          {state.results?.live?.length > 0 && (
+            <div className="space-y-1">
+              {state.results.live.map((r: any, i: number) => (
+                <p key={i} className="text-xs" style={{ color: MUTED }}><span className="text-foreground font-medium">{r.nickname}:</span> {r.response?.text}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {state.kind !== "icebreaker_roulette" && <p className="text-xs"><GameProgress state={state} /></p>}
+    </div>
+  );
+}
+
+function GameComposerDialog({ groupId, open, onClose }: { groupId: number; open: boolean; onClose: () => void }) {
+  const { data: kindsData } = useGameKinds();
+  const [selectedKind, setSelectedKind] = useState<string | null>(null);
+  const { data: bankData } = useGameBank(selectedKind);
+  const createGame = useCreateGame(groupId);
+  const { toast } = useToast();
+
+  // Setup-form local state, cleared whenever the picked kind changes.
+  const [statements, setStatements] = useState(["", "", ""]);
+  const [lieIndex, setLieIndex] = useState<number | null>(null);
+  const [promptIndex, setPromptIndex] = useState<number | null>(null);
+  const [customA, setCustomA] = useState("");
+  const [customB, setCustomB] = useState("");
+  const [customStatement, setCustomStatement] = useState("");
+  const [charadesFromBank, setCharadesFromBank] = useState(true);
+  const [charadesAnswer, setCharadesAnswer] = useState("");
+  const [charadesEmoji, setCharadesEmoji] = useState("");
+
+  const reset = () => {
+    setSelectedKind(null);
+    setStatements(["", "", ""]);
+    setLieIndex(null);
+    setPromptIndex(null);
+    setCustomA(""); setCustomB(""); setCustomStatement("");
+    setCharadesFromBank(true); setCharadesAnswer(""); setCharadesEmoji("");
+  };
+
+  const buildSetup = (): any => {
+    switch (selectedKind) {
+      case "two_truths_one_lie": return { statements, lieIndex };
+      case "would_you_rather": return customA.trim() && customB.trim() ? { a: customA.trim(), b: customB.trim() } : {};
+      case "never_have_i_ever": return customStatement.trim() ? { statement: customStatement.trim() } : {};
+      case "most_likely_to": return { promptIndex };
+      case "emoji_charades": return charadesFromBank ? { fromBank: true } : { answer: charadesAnswer, emoji: charadesEmoji };
+      default: return {};
+    }
+  };
+
+  const canSubmit = (): boolean => {
+    if (!selectedKind) return false;
+    if (selectedKind === "two_truths_one_lie") return statements.every((s) => s.trim()) && lieIndex !== null;
+    if (selectedKind === "most_likely_to") return promptIndex !== null;
+    if (selectedKind === "emoji_charades" && !charadesFromBank) return !!charadesAnswer.trim() && !!charadesEmoji.trim();
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedKind || !canSubmit()) return;
+    try {
+      await createGame.mutateAsync({ kind: selectedKind, setup: buildSetup() });
+      toast({ title: "Game started" });
+      reset();
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Couldn't start that", description: e?.message, variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(); onClose(); } }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Play a game</DialogTitle>
+          <DialogDescription>Pick something for the group to play together, right here in chat.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+          {!selectedKind ? (
+            <div className="space-y-1.5">
+              {(kindsData?.kinds ?? []).map((k) => (
+                <button
+                  key={k.kind}
+                  onClick={() => setSelectedKind(k.kind)}
+                  className="w-full text-left p-2.5 text-sm"
+                  style={{ borderRadius: 10, border: `1px solid ${LINE}`, background: SURFACE2 }}
+                  data-testid={`game-kind-${k.kind}`}
+                >
+                  <div className="font-medium text-foreground">{GAME_ICON_LABEL[k.kind] || "🎮"} {k.label}</div>
+                  <div className="text-xs" style={{ color: MUTED }}>{k.blurb}</div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <button onClick={() => setSelectedKind(null)} className="text-xs" style={{ color: MUTED }}>← Back</button>
+
+              {selectedKind === "two_truths_one_lie" && (
+                <div className="space-y-2">
+                  {statements.map((s, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input value={s} onChange={(e) => { const next = [...statements]; next[i] = e.target.value; setStatements(next); }} placeholder={`Statement ${i + 1}`} data-testid={`input-truth-${i}`} />
+                      <button
+                        onClick={() => setLieIndex(i)}
+                        className="text-xs px-2 py-1 rounded-full shrink-0"
+                        style={{ border: `1px solid ${lieIndex === i ? EMBER : LINE}`, color: lieIndex === i ? EMBER : MUTED }}
+                        data-testid={`button-mark-lie-${i}`}
+                      >
+                        {lieIndex === i ? "This is the lie" : "Mark as lie"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedKind === "would_you_rather" && (
+                <div className="space-y-2">
+                  <p className="text-xs" style={{ color: MUTED }}>Leave blank to get a random one from the bank.</p>
+                  <Input value={customA} onChange={(e) => setCustomA(e.target.value)} placeholder="Option A (optional)" data-testid="input-wyr-a" />
+                  <Input value={customB} onChange={(e) => setCustomB(e.target.value)} placeholder="Option B (optional)" data-testid="input-wyr-b" />
+                </div>
+              )}
+
+              {selectedKind === "never_have_i_ever" && (
+                <div className="space-y-2">
+                  <p className="text-xs" style={{ color: MUTED }}>Leave blank to get a random one from the bank.</p>
+                  <Input value={customStatement} onChange={(e) => setCustomStatement(e.target.value)} placeholder="Never have I ever... (optional)" data-testid="input-nhie" />
+                </div>
+              )}
+
+              {selectedKind === "most_likely_to" && (
+                <div className="space-y-1.5">
+                  {(bankData?.items ?? []).map((item: any) => (
+                    <button
+                      key={item.promptIndex}
+                      onClick={() => setPromptIndex(item.promptIndex)}
+                      className="w-full text-left p-2 text-xs"
+                      style={{ borderRadius: 8, border: `1px solid ${promptIndex === item.promptIndex ? EMBER : LINE}`, background: promptIndex === item.promptIndex ? "hsl(var(--vf-ember) / 0.1)" : SURFACE2 }}
+                      data-testid={`most-likely-prompt-${item.promptIndex}`}
+                    >
+                      {item.prompt}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {selectedKind === "emoji_charades" && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setCharadesFromBank(true)} className="text-xs px-2 py-1 rounded-full" style={{ border: `1px solid ${charadesFromBank ? EMBER : LINE}`, color: charadesFromBank ? EMBER : MUTED }}>Surprise me</button>
+                    <button onClick={() => setCharadesFromBank(false)} className="text-xs px-2 py-1 rounded-full" style={{ border: `1px solid ${!charadesFromBank ? EMBER : LINE}`, color: !charadesFromBank ? EMBER : MUTED }}>Write my own</button>
+                  </div>
+                  {!charadesFromBank && (
+                    <>
+                      <Input value={charadesEmoji} onChange={(e) => setCharadesEmoji(e.target.value)} placeholder="Emoji clue, e.g. 🦁👑🌍" data-testid="input-charades-emoji" />
+                      <Input value={charadesAnswer} onChange={(e) => setCharadesAnswer(e.target.value)} placeholder="Answer" data-testid="input-charades-answer" />
+                    </>
+                  )}
+                </div>
+              )}
+
+              {["this_or_that", "trivia_round", "category_sprint", "icebreaker_roulette"].includes(selectedKind) && (
+                <p className="text-xs" style={{ color: MUTED }}>Nothing to set up — this one's ready to go.</p>
+              )}
+            </div>
+          )}
+        </div>
+        {selectedKind && (
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { reset(); onClose(); }}>Cancel</Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={!canSubmit() || createGame.isPending}
+              className="btn-press"
+              style={{ background: EMBER, border: "none", color: INK }}
+              data-testid="button-submit-game"
+            >
+              {createGame.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              Start
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Groups can have far more members than a "who's seen this" list should try
 // to enumerate, so this leads with the count and only lists names up to the
 // cap the API already applies — never a claim that the list is exhaustive.
@@ -337,6 +809,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   const [replyTo, setReplyTo] = useState<any>(null);
   const [activeMessageId, setActiveMessageId] = useState<number | null>(null);
   const [showPollDialog, setShowPollDialog] = useState(false);
+  const [showGameDialog, setShowGameDialog] = useState(false);
   const [messageInfoId, setMessageInfoId] = useState<number | null>(null);
   const [reportTarget, setReportTarget] = useState<{ userId: string; messageId: number } | null>(null);
   const [reportReason, setReportReason] = useState("");
@@ -674,6 +1147,8 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                             <video src={msg.mediaUrl} className="rounded-lg max-w-[250px] max-h-[300px]" controls data-testid={`video-${msg.id}`} />
                           ) : msg.contentType === "poll" ? (
                             <PollBubble messageId={msg.id} groupId={groupId} />
+                          ) : msg.contentType === "game" ? (
+                            <GameBubble messageId={msg.id} groupId={groupId} />
                           ) : parseDestiraLink(msg.content) ? (
                             <LinkPreviewCard content={msg.content} />
                           ) : (
@@ -924,6 +1399,15 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
               >
                 <BarChart3 className="w-4 h-4" />
               </button>
+              <button
+                type="button"
+                className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
+                style={{ color: MUTED, background: "transparent" }}
+                onClick={() => setShowGameDialog(true)}
+                data-testid="button-game"
+              >
+                <Dices className="w-4 h-4" />
+              </button>
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -965,6 +1449,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
       </div>
 
       <PollComposerDialog groupId={groupId} open={showPollDialog} onClose={() => setShowPollDialog(false)} />
+      <GameComposerDialog groupId={groupId} open={showGameDialog} onClose={() => setShowGameDialog(false)} />
       <MessageInfoDialog groupId={groupId} messageId={messageInfoId} onClose={() => setMessageInfoId(null)} />
       {paywall.sheet}
 

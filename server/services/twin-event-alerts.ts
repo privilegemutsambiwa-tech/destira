@@ -24,6 +24,7 @@ import {
 import { and, count, eq, gte, inArray } from "drizzle-orm";
 import { scoreEventForUser } from "../events-fit";
 import { buildContext } from "../events-feed";
+import { sendCategorizedPush } from "../push";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_UTC_OFFSET_HOURS = 2; // Zimbabwe (CAT) — every seeded suburb
@@ -154,6 +155,17 @@ export async function runTwinEventAlerts(eventId: number): Promise<{ sent: numbe
       title: "Your twin flagged an event",
       body: message,
     });
+    // Same gate that already protects every other push category (Settings ->
+    // Notifications -> Events) — this alert already passed its own, much
+    // stricter dedupe/quiet-hours/weekly-cap gates above, so a push here is
+    // additive reach for someone who has the app closed, not a new source of
+    // nagging.
+    sendCategorizedPush(prefs.userId, "events", {
+      title: "Your twin flagged an event",
+      body: message,
+      url: `/events/${eventId}`,
+      tag: `event-alert-${eventId}`,
+    }).catch(() => {});
     sent += 1;
   }
 

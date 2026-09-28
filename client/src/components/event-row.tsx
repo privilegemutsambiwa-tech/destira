@@ -53,6 +53,11 @@ export function eventResonanceSignal(event: EventItem): { text: string; color: "
     return { text: `${resonance.highReadCount} read${resonance.highReadCount === 1 ? "" : "s"} above 80 going`, color: "mint" };
   }
   if (event.emberFirstPick) return { text: "Ember members get first pick", color: "gold" };
+  // A brand-new event with nobody going yet used to show no signal line at
+  // all here, which read as "nothing happening" right when a host most needs
+  // the first RSVP. An inviting line costs nothing and disappears the moment
+  // there's real social proof to show instead.
+  if (resonance.goingCount === 0 && event.myStatus == null) return { text: "Be the first to RSVP", color: "gold" };
   return null;
 }
 

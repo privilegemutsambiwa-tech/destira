@@ -308,6 +308,43 @@ export const pollVotes = pgTable("poll_votes", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Group games: the same message-as-pointer pattern as polls above
+// (groupMessages row with contentType 'game' -> messageId here), but unlike
+// a poll a game has a reveal MOMENT (status flips once) and some kinds hide
+// an answer in `config` until reveal — see server/group-games.ts, which is
+// the only place `config`/`response` ever get interpreted or sanitized.
+export const GROUP_GAME_KINDS = [
+  "two_truths_one_lie", "would_you_rather", "this_or_that", "never_have_i_ever",
+  "most_likely_to", "trivia_round", "category_sprint", "emoji_charades", "icebreaker_roulette",
+] as const;
+export const groupGameKindEnum = z.enum(GROUP_GAME_KINDS);
+export type GroupGameKind = (typeof GROUP_GAME_KINDS)[number];
+
+export const groupGames = pgTable("group_games", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => groups.id),
+  messageId: integer("message_id").references(() => groupMessages.id),
+  kind: text("kind").notNull(), // one GROUP_GAME_KINDS value
+  startedBy: varchar("started_by").notNull().references(() => users.id),
+  config: jsonb("config").notNull(), // per-kind setup; may hold a hidden answer pre-reveal
+  status: text("status").notNull().default("active"), // 'active' | 'revealed'
+  revealAt: timestamp("reveal_at"), // null = reveals only once every eligible member has responded
+  results: jsonb("results"), // computed exactly once, at reveal — never recomputed after
+  createdAt: timestamp("created_at").defaultNow(),
+  revealedAt: timestamp("revealed_at"),
+});
+
+export const groupGameResponses = pgTable("group_game_responses", {
+  id: serial("id").primaryKey(),
+  gameId: integer("game_id").notNull().references(() => groupGames.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  nickname: text("nickname").notNull(), // denormalized snapshot, same convention as groupMessages.nickname
+  response: jsonb("response").notNull(), // shape is per-kind: {choice}/{text}/{items}/{targetUserId}
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [
+  uniqueIndex("group_game_responses_game_user_idx").on(t.gameId, t.userId),
+]);
+
 export const messageReactions = pgTable("message_reactions", {
   id: serial("id").primaryKey(),
   messageId: integer("message_id").notNull().references(() => groupMessages.id),
@@ -667,7 +704,7 @@ export const reminderDismissals = pgTable("reminder_dismissals", {
   uniqueIndex("reminder_dismissals_user_kind_idx").on(t.userId, t.kind),
 ]);
 
-export const REMINDER_KINDS = ["discover_readiness_strip", "proximity_upsell", "twin_disclosure_intro", "twin_disclosure_interview", "profile_photos_nudge", "profile_completion_nudge"] as const;
+export const REMINDER_KINDS = ["discover_readiness_strip", "proximity_upsell", "twin_disclosure_intro", "twin_disclosure_interview", "profile_photos_nudge", "profile_completion_nudge", "lounge_intro_tip", "events_intro_tip"] as const;
 export const reminderKindEnum = z.enum(REMINDER_KINDS);
 
 // The minimum answered soul-mapping questions below which the twin is NOT
@@ -1210,6 +1247,17 @@ export const insertPollVoteSchema = createInsertSchema(pollVotes).omit({
   createdAt: true,
 });
 
+export const insertGroupGameSchema = createInsertSchema(groupGames).omit({
+  id: true,
+  createdAt: true,
+  revealedAt: true,
+});
+
+export const insertGroupGameResponseSchema = createInsertSchema(groupGameResponses).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertMessageReactionSchema = createInsertSchema(messageReactions).omit({
   id: true,
   createdAt: true,
@@ -1255,6 +1303,8 @@ export type Entitlement = typeof entitlements.$inferSelect;
 export type Poll = typeof polls.$inferSelect;
 export type PollOption = typeof pollOptions.$inferSelect;
 export type PollVote = typeof pollVotes.$inferSelect;
+export type GroupGame = typeof groupGames.$inferSelect;
+export type GroupGameResponse = typeof groupGameResponses.$inferSelect;
 export type MessageReaction = typeof messageReactions.$inferSelect;
 export type StarredMessage = typeof starredMessages.$inferSelect;
 

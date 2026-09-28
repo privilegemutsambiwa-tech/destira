@@ -1028,6 +1028,94 @@ export function useVotePoll(groupId: number) {
   });
 }
 
+export function useGameKinds() {
+  return useQuery<{ kinds: { kind: string; label: string; blurb: string; needsSetup: boolean }[] }>({
+    queryKey: ["/api/games/kinds"],
+    queryFn: async () => {
+      const res = await fetch("/api/games/kinds", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load games");
+      return res.json();
+    },
+    staleTime: Infinity, // static registry, never changes within a session
+  });
+}
+
+export function useGameBank(kind: string | null) {
+  return useQuery<{ items: any[] }>({
+    queryKey: ["/api/games/kinds", kind, "bank"],
+    queryFn: async () => {
+      const res = await fetch(`/api/games/kinds/${kind}/bank`, { credentials: "include" });
+      if (!res.ok) return { items: [] };
+      return res.json();
+    },
+    enabled: !!kind,
+    staleTime: Infinity,
+  });
+}
+
+export function useCreateGame(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { kind: string; setup: any }) => {
+      const res = await fetch(`/api/groups/${groupId}/games`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || "Failed to start game");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] }),
+  });
+}
+
+export function useGameByMessage(messageId: number) {
+  return useQuery({
+    queryKey: ["/api/messages", messageId, "game"],
+    queryFn: async () => {
+      const res = await fetch(`/api/messages/${messageId}/game`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+}
+
+export function useSubmitGameResponse(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ gameId, messageId, response }: { gameId: number; messageId: number; response: any }) => {
+      const res = await fetch(`/api/games/${gameId}/respond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ response }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || "Failed to respond");
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/messages", variables.messageId, "game"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] });
+    },
+  });
+}
+
+export function useRevealGame(groupId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ gameId, messageId }: { gameId: number; messageId: number }) => {
+      const res = await fetch(`/api/games/${gameId}/reveal`, { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || "Failed to reveal");
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/messages", variables.messageId, "game"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] });
+    },
+  });
+}
+
 export function useAddReaction(groupId: number) {
   const queryClient = useQueryClient();
   return useMutation({

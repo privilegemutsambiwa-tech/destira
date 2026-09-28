@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutShell } from "@/components/layout-shell";
 import { EventRow, FeaturedEventRow } from "@/components/event-row";
 import {
@@ -73,6 +73,38 @@ function activeCount(p: EventSearchParams): number {
     (p.when && p.when !== "any" ? 1 : 0) +
     (p.sober ? 1 : 0) +
     (p.stepFree ? 1 : 0)
+  );
+}
+
+// Same orientation-strip pattern as Lounge's intro tip — the events feed is
+// still thin with ~300 users on the platform, so a first-time visitor needs
+// to be told what's even possible here (join / host / find details) rather
+// than left to infer it from an empty-looking list.
+function EventsIntroTip() {
+  const qc = useQueryClient();
+  const { data } = useQuery<{ dismissed: boolean }>({
+    queryKey: ["/api/reminders", "events_intro_tip"],
+    queryFn: async () => {
+      const res = await fetch("/api/reminders/events_intro_tip", { credentials: "include" });
+      if (!res.ok) return { dismissed: true };
+      return res.json();
+    },
+  });
+  if (!data || data.dismissed) return null;
+  const dismiss = async () => {
+    await fetch("/api/reminders/events_intro_tip/dismiss", { method: "POST", credentials: "include" });
+    qc.invalidateQueries({ queryKey: ["/api/reminders", "events_intro_tip"] });
+  };
+  return (
+    <div className="mb-6 rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-start justify-between gap-3" data-testid="strip-events-intro">
+      <p className="text-[13px] text-vf-muted leading-[1.55]">
+        You can join an event someone else is hosting, or create your own. Tap into any event to see its date,
+        time, location and who else is going before you decide.
+      </p>
+      <button onClick={dismiss} className="text-vf-faint hover:text-vf-text transition-colors shrink-0 -mr-1 -mt-0.5" aria-label="Dismiss" data-testid="button-dismiss-events-intro">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
   );
 }
 
@@ -246,6 +278,8 @@ export default function Events() {
         <p className="text-[15px] text-vf-muted max-w-[560px] mb-5">
           Small, hosted, in real rooms. Your twin flags who's going that you'd get on with.
         </p>
+
+        <EventsIntroTip />
 
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:justify-end sm:items-center mb-6">
           <button

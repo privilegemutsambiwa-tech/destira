@@ -39,7 +39,7 @@ export interface PushPayload {
   tag?: string;
 }
 
-export type NotificationCategory = "matches" | "messages" | "stories" | "interviews";
+export type NotificationCategory = "matches" | "messages" | "stories" | "interviews" | "events";
 
 // Missing key => on, matching the Settings toggles' default-enabled behavior
 // (a user who never opened the toggle keeps getting notified).

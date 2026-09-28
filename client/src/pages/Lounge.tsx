@@ -8,12 +8,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Loader2, Plus, Search, Lock, Globe, UserPlus, Crown, Shield, BellOff, BadgeCheck
+  Loader2, Plus, Search, Lock, Globe, UserPlus, Crown, Shield, BellOff, BadgeCheck, X
 } from "lucide-react";
 import { useGroups, useGroup, useCreateGroup, useJoinGroup } from "@/hooks/use-interactions";
 import { useToast } from "@/hooks/use-toast";
 import { usePaywall } from "@/hooks/use-paywall";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { AvatarStack } from "@/components/avatar-stack";
 
@@ -30,6 +30,39 @@ const FILTER_OPTIONS = [
   { value: "popular", label: "Popular" },
   { value: "new", label: "New" },
 ];
+
+// One-time (dismissible, reappears after a week if closed) orientation strip
+// explaining what Lounge actually is — the platform has few enough people
+// right now that most visitors have never seen a group-based chat feature
+// before and won't discover "join / create / play" just by poking around.
+function LoungeIntroTip() {
+  const qc = useQueryClient();
+  const { data } = useQuery<{ dismissed: boolean }>({
+    queryKey: ["/api/reminders", "lounge_intro_tip"],
+    queryFn: async () => {
+      const res = await fetch("/api/reminders/lounge_intro_tip", { credentials: "include" });
+      if (!res.ok) return { dismissed: true };
+      return res.json();
+    },
+  });
+  if (!data || data.dismissed) return null;
+  const dismiss = async () => {
+    await fetch("/api/reminders/lounge_intro_tip/dismiss", { method: "POST", credentials: "include" });
+    qc.invalidateQueries({ queryKey: ["/api/reminders", "lounge_intro_tip"] });
+  };
+  return (
+    <div className="mb-5 rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-start justify-between gap-3" data-testid="strip-lounge-intro">
+      <p className="text-[13px] text-vf-muted leading-[1.55]">
+        Within Lounge you can join groups of shared interest, or create your own. Inside a group you can chat,
+        play games together (tap the dice icon in any group's chat), and see who else is around — a
+        lower-pressure way to meet people than Discover.
+      </p>
+      <button onClick={dismiss} className="text-vf-faint hover:text-vf-text transition-colors shrink-0 -mr-1 -mt-0.5" aria-label="Dismiss" data-testid="button-dismiss-lounge-intro">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
 
 export default function Lounge() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -49,6 +82,8 @@ export default function Lounge() {
           Connect organically in interest-based groups. Chat anonymously and discover unexpected connections.
         </p>
       </div>
+
+      <LoungeIntroTip />
 
       {/* Search + Create */}
       <div className="flex items-center gap-3 mb-4">

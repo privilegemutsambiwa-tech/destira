@@ -28,6 +28,7 @@ import type { TwinProfileStructured } from "@shared/schema";
 import * as eventsService from "./events";
 import * as eventsFeed from "./events-feed";
 import * as twinEventAlerts from "./services/twin-event-alerts";
+import * as groupGames from "./group-games";
 import * as onboarding from "./onboarding";
 import * as payments from "./payments";
 import * as proximity from "./services/twin-proximity-alerts";
@@ -3170,6 +3171,101 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Group games — same shape as the poll endpoints just above, generalized
+  // to a reveal moment and (for some kinds) a hidden answer. See
+  // server/group-games.ts for the one place config/response payloads are
+  // ever interpreted.
+  app.get("/api/games/kinds", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    res.json({ kinds: groupGames.listGameKinds() });
+  });
+
+  app.get("/api/games/kinds/:kind/bank", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const preview = groupGames.getBankPreview(req.params.kind as any);
+    if (preview == null) return res.status(404).json({ message: "No bank for this kind" });
+    res.json({ items: preview });
+  });
+
+  app.post("/api/groups/:id/games", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const groupId = parseInt(req.params.id);
+    const { kind, setup } = req.body || {};
+    try {
+      const game = await groupGames.createGame(groupId, userId, kind, setup ?? {});
+      const state = await groupGames.getGameState(game.id, userId);
+      res.status(201).json(state);
+    } catch (e) {
+      if (e instanceof groupGames.NotGroupMemberError) return res.status(403).json({ message: e.message });
+      if (e instanceof groupGames.InvalidSetupError) return res.status(400).json({ message: e.message });
+      console.error("Create game error:", e);
+      res.status(500).json({ message: "Failed to start game" });
+    }
+  });
+
+  app.get("/api/games/:gameId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const state = await groupGames.getGameState(parseInt(req.params.gameId), userId);
+      res.json(state);
+    } catch (e) {
+      if (e instanceof groupGames.GameNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof groupGames.NotGroupMemberError) return res.status(403).json({ message: e.message });
+      res.status(500).json({ message: "Failed to fetch game" });
+    }
+  });
+
+  app.get("/api/messages/:messageId/game", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const access = await requireGroupMessageAccess(parseInt(req.params.messageId), userId);
+      if (!access.ok) return res.status(access.status).json(access.body);
+      const state = await groupGames.getGameByMessageId(access.message.id, userId);
+      if (!state) return res.status(404).json({ message: "Game not found" });
+      res.json(state);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch game" });
+    }
+  });
+
+  app.post("/api/games/:gameId/respond", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const gameId = parseInt(req.params.gameId);
+      await groupGames.submitResponse(gameId, userId, req.body?.response ?? {});
+      const state = await groupGames.getGameState(gameId, userId);
+      res.status(201).json(state);
+    } catch (e) {
+      if (e instanceof groupGames.GameNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof groupGames.NotGroupMemberError) return res.status(403).json({ message: e.message });
+      if (e instanceof groupGames.GameNotActiveError) return res.status(409).json({ message: e.message });
+      if (e instanceof groupGames.NotEligibleError) return res.status(403).json({ message: e.message });
+      console.error("Submit game response error:", e);
+      res.status(500).json({ message: "Failed to submit response" });
+    }
+  });
+
+  app.post("/api/games/:gameId/reveal", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const gameId = parseInt(req.params.gameId);
+      await groupGames.revealNow(gameId, userId);
+      const state = await groupGames.getGameState(gameId, userId);
+      res.json(state);
+    } catch (e) {
+      if (e instanceof groupGames.GameNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof groupGames.NotEligibleError) return res.status(403).json({ message: e.message });
+      res.status(500).json({ message: "Failed to reveal" });
+    }
+  });
+
   // Reaction endpoints
   app.post("/api/messages/:messageId/reactions", async (req, res) => {
     const userId = getUserId(req);
@@ -4089,10 +4185,16 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         const myRole = myMember?.role;
         const isMuted = myMember?.isMuted ?? false;
         // Only members get a message preview, and only from after they joined.
-        const msgs = myMember
-          ? await storage.getGroupMessages(g.id, 1, myMember.joinedAt ?? undefined)
-          : [];
-        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+        const since = myMember?.joinedAt ?? undefined;
+        const lastMsg = myMember ? await storage.getLatestGroupMessage(g.id, since) : undefined;
+        // The sender's CURRENT group nickname, not the snapshot stored on the
+        // message row — a preview showing who's active in the group should
+        // never lag behind a nickname change the way the full chat history
+        // intentionally does (chat history is a record of what was sent).
+        const lastMsgSender = lastMsg ? members.find((m) => m.userId === lastMsg.userId) : undefined;
+        const unreadCount = myMember
+          ? await storage.getUnreadGroupMessageCount(g.id, since, myMember.lastSeenMessageId ?? null)
+          : 0;
         return {
           ...g,
           memberCount: members.length,
@@ -4100,8 +4202,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
           myRole,
           isMuted,
           lastMessage: lastMsg?.content || null,
-          lastMessageNickname: lastMsg?.nickname || null,
+          lastMessageNickname: lastMsgSender?.nickname || lastMsg?.nickname || null,
           lastMessageAt: lastMsg?.createdAt || g.createdAt,
+          unreadCount,
         };
       }));
 
