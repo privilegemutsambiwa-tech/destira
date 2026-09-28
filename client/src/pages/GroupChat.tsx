@@ -112,12 +112,58 @@ function isSameDay(a: string, b: string) {
   return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
 }
 
+// Shared shell for every rich, interactive chat card (polls, games — the
+// same role LinkPreviewCard's CardShell plays for link previews). Always
+// the same opaque, neutral surface regardless of who sent the message —
+// an "isMe" ember bubble is fine for a line of text, but a multi-element
+// widget with buttons and progress bars needs one consistent, explicitly
+// colored surface to stay readable no matter whose message it's in.
+function RichCard({ children, testId }: { children: React.ReactNode; testId?: string }) {
+  return (
+    <div
+      className="min-w-[240px] max-w-full"
+      style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: "16px", padding: "14px", boxShadow: "0 2px 10px rgba(0,0,0,0.18)" }}
+      data-testid={testId}
+    >
+      {children}
+    </div>
+  );
+}
+
+function CardHeader({ icon, title, status }: { icon: string; title: string; status?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-3">
+      <span
+        className="w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0"
+        style={{ background: "hsl(var(--vf-ember) / 0.14)" }}
+      >
+        {icon}
+      </span>
+      <p className="font-semibold text-sm flex-1 min-w-0" style={{ color: TEXT }}>{title}</p>
+      {status}
+    </div>
+  );
+}
+
+function StatusPill({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "ember" | "mint" }) {
+  const color = tone === "mint" ? MINT : tone === "ember" ? EMBER : MUTED;
+  const bg = tone === "mint" ? "hsl(var(--vf-mint) / 0.14)" : tone === "ember" ? "hsl(var(--vf-ember) / 0.14)" : "rgba(255,255,255,0.06)";
+  return (
+    <span
+      className="shrink-0 font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-full"
+      style={{ color, background: bg }}
+    >
+      {children}
+    </span>
+  );
+}
+
 function PollBubble({ messageId, groupId }: { messageId: number; groupId: number }) {
   const { data: pollData, isLoading } = usePollByMessage(messageId);
   const votePoll = useVotePoll(groupId);
   const { user } = useAuth();
 
-  if (isLoading) return <Loader2 className="w-4 h-4 animate-spin" />;
+  if (isLoading) return <Loader2 className="w-4 h-4 animate-spin" style={{ color: MUTED }} />;
   if (!pollData || !pollData.poll) return null;
 
   const { poll, options, votes } = pollData;
@@ -131,9 +177,9 @@ function PollBubble({ messageId, groupId }: { messageId: number; groupId: number
   };
 
   return (
-    <div className="space-y-2 min-w-[200px]" data-testid={`poll-bubble-${messageId}`}>
-      <p className="font-medium text-sm text-foreground">{poll.question}</p>
-      {poll.allowMultiple && <p className="text-xs" style={{ color: MUTED }}>Multiple answers allowed</p>}
+    <RichCard testId={`poll-bubble-${messageId}`}>
+      <CardHeader icon="📊" title={poll.question} status={<StatusPill>{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</StatusPill>} />
+      {poll.allowMultiple && <p className="text-xs mb-2" style={{ color: FAINT }}>Multiple answers allowed</p>}
       <div className="space-y-1.5">
         {options?.map((opt: any) => {
           const optVotes = votes?.filter((v: any) => v.optionId === opt.id).length || 0;
@@ -144,28 +190,27 @@ function PollBubble({ messageId, groupId }: { messageId: number; groupId: number
               key={opt.id}
               onClick={() => handleVote(opt.id)}
               disabled={votePoll.isPending}
-              className="w-full text-left p-2 text-xs relative overflow-hidden transition-colors"
+              className="w-full text-left p-2.5 text-[13px] relative overflow-hidden transition-colors hover:brightness-110"
               style={{
-                borderRadius: "8px",
-                border: isVoted ? "1px solid hsl(var(--vf-ember) / 0.6)" : `1px solid ${LINE}`,
-                background: isVoted ? "hsl(var(--vf-ember) / 0.12)" : SURFACE2,
+                borderRadius: "10px",
+                border: isVoted ? `1px solid ${EMBER}` : `1px solid ${LINE}`,
+                background: isVoted ? "hsl(var(--vf-ember) / 0.14)" : "rgba(255,255,255,0.03)",
               }}
               data-testid={`poll-option-${opt.id}`}
             >
               <div
-                className="absolute inset-0 rounded-md"
-                style={{ width: `${pct}%`, background: "hsl(var(--vf-ember) / 0.1)" }}
+                className="absolute inset-y-0 left-0 transition-[width] duration-500"
+                style={{ width: `${pct}%`, background: "hsl(var(--vf-ember) / 0.12)" }}
               />
               <div className="relative flex items-center justify-between gap-2">
-                <span className={isVoted ? "font-medium text-foreground" : "text-foreground/80"}>{opt.text}</span>
-                <span style={{ color: MUTED }}>{optVotes} ({pct}%)</span>
+                <span style={{ color: TEXT, fontWeight: isVoted ? 600 : 500 }}>{opt.text}</span>
+                <span className="font-mono text-[11px] shrink-0" style={{ color: MUTED }}>{optVotes} · {pct}%</span>
               </div>
             </button>
           );
         })}
       </div>
-      <p className="text-xs" style={{ color: MUTED }}>{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</p>
-    </div>
+    </RichCard>
   );
 }
 
@@ -275,15 +320,23 @@ const GAME_ICON_LABEL: Record<string, string> = {
 };
 
 function GameProgress({ state }: { state: any }) {
-  if (state.status === "revealed") return <span style={{ color: EMBER }}>Revealed</span>;
-  return <span style={{ color: MUTED }}>{state.responseCount} of {state.eligibleCount} answered</span>;
+  if (state.status === "revealed") return <StatusPill tone="mint">✓ Revealed</StatusPill>;
+  return <StatusPill>{state.responseCount}/{state.eligibleCount} answered</StatusPill>;
 }
 
-function ChoiceRound({ state, choices, onPick, resultsFor }: {
+// `correctKey`, when set, gives that one choice the mint "this was right"
+// treatment once revealed — used by two_truths_one_lie for the actual lie.
+// Every color here is explicit (never inherited/Tailwind `text-foreground`)
+// on purpose: these cards render inside a chat bubble whose own background
+// flips between a bright ember fill and a near-transparent one depending on
+// who sent it, so any color that isn't nailed down goes unreadable in one
+// of those two contexts.
+function ChoiceRound({ state, choices, onPick, resultsFor, correctKey }: {
   state: any;
   choices: { key: string; label: string }[];
   onPick: (key: string) => void;
   resultsFor?: (key: string) => { count: number; pct: number } | null;
+  correctKey?: string;
 }) {
   const revealed = state.status === "revealed";
   return (
@@ -291,29 +344,50 @@ function ChoiceRound({ state, choices, onPick, resultsFor }: {
       {choices.map((c) => {
         const isMine = state.myResponse && Object.values(state.myResponse)[0] === c.key;
         const res = revealed ? resultsFor?.(c.key) : null;
+        const isCorrect = revealed && correctKey != null && c.key === correctKey;
+        const accent = isCorrect ? MINT : isMine ? EMBER : null;
         return (
           <button
             key={c.key}
             onClick={() => !state.myResponse && onPick(c.key)}
             disabled={!!state.myResponse}
-            className="w-full text-left p-2 text-xs relative overflow-hidden transition-colors"
+            className="w-full text-left p-2.5 text-[13px] relative overflow-hidden transition-colors hover:brightness-110"
             style={{
-              borderRadius: "8px",
-              border: isMine ? "1px solid hsl(var(--vf-ember) / 0.6)" : `1px solid ${LINE}`,
-              background: isMine ? "hsl(var(--vf-ember) / 0.12)" : SURFACE2,
+              borderRadius: "10px",
+              border: `1px solid ${accent ?? LINE}`,
+              background: isCorrect ? "hsl(var(--vf-mint) / 0.14)" : isMine ? "hsl(var(--vf-ember) / 0.14)" : "rgba(255,255,255,0.03)",
             }}
             data-testid={`game-choice-${c.key}`}
           >
-            {res && <div className="absolute inset-0" style={{ width: `${res.pct}%`, background: "hsl(var(--vf-ember) / 0.1)" }} />}
+            {res && (
+              <div
+                className="absolute inset-y-0 left-0 transition-[width] duration-500"
+                style={{ width: `${res.pct}%`, background: isCorrect ? "hsl(var(--vf-mint) / 0.1)" : "hsl(var(--vf-ember) / 0.1)" }}
+              />
+            )}
             <div className="relative flex items-center justify-between gap-2">
-              <span className={isMine ? "font-medium text-foreground" : "text-foreground/80"}>{c.label}</span>
-              {res && <span style={{ color: MUTED }}>{res.count} ({res.pct}%)</span>}
+              <span style={{ color: TEXT, fontWeight: accent ? 600 : 500 }}>
+                {isCorrect && "✓ "}{c.label}
+              </span>
+              {res && <span className="font-mono text-[11px] shrink-0" style={{ color: MUTED }}>{res.count} · {res.pct}%</span>}
             </div>
           </button>
         );
       })}
     </div>
   );
+}
+
+// A subordinate line under the header — the prompt/statement/category text
+// every kind but the roulette-style ones needs. Explicit TEXT (not MUTED):
+// this is the actual content of the round, not metadata.
+function GamePrompt({ children }: { children: React.ReactNode }) {
+  return <p className="text-[13px] mb-2.5" style={{ color: TEXT }}>{children}</p>;
+}
+
+const inputCardCls = "text-[13px] h-9 border-0";
+function gameInputStyle(): React.CSSProperties {
+  return { background: "rgba(255,255,255,0.05)", color: TEXT };
 }
 
 function GameBubble({ messageId, groupId }: { messageId: number; groupId: number }) {
@@ -324,22 +398,25 @@ function GameBubble({ messageId, groupId }: { messageId: number; groupId: number
   const [draftPairChoices, setDraftPairChoices] = useState<Record<number, "a" | "b">>({});
   const [draftAnswers, setDraftAnswers] = useState<Record<number, number>>({});
 
-  if (isLoading) return <Loader2 className="w-4 h-4 animate-spin" />;
+  if (isLoading) return <Loader2 className="w-4 h-4 animate-spin" style={{ color: MUTED }} />;
   if (!state) return null;
 
   const submit = (response: any) => respond.mutate({ gameId: state.id, messageId, response });
   const hasResponded = !!state.myResponse;
   const revealed = state.status === "revealed";
+  const showFooter = state.kind !== "icebreaker_roulette";
 
   return (
-    <div className="space-y-2 min-w-[220px]" data-testid={`game-bubble-${messageId}`}>
-      <p className="font-medium text-sm text-foreground">
-        {GAME_ICON_LABEL[state.kind] || "🎮"} {state.label}
-      </p>
+    <RichCard testId={`game-bubble-${messageId}`}>
+      <CardHeader
+        icon={GAME_ICON_LABEL[state.kind] || "🎮"}
+        title={state.label}
+        status={showFooter ? <GameProgress state={state} /> : undefined}
+      />
 
       {state.kind === "would_you_rather" && (
         <>
-          <p className="text-xs" style={{ color: MUTED }}>{state.config.a} — or — {state.config.b}</p>
+          <GamePrompt>{state.config.a} <span style={{ color: FAINT }}>or</span> {state.config.b}</GamePrompt>
           <ChoiceRound
             state={state}
             choices={[{ key: "a", label: state.config.a }, { key: "b", label: state.config.b }]}
@@ -351,7 +428,7 @@ function GameBubble({ messageId, groupId }: { messageId: number; groupId: number
 
       {state.kind === "never_have_i_ever" && (
         <>
-          <p className="text-xs" style={{ color: MUTED }}>{state.config.statement}</p>
+          <GamePrompt>{state.config.statement}</GamePrompt>
           <ChoiceRound
             state={state}
             choices={[{ key: "have", label: "I have" }, { key: "havent", label: "I haven't" }]}
@@ -367,27 +444,30 @@ function GameBubble({ messageId, groupId }: { messageId: number; groupId: number
       )}
 
       {state.kind === "two_truths_one_lie" && (
-        <ChoiceRound
-          state={state}
-          choices={state.config.statements.map((s: string, i: number) => ({ key: String(i), label: s }))}
-          onPick={(key) => submit({ guessIndex: Number(key) })}
-          resultsFor={(key) => {
-            if (!revealed) return null;
-            const count = state.results.guesses.filter((g: any) => g.guessIndex === Number(key)).length;
-            const total = state.results.guesses.length || 1;
-            return { count, pct: Math.round((count / total) * 100) };
-          }}
-        />
-      )}
-      {state.kind === "two_truths_one_lie" && revealed && (
-        <p className="text-xs" style={{ color: EMBER }}>
-          The lie was #{state.results.lieIndex + 1}. {state.results.correctGuessers.length ? `Guessed right: ${state.results.correctGuessers.join(", ")}` : "Nobody guessed it."}
-        </p>
+        <>
+          <ChoiceRound
+            state={state}
+            choices={state.config.statements.map((s: string, i: number) => ({ key: String(i), label: s }))}
+            onPick={(key) => submit({ guessIndex: Number(key) })}
+            correctKey={revealed ? String(state.results.lieIndex) : undefined}
+            resultsFor={(key) => {
+              if (!revealed) return null;
+              const count = state.results.guesses.filter((g: any) => g.guessIndex === Number(key)).length;
+              const total = state.results.guesses.length || 1;
+              return { count, pct: Math.round((count / total) * 100) };
+            }}
+          />
+          {revealed && (
+            <p className="text-xs mt-2.5" style={{ color: MUTED }}>
+              {state.results.correctGuessers.length ? `Guessed right: ${state.results.correctGuessers.join(", ")}` : "Nobody guessed it."}
+            </p>
+          )}
+        </>
       )}
 
       {state.kind === "most_likely_to" && (
         <>
-          <p className="text-xs" style={{ color: MUTED }}>{state.config.prompt}</p>
+          <GamePrompt>{state.config.prompt}</GamePrompt>
           <ChoiceRound
             state={state}
             choices={state.config.candidates.map((c: any) => ({ key: c.userId, label: c.nickname }))}
@@ -400,32 +480,34 @@ function GameBubble({ messageId, groupId }: { messageId: number; groupId: number
             }}
           />
           {revealed && state.results.winner && (
-            <p className="text-xs" style={{ color: EMBER }}>🏆 {state.results.winner.nickname}</p>
+            <p className="text-xs mt-2.5 font-medium" style={{ color: EMBER }}>🏆 {state.results.winner.nickname}</p>
           )}
         </>
       )}
 
       {state.kind === "this_or_that" && (
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {state.config.pairs.map((p: { a: string; b: string }, i: number) => {
             const picked = hasResponded ? state.myResponse.choices?.[i] : draftPairChoices[i];
             const res = revealed ? state.results[i] : null;
             return (
-              <div key={i} className="flex items-center gap-2 text-xs">
+              <div key={i} className="flex items-center gap-2 text-[13px]">
                 {(["a", "b"] as const).map((side) => (
                   <button
                     key={side}
                     disabled={hasResponded}
                     onClick={() => setDraftPairChoices((cur) => ({ ...cur, [i]: side }))}
-                    className="flex-1 p-2 text-left relative overflow-hidden"
+                    className="flex-1 p-2 text-left relative overflow-hidden transition-colors hover:brightness-110"
                     style={{
-                      borderRadius: 8,
-                      border: picked === side ? "1px solid hsl(var(--vf-ember) / 0.6)" : `1px solid ${LINE}`,
-                      background: picked === side ? "hsl(var(--vf-ember) / 0.12)" : SURFACE2,
+                      borderRadius: 10,
+                      border: `1px solid ${picked === side ? EMBER : LINE}`,
+                      background: picked === side ? "hsl(var(--vf-ember) / 0.14)" : "rgba(255,255,255,0.03)",
                     }}
                   >
-                    <span>{side === "a" ? p.a : p.b}</span>
-                    {res && <span className="ml-2" style={{ color: MUTED }}>{side === "a" ? res.aCount : res.bCount}</span>}
+                    <div className="relative flex items-center justify-between gap-1.5">
+                      <span style={{ color: TEXT, fontWeight: picked === side ? 600 : 500 }}>{side === "a" ? p.a : p.b}</span>
+                      {res && <span className="font-mono text-[11px] shrink-0" style={{ color: MUTED }}>{side === "a" ? res.aCount : res.bCount}</span>}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -436,6 +518,8 @@ function GameBubble({ messageId, groupId }: { messageId: number; groupId: number
               size="sm"
               disabled={Object.keys(draftPairChoices).length < state.config.pairs.length || respond.isPending}
               onClick={() => submit({ choices: state.config.pairs.map((_: any, i: number) => draftPairChoices[i]) })}
+              className="w-full btn-press"
+              style={{ background: EMBER, color: INK, border: "none" }}
               data-testid="button-submit-this-or-that"
             >
               Submit
@@ -449,26 +533,32 @@ function GameBubble({ messageId, groupId }: { messageId: number; groupId: number
           {state.config.questions.map((q: { question: string; options: string[] }, i: number) => {
             const picked = hasResponded ? state.myResponse.answers?.[i] : draftAnswers[i];
             return (
-              <div key={i} className="space-y-1">
-                <p className="text-xs font-medium text-foreground">{i + 1}. {q.question}</p>
-                {q.options.map((opt, oi) => {
-                  const isCorrect = revealed && state.results.correctIndexes[i] === oi;
-                  return (
-                    <button
-                      key={oi}
-                      disabled={hasResponded}
-                      onClick={() => setDraftAnswers((cur) => ({ ...cur, [i]: oi }))}
-                      className="w-full text-left p-1.5 text-xs"
-                      style={{
-                        borderRadius: 6,
-                        border: isCorrect ? "1px solid hsl(var(--vf-mint) / 0.7)" : picked === oi ? "1px solid hsl(var(--vf-ember) / 0.6)" : `1px solid ${LINE}`,
-                        background: isCorrect ? "hsl(var(--vf-mint) / 0.12)" : picked === oi ? "hsl(var(--vf-ember) / 0.1)" : SURFACE2,
-                      }}
-                    >
-                      {opt}
-                    </button>
-                  );
-                })}
+              <div key={i} className="space-y-1.5">
+                <p className="text-[13px] font-medium" style={{ color: TEXT }}>{i + 1}. {q.question}</p>
+                <div className="space-y-1">
+                  {q.options.map((opt, oi) => {
+                    const isCorrect = revealed && state.results.correctIndexes[i] === oi;
+                    const isPicked = picked === oi;
+                    const accent = isCorrect ? MINT : isPicked ? EMBER : null;
+                    return (
+                      <button
+                        key={oi}
+                        disabled={hasResponded}
+                        onClick={() => setDraftAnswers((cur) => ({ ...cur, [i]: oi }))}
+                        className="w-full text-left p-2 text-[12.5px] transition-colors hover:brightness-110"
+                        style={{
+                          borderRadius: 8,
+                          border: `1px solid ${accent ?? LINE}`,
+                          background: isCorrect ? "hsl(var(--vf-mint) / 0.14)" : isPicked ? "hsl(var(--vf-ember) / 0.14)" : "rgba(255,255,255,0.03)",
+                          color: TEXT,
+                          fontWeight: accent ? 600 : 400,
+                        }}
+                      >
+                        {isCorrect && "✓ "}{opt}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
@@ -477,38 +567,46 @@ function GameBubble({ messageId, groupId }: { messageId: number; groupId: number
               size="sm"
               disabled={Object.keys(draftAnswers).length < state.config.questions.length || respond.isPending}
               onClick={() => submit({ answers: state.config.questions.map((_: any, i: number) => draftAnswers[i]) })}
+              className="w-full btn-press"
+              style={{ background: EMBER, color: INK, border: "none" }}
               data-testid="button-submit-trivia"
             >
               Submit answers
             </Button>
           )}
           {revealed && (
-            <p className="text-xs" style={{ color: MUTED }}>
-              {state.results.scores.map((s: any) => `${s.nickname}: ${s.score}/${state.config.questions.length}`).join(" · ")}
-            </p>
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {state.results.scores.map((s: any) => (
+                <span key={s.userId} className="text-[11px] font-mono px-2 py-1 rounded-full" style={{ color: TEXT, background: "rgba(255,255,255,0.05)" }}>
+                  {s.nickname}: {s.score}/{state.config.questions.length}
+                </span>
+              ))}
+            </div>
           )}
         </div>
       )}
 
       {state.kind === "category_sprint" && (
-        <div className="space-y-2">
-          <p className="text-xs" style={{ color: MUTED }}>Category: {state.config.category} — list as many as you can</p>
+        <div className="space-y-2.5">
+          <GamePrompt>Category: <span style={{ color: EMBER, fontWeight: 600 }}>{state.config.category}</span> — list as many as you can</GamePrompt>
           {!hasResponded ? (
             <div className="flex items-center gap-2">
-              <Input value={draftText} onChange={(e) => setDraftText(e.target.value)} placeholder="comma-separated..." className="text-xs h-8" data-testid="input-category-sprint" />
-              <Button size="sm" disabled={!draftText.trim() || respond.isPending} onClick={() => submit({ items: draftText.split(",").map((s) => s.trim()).filter(Boolean) })}>
+              <Input value={draftText} onChange={(e) => setDraftText(e.target.value)} placeholder="comma-separated..." className={inputCardCls} style={gameInputStyle()} data-testid="input-category-sprint" />
+              <Button size="sm" disabled={!draftText.trim() || respond.isPending} onClick={() => submit({ items: draftText.split(",").map((s) => s.trim()).filter(Boolean) })} style={{ background: EMBER, color: INK, border: "none" }}>
                 Submit
               </Button>
             </div>
           ) : (
-            <p className="text-xs" style={{ color: MUTED }}>Submitted — waiting on the rest of the group.</p>
+            <p className="text-xs" style={{ color: FAINT }}>Submitted — waiting on the rest of the group.</p>
           )}
           {revealed && (
-            <div className="space-y-1">
-              {state.results.leaderboard.map((row: any) => (
-                <p key={row.userId} className="text-xs" style={{ color: MUTED }}>
-                  <span className="text-foreground font-medium">{row.nickname}</span> ({row.uniqueCount} unique): {row.items.join(", ")}
-                </p>
+            <div className="space-y-1.5 pt-1">
+              {state.results.leaderboard.map((row: any, i: number) => (
+                <div key={row.userId} className="text-xs p-2 rounded-lg" style={{ background: "rgba(255,255,255,0.03)" }}>
+                  <span style={{ color: i === 0 ? EMBER : TEXT, fontWeight: 600 }}>{i === 0 ? "🏆 " : ""}{row.nickname}</span>
+                  <span className="font-mono ml-1.5" style={{ color: MUTED }}>{row.uniqueCount} unique</span>
+                  <p className="mt-0.5" style={{ color: MUTED }}>{row.items.join(", ") || "—"}</p>
+                </div>
               ))}
             </div>
           )}
@@ -516,22 +614,22 @@ function GameBubble({ messageId, groupId }: { messageId: number; groupId: number
       )}
 
       {state.kind === "emoji_charades" && (
-        <div className="space-y-2">
-          <p className="text-2xl">{state.config.emoji}</p>
+        <div className="space-y-2.5">
+          <p className="text-3xl mb-1">{state.config.emoji}</p>
           {!revealed ? (
             <div className="flex items-center gap-2">
-              <Input value={draftText} onChange={(e) => setDraftText(e.target.value)} placeholder="Your guess..." className="text-xs h-8" data-testid="input-charades-guess" />
-              <Button size="sm" disabled={!draftText.trim() || respond.isPending} onClick={() => { submit({ guess: draftText.trim() }); setDraftText(""); }}>
+              <Input value={draftText} onChange={(e) => setDraftText(e.target.value)} placeholder="Your guess..." className={inputCardCls} style={gameInputStyle()} data-testid="input-charades-guess" />
+              <Button size="sm" disabled={!draftText.trim() || respond.isPending} onClick={() => { submit({ guess: draftText.trim() }); setDraftText(""); }} style={{ background: EMBER, color: INK, border: "none" }}>
                 Guess
               </Button>
             </div>
           ) : (
-            <p className="text-xs" style={{ color: EMBER }}>
+            <p className="text-[13px] font-medium" style={{ color: MINT }}>
               It was "{state.results.answer}" — {state.results.correctGuessers.length ? `guessed by ${state.results.correctGuessers.join(", ")}` : "nobody got it"}
             </p>
           )}
           {state.canRevealEarly && (
-            <Button size="sm" variant="outline" onClick={() => reveal.mutate({ gameId: state.id, messageId })} data-testid="button-reveal-charades">
+            <Button size="sm" variant="outline" onClick={() => reveal.mutate({ gameId: state.id, messageId })} style={{ borderColor: LINE, color: MUTED }} data-testid="button-reveal-charades">
               Reveal answer
             </Button>
           )}
@@ -539,28 +637,28 @@ function GameBubble({ messageId, groupId }: { messageId: number; groupId: number
       )}
 
       {state.kind === "icebreaker_roulette" && (
-        <div className="space-y-2">
-          <p className="text-xs" style={{ color: MUTED }}>{state.config.prompt}</p>
+        <div className="space-y-2.5">
+          <GamePrompt>{state.config.prompt}</GamePrompt>
           {!hasResponded && (
             <div className="flex items-center gap-2">
-              <Input value={draftText} onChange={(e) => setDraftText(e.target.value)} placeholder="Your answer..." className="text-xs h-8" data-testid="input-icebreaker" />
-              <Button size="sm" disabled={!draftText.trim() || respond.isPending} onClick={() => { submit({ text: draftText.trim() }); setDraftText(""); }}>
+              <Input value={draftText} onChange={(e) => setDraftText(e.target.value)} placeholder="Your answer..." className={inputCardCls} style={gameInputStyle()} data-testid="input-icebreaker" />
+              <Button size="sm" disabled={!draftText.trim() || respond.isPending} onClick={() => { submit({ text: draftText.trim() }); setDraftText(""); }} style={{ background: EMBER, color: INK, border: "none" }}>
                 Share
               </Button>
             </div>
           )}
           {state.results?.live?.length > 0 && (
-            <div className="space-y-1">
+            <div className="space-y-1.5 pt-1">
               {state.results.live.map((r: any, i: number) => (
-                <p key={i} className="text-xs" style={{ color: MUTED }}><span className="text-foreground font-medium">{r.nickname}:</span> {r.response?.text}</p>
+                <p key={i} className="text-xs p-2 rounded-lg" style={{ background: "rgba(255,255,255,0.03)" }}>
+                  <span className="font-medium" style={{ color: TEXT }}>{r.nickname}:</span> <span style={{ color: MUTED }}>{r.response?.text}</span>
+                </p>
               ))}
             </div>
           )}
         </div>
       )}
-
-      {state.kind !== "icebreaker_roulette" && <p className="text-xs"><GameProgress state={state} /></p>}
-    </div>
+    </RichCard>
   );
 }
 
@@ -631,23 +729,38 @@ function GameComposerDialog({ groupId, open, onClose }: { groupId: number; open:
         </DialogHeader>
         <div className="space-y-4 max-h-[60vh] overflow-y-auto">
           {!selectedKind ? (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {(kindsData?.kinds ?? []).map((k) => (
                 <button
                   key={k.kind}
                   onClick={() => setSelectedKind(k.kind)}
-                  className="w-full text-left p-2.5 text-sm"
-                  style={{ borderRadius: 10, border: `1px solid ${LINE}`, background: SURFACE2 }}
+                  className="w-full flex items-center gap-3 text-left p-3 transition-colors hover:brightness-110"
+                  style={{ borderRadius: 12, border: `1px solid ${LINE}`, background: "rgba(255,255,255,0.03)" }}
                   data-testid={`game-kind-${k.kind}`}
                 >
-                  <div className="font-medium text-foreground">{GAME_ICON_LABEL[k.kind] || "🎮"} {k.label}</div>
-                  <div className="text-xs" style={{ color: MUTED }}>{k.blurb}</div>
+                  <span className="w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0" style={{ background: "hsl(var(--vf-ember) / 0.14)" }}>
+                    {GAME_ICON_LABEL[k.kind] || "🎮"}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold" style={{ color: TEXT }}>{k.label}</div>
+                    <div className="text-xs mt-0.5" style={{ color: MUTED }}>{k.blurb}</div>
+                  </div>
                 </button>
               ))}
             </div>
           ) : (
-            <div className="space-y-3">
-              <button onClick={() => setSelectedKind(null)} className="text-xs" style={{ color: MUTED }}>← Back</button>
+            <div className="space-y-3.5">
+              <button onClick={() => setSelectedKind(null)} className="flex items-center gap-1.5 text-xs font-medium" style={{ color: MUTED }}>
+                ← Back to games
+              </button>
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0" style={{ background: "hsl(var(--vf-ember) / 0.14)" }}>
+                  {GAME_ICON_LABEL[selectedKind] || "🎮"}
+                </span>
+                <span className="text-sm font-semibold" style={{ color: TEXT }}>
+                  {kindsData?.kinds.find((k) => k.kind === selectedKind)?.label}
+                </span>
+              </div>
 
               {selectedKind === "two_truths_one_lie" && (
                 <div className="space-y-2">
@@ -656,11 +769,11 @@ function GameComposerDialog({ groupId, open, onClose }: { groupId: number; open:
                       <Input value={s} onChange={(e) => { const next = [...statements]; next[i] = e.target.value; setStatements(next); }} placeholder={`Statement ${i + 1}`} data-testid={`input-truth-${i}`} />
                       <button
                         onClick={() => setLieIndex(i)}
-                        className="text-xs px-2 py-1 rounded-full shrink-0"
-                        style={{ border: `1px solid ${lieIndex === i ? EMBER : LINE}`, color: lieIndex === i ? EMBER : MUTED }}
+                        className="text-xs px-2.5 py-1.5 rounded-full shrink-0 font-medium transition-colors"
+                        style={{ border: `1px solid ${lieIndex === i ? EMBER : LINE}`, color: lieIndex === i ? EMBER : MUTED, background: lieIndex === i ? "hsl(var(--vf-ember) / 0.12)" : "transparent" }}
                         data-testid={`button-mark-lie-${i}`}
                       >
-                        {lieIndex === i ? "This is the lie" : "Mark as lie"}
+                        {lieIndex === i ? "✓ Lie" : "Mark as lie"}
                       </button>
                     </div>
                   ))}
@@ -683,16 +796,22 @@ function GameComposerDialog({ groupId, open, onClose }: { groupId: number; open:
               )}
 
               {selectedKind === "most_likely_to" && (
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
                   {(bankData?.items ?? []).map((item: any) => (
                     <button
                       key={item.promptIndex}
                       onClick={() => setPromptIndex(item.promptIndex)}
-                      className="w-full text-left p-2 text-xs"
-                      style={{ borderRadius: 8, border: `1px solid ${promptIndex === item.promptIndex ? EMBER : LINE}`, background: promptIndex === item.promptIndex ? "hsl(var(--vf-ember) / 0.1)" : SURFACE2 }}
+                      className="w-full text-left p-2.5 text-[13px] transition-colors hover:brightness-110"
+                      style={{
+                        borderRadius: 10,
+                        border: `1px solid ${promptIndex === item.promptIndex ? EMBER : LINE}`,
+                        background: promptIndex === item.promptIndex ? "hsl(var(--vf-ember) / 0.14)" : "rgba(255,255,255,0.03)",
+                        color: TEXT,
+                        fontWeight: promptIndex === item.promptIndex ? 600 : 500,
+                      }}
                       data-testid={`most-likely-prompt-${item.promptIndex}`}
                     >
-                      {item.prompt}
+                      {promptIndex === item.promptIndex && "✓ "}{item.prompt}
                     </button>
                   ))}
                 </div>
@@ -701,8 +820,20 @@ function GameComposerDialog({ groupId, open, onClose }: { groupId: number; open:
               {selectedKind === "emoji_charades" && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setCharadesFromBank(true)} className="text-xs px-2 py-1 rounded-full" style={{ border: `1px solid ${charadesFromBank ? EMBER : LINE}`, color: charadesFromBank ? EMBER : MUTED }}>Surprise me</button>
-                    <button onClick={() => setCharadesFromBank(false)} className="text-xs px-2 py-1 rounded-full" style={{ border: `1px solid ${!charadesFromBank ? EMBER : LINE}`, color: !charadesFromBank ? EMBER : MUTED }}>Write my own</button>
+                    <button
+                      onClick={() => setCharadesFromBank(true)}
+                      className="text-xs px-2.5 py-1.5 rounded-full font-medium transition-colors"
+                      style={{ border: `1px solid ${charadesFromBank ? EMBER : LINE}`, color: charadesFromBank ? EMBER : MUTED, background: charadesFromBank ? "hsl(var(--vf-ember) / 0.12)" : "transparent" }}
+                    >
+                      Surprise me
+                    </button>
+                    <button
+                      onClick={() => setCharadesFromBank(false)}
+                      className="text-xs px-2.5 py-1.5 rounded-full font-medium transition-colors"
+                      style={{ border: `1px solid ${!charadesFromBank ? EMBER : LINE}`, color: !charadesFromBank ? EMBER : MUTED, background: !charadesFromBank ? "hsl(var(--vf-ember) / 0.12)" : "transparent" }}
+                    >
+                      Write my own
+                    </button>
                   </div>
                   {!charadesFromBank && (
                     <>
@@ -1351,7 +1482,15 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
           </div>
         )}
         <div className="p-3">
-          {!isMember ? (
+          {groupLoading ? (
+            // Group membership hasn't loaded yet — showing the join button
+            // here (isMember defaults false pre-load) would flash "Join
+            // Group to Chat" at existing members for a moment on every
+            // visit, so this stays neutral until the real answer is in.
+            <div className="w-full flex items-center justify-center" style={{ height: "48px" }}>
+              <Loader2 className="w-5 h-5 animate-spin" style={{ color: MUTED }} />
+            </div>
+          ) : !isMember ? (
             <button
               className="w-full flex items-center justify-center gap-2 font-semibold btn-press"
               onClick={handleJoin}
