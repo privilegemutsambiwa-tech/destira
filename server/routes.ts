@@ -3206,6 +3206,22 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // The "Join Game Room" lobby: every game currently live in a group.
+  app.get("/api/groups/:id/games/active", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const groupId = parseInt(req.params.id);
+      const member = await storage.getGroupMember(groupId, userId);
+      if (!member) return res.status(403).json({ message: "Must be a member of this group" });
+      const games = await groupGames.listActiveGames(groupId);
+      res.json({ games });
+    } catch (e) {
+      console.error("List active games error:", e);
+      res.status(500).json({ message: "Failed to load games" });
+    }
+  });
+
   app.get("/api/games/:gameId", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -3263,6 +3279,55 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (e instanceof groupGames.GameNotFoundError) return res.status(404).json({ message: e.message });
       if (e instanceof groupGames.NotEligibleError) return res.status(403).json({ message: e.message });
       res.status(500).json({ message: "Failed to reveal" });
+    }
+  });
+
+  // Joining a room is what makes someone count toward eligibility/reveal —
+  // idempotent, called both from the lobby's "Join" button and automatically
+  // when a room is opened by someone who hasn't joined yet.
+  app.post("/api/games/:gameId/join", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const gameId = parseInt(req.params.gameId);
+      await groupGames.joinGame(gameId, userId);
+      const state = await groupGames.getGameState(gameId, userId);
+      res.json(state);
+    } catch (e) {
+      if (e instanceof groupGames.GameNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof groupGames.NotGroupMemberError) return res.status(403).json({ message: e.message });
+      console.error("Join game error:", e);
+      res.status(500).json({ message: "Failed to join" });
+    }
+  });
+
+  // A game room's own small text thread — separate from the group's main
+  // chat (server/group-games.ts's sendGameMessage/getGameMessages).
+  app.get("/api/games/:gameId/messages", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const messages = await groupGames.getGameMessages(parseInt(req.params.gameId), userId);
+      res.json({ messages });
+    } catch (e) {
+      if (e instanceof groupGames.GameNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof groupGames.NotGroupMemberError) return res.status(403).json({ message: e.message });
+      res.status(500).json({ message: "Failed to load messages" });
+    }
+  });
+
+  app.post("/api/games/:gameId/messages", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const message = await groupGames.sendGameMessage(parseInt(req.params.gameId), userId, req.body?.content ?? "");
+      res.status(201).json(message);
+    } catch (e) {
+      if (e instanceof groupGames.GameNotFoundError) return res.status(404).json({ message: e.message });
+      if (e instanceof groupGames.NotGroupMemberError) return res.status(403).json({ message: e.message });
+      if (e instanceof groupGames.InvalidSetupError) return res.status(400).json({ message: e.message });
+      console.error("Send game message error:", e);
+      res.status(500).json({ message: "Failed to send message" });
     }
   });
 

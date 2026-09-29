@@ -1084,7 +1084,7 @@ export function useGameByMessage(messageId: number) {
 export function useSubmitGameResponse(groupId: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ gameId, messageId, response }: { gameId: number; messageId: number; response: any }) => {
+    mutationFn: async ({ gameId, response }: { gameId: number; messageId?: number | null; response: any }) => {
       const res = await fetch(`/api/games/${gameId}/respond`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1095,7 +1095,8 @@ export function useSubmitGameResponse(groupId: number) {
       return res.json();
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/messages", variables.messageId, "game"] });
+      if (variables.messageId != null) queryClient.invalidateQueries({ queryKey: ["/api/messages", variables.messageId, "game"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/games", variables.gameId] });
       queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] });
     },
   });
@@ -1104,15 +1105,89 @@ export function useSubmitGameResponse(groupId: number) {
 export function useRevealGame(groupId: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ gameId, messageId }: { gameId: number; messageId: number }) => {
+    mutationFn: async ({ gameId }: { gameId: number; messageId?: number | null }) => {
       const res = await fetch(`/api/games/${gameId}/reveal`, { method: "POST", credentials: "include" });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || "Failed to reveal");
       return res.json();
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/messages", variables.messageId, "game"] });
+      if (variables.messageId != null) queryClient.invalidateQueries({ queryKey: ["/api/messages", variables.messageId, "game"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/games", variables.gameId] });
       queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] });
     },
+  });
+}
+
+// The "Join Game Room" lobby — every game currently live in a group.
+export function useActiveGames(groupId: number) {
+  return useQuery<{ games: any[] }>({
+    queryKey: ["/api/groups", groupId, "games", "active"],
+    queryFn: async () => {
+      const res = await fetch(`/api/groups/${groupId}/games/active`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load games");
+      return res.json();
+    },
+    refetchInterval: 5000,
+  });
+}
+
+// Fetches a game room directly by id — used by GameRoomScreen, which
+// navigates there before it necessarily knows the originating chat message.
+export function useGameById(gameId: number | undefined) {
+  return useQuery({
+    queryKey: ["/api/games", gameId],
+    queryFn: async () => {
+      const res = await fetch(`/api/games/${gameId}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load game");
+      return res.json();
+    },
+    enabled: gameId != null,
+    refetchInterval: 5000,
+  });
+}
+
+export function useJoinGame() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (gameId: number) => {
+      const res = await fetch(`/api/games/${gameId}/join`, { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || "Failed to join");
+      return res.json();
+    },
+    onSuccess: (_data, gameId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/games", gameId] });
+    },
+  });
+}
+
+// A game room's own small text thread — separate from the group's main chat.
+export function useGameMessages(gameId: number | undefined) {
+  return useQuery<{ messages: any[] }>({
+    queryKey: ["/api/games", gameId, "messages"],
+    queryFn: async () => {
+      const res = await fetch(`/api/games/${gameId}/messages`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load messages");
+      return res.json();
+    },
+    enabled: gameId != null,
+    refetchInterval: 5000,
+  });
+}
+
+export function useSendGameMessage(gameId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (content: string) => {
+      const res = await fetch(`/api/games/${gameId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || "Failed to send");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/games", gameId, "messages"] }),
   });
 }
 

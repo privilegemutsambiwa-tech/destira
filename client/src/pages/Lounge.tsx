@@ -54,8 +54,8 @@ function LoungeIntroTip() {
     <div className="mb-5 rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-start justify-between gap-3" data-testid="strip-lounge-intro">
       <p className="text-[13px] text-vf-muted leading-[1.55]">
         Within Lounge you can join groups of shared interest, or create your own. Inside a group you can chat,
-        play games together (tap the dice icon in any group's chat), and see who else is around — a
-        lower-pressure way to meet people than Discover.
+        open the Game Room to see what's live and jump into a round with whoever's playing, and see who
+        else is around — a lower-pressure way to meet people than Discover.
       </p>
       <button onClick={dismiss} className="text-vf-faint hover:text-vf-text transition-colors shrink-0 -mr-1 -mt-0.5" aria-label="Dismiss" data-testid="button-dismiss-lounge-intro">
         <X className="w-4 h-4" />

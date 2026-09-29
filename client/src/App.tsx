@@ -50,6 +50,8 @@ const Essentials = lazy(() => import("@/pages/Essentials"));
 const Plans = lazy(() => import("@/pages/Plans"));
 const PlansPay = lazy(() => import("@/pages/PlansPay"));
 const GroupChatPage = lazy(() => import("@/pages/GroupChat"));
+const GameRoomLobby = lazy(() => import("@/pages/GameRoomLobby"));
+const GameRoomScreen = lazy(() => import("@/pages/GameRoomScreen"));
 const GroupInfoPage = lazy(() => import("@/pages/GroupInfo"));
 const GroupSettings = lazy(() => import("@/pages/GroupSettings"));
 const JoinGroup = lazy(() => import("@/pages/JoinGroup"));
@@ -220,6 +222,12 @@ function Router() {
       </Route>
       <Route path="/lounge/group/:groupId/settings">
         {(params) => <ProtectedRoute component={GroupSettings} params={params} />}
+      </Route>
+      <Route path="/lounge/group/:groupId/games/:gameId">
+        {(params) => <ProtectedRoute component={GameRoomScreen} params={params} />}
+      </Route>
+      <Route path="/lounge/group/:groupId/games">
+        {(params) => <ProtectedRoute component={GameRoomLobby} params={params} />}
       </Route>
       <Route path="/lounge/group/:groupId">
         {(params) => <ProtectedRoute component={GroupChatPage} params={params} />}

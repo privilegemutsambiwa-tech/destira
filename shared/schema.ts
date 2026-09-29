@@ -345,6 +345,34 @@ export const groupGameResponses = pgTable("group_game_responses", {
   uniqueIndex("group_game_responses_game_user_idx").on(t.gameId, t.userId),
 ]);
 
+// Who's actually IN a given game's room — a group member only counts toward
+// eligibility/reveal once they've explicitly joined (see server/group-games.ts
+// eligibleCount/joinGame), not by merely being in the group. The starter is
+// added here at creation time too (see createGame) unless their kind's
+// starterParticipates is false, in which case they host without playing.
+export const groupGameParticipants = pgTable("group_game_participants", {
+  id: serial("id").primaryKey(),
+  gameId: integer("game_id").notNull().references(() => groupGames.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  nickname: text("nickname").notNull(),
+  joinedAt: timestamp("joined_at").defaultNow(),
+}, (t) => [
+  uniqueIndex("group_game_participants_game_user_idx").on(t.gameId, t.userId),
+]);
+
+// A game room's own small text thread — deliberately simpler than
+// groupMessages (no polls/images/reactions/replies): this is where the
+// people who joined ONE game talk to each other, separate from the group's
+// main chat.
+export const groupGameMessages = pgTable("group_game_messages", {
+  id: serial("id").primaryKey(),
+  gameId: integer("game_id").notNull().references(() => groupGames.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  nickname: text("nickname").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const messageReactions = pgTable("message_reactions", {
   id: serial("id").primaryKey(),
   messageId: integer("message_id").notNull().references(() => groupMessages.id),
@@ -1305,6 +1333,8 @@ export type PollOption = typeof pollOptions.$inferSelect;
 export type PollVote = typeof pollVotes.$inferSelect;
 export type GroupGame = typeof groupGames.$inferSelect;
 export type GroupGameResponse = typeof groupGameResponses.$inferSelect;
+export type GroupGameParticipant = typeof groupGameParticipants.$inferSelect;
+export type GroupGameMessage = typeof groupGameMessages.$inferSelect;
 export type MessageReaction = typeof messageReactions.$inferSelect;
 export type StarredMessage = typeof starredMessages.$inferSelect;
 

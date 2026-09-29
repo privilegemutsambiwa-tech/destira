@@ -7,10 +7,10 @@
 // groupGames.config or groupGameResponses.response directly.
 import { db } from "./db";
 import {
-  groupGames, groupGameResponses, groupMessages, groupMembers,
-  type GroupGame, type GroupGameResponse, type GroupGameKind,
+  groupGames, groupGameResponses, groupGameParticipants, groupGameMessages, groupMessages,
+  type GroupGame, type GroupGameResponse, type GroupGameKind, type GroupGameMessage,
 } from "@shared/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, asc, count } from "drizzle-orm";
 import { storage } from "./storage";
 import {
   WOULD_YOU_RATHER_BANK, THIS_OR_THAT_BANK, NEVER_HAVE_I_EVER_BANK,
@@ -363,11 +363,89 @@ export async function createGame(groupId: number, userId: string, kind: GroupGam
     revealAt,
   }).returning();
 
+  // A kind whose starter also plays (would_you_rather, trivia, ...) joins
+  // their own room the moment they create it; a kind whose starter is
+  // purely hosting (two_truths' author, charades' clue-setter) is tracked
+  // via startedBy only and never becomes a participant/responder.
+  if (def.starterParticipates) {
+    await joinGame(game.id, userId);
+  }
+
   return game;
 }
 
-function eligibleCount(def: GameDefinition, members: MemberRef[], startedBy: string): number {
-  return def.starterParticipates ? members.length : Math.max(members.length - 1, 0);
+// Idempotent — the lobby's "Join" button, opening a room you haven't joined
+// yet, and (defensively) submitResponse itself all call this.
+export async function joinGame(gameId: number, userId: string): Promise<void> {
+  const [game] = await db.select().from(groupGames).where(eq(groupGames.id, gameId));
+  if (!game) throw new GameNotFoundError();
+  const member = await storage.getGroupMember(game.groupId, userId);
+  if (!member) throw new NotGroupMemberError();
+  await db.insert(groupGameParticipants)
+    .values({ gameId, userId, nickname: member.nickname || "Someone" })
+    .onConflictDoNothing();
+}
+
+async function eligibleCount(gameId: number): Promise<number> {
+  const [row] = await db.select({ n: count() }).from(groupGameParticipants).where(eq(groupGameParticipants.gameId, gameId));
+  return Number(row?.n ?? 0);
+}
+
+async function getParticipants(gameId: number): Promise<MemberRef[]> {
+  const rows = await db.select({ userId: groupGameParticipants.userId, nickname: groupGameParticipants.nickname })
+    .from(groupGameParticipants)
+    .where(eq(groupGameParticipants.gameId, gameId));
+  return rows;
+}
+
+// Every active game in a group, for the "Join Game Room" lobby.
+export async function listActiveGames(groupId: number): Promise<Array<{
+  id: number; kind: GroupGameKind; label: string; startedBy: string; startedByNickname: string;
+  participantCount: number; createdAt: Date;
+}>> {
+  const rows = await db.select().from(groupGames)
+    .where(and(eq(groupGames.groupId, groupId), eq(groupGames.status, "active")))
+    .orderBy(asc(groupGames.createdAt));
+  const out = [];
+  for (const g of rows) {
+    const def = DEFINITIONS[g.kind as GroupGameKind];
+    if (!def) continue;
+    const [starterMember, participantCount] = await Promise.all([
+      storage.getGroupMember(groupId, g.startedBy),
+      eligibleCount(g.id),
+    ]);
+    out.push({
+      id: g.id,
+      kind: g.kind as GroupGameKind,
+      label: def.label,
+      startedBy: g.startedBy,
+      startedByNickname: starterMember?.nickname || "Someone",
+      participantCount,
+      createdAt: g.createdAt!,
+    });
+  }
+  return out;
+}
+
+export async function sendGameMessage(gameId: number, userId: string, content: string): Promise<GroupGameMessage> {
+  const [game] = await db.select().from(groupGames).where(eq(groupGames.id, gameId));
+  if (!game) throw new GameNotFoundError();
+  const member = await storage.getGroupMember(game.groupId, userId);
+  if (!member) throw new NotGroupMemberError();
+  const trimmed = content.trim().slice(0, 2000);
+  if (!trimmed) throw new InvalidSetupError("Message can't be empty.");
+  const [msg] = await db.insert(groupGameMessages)
+    .values({ gameId, userId, nickname: member.nickname || "Someone", content: trimmed })
+    .returning();
+  return msg;
+}
+
+export async function getGameMessages(gameId: number, viewerId: string): Promise<GroupGameMessage[]> {
+  const [game] = await db.select().from(groupGames).where(eq(groupGames.id, gameId));
+  if (!game) throw new GameNotFoundError();
+  const member = await storage.getGroupMember(game.groupId, viewerId);
+  if (!member) throw new NotGroupMemberError();
+  return db.select().from(groupGameMessages).where(eq(groupGameMessages.gameId, gameId)).orderBy(asc(groupGameMessages.createdAt));
 }
 
 async function maybeReveal(game: GroupGame): Promise<GroupGame> {
@@ -375,11 +453,10 @@ async function maybeReveal(game: GroupGame): Promise<GroupGame> {
   const def = DEFINITIONS[game.kind as GroupGameKind];
   if (!def) return game;
 
-  const memberRows = await storage.getGroupMembers(game.groupId);
-  const members: MemberRef[] = memberRows.map((m) => ({ userId: m.userId, nickname: m.nickname || "Someone" }));
   const responses = await db.select().from(groupGameResponses).where(eq(groupGameResponses.gameId, game.id));
+  const eligible = await eligibleCount(game.id);
 
-  const allResponded = responses.length >= eligibleCount(def, members, game.startedBy);
+  const allResponded = eligible > 0 && responses.length >= eligible;
   const timerPassed = game.revealAt != null && game.revealAt.getTime() <= Date.now();
 
   const shouldReveal =
@@ -410,6 +487,11 @@ export async function submitResponse(gameId: number, userId: string, response: a
   if (!member) throw new NotGroupMemberError();
   if (!def.starterParticipates && userId === game.startedBy) throw new NotEligibleError("The round's host doesn't also play this one.");
 
+  // Belt-and-braces: the client always joins before letting someone respond,
+  // but a response should never silently NOT count toward eligibility just
+  // because that call was missed.
+  await joinGame(gameId, userId);
+
   await db.insert(groupGameResponses)
     .values({ gameId, userId, nickname: member.nickname || "Someone", response })
     .onConflictDoUpdate({ target: [groupGameResponses.gameId, groupGameResponses.userId], set: { response } });
@@ -438,14 +520,18 @@ export async function revealNow(gameId: number, userId: string): Promise<GroupGa
 export interface GameStateView {
   id: number;
   groupId: number;
+  messageId: number | null;
   kind: GroupGameKind;
   label: string;
   startedBy: string;
+  startedByNickname: string;
   status: string;
   config: any;
   myResponse: any | null;
   responseCount: number;
   eligibleCount: number;
+  participants: MemberRef[];
+  isParticipant: boolean;
   results: any | null;
   canRevealEarly: boolean;
 }
@@ -461,11 +547,12 @@ export async function getGameState(gameId: number, viewerId: string): Promise<Ga
   const revealed = game.status === "revealed";
   const showLive = def.revealMode === "never-gated";
 
-  const responses = await db.select().from(groupGameResponses).where(eq(groupGameResponses.gameId, game.id));
+  const [responses, participants, starterMember] = await Promise.all([
+    db.select().from(groupGameResponses).where(eq(groupGameResponses.gameId, game.id)),
+    getParticipants(game.id),
+    storage.getGroupMember(game.groupId, game.startedBy),
+  ]);
   const mine = responses.find((r) => r.userId === viewerId);
-
-  const memberRows = await storage.getGroupMembers(game.groupId);
-  const members: MemberRef[] = memberRows.map((m) => ({ userId: m.userId, nickname: m.nickname || "Someone" }));
 
   const starterSeesSecret = def.starterKnowsSecret && viewerId === game.startedBy;
   const sanitizedConfig = def.sanitizeConfig(game.config, revealed || starterSeesSecret);
@@ -473,14 +560,18 @@ export async function getGameState(gameId: number, viewerId: string): Promise<Ga
   return {
     id: game.id,
     groupId: game.groupId,
+    messageId: game.messageId,
     kind: game.kind as GroupGameKind,
     label: def.label,
     startedBy: game.startedBy,
+    startedByNickname: starterMember?.nickname || "Someone",
     status: game.status,
     config: sanitizedConfig,
     myResponse: mine?.response ?? null,
     responseCount: responses.length,
-    eligibleCount: eligibleCount(def, members, game.startedBy),
+    eligibleCount: participants.length,
+    participants,
+    isParticipant: participants.some((p) => p.userId === viewerId),
     results: revealed ? game.results : showLive ? { live: responses.map((r) => ({ nickname: r.nickname, response: r.response })) } : null,
     canRevealEarly: def.revealMode === "manual-or-timer" && viewerId === game.startedBy && !revealed,
   };
