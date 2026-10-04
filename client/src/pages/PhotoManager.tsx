@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, Trash2, Upload } from "lucide-react";
+import { PhotoSourceSheet } from "@/components/photo-source-sheet";
 import { LayoutShell } from "@/components/layout-shell";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -89,7 +90,7 @@ export default function PhotoManager() {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [showPhotoSource, setShowPhotoSource] = useState(false);
   const focalTimer = useRef<number | null>(null);
 
   const selected = photos.find((p) => p.id === selectedId) ?? null;
@@ -196,7 +197,6 @@ export default function PhotoManager() {
       toast({ title: "Couldn't upload", variant: "destructive" });
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
   };
 
@@ -239,7 +239,7 @@ export default function PhotoManager() {
             <Loader2 className="w-7 h-7 animate-spin text-vf-mint" />
           </div>
         ) : photos.length === 0 ? (
-          <EmptyState onPick={() => fileRef.current?.click()} dragOver={dragOver} uploading={uploading} />
+          <EmptyState onPick={() => setShowPhotoSource(true)} dragOver={dragOver} uploading={uploading} />
         ) : (
           <>
             {/* live header preview (~40% scale) */}
@@ -303,7 +303,7 @@ export default function PhotoManager() {
                 );
               })}
               <button
-                onClick={() => fileRef.current?.click()}
+                onClick={() => setShowPhotoSource(true)}
                 disabled={uploading}
                 className={`rounded-[16px] border border-dashed flex flex-col items-center justify-center gap-1.5 text-vf-faint transition-colors ${
                   dragOver ? "border-vf-text/60 text-vf-text" : "border-vf-line hover:border-vf-text/25 hover:text-vf-text"
@@ -370,13 +370,13 @@ export default function PhotoManager() {
           </div>
         )}
 
-        <input
-          ref={fileRef}
-          type="file"
+        <PhotoSourceSheet
+          open={showPhotoSource}
+          onClose={() => setShowPhotoSource(false)}
+          onFile={doUpload}
           accept="image/jpeg,image/png,image/webp,image/gif"
-          className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f); }}
-          data-testid="input-file"
+          title="Add to your gallery"
+          camera="user"
         />
       </div>
     </LayoutShell>

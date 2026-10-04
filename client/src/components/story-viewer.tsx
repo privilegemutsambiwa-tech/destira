@@ -3,8 +3,9 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
+import { shrinkImage } from "@/lib/shrink-image";
 import { Textarea } from "@/components/ui/textarea";
-import { Heart, MessageCircle, X, Plus, Eye, Send, ChevronLeft, ChevronRight, Trash2, Camera, Pencil, Brain } from "lucide-react";
+import { Heart, MessageCircle, X, Plus, Eye, Send, ChevronLeft, ChevronRight, Trash2, Camera, Pencil, Brain, Image as ImageIcon } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { UpgradeRequiredError } from "@/hooks/use-interactions";
@@ -782,12 +783,14 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setSelectedFile(file);
+    // Camera shots are often bigger than the upload limit; no-op for videos.
+    setSelectedFile(await shrinkImage(file));
     setCreatorMode("photo-caption");
   };
 
@@ -847,6 +850,7 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
     setTextContent("");
     setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
     onOpenChange?.(false);
   };
 
@@ -867,6 +871,17 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
         className="hidden"
         onChange={handleFileSelect}
         data-testid="input-story-file"
+      />
+      {/* `capture` opens the device camera directly on phones; desktop
+          browsers ignore it and show the normal file picker. */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFileSelect}
+        data-testid="input-story-camera"
       />
 
       <div className="flex flex-col items-center gap-1" data-testid="add-story-button-wrapper">
@@ -907,7 +922,18 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
             <p className="text-center text-xs mb-6" style={{ color: "#7E7690" }}>
               Your name shows up if someone opens it.
             </p>
-            <div className="grid grid-cols-2 gap-3 mb-5">
+            <div className="grid grid-cols-3 gap-3 mb-5">
+              <button
+                className="flex flex-col items-start gap-2 p-4 transition-colors"
+                style={{ background: "#161220", borderRadius: "18px", border: "1px solid rgba(255,255,255,0.09)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(255,107,74,0.5)")}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.09)")}
+                onClick={() => { cameraInputRef.current?.click(); setCreatorMode(null); }}
+                data-testid="button-story-take-photo"
+              >
+                <Camera className="w-5 h-5" style={{ color: "#A79FB4" }} />
+                <p className="font-medium text-sm" style={{ color: "#F5F0EA" }}>Take a photo</p>
+              </button>
               <button
                 className="flex flex-col items-start gap-2 p-4 transition-colors"
                 style={{ background: "#161220", borderRadius: "18px", border: "1px solid rgba(255,255,255,0.09)" }}
@@ -916,8 +942,8 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
                 onClick={() => { fileInputRef.current?.click(); setCreatorMode(null); }}
                 data-testid="button-story-choose-photo"
               >
-                <Camera className="w-5 h-5" style={{ color: "#A79FB4" }} />
-                <p className="font-medium text-sm" style={{ color: "#F5F0EA" }}>A photo</p>
+                <ImageIcon className="w-5 h-5" style={{ color: "#A79FB4" }} />
+                <p className="font-medium text-sm" style={{ color: "#F5F0EA" }}>Upload</p>
               </button>
               <button
                 className="flex flex-col items-start gap-2 p-4 transition-colors"

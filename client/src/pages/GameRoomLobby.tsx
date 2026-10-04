@@ -15,7 +15,17 @@ const MUTED = "var(--vf-muted)";
 const TEXT = "hsl(var(--vf-text))";
 const EMBER = "hsl(var(--vf-ember))";
 const SERIF: React.CSSProperties = { fontFamily: '"Instrument Serif", serif', fontWeight: 400 };
+const FAINT = "var(--vf-faint)";
 const MONO: React.CSSProperties = { fontFamily: '"DM Mono", ui-monospace, monospace', fontSize: "10.5px" };
+
+function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  return `${hrs}h ago`;
+}
 
 export default function GameRoomLobby({ params }: { params?: { groupId?: string } }) {
   const groupId = Number(params?.groupId);
@@ -24,6 +34,7 @@ export default function GameRoomLobby({ params }: { params?: { groupId?: string 
   const { data, isLoading } = useActiveGames(groupId);
   const [showComposer, setShowComposer] = useState(false);
   const games = data?.games ?? [];
+  const recent = data?.recent ?? [];
 
   return (
     <div className="min-h-dvh flex flex-col" style={{ background: INK }}>
@@ -58,43 +69,81 @@ export default function GameRoomLobby({ params }: { params?: { groupId?: string 
           <div className="flex justify-center p-12">
             <Loader2 className="w-6 h-6 animate-spin" style={{ color: EMBER }} />
           </div>
-        ) : games.length === 0 ? (
-          <div className="text-center py-16 max-w-sm mx-auto">
-            <p className="mb-2" style={{ ...SERIF, color: TEXT, fontSize: "22px" }}>Nothing live right now.</p>
-            <p className="text-sm mb-5" style={{ color: MUTED }}>
-              Start a round and everyone in the group can jump in from here.
-            </p>
-            <button
-              onClick={() => setShowComposer(true)}
-              className="inline-flex items-center gap-2 font-semibold px-5 h-11 rounded-full btn-press"
-              style={{ background: EMBER, color: INK }}
-              data-testid="button-new-game-empty"
-            >
-              <Plus className="w-4 h-4" /> Start a game
-            </button>
-          </div>
         ) : (
-          <div className="space-y-2.5">
-            {games.map((g: any) => (
-              <button
-                key={g.id}
-                onClick={() => setLocation(`/lounge/group/${groupId}/games/${g.id}`)}
-                className="w-full flex items-center gap-3 text-left p-3.5 transition-colors hover:brightness-110"
-                style={{ borderRadius: 14, border: `1px solid ${LINE}`, background: SURFACE2 }}
-                data-testid={`active-game-${g.id}`}
-              >
-                <span className="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0" style={{ background: "hsl(var(--vf-ember) / 0.14)" }}>
-                  {GAME_ICON_LABEL[g.kind] || "🎮"}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold" style={{ color: TEXT }}>{g.label}</div>
-                  <div className="text-xs mt-0.5" style={{ color: MUTED }}>Started by {g.startedByNickname}</div>
+          <div className="space-y-6">
+            <section>
+              <div className="mb-2.5" style={{ ...MONO, color: MUTED, letterSpacing: "0.16em", textTransform: "uppercase" }}>Live now</div>
+              {games.length === 0 ? (
+                <div className="text-center py-10 px-4 rounded-2xl" style={{ border: `1px dashed ${LINE}` }}>
+                  <p className="mb-1.5" style={{ ...SERIF, color: TEXT, fontSize: "20px" }}>Nothing live right now.</p>
+                  <p className="text-sm mb-4" style={{ color: MUTED }}>
+                    Start a round and everyone in the group can jump in from here.
+                  </p>
+                  <button
+                    onClick={() => setShowComposer(true)}
+                    className="inline-flex items-center gap-2 font-semibold px-5 h-11 rounded-full btn-press"
+                    style={{ background: EMBER, color: INK }}
+                    data-testid="button-new-game-empty"
+                  >
+                    <Plus className="w-4 h-4" /> Start a game
+                  </button>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0 font-mono text-xs px-2.5 py-1 rounded-full" style={{ color: EMBER, background: "hsl(var(--vf-ember) / 0.12)" }}>
-                  <Users className="w-3.5 h-3.5" /> {g.participantCount}
+              ) : (
+                <div className="space-y-2.5">
+                  {games.map((g: any) => (
+                    <button
+                      key={g.id}
+                      onClick={() => setLocation(`/lounge/group/${groupId}/games/${g.id}`)}
+                      className="w-full flex items-center gap-3 text-left p-3.5 transition-colors hover:brightness-110"
+                      style={{ borderRadius: 14, border: `1px solid ${LINE}`, background: SURFACE2 }}
+                      data-testid={`active-game-${g.id}`}
+                    >
+                      <span className="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0" style={{ background: "hsl(var(--vf-ember) / 0.14)" }}>
+                        {GAME_ICON_LABEL[g.kind] || "🎮"}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold" style={{ color: TEXT }}>{g.label}</div>
+                        <div className="text-xs mt-0.5" style={{ color: MUTED }}>Started by {g.startedByNickname}</div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0 font-mono text-xs px-2.5 py-1 rounded-full" style={{ color: EMBER, background: "hsl(var(--vf-ember) / 0.12)" }}>
+                        <Users className="w-3.5 h-3.5" /> {g.participantCount}
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              </button>
-            ))}
+              )}
+            </section>
+
+            {recent.length > 0 && (
+              <section>
+                <div className="mb-1" style={{ ...MONO, color: MUTED, letterSpacing: "0.16em", textTransform: "uppercase" }}>Earlier today</div>
+                <p className="text-xs mb-2.5" style={{ color: FAINT }}>Finished rounds — tap one to see how it went.</p>
+                <div className="space-y-2">
+                  {recent.map((g: any) => (
+                    <button
+                      key={g.id}
+                      onClick={() => setLocation(`/lounge/group/${groupId}/games/${g.id}`)}
+                      className="w-full flex items-center gap-3 text-left p-3 transition-colors hover:brightness-110"
+                      style={{ borderRadius: 14, border: `1px solid ${LINE}`, background: "rgba(255,255,255,0.02)" }}
+                      data-testid={`recent-game-${g.id}`}
+                    >
+                      <span className="w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0 opacity-80" style={{ background: "rgba(255,255,255,0.06)" }}>
+                        {GAME_ICON_LABEL[g.kind] || "🎮"}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium" style={{ color: TEXT }}>{g.label}</div>
+                        <div className="text-xs mt-0.5" style={{ color: MUTED }}>
+                          {g.startedByNickname} · {g.participantCount} played · {timeAgo(g.revealedAt)}
+                        </div>
+                      </div>
+                      <span className="font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-full shrink-0" style={{ color: MUTED, background: "rgba(255,255,255,0.06)" }}>
+                        {g.responseCount === 0 ? "No players" : "Ended"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         )}
       </div>

@@ -1120,7 +1120,7 @@ export function useRevealGame(groupId: number) {
 
 // The "Join Game Room" lobby — every game currently live in a group.
 export function useActiveGames(groupId: number) {
-  return useQuery<{ games: any[] }>({
+  return useQuery<{ games: any[]; recent: any[] }>({
     queryKey: ["/api/groups", groupId, "games", "active"],
     queryFn: async () => {
       const res = await fetch(`/api/groups/${groupId}/games/active`, { credentials: "include" });

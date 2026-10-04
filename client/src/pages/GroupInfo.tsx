@@ -13,7 +13,7 @@ import {
 import {
   ArrowLeft, Crown, Shield, Loader2, Users, Globe, Lock, UserPlus,
   Link2, Copy, Check, X, Trash2, Pencil, Image as ImageIcon, Star,
-  Search, BellOff, Bell, Settings, ChevronRight, Share2, Camera
+  Search, BellOff, Bell, Settings, ChevronRight, Share2, Camera, MoreHorizontal, UserMinus, ShieldCheck, ShieldOff
 } from "lucide-react";
 import {
   useGroup, useGroupMembers, useGroupMedia, useUpdateGroup,
@@ -27,6 +27,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { avatarColor } from "@/lib/avatar-color";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { PhotoSourceSheet } from "@/components/photo-source-sheet";
+import { PhotoLightbox } from "@/components/photo-lightbox";
 
 const PRIVACY_LABELS: Record<string, { icon: any; label: string }> = {
   "open": { icon: Globe, label: "Open" },
@@ -123,8 +125,9 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   const [shareLink, setShareLink] = useState("");
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
 
-  const iconUploadRef = useRef<HTMLInputElement>(null);
-  const bannerUploadRef = useRef<HTMLInputElement>(null);
+  const [photoTarget, setPhotoTarget] = useState<"icon" | "banner" | null>(null);
+  const [lightbox, setLightbox] = useState<{ photos: { url: string }[]; index: number } | null>(null);
+  const [memberAction, setMemberAction] = useState<{ member: any; action: "promote" | "demote" | "remove" | null } | null>(null);
   const queryClient = useQueryClient();
 
   const toggleMute = useToggleMute(groupId);
@@ -138,11 +141,19 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
   const isOwner = group?.myRole === "owner";
   const isAdmin = group?.myRole === "owner" || group?.myRole === "admin";
 
+  const bannerPhotoUrl: string | null = group?.bannerUrl || group?.groupPhotoUrl || null;
+  // Both the cover and the group picture are viewable; whichever was tapped
+  // opens first and the other is a swipe/tap away.
+  const openLightbox = (url: string) => {
+    const photos = [bannerPhotoUrl, group?.iconUrl].filter((u): u is string => !!u);
+    setLightbox({ photos: photos.map((u) => ({ url: u })), index: Math.max(photos.indexOf(url), 0) });
+  };
+
   const currentMember = (members || []).find((m: { userId: string; isMuted?: boolean; role?: string }) => m.userId === user?.id);
 
   const sortedMembers = [...(members || [])].sort((a: any, b: any) => {
     const order: Record<string, number> = { owner: 0, admin: 1, member: 2 };
-    return (order[a.role] || 2) - (order[b.role] || 2);
+    return (order[a.role] ?? 2) - (order[b.role] ?? 2);
   });
 
   const makeInviteUrl = (token: string) => `${window.location.origin}/join/${groupId}-${token}`;
@@ -378,24 +389,25 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
 
       <div className="flex-1 overflow-y-auto">
         <div className="relative">
-          <input
-            ref={bannerUploadRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => { if (e.target.files?.[0]) handleUploadBanner(e.target.files[0]); }}
+          <PhotoSourceSheet
+            open={photoTarget !== null}
+            onClose={() => setPhotoTarget(null)}
+            onFile={(file) => {
+              if (photoTarget === "banner") handleUploadBanner(file);
+              else if (photoTarget === "icon") handleUploadIcon(file);
+            }}
+            title={photoTarget === "banner" ? "Change cover photo" : "Change group picture"}
           />
-          <input
-            ref={iconUploadRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => { if (e.target.files?.[0]) handleUploadIcon(e.target.files[0]); }}
-          />
+          {/* Tapping a photo always opens it full size, for everyone — editing
+              (owner/admin only) is its own explicit control, so viewing and
+              changing a photo are never the same tap. */}
           <div
             className="relative w-full"
-            style={{ aspectRatio: "21 / 9", background: SURFACE2, borderBottom: `1px solid ${LINE}`, cursor: isAdmin ? "pointer" : "default" }}
-            onClick={() => isAdmin && bannerUploadRef.current?.click()}
+            style={{ aspectRatio: "21 / 9", background: SURFACE2, borderBottom: `1px solid ${LINE}`, cursor: bannerPhotoUrl ? "zoom-in" : isAdmin ? "pointer" : "default" }}
+            onClick={() => {
+              if (bannerPhotoUrl) openLightbox(bannerPhotoUrl);
+              else if (isAdmin) setPhotoTarget("banner");
+            }}
             data-testid="banner-area"
           >
             {(group?.bannerUrl || group?.groupPhotoUrl) ? (
@@ -425,38 +437,53 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
               </p>
             </div>
             {isAdmin && (
-              <div
-                className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium"
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setPhotoTarget("banner"); }}
+                className="absolute top-2 right-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium btn-press"
                 // On the cover photo's own dark scrim, not the page — stays a
                 // fixed light color regardless of theme, same as the scrim itself.
                 style={{ background: "rgba(0,0,0,0.55)", color: "#F5F0EA" }}
+                data-testid="button-edit-cover"
+                aria-label="Change cover photo"
               >
-                <Pencil className="w-3 h-3" /> Cover
-              </div>
+                <Pencil className="w-3 h-3" /> Edit cover
+              </button>
             )}
-            {/* Group profile picture — overlaps the cover, editable by owner/admin */}
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); if (isAdmin) iconUploadRef.current?.click(); }}
-              className="absolute left-4 bottom-3 w-[84px] h-[84px] rounded-full overflow-hidden flex items-center justify-center"
-              style={{ background: SURFACE2, border: `3px solid ${INK}`, cursor: isAdmin ? "pointer" : "default" }}
-              data-testid="button-group-avatar"
-              aria-label={isAdmin ? "Change group picture" : "Group picture"}
-            >
-              {group?.iconUrl ? (
-                <img src={group.iconUrl} alt={group.name} className="w-full h-full object-cover" />
-              ) : (
-                <span style={{ ...SERIF, color: TEXT, fontSize: "30px" }}>{(group?.name || "G")[0].toUpperCase()}</span>
-              )}
+            {/* Group profile picture — overlaps the cover. Tap to view full
+                size; owner/admin get a separate camera badge to change it. */}
+            <div className="absolute left-4 bottom-3 w-[84px] h-[84px]">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (group?.iconUrl) openLightbox(group.iconUrl);
+                  else if (isAdmin) setPhotoTarget("icon");
+                }}
+                className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
+                style={{ background: SURFACE2, border: `3px solid ${INK}`, cursor: group?.iconUrl ? "zoom-in" : isAdmin ? "pointer" : "default" }}
+                data-testid="button-group-avatar"
+                aria-label="View group picture"
+              >
+                {group?.iconUrl ? (
+                  <img src={group.iconUrl} alt={group.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span style={{ ...SERIF, color: TEXT, fontSize: "30px" }}>{(group?.name || "G")[0].toUpperCase()}</span>
+                )}
+              </button>
               {isAdmin && (
-                <span
-                  className="absolute bottom-0 right-0 w-6 h-6 rounded-full flex items-center justify-center"
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setPhotoTarget("icon"); }}
+                  className="absolute bottom-0 right-0 w-7 h-7 rounded-full flex items-center justify-center btn-press"
                   style={{ background: EMBER, border: `2px solid ${INK}` }}
+                  data-testid="button-edit-group-picture"
+                  aria-label="Change group picture"
                 >
-                  <Camera className="w-3 h-3" style={{ color: INK }} />
-                </span>
+                  <Camera className="w-3.5 h-3.5" style={{ color: INK }} />
+                </button>
               )}
-            </button>
+            </div>
           </div>
 
           {group?.categoryTags && group.categoryTags.length > 0 && (
@@ -689,37 +716,19 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                         <span className="text-xs capitalize" style={{ color: MUTED }}>{member.role}</span>
                       </div>
                     </div>
-                    {isOwner && member.userId !== user?.id && (
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {member.role === "member" && (
-                          <button
-                            onClick={() => handlePromote(member.userId, "admin")}
-                            className="px-2 py-1 text-xs rounded btn-press"
-                            style={{ background: ELEVATED, color: TEXT, border: `1px solid ${LINE}` }}
-                            data-testid={`button-promote-${member.id}`}
-                          >
-                            <Shield className="w-3 h-3 inline mr-1" />Admin
-                          </button>
-                        )}
-                        {member.role === "admin" && (
-                          <button
-                            onClick={() => handlePromote(member.userId, "member")}
-                            className="px-2 py-1 text-xs rounded btn-press"
-                            style={{ background: ELEVATED, color: TEXT, border: `1px solid ${LINE}` }}
-                            data-testid={`button-demote-${member.id}`}
-                          >
-                            Demote
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleRemove(member.userId)}
-                          className="w-7 h-7 rounded-full flex items-center justify-center btn-press"
-                          style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)" }}
-                          data-testid={`button-remove-${member.id}`}
-                        >
-                          <X className="w-4 h-4" style={{ color: "#EF4444" }} />
-                        </button>
-                      </div>
+                    {/* One quiet menu button instead of always-visible Admin/Remove
+                        buttons — nothing destructive or privilege-changing is a
+                        single tap away, and every choice is confirmed first. */}
+                    {isOwner && member.userId !== user?.id && member.role !== "owner" && (
+                      <button
+                        onClick={() => setMemberAction({ member, action: null })}
+                        className="w-8 h-8 rounded-full flex items-center justify-center btn-press shrink-0 transition-colors hover:brightness-125"
+                        style={{ background: ELEVATED, border: `1px solid ${LINE}` }}
+                        aria-label={`Manage ${member.nickname || "member"}`}
+                        data-testid={`button-manage-${member.id}`}
+                      >
+                        <MoreHorizontal className="w-4 h-4" style={{ color: MUTED }} />
+                      </button>
                     )}
                   </div>
                 ))}
@@ -1065,6 +1074,155 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {lightbox && (
+        <PhotoLightbox photos={lightbox.photos} initialIndex={lightbox.index} onClose={() => setLightbox(null)} />
+      )}
+
+      <MemberActionDialog
+        target={memberAction}
+        busy={updateRole.isPending || removeMember.isPending}
+        onClose={() => setMemberAction(null)}
+        onPick={(action) => setMemberAction((cur) => (cur ? { ...cur, action } : cur))}
+        onConfirm={async () => {
+          if (!memberAction?.action) return;
+          const { member, action } = memberAction;
+          if (action === "promote") await handlePromote(member.userId, "admin");
+          else if (action === "demote") await handlePromote(member.userId, "member");
+          else await handleRemove(member.userId);
+          setMemberAction(null);
+        }}
+      />
     </div>
+  );
+}
+
+// Two steps on purpose: pick what to do, then confirm it in plain words. A
+// stray tap can open this menu but can never promote or remove anyone.
+function MemberActionDialog({ target, busy, onClose, onPick, onConfirm }: {
+  target: { member: any; action: "promote" | "demote" | "remove" | null } | null;
+  busy: boolean;
+  onClose: () => void;
+  onPick: (action: "promote" | "demote" | "remove") => void;
+  onConfirm: () => void;
+}) {
+  // Keep showing the last member while the dialog animates closed — with
+  // `target` already null the content would blank out mid-fade.
+  const lastTarget = useRef(target);
+  if (target) lastTarget.current = target;
+  const shown = target ?? lastTarget.current;
+  const member = shown?.member;
+  const action = shown?.action ?? null;
+  const name = member?.nickname || "this member";
+  const isAdminNow = member?.role === "admin";
+
+  const copy = {
+    promote: {
+      title: `Make ${name} an admin?`,
+      body: "Admins can manage members, edit the group's details and settings, and moderate messages. You can take it back any time.",
+      confirm: "Make admin",
+      danger: false,
+    },
+    demote: {
+      title: `Remove ${name}'s admin role?`,
+      body: "They'll stay in the group as a regular member and lose admin controls.",
+      confirm: "Remove admin role",
+      danger: false,
+    },
+    remove: {
+      title: `Remove ${name} from the group?`,
+      body: "They'll lose access to this room and its messages. If the group is open they can rejoin; otherwise they'd need to be invited again.",
+      confirm: "Remove from group",
+      danger: true,
+    },
+  } as const;
+
+  const rows: { key: "promote" | "demote" | "remove"; icon: any; label: string; hint: string; danger?: boolean }[] = [
+    isAdminNow
+      ? { key: "demote", icon: ShieldOff, label: "Remove admin role", hint: "Keep them as a regular member" }
+      : { key: "promote", icon: ShieldCheck, label: "Make admin", hint: "Let them manage members and settings" },
+    { key: "remove", icon: UserMinus, label: "Remove from group", hint: "They lose access to this room", danger: true },
+  ];
+
+  return (
+    <Dialog open={!!target} onOpenChange={(v) => { if (!v && !busy) onClose(); }}>
+      <DialogContent style={{ background: SURFACE2, border: `1px solid ${LINE}` }}>
+        {member && action === null && (
+          <>
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-base font-bold text-white"
+                  style={{ background: avatarColor(member.userId) }}
+                >
+                  {member.nickname?.[0]?.toUpperCase() || "?"}
+                </div>
+                <div className="min-w-0 text-left">
+                  <DialogTitle style={{ ...SERIF, color: TEXT, fontSize: "20px" }}>{name}</DialogTitle>
+                  <DialogDescription className="capitalize" style={{ color: MUTED }}>{member.role}</DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+            <div className="space-y-2">
+              {rows.map((r) => (
+                <button
+                  key={r.key}
+                  onClick={() => onPick(r.key)}
+                  className="w-full flex items-center gap-3 text-left p-3 transition-colors hover:brightness-110"
+                  style={{ borderRadius: 12, border: `1px solid ${r.danger ? "rgba(239,68,68,0.3)" : LINE}`, background: r.danger ? "rgba(239,68,68,0.06)" : "rgba(255,255,255,0.03)" }}
+                  data-testid={`member-action-${r.key}`}
+                >
+                  <span
+                    className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                    style={{ background: r.danger ? "rgba(239,68,68,0.12)" : "hsl(var(--vf-ember) / 0.14)" }}
+                  >
+                    <r.icon className="w-4 h-4" style={{ color: r.danger ? "#EF4444" : EMBER }} />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold" style={{ color: r.danger ? "#EF4444" : TEXT }}>{r.label}</div>
+                    <div className="text-xs mt-0.5" style={{ color: MUTED }}>{r.hint}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {member && action !== null && (
+          <>
+            <DialogHeader>
+              <DialogTitle style={{ ...SERIF, color: TEXT, fontSize: "20px" }}>{copy[action].title}</DialogTitle>
+              <DialogDescription style={{ color: MUTED }}>{copy[action].body}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <button
+                className="px-4 py-2 text-sm font-medium disabled:opacity-50"
+                style={{ color: MUTED }}
+                onClick={onClose}
+                disabled={busy}
+                data-testid="button-member-action-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                style={{
+                  background: copy[action].danger ? "#EF4444" : EMBER,
+                  color: copy[action].danger ? "#fff" : INK,
+                  borderRadius: "10px",
+                  border: "none",
+                }}
+                onClick={onConfirm}
+                disabled={busy}
+                data-testid="button-member-action-confirm"
+              >
+                {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+                {copy[action].confirm}
+              </button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

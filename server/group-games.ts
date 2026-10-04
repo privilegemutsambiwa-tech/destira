@@ -10,7 +10,7 @@ import {
   groupGames, groupGameResponses, groupGameParticipants, groupGameMessages, groupMessages,
   type GroupGame, type GroupGameResponse, type GroupGameKind, type GroupGameMessage,
 } from "@shared/schema";
-import { eq, and, asc, count } from "drizzle-orm";
+import { eq, and, asc, desc, count, max, gte } from "drizzle-orm";
 import { storage } from "./storage";
 import {
   WOULD_YOU_RATHER_BANK, THIS_OR_THAT_BANK, NEVER_HAVE_I_EVER_BANK,
@@ -244,19 +244,19 @@ const DEFINITIONS: Record<GroupGameKind, GameDefinition> = {
     },
     sanitizeConfig(config) { return config; },
     computeResults(_config, responses) {
-      const itemsByUser = responses.map((r) => ({
+      const itemsByUser: { userId: string; nickname: string; items: string[] }[] = responses.map((r) => ({
         userId: r.userId,
         nickname: r.nickname,
-        items: (Array.isArray(r.response?.items) ? r.response.items : []).map((i: string) => String(i).trim()).filter(Boolean),
+        items: (Array.isArray(r.response?.items) ? (r.response.items as unknown[]) : []).map((i) => String(i).trim()).filter(Boolean),
       }));
       const countAcrossOthers = (userId: string, item: string) =>
-        itemsByUser.filter((u) => u.userId !== userId).some((u) => u.items.some((i) => norm(i) === norm(item)));
+        itemsByUser.filter((u) => u.userId !== userId).some((u) => u.items.some((i: string) => norm(i) === norm(item)));
       const leaderboard = itemsByUser
         .map((u) => ({
           userId: u.userId,
           nickname: u.nickname,
           items: u.items,
-          uniqueCount: u.items.filter((i) => !countAcrossOthers(u.userId, i)).length,
+          uniqueCount: u.items.filter((i: string) => !countAcrossOthers(u.userId, i)).length,
         }))
         .sort((a, b) => b.uniqueCount - a.uniqueCount);
       return { leaderboard };
@@ -304,7 +304,11 @@ const DEFINITIONS: Record<GroupGameKind, GameDefinition> = {
       return { prompt: pick(ICEBREAKER_BANK) };
     },
     sanitizeConfig(config) { return config; },
-    computeResults() { return null; },
+    // Same shape getGameState serves while the room is live, so the thread
+    // of answers is still there once an idle room is closed out.
+    computeResults(_config, responses) {
+      return { live: responses.map((r) => ({ nickname: r.nickname, response: r.response })) };
+    },
   },
 };
 
@@ -399,32 +403,65 @@ async function getParticipants(gameId: number): Promise<MemberRef[]> {
 }
 
 // Every active game in a group, for the "Join Game Room" lobby.
-export async function listActiveGames(groupId: number): Promise<Array<{
+export interface GameSummary {
   id: number; kind: GroupGameKind; label: string; startedBy: string; startedByNickname: string;
-  participantCount: number; createdAt: Date;
-}>> {
-  const rows = await db.select().from(groupGames)
+  participantCount: number; responseCount: number; createdAt: Date; revealedAt: Date | null;
+}
+
+async function summarize(groupId: number, g: GroupGame): Promise<GameSummary | null> {
+  const def = DEFINITIONS[g.kind as GroupGameKind];
+  if (!def) return null;
+  const [starterMember, participantCount, [resp]] = await Promise.all([
+    storage.getGroupMember(groupId, g.startedBy),
+    eligibleCount(g.id),
+    db.select({ n: count() }).from(groupGameResponses).where(eq(groupGameResponses.gameId, g.id)),
+  ]);
+  return {
+    id: g.id,
+    kind: g.kind as GroupGameKind,
+    label: def.label,
+    startedBy: g.startedBy,
+    startedByNickname: starterMember?.nickname || "Someone",
+    participantCount,
+    responseCount: Number(resp?.n ?? 0),
+    createdAt: g.createdAt!,
+    revealedAt: g.revealedAt ?? null,
+  };
+}
+
+// How far back the lobby's "Earlier today" history reaches. A day is enough
+// for a newcomer to see what the group has been up to and read a finished
+// round, without the list growing without bound as the group gets busier.
+const HISTORY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const HISTORY_LIMIT = 30;
+
+// The lobby's data: what's live right now, and what finished recently. Opening
+// the lobby is also what notices abandoned rooms — each live game is run
+// through maybeReveal first, so one that's gone quiet (see
+// INACTIVITY_TIMEOUT_MS) moves to history here instead of lingering as "live".
+export async function listGameRoom(groupId: number): Promise<{ active: GameSummary[]; recent: GameSummary[] }> {
+  const liveRows = await db.select().from(groupGames)
     .where(and(eq(groupGames.groupId, groupId), eq(groupGames.status, "active")))
-    .orderBy(asc(groupGames.createdAt));
-  const out = [];
-  for (const g of rows) {
-    const def = DEFINITIONS[g.kind as GroupGameKind];
-    if (!def) continue;
-    const [starterMember, participantCount] = await Promise.all([
-      storage.getGroupMember(groupId, g.startedBy),
-      eligibleCount(g.id),
-    ]);
-    out.push({
-      id: g.id,
-      kind: g.kind as GroupGameKind,
-      label: def.label,
-      startedBy: g.startedBy,
-      startedByNickname: starterMember?.nickname || "Someone",
-      participantCount,
-      createdAt: g.createdAt!,
-    });
+    .orderBy(asc(groupGames.createdAt))
+    .limit(50);
+  const stillLive: GroupGame[] = [];
+  for (const g of liveRows) {
+    const after = await maybeReveal(g);
+    if (after.status === "active") stillLive.push(after);
   }
-  return out;
+
+  const recentRows = await db.select().from(groupGames)
+    .where(and(
+      eq(groupGames.groupId, groupId),
+      eq(groupGames.status, "revealed"),
+      gte(groupGames.revealedAt, new Date(Date.now() - HISTORY_WINDOW_MS)),
+    ))
+    .orderBy(desc(groupGames.revealedAt))
+    .limit(HISTORY_LIMIT);
+
+  const active = (await Promise.all(stillLive.map((g) => summarize(groupId, g)))).filter((s): s is GameSummary => !!s);
+  const recent = (await Promise.all(recentRows.map((g) => summarize(groupId, g)))).filter((s): s is GameSummary => !!s);
+  return { active, recent };
 }
 
 export async function sendGameMessage(gameId: number, userId: string, content: string): Promise<GroupGameMessage> {
@@ -448,6 +485,25 @@ export async function getGameMessages(gameId: number, viewerId: string): Promise
   return db.select().from(groupGameMessages).where(eq(groupGameMessages.gameId, gameId)).orderBy(asc(groupGameMessages.createdAt));
 }
 
+// A room nobody is doing anything in shouldn't sit "live" forever — it
+// clutters the lobby and tells people there's a game to join when there
+// isn't. Ten minutes with no join, answer, or room message ends it. Chosen
+// as long enough that someone can step away to think or reply to a text
+// mid-round, short enough that an abandoned room is gone by the time the
+// next person opens the lobby. Applies to every kind, over and above each
+// kind's own reveal rule (including never-gated ones like the icebreaker).
+export const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
+
+async function lastActivityMs(game: GroupGame): Promise<number> {
+  const [[r], [p], [m]] = await Promise.all([
+    db.select({ t: max(groupGameResponses.createdAt) }).from(groupGameResponses).where(eq(groupGameResponses.gameId, game.id)),
+    db.select({ t: max(groupGameParticipants.joinedAt) }).from(groupGameParticipants).where(eq(groupGameParticipants.gameId, game.id)),
+    db.select({ t: max(groupGameMessages.createdAt) }).from(groupGameMessages).where(eq(groupGameMessages.gameId, game.id)),
+  ]);
+  const ts = (v: unknown) => (v ? new Date(v as any).getTime() : 0);
+  return Math.max(ts(game.createdAt), ts(r?.t), ts(p?.t), ts(m?.t));
+}
+
 async function maybeReveal(game: GroupGame): Promise<GroupGame> {
   if (game.status === "revealed") return game;
   const def = DEFINITIONS[game.kind as GroupGameKind];
@@ -459,11 +515,13 @@ async function maybeReveal(game: GroupGame): Promise<GroupGame> {
   const allResponded = eligible > 0 && responses.length >= eligible;
   const timerPassed = game.revealAt != null && game.revealAt.getTime() <= Date.now();
 
-  const shouldReveal =
+  const naturalReveal =
     def.revealMode === "all-responded" ? allResponded :
     def.revealMode === "timer" ? (allResponded || timerPassed) :
     def.revealMode === "manual-or-timer" ? timerPassed :
     false; // "never-gated" kinds don't have a reveal moment
+
+  const shouldReveal = naturalReveal || (Date.now() - (await lastActivityMs(game)) > INACTIVITY_TIMEOUT_MS);
 
   if (!shouldReveal) return game;
 
@@ -534,6 +592,9 @@ export interface GameStateView {
   isParticipant: boolean;
   results: any | null;
   canRevealEarly: boolean;
+  // Ended with nobody having answered — typically an abandoned room that
+  // timed out, so the room can say so instead of showing an empty result.
+  endedEmpty: boolean;
 }
 
 export async function getGameState(gameId: number, viewerId: string): Promise<GameStateView> {
@@ -574,6 +635,7 @@ export async function getGameState(gameId: number, viewerId: string): Promise<Ga
     isParticipant: participants.some((p) => p.userId === viewerId),
     results: revealed ? game.results : showLive ? { live: responses.map((r) => ({ nickname: r.nickname, response: r.response })) } : null,
     canRevealEarly: def.revealMode === "manual-or-timer" && viewerId === game.startedBy && !revealed,
+    endedEmpty: revealed && responses.length === 0,
   };
 }
 

@@ -16,6 +16,7 @@ import {
   type Place,
 } from "@/hooks/use-events";
 import { HostVideoRecorder, type RecordedVideo } from "@/components/host-video-recorder";
+import { PhotoSourceSheet } from "@/components/photo-source-sheet";
 import { EVENT_KINDS, EVENT_VIBES, EVENT_PLACE_TYPES, EVENT_ACCESS_NEEDS } from "@shared/event-taxonomy";
 
 const KNOWN_SUBURBS = [
@@ -120,6 +121,7 @@ export default function HostEvent() {
   const [placeQuery, setPlaceQuery] = useState("");
   const [placeOpen, setPlaceOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [photoSourceOpen, setPhotoSourceOpen] = useState(false);
   const { data: places = [] } = usePlaces(placeQuery);
 
   const set = (p: Partial<Draft>) => setD((cur) => ({ ...cur, ...p }));
@@ -457,23 +459,25 @@ export default function HostEvent() {
                   </div>
                 ))}
                 {d.photos.length < 6 && (
-                  <label className="rounded-[12px] border border-dashed border-vf-line flex items-center justify-center text-vf-faint hover:text-vf-text hover:border-vf-text/25 cursor-pointer text-[12px]" style={{ aspectRatio: "3/2" }}>
+                  <button
+                    type="button"
+                    onClick={() => setPhotoSourceOpen(true)}
+                    className="rounded-[12px] border border-dashed border-vf-line flex items-center justify-center text-vf-faint hover:text-vf-text hover:border-vf-text/25 cursor-pointer text-[12px]"
+                    style={{ aspectRatio: "3/2" }}
+                    data-testid="button-add-photos"
+                  >
                     Add
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files ?? []);
-                        set({ photos: [...d.photos, ...files].slice(0, 6) });
-                        e.currentTarget.value = "";
-                      }}
-                      data-testid="input-photos"
-                    />
-                  </label>
+                  </button>
                 )}
               </div>
+              <PhotoSourceSheet
+                open={photoSourceOpen}
+                onClose={() => setPhotoSourceOpen(false)}
+                onFiles={(files) => set({ photos: [...d.photos, ...files].slice(0, 6) })}
+                multiple
+                accept="image/jpeg,image/png,image/webp"
+                title="Add photos of the place"
+              />
               <p className="mt-2 text-[12px] text-vf-faint">Up to 6. Location data is stripped when you upload.</p>
             </div>
 

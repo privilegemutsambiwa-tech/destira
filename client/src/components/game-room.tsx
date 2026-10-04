@@ -92,8 +92,8 @@ export function ChoiceRound({ state, choices, onPick, resultsFor, correctKey }: 
         return (
           <button
             key={c.key}
-            onClick={() => !state.myResponse && onPick(c.key)}
-            disabled={!!state.myResponse}
+            onClick={() => !state.myResponse && !revealed && onPick(c.key)}
+            disabled={!!state.myResponse || revealed}
             className="w-full text-left p-2.5 text-[13px] relative overflow-hidden transition-colors hover:brightness-110"
             style={{
               borderRadius: "10px",
@@ -145,11 +145,18 @@ export function GameRoomBody({ state, groupId }: { state: any; groupId: number }
   const [draftAnswers, setDraftAnswers] = useState<Record<number, number>>({});
 
   const submit = (response: any) => respond.mutate({ gameId: state.id, messageId: state.messageId, response });
-  const hasResponded = !!state.myResponse;
   const revealed = state.status === "revealed";
+  // Once a round has ended nobody can answer it any more, whether they
+  // already had or not — so every input below treats "ended" like "answered".
+  const hasResponded = !!state.myResponse || revealed;
 
   return (
     <>
+      {state.endedEmpty && (
+        <p className="text-xs mb-3 px-3 py-2 rounded-lg" style={{ color: MUTED, background: "rgba(255,255,255,0.04)" }}>
+          This round ended — nobody played it in time.
+        </p>
+      )}
       {state.kind === "would_you_rather" && (
         <>
           <GamePrompt>{state.config.a} <span style={{ color: FAINT }}>or</span> {state.config.b}</GamePrompt>
@@ -224,7 +231,7 @@ export function GameRoomBody({ state, groupId }: { state: any; groupId: number }
       {state.kind === "this_or_that" && (
         <div className="space-y-2.5">
           {state.config.pairs.map((p: { a: string; b: string }, i: number) => {
-            const picked = hasResponded ? state.myResponse.choices?.[i] : draftPairChoices[i];
+            const picked = hasResponded ? state.myResponse?.choices?.[i] : draftPairChoices[i];
             const res = revealed ? state.results[i] : null;
             return (
               <div key={i} className="flex items-center gap-2 text-[13px]">
@@ -267,7 +274,7 @@ export function GameRoomBody({ state, groupId }: { state: any; groupId: number }
       {state.kind === "trivia_round" && (
         <div className="space-y-3">
           {state.config.questions.map((q: { question: string; options: string[] }, i: number) => {
-            const picked = hasResponded ? state.myResponse.answers?.[i] : draftAnswers[i];
+            const picked = hasResponded ? state.myResponse?.answers?.[i] : draftAnswers[i];
             return (
               <div key={i} className="space-y-1.5">
                 <p className="text-[13px] font-medium" style={{ color: TEXT }}>{i + 1}. {q.question}</p>
@@ -332,9 +339,9 @@ export function GameRoomBody({ state, groupId }: { state: any; groupId: number }
                 Submit
               </Button>
             </div>
-          ) : (
+          ) : !revealed ? (
             <p className="text-xs" style={{ color: FAINT }}>Submitted — waiting on the rest of the room.</p>
-          )}
+          ) : null}
           {revealed && (
             <div className="space-y-1.5 pt-1">
               {state.results.leaderboard.map((row: any, i: number) => (

@@ -33,6 +33,7 @@ import { parseDestiraLink } from "@/lib/link-preview";
 import { LinkPreviewCard } from "@/components/link-preview-card";
 import { avatarColor } from "@/lib/avatar-color";
 import { RichCard, CardHeader, StatusPill, GAME_ICON_LABEL, GameProgress } from "@/components/game-room";
+import { PhotoSourceSheet } from "@/components/photo-source-sheet";
 
 interface MessageAction {
   icon: React.ReactNode;
@@ -380,7 +381,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   const [hasJoined, setHasJoined] = useState(false);
   const [highlightedMsgId, setHighlightedMsgId] = useState<number | null>(highlightMsgId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showPhotoSource, setShowPhotoSource] = useState(false);
 
   const isMember = group?.isMember || hasJoined;
   const isAdmin = group?.myRole === "owner" || group?.myRole === "admin";
@@ -449,9 +450,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
     }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleImageUpload = async (file: File) => {
     const formData = new FormData();
     formData.append("image", file);
     try {
@@ -462,7 +461,6 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
     } catch {
       toast({ title: "Error", description: "Failed to upload image.", variant: "destructive" });
     }
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleReact = async (messageId: number, reaction: string) => {
@@ -944,19 +942,11 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
               className="flex items-center gap-2"
               onSubmit={(e) => { e.preventDefault(); handleSend(); }}
             >
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageUpload}
-                data-testid="input-file-upload"
-              />
               <button
                 type="button"
                 className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
                 style={{ color: MUTED, background: "transparent" }}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => setShowPhotoSource(true)}
                 data-testid="button-attach"
               >
                 <Paperclip className="w-4 h-4" />
@@ -1019,6 +1009,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
         </div>
       </div>
 
+      <PhotoSourceSheet open={showPhotoSource} onClose={() => setShowPhotoSource(false)} onFile={handleImageUpload} title="Send a photo" />
       <PollComposerDialog groupId={groupId} open={showPollDialog} onClose={() => setShowPollDialog(false)} />
       <MessageInfoDialog groupId={groupId} messageId={messageInfoId} onClose={() => setMessageInfoId(null)} />
       {paywall.sheet}

@@ -3214,8 +3214,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const groupId = parseInt(req.params.id);
       const member = await storage.getGroupMember(groupId, userId);
       if (!member) return res.status(403).json({ message: "Must be a member of this group" });
-      const games = await groupGames.listActiveGames(groupId);
-      res.json({ games });
+      const { active, recent } = await groupGames.listGameRoom(groupId);
+      res.json({ games: active, recent });
     } catch (e) {
       console.error("List active games error:", e);
       res.status(500).json({ message: "Failed to load games" });
