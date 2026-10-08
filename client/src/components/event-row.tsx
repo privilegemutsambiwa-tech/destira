@@ -44,7 +44,35 @@ export function eventActionState(
   return { label: "Save a seat", variant: "solid", kind: "attend" };
 }
 
+// Official events show what it takes to confirm them, ahead of social proof:
+// "Needs a lead" is the call to action, and the headcount gap is the honest
+// reason the event might be called off 48h out.
+export function officialStatusLine(event: EventItem): { text: string; color: "mint" | "gold" } | null {
+  if (!event.isOfficial) return null;
+  const min = event.minGoing ?? 5;
+  const going = event.resonance.goingCount;
+  const gap = Math.max(0, min - going);
+  if (!event.leadUserId && gap > 0) return { text: `Needs a lead · ${gap} more to confirm`, color: "gold" };
+  if (!event.leadUserId) return { text: "Needs a lead to confirm", color: "gold" };
+  if (gap > 0) return { text: `Led by ${event.leadName ?? "a member"} · ${gap} more to confirm`, color: "gold" };
+  return { text: `Confirmed · led by ${event.leadName ?? "a member"}`, color: "mint" };
+}
+
+export function OfficialBadge({ sponsorName }: { sponsorName?: string | null }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.14em] rounded-full px-2 py-0.5 align-middle"
+      style={{ color: "hsl(var(--vf-ember))", background: "hsl(var(--vf-ember) / 0.12)", border: "1px solid hsl(var(--vf-ember) / 0.35)" }}
+      data-testid="badge-official-event"
+    >
+      Destira Official{sponsorName ? ` · ${sponsorName}` : ""}
+    </span>
+  );
+}
+
 export function eventResonanceSignal(event: EventItem): { text: string; color: "mint" | "gold" } | null {
+  const official = officialStatusLine(event);
+  if (official) return official;
   const { resonance } = event;
   if (resonance.notableAttendees.length > 0) {
     return { text: `${resonance.notableAttendees[0].name.split(" ")[0]} is going`, color: "mint" };
@@ -116,6 +144,7 @@ export function EventRow({ event, groupName, isHost, pending, onOpen, onAttend, 
       </div>
 
       <div className="min-w-0">
+        {event.isOfficial && <div className="mb-1.5"><OfficialBadge sponsorName={event.sponsorName} /></div>}
         <div className="text-[17.5px] text-vf-text truncate">{event.title}</div>
         <div className="text-[13px] text-vf-muted mt-1 truncate">{metaParts.join(" · ")}</div>
         {event.costModel === "contribute" && event.contributionAmount != null && (
@@ -235,6 +264,7 @@ export function FeaturedEventRow({ event, groupName, isHost, pending, onOpen, on
 
       <div className="pt-9 pb-5 px-5 flex items-end justify-between gap-4 flex-wrap">
         <div className="min-w-0">
+          {event.isOfficial && <div className="mb-1.5"><OfficialBadge sponsorName={event.sponsorName} /></div>}
           <div className="font-serif text-[21px] text-vf-text truncate">{event.title}</div>
           <div className="text-[13px] text-vf-muted mt-1 truncate">{metaParts.join(" · ")}</div>
           {signal && (

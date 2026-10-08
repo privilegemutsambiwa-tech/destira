@@ -42,7 +42,7 @@ import {
   type UpdateEventPreferences,
 } from "@shared/schema";
 import { and, eq, ilike, inArray, or } from "drizzle-orm";
-import { buildResonanceBlocks, serializeEvent, type SerializedEvent } from "./events";
+import { buildResonanceBlocks, serializeEvent, leadNamesFor, type SerializedEvent } from "./events";
 import {
   scoreEventForUser,
   resolveEventLocation,
@@ -142,6 +142,7 @@ export type FeedEvent = SerializedEvent & {
   resonance: ResonanceBlock;
   myStatus: string | null;
   twinFlagged: boolean;
+  leadName: string | null;
 };
 
 const EMPTY_BLOCK: ResonanceBlock = { goingCount: 0, highReadCount: 0, notableAttendees: [] };
@@ -168,6 +169,7 @@ async function decorate(
   ]);
   const myStatusByEvent = new Map(myRows.map((r) => [r.eventId, r.status]));
   const flagged = new Set(flaggedRows.map((r) => r.eventId));
+  const leadNames = await leadNamesFor(scored.map((s) => s.event.leadUserId));
   return scored.map((s) => {
     const resonance = blocks.get(s.event.id) ?? EMPTY_BLOCK;
     const myStatus = myStatusByEvent.get(s.event.id) ?? null;
@@ -182,6 +184,7 @@ async function decorate(
       resonance,
       myStatus,
       twinFlagged: flagged.has(s.event.id),
+      leadName: s.event.leadUserId ? leadNames.get(s.event.leadUserId) ?? null : null,
     };
   });
 }
@@ -232,7 +235,12 @@ export async function getEventsFeed(userId: string): Promise<{ events: FeedEvent
     .sort((a, b) => b.score - a.score || a.event.startsAt.getTime() - b.event.startsAt.getTime());
 
   const moreThanShown = scored.length > FEED_CAP;
-  const decorated = await decorate(scored.slice(0, FEED_CAP), userId);
+  // Official events always make the feed: they only work if people see them,
+  // so a low fit score must not push one past the cap.
+  const top = scored.slice(0, FEED_CAP);
+  const shown = new Set(top.map((s) => s.event.id));
+  const officialExtras = scored.slice(FEED_CAP).filter((s) => s.event.isOfficial && !shown.has(s.event.id));
+  const decorated = await decorate([...top, ...officialExtras], userId);
   return { events: decorated, moreThanShown };
 }
 

@@ -860,7 +860,32 @@ export const events = pgTable("events", {
   womenSlots: integer("women_slots"),
   // Optional private chat for attendees, off until the host creates it.
   chatGroupId: integer("chat_group_id").references(() => groups.id),
+  // ── Official events (platform-run, hosted by the Destira system user) ──
+  // leadUserId null on an official event = "needs a lead"; set only through
+  // admin approval of an eventLeadApplications row. minGoing is the headcount
+  // that must be reached by the 48h mark or the event is called off.
+  isOfficial: boolean("is_official").notNull().default(false),
+  leadUserId: varchar("lead_user_id").references(() => users.id),
+  sponsorName: text("sponsor_name"),
+  sponsorLogoUrl: text("sponsor_logo_url"),
+  minGoing: integer("min_going"),
+  leadNudgedAt: timestamp("lead_nudged_at"), // set once the "still needs a lead" push has gone out
 });
+
+// A member's "I'll lead this" request on an official event. An admin approves
+// at most one; approval sets events.leadUserId.
+export const eventLeadApplications = pgTable("event_lead_applications", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => events.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  note: text("note"),
+  status: text("status").notNull().default("pending"), // pending | approved | rejected
+  createdAt: timestamp("created_at").defaultNow(),
+  decidedAt: timestamp("decided_at"),
+}, (table) => [
+  uniqueIndex("event_lead_applications_event_user_idx").on(table.eventId, table.userId),
+]);
+export type EventLeadApplication = typeof eventLeadApplications.$inferSelect;
 
 // Up to 6 per event. EXIF is stripped server-side on upload (mandatory — a
 // host's home photo must not carry GPS). `url` is the 1600w webp; 480/960

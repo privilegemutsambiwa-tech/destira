@@ -26,6 +26,7 @@ import {
 } from "./storage/objectStorage";
 import type { TwinProfileStructured } from "@shared/schema";
 import * as eventsService from "./events";
+import * as officialEvents from "./official-events";
 import * as eventsFeed from "./events-feed";
 import * as twinEventAlerts from "./services/twin-event-alerts";
 import * as groupGames from "./group-games";
@@ -5139,6 +5140,39 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Official events: "I'll lead this" (admin approves in the console) and my
+  // own application state for the detail page.
+  app.get("/api/events/:id/lead", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    try {
+      const application = await officialEvents.getMyLeadApplication(eventId, userId);
+      res.json({ application: application ? { status: application.status, note: application.note } : null });
+    } catch (e) {
+      console.error("Get lead application error:", e);
+      res.status(500).json({ message: "Failed to load" });
+    }
+  });
+
+  app.post("/api/events/:id/lead/apply", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const eventId = parseInt(req.params.id, 10);
+    if (Number.isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) : "";
+    try {
+      const application = await officialEvents.applyToLead(eventId, userId, note);
+      res.status(201).json({ application: { status: application.status, note: application.note } });
+    } catch (e) {
+      if (e instanceof officialEvents.OfficialEventError) return res.status(400).json({ message: e.message });
+      if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
+      console.error("Apply to lead error:", e);
+      res.status(500).json({ message: "Failed to send your offer" });
+    }
+  });
+
   app.post("/api/events", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -5738,6 +5772,15 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   setInterval(sweep, 10 * 60 * 1000);
   setTimeout(sweepPayments, 5_000);
   setInterval(sweepPayments, 5 * 60 * 1000);
+  // Official events: call off any that missed their headcount/lead by the 48h
+  // mark, and nudge going attendees when one still has no lead.
+  const sweepOfficial = () =>
+    officialEvents
+      .sweepOfficialEvents()
+      .then((n) => n > 0 && console.log(`[official-events] ${n} event(s) called off`))
+      .catch((e) => console.error("[official-events] sweep failed:", e));
+  setTimeout(sweepOfficial, 8_000);
+  setInterval(sweepOfficial, 15 * 60 * 1000);
   setTimeout(initialBackfill, 12_000);
   setInterval(() => {
     runNightlyRollup()

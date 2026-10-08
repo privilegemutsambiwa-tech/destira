@@ -93,6 +93,18 @@ export function serializeEvent<T extends Event>(row: T, ctx: EventViewerCtx) {
 
 export type SerializedEvent = ReturnType<typeof serializeEvent>;
 
+// Names for a batch of official-event lead ids, for payloads that show
+// "led by X". Display name only — never anything contact-like.
+export async function leadNamesFor(leadIds: Array<string | null | undefined>): Promise<Map<string, string>> {
+  const ids = Array.from(new Set(leadIds.filter((x): x is string => !!x)));
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({ userId: profiles.userId, nickname: profiles.groupNickname, name: profiles.displayName })
+    .from(profiles)
+    .where(inArray(profiles.userId, ids));
+  return new Map(rows.map((r) => [r.userId, r.nickname || r.name || "A member"]));
+}
+
 // Comma-separated user ids in EVENT_MODERATOR_IDS may approve first events out
 // of the pending_review queue. Empty = nobody (events stay held).
 export function isEventModerator(userId: string): boolean {
@@ -232,6 +244,7 @@ export async function listEvents(
       : Promise.resolve([]),
   ]);
   const myStatusByEvent = new Map(myRows.map((r) => [r.eventId, r.status as AttendeeStatus]));
+  const leadNames = await leadNamesFor(rows.map((r) => r.leadUserId));
 
   return rows.map((event) => {
     const resonance = blocks.get(event.id) || { goingCount: 0, highReadCount: 0, notableAttendees: [] };
@@ -240,6 +253,7 @@ export async function listEvents(
       ...serializeEvent(event, { isHost: event.hostUserId === viewerId, myStatus, goingCount: resonance.goingCount }),
       resonance,
       myStatus,
+      leadName: event.leadUserId ? leadNames.get(event.leadUserId) ?? null : null,
     };
   });
 }
@@ -261,10 +275,13 @@ export async function getEventDetail(eventId: number, viewerId: string) {
   const resonance = blocks.get(eventId) || { goingCount: 0, highReadCount: 0, notableAttendees: [] };
   const myStatus = (myRow?.status as AttendeeStatus | undefined) ?? null;
   const photos = await listEventPhotos(eventId);
+  const leadNames = await leadNamesFor([event.leadUserId]);
   return {
     ...serializeEvent(event, { isHost: event.hostUserId === viewerId, myStatus, goingCount: resonance.goingCount }),
     resonance,
     myStatus,
+    leadName: event.leadUserId ? leadNames.get(event.leadUserId) ?? null : null,
+    iAmLead: event.leadUserId === viewerId,
     twinFlagged: !!flagRow,
     photos,
   };
@@ -376,6 +393,8 @@ export async function updateEvent(eventId: number, hostUserId: string, data: Par
     locationTier: _lt, minAttendees: _ma, infoScore: _is,
     hostVideoUrl: _hv, hostVideoPosterUrl: _hp, hostVideoDurationSec: _hd,
     hostVideoStatus: _hs, hostVideoRejectReason: _hr,
+    // official-event fields — admin-owned; a host must not be able to self-declare "official"
+    isOfficial: _io, leadUserId: _lu, sponsorName: _sn, sponsorLogoUrl: _sl, minGoing: _mg,
     ...safe
   } = data as any;
   const patch: Record<string, unknown> = { ...safe };

@@ -7,6 +7,7 @@
 // doesn't exist, the metric isn't computed and metrics.ts says so ("no data"
 // rather than a fabricated number).
 import { db } from "../db";
+import { DESTIRA_SYSTEM_USER_ID } from "../system-user";
 import {
   users,
   profiles,
@@ -50,7 +51,7 @@ async function upsert(date: string, metricKey: string, value: number) {
 // ── growth ────────────────────────────────────────────────────────────
 async function rollGrowth(dateStr: string) {
   const { start, end } = dayRange(dateStr);
-  const [signups] = await db.select({ n: count() }).from(users).where(and(gte(users.createdAt, start), lt(users.createdAt, end)));
+  const [signups] = await db.select({ n: count() }).from(users).where(and(gte(users.createdAt, start), lt(users.createdAt, end), ne(users.id, DESTIRA_SYSTEM_USER_ID)));
   await upsert(dateStr, "growth.signups", Number(signups?.n ?? 0));
 
   for (const [key, days] of [["dau", 1], ["wau", 7], ["mau", 30]] as const) {
@@ -69,7 +70,7 @@ const FUNNEL_STAGES = ["signup", "basics_complete", "soul_answer", "twin_generat
 
 async function rollFunnelForCohortDay(dateStr: string) {
   const { start, end } = dayRange(dateStr);
-  const cohort = await db.select({ id: users.id, createdAt: users.createdAt }).from(users).where(and(gte(users.createdAt, start), lt(users.createdAt, end)));
+  const cohort = await db.select({ id: users.id, createdAt: users.createdAt }).from(users).where(and(gte(users.createdAt, start), lt(users.createdAt, end), ne(users.id, DESTIRA_SYSTEM_USER_ID)));
   if (cohort.length === 0) {
     for (const s of FUNNEL_STAGES) await upsert(dateStr, `funnel.${s}`, 0);
     await upsert(dateStr, "activation.d1_pct", 0);
@@ -104,7 +105,7 @@ async function rollFunnelForCohortDay(dateStr: string) {
 // ── retention (per signup-day cohort, any activity on day+N) ───────────
 async function rollRetentionForCohortDay(dateStr: string) {
   const { start, end } = dayRange(dateStr);
-  const cohort = await db.select({ id: users.id }).from(users).where(and(gte(users.createdAt, start), lt(users.createdAt, end)));
+  const cohort = await db.select({ id: users.id }).from(users).where(and(gte(users.createdAt, start), lt(users.createdAt, end), ne(users.id, DESTIRA_SYSTEM_USER_ID)));
   const ids = cohort.map((c) => c.id);
   for (const [key, offset] of [["d1", 1], ["d7", 7], ["d30", 30]] as const) {
     const targetDate = new Date(start.getTime() + offset * 86400000);
@@ -198,7 +199,7 @@ async function rollMatching(dateStr: string) {
 
   // % of users signed up >=14d ago with zero matches ever.
   const cutoff = new Date(Date.now() - 14 * 86400000);
-  const oldUsers = await db.select({ id: users.id }).from(users).where(lt(users.createdAt, cutoff));
+  const oldUsers = await db.select({ id: users.id }).from(users).where(and(lt(users.createdAt, cutoff), ne(users.id, DESTIRA_SYSTEM_USER_ID)));
   if (oldUsers.length) {
     const oldIds = oldUsers.map((u) => u.id);
     const withMatch = await db
@@ -230,7 +231,7 @@ async function rollMoney(dateStr: string) {
     }
   }
   await upsert(dateStr, "money.mrr_usd", Math.round(mrrCents) / 100);
-  const [totalUsers] = await db.select({ n: count() }).from(users);
+  const [totalUsers] = await db.select({ n: count() }).from(users).where(ne(users.id, DESTIRA_SYSTEM_USER_ID));
   await upsert(dateStr, "money.arpu_usd", Number(totalUsers?.n ?? 0) ? Math.round((mrrCents / Number(totalUsers!.n))) / 100 : 0);
   for (const [tier, n] of Object.entries(byTier)) await upsert(dateStr, `money.paid_subscribers.${tier}`, n);
 

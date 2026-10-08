@@ -99,7 +99,8 @@ function EventsIntroTip() {
     <div className="mb-6 rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-start justify-between gap-3" data-testid="strip-events-intro">
       <p className="text-[13px] text-vf-muted leading-[1.55]">
         You can join an event someone else is hosting, or create your own. Tap into any event to see its date,
-        time, location and who else is going before you decide.
+        time, location and who else is going before you decide. Events marked Destira Official are run by us:
+        join one, or offer to lead it and coordinate everyone in the event chat.
       </p>
       <button onClick={dismiss} className="text-vf-faint hover:text-vf-text transition-colors shrink-0 -mr-1 -mt-0.5" aria-label="Dismiss" data-testid="button-dismiss-events-intro">
         <X className="w-4 h-4" />
@@ -207,8 +208,18 @@ export default function Events() {
     return map;
   }, [groups]);
 
+  // Platform-run events get their own section at the top (soonest first) so
+  // "something to join" is the first thing a member sees.
+  const officialEvents = useMemo(
+    () =>
+      (feed.data?.events ?? [])
+        .filter((e) => e.isOfficial)
+        .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()),
+    [feed.data],
+  );
+
   const grouped = useMemo(() => {
-    const list = feed.data?.events ?? [];
+    const list = (feed.data?.events ?? []).filter((e) => !e.isOfficial);
     const now = new Date();
     const sections = new Map<string, EventItem[]>();
     for (const event of list) {
@@ -454,6 +465,21 @@ export default function Events() {
           )
         ) : (
           <div className="flex flex-col gap-8">
+            {officialEvents.length > 0 && (
+              <div data-testid="section-official-events">
+                <div className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-ember mb-1">Destira Official</div>
+                <p className="text-[13px] text-vf-muted mb-3">
+                  Run by Destira. Join one, and if you'd like to run it, offer to lead.
+                </p>
+                <div className="flex flex-col gap-3.5">
+                  {officialEvents.map((event) => (
+                    <div key={event.id} className="motion-safe:animate-[vf-rise_0.4s_ease_both]">
+                      {rowHandlers(event)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {featuredEvent && (
               <div className="motion-safe:animate-[vf-rise_0.4s_ease_both]">
                 <FeaturedEventRow {...commonRowProps(featuredEvent)} />

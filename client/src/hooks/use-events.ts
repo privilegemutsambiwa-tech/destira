@@ -59,6 +59,51 @@ export interface EventItem {
   hostVideoPosterUrl?: string | null;
   hostVideoStatus?: "none" | "processing" | "approved" | "rejected";
   photos?: EventPhoto[];
+  // Official events (platform-run, with a volunteer lead)
+  isOfficial?: boolean;
+  leadUserId?: string | null;
+  leadName?: string | null;
+  iAmLead?: boolean;
+  sponsorName?: string | null;
+  sponsorLogoUrl?: string | null;
+  minGoing?: number | null;
+}
+
+export interface LeadApplication {
+  status: "pending" | "approved" | "rejected";
+  note: string | null;
+}
+
+export function useMyLeadApplication(eventId: number | undefined, enabled: boolean) {
+  return useQuery<{ application: LeadApplication | null }>({
+    queryKey: ["/api/events", eventId, "lead"],
+    enabled: enabled && eventId != null && !Number.isNaN(eventId),
+    queryFn: async () => {
+      const res = await fetch(`/api/events/${eventId}/lead`, { credentials: "include" });
+      if (!res.ok) return { application: null };
+      return res.json();
+    },
+  });
+}
+
+export function useApplyToLead() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ eventId, note }: { eventId: number; note: string }) => {
+      const res = await fetch(`/api/events/${eventId}/lead/apply`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || "Couldn't send your offer");
+      return body as { application: LeadApplication };
+    },
+    onError: (err: Error) => toast({ title: "Couldn't send that", description: err.message, variant: "destructive" }),
+    onSuccess: (_d, v) => queryClient.invalidateQueries({ queryKey: ["/api/events", v.eventId, "lead"] }),
+  });
 }
 
 interface FeedResponse {

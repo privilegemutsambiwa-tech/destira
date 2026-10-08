@@ -5,7 +5,8 @@ import type { Express } from "express";
 import { db } from "../db";
 import { metricDaily, users, profiles } from "@shared/schema";
 import { GENDER_OPTIONS } from "@shared/essentials";
-import { and, gte, lte, like, desc, eq, count } from "drizzle-orm";
+import { and, gte, lte, like, desc, eq, ne, count } from "drizzle-orm";
+import { DESTIRA_SYSTEM_USER_ID } from "../system-user";
 import { adminRoute } from "./auth";
 import { currentErrorRate } from "./error-rate";
 import { computeDailyMetrics, backfillRecentMetrics } from "./metrics-rollup";
@@ -286,7 +287,7 @@ export function registerAdminMetricsRoutes(app: Express) {
   adminRoute(app, "get", "/api/admin/metrics/audience", "support", async (req, res) => {
     try {
       const [[totalRow], ...genderRows] = await Promise.all([
-        db.select({ n: count() }).from(users),
+        db.select({ n: count() }).from(users).where(ne(users.id, DESTIRA_SYSTEM_USER_ID)),
         ...GENDER_OPTIONS.map((o) =>
           db.select({ n: count() }).from(users).innerJoin(profiles, eq(profiles.userId, users.id)).where(eq(profiles.gender, o.value))
         ),
