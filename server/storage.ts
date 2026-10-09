@@ -469,7 +469,7 @@ export class DatabaseStorage implements IStorage {
     // Anyone already evaluated (liked, matched, rejected, or unmatched) never
     // reappears in the feed — a matches row between the pair means the
     // requester has already been shown this candidate and acted on them.
-    const evaluatedMatches = await db.select({ user1Id: matches.user1Id, user2Id: matches.user2Id })
+    const evaluatedMatches = await db.select({ user1Id: matches.user1Id, user2Id: matches.user2Id, status: matches.status })
       .from(matches)
       .where(or(eq(matches.user1Id, excludeUserId), eq(matches.user2Id, excludeUserId)));
 
@@ -488,6 +488,23 @@ export class DatabaseStorage implements IStorage {
       ...evaluatedMatches.map(m => m.user1Id === excludeUserId ? m.user2Id : m.user1Id),
       ...passed.map(p => p.targetId),
     ]);
+
+    // People who already liked the requester and are still waiting on an
+    // answer. They're excluded from the paged query above like any other
+    // evaluated pair, then dealt back into the first page below — without
+    // this, a like made someone vanish from the other person's deck for good,
+    // and on Free (where the Likes page only shows a count) there was no way
+    // left to ever like them back, so two Free members could never match.
+    const blockedOrPassed = new Set([
+      ...blockedByRequester.map(r => r.blockedId),
+      ...blockedOfRequester.map(r => r.blockerId),
+      ...passed.map(p => p.targetId),
+    ]);
+    const pendingLikerIds = Array.from(new Set(
+      evaluatedMatches
+        .filter(m => m.status === "pending" && m.user2Id === excludeUserId && !blockedOrPassed.has(m.user1Id))
+        .map(m => m.user1Id),
+    ));
 
     const baseCondition = and(
       ne(profiles.userId, excludeUserId),
@@ -525,6 +542,79 @@ export class DatabaseStorage implements IStorage {
     // genuinely runs out of rows. `id` (a serial PK) is the tiebreaker so two
     // rows sharing an otherwise-equal key still sort and paginate
     // deterministically.
+    const candidateFields = {
+    id: profiles.id,
+    userId: profiles.userId,
+    displayName: profiles.displayName,
+    bio: profiles.bio,
+    aboutMe: profiles.aboutMe,
+    age: profiles.age,
+    gender: profiles.gender,
+    seekingGenders: profiles.seekingGenders,
+    location: profiles.location,
+    personalityProfile: profiles.personalityProfile,
+    twinPersona: profiles.twinPersona,
+    prompts: profiles.prompts,
+    isVerified: profiles.isVerified,
+    onboardingCompleted: profiles.onboardingCompleted,
+    isPublic: profiles.isPublic,
+    createdAt: profiles.createdAt,
+    sortKey,
+    _lat: profiles.locationLat,
+    _lng: profiles.locationLng,
+    locationName: profiles.locationName,
+    locationUpdatedAt: profiles.locationUpdatedAt,
+    showDistance: profiles.showDistance,
+    coverPhotoUrl: profiles.coverPhotoUrl,
+    user: {
+      id: users.id,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      profileImageUrl: users.profileImageUrl,
+    }
+  };
+
+    const shapeRows = (rows: any[]) => rows
+      .filter(row => {
+        if (ageMin !== null && row.age !== null && row.age < ageMin) return false;
+        if (ageMax !== null && row.age !== null && row.age > ageMax) return false;
+        return true;
+      })
+      .filter(row => {
+        // Strict, reciprocal gender matching. A candidate missing either half
+        // of its own preferences is excluded outright (never treated as
+        // "open to anyone"); otherwise both directions must independently
+        // match — the candidate's gender against what the requester is
+        // seeking, and the requester's gender against what the candidate is
+        // seeking — so a match is never one-sided (e.g. a man seeking women
+        // only shows up to women who are themselves seeking men).
+        const candidateSeekingGenders = (row.seekingGenders ?? []) as string[];
+        if (!row.gender || candidateSeekingGenders.length === 0) return false;
+        if (!seekingIncludesGender(requesterSeekingGenders, row.gender)) return false;
+        if (!seekingIncludesGender(candidateSeekingGenders, requesterGender)) return false;
+        return true;
+      })
+      .map(({ _lat, _lng, seekingGenders: _candidateSeeking, ...rest }) => {
+        if (!rest.showDistance) {
+          return { ...rest, locationName: null, locationUpdatedAt: null, distanceKm: null, isNearbyNow: false };
+        }
+        const pLat = _lat ? parseFloat(String(_lat)) : null;
+        const pLng = _lng ? parseFloat(String(_lng)) : null;
+        const rawDistanceKm = (userLat !== undefined && userLng !== undefined && pLat !== null && pLng !== null)
+          ? haversineKm(userLat, userLng, pLat, pLng)
+          : null;
+        if (maxDistanceKm !== null && rawDistanceKm !== null && rawDistanceKm > maxDistanceKm) return null;
+        const isNearby = rest.locationUpdatedAt
+          ? Date.now() - new Date(rest.locationUpdatedAt).getTime() < 30 * 60 * 1000
+          : false;
+        // Only the rounded distance and coarse location leave this function —
+        // _lat/_lng (raw GPS) are destructured out above and never reach the
+        // returned object.
+        const distanceKm = rawDistanceKm !== null ? Math.round(rawDistanceKm) : null;
+        return { ...rest, distanceKm, isNearbyNow: isNearby };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+
     const BATCH_SIZE = Math.max(limit * 2, 40);
     const MAX_BATCHES = 25; // ~1000 rows/request cap — a safety valve, not a normal case
     let cur: DiscoverCursor | null = cursor ?? null;
@@ -541,37 +631,7 @@ export class DatabaseStorage implements IStorage {
         : undefined;
 
       const rawBatch = await db
-        .select({
-          id: profiles.id,
-          userId: profiles.userId,
-          displayName: profiles.displayName,
-          bio: profiles.bio,
-          aboutMe: profiles.aboutMe,
-          age: profiles.age,
-          gender: profiles.gender,
-          seekingGenders: profiles.seekingGenders,
-          location: profiles.location,
-          personalityProfile: profiles.personalityProfile,
-          twinPersona: profiles.twinPersona,
-          prompts: profiles.prompts,
-          isVerified: profiles.isVerified,
-          onboardingCompleted: profiles.onboardingCompleted,
-          isPublic: profiles.isPublic,
-          createdAt: profiles.createdAt,
-          sortKey,
-          _lat: profiles.locationLat,
-          _lng: profiles.locationLng,
-          locationName: profiles.locationName,
-          locationUpdatedAt: profiles.locationUpdatedAt,
-          showDistance: profiles.showDistance,
-          coverPhotoUrl: profiles.coverPhotoUrl,
-          user: {
-            id: users.id,
-            firstName: users.firstName,
-            lastName: users.lastName,
-            profileImageUrl: users.profileImageUrl,
-          }
-        })
+        .select(candidateFields)
         .from(profiles)
         .innerJoin(users, eq(profiles.userId, users.id))
         .where(cursorClause ? and(filterCondition, cursorClause) : filterCondition)
@@ -583,46 +643,7 @@ export class DatabaseStorage implements IStorage {
       const lastRaw = rawBatch[rawBatch.length - 1];
       cur = useShuffle ? { sortKey: lastRaw.sortKey, id: lastRaw.id } : { createdAt: lastRaw.createdAt!.toISOString(), id: lastRaw.id };
 
-      const shapedBatch = rawBatch
-        .filter(row => {
-          if (ageMin !== null && row.age !== null && row.age < ageMin) return false;
-          if (ageMax !== null && row.age !== null && row.age > ageMax) return false;
-          return true;
-        })
-        .filter(row => {
-          // Strict, reciprocal gender matching. A candidate missing either half
-          // of its own preferences is excluded outright (never treated as
-          // "open to anyone"); otherwise both directions must independently
-          // match — the candidate's gender against what the requester is
-          // seeking, and the requester's gender against what the candidate is
-          // seeking — so a match is never one-sided (e.g. a man seeking women
-          // only shows up to women who are themselves seeking men).
-          const candidateSeekingGenders = (row.seekingGenders ?? []) as string[];
-          if (!row.gender || candidateSeekingGenders.length === 0) return false;
-          if (!seekingIncludesGender(requesterSeekingGenders, row.gender)) return false;
-          if (!seekingIncludesGender(candidateSeekingGenders, requesterGender)) return false;
-          return true;
-        })
-        .map(({ _lat, _lng, seekingGenders: _candidateSeeking, ...rest }) => {
-          if (!rest.showDistance) {
-            return { ...rest, locationName: null, locationUpdatedAt: null, distanceKm: null, isNearbyNow: false };
-          }
-          const pLat = _lat ? parseFloat(String(_lat)) : null;
-          const pLng = _lng ? parseFloat(String(_lng)) : null;
-          const rawDistanceKm = (userLat !== undefined && userLng !== undefined && pLat !== null && pLng !== null)
-            ? haversineKm(userLat, userLng, pLat, pLng)
-            : null;
-          if (maxDistanceKm !== null && rawDistanceKm !== null && rawDistanceKm > maxDistanceKm) return null;
-          const isNearby = rest.locationUpdatedAt
-            ? Date.now() - new Date(rest.locationUpdatedAt).getTime() < 30 * 60 * 1000
-            : false;
-          // Only the rounded distance and coarse location leave this function —
-          // _lat/_lng (raw GPS) are destructured out above and never reach the
-          // returned object.
-          const distanceKm = rawDistanceKm !== null ? Math.round(rawDistanceKm) : null;
-          return { ...rest, distanceKm, isNearbyNow: isNearby };
-        })
-        .filter((row): row is NonNullable<typeof row> => row !== null);
+      const shapedBatch = shapeRows(rawBatch);
 
       shapedAccum.push(...shapedBatch);
     }
@@ -643,6 +664,32 @@ export class DatabaseStorage implements IStorage {
       nextCursor = cursorFor(page[page.length - 1]);
     } else if (shapedAccum.length === limit && !exhausted) {
       nextCursor = cursorFor(shapedAccum[shapedAccum.length - 1]);
+    }
+
+    // First page only: deal pending likers back in (see pendingLikerIds), up
+    // to 5, a few cards apart and never as the very first card. Same
+    // eligibility rules as everyone else — a liker outside the requester's
+    // age/distance/gender settings stays out. The cursor above still points
+    // into the regular shuffled pool, so later pages are unaffected.
+    if (!cursor && pendingLikerIds.length > 0) {
+      const likerRows = await db
+        .select(candidateFields)
+        .from(profiles)
+        .innerJoin(users, eq(profiles.userId, users.id))
+        .where(and(
+          filter === "online" ? and(baseCondition, gt(profiles.locationUpdatedAt, thirtyMinutesAgo)) : baseCondition,
+          inArray(profiles.userId, pendingLikerIds),
+        ))
+        .orderBy(asc(sortKey), asc(profiles.id));
+      const likers = shapeRows(likerRows).slice(0, 5);
+      if (likers.length > 0) {
+        page = [...page];
+        let pos = 1;
+        for (const liker of likers) {
+          page.splice(Math.min(pos, page.length), 0, liker);
+          pos += 2 + (liker.id % 2);
+        }
+      }
     }
 
     // Attach everything the card is allowed to show — only for this page's

@@ -1,6 +1,7 @@
 ﻿import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { FirstDayCard } from "@/components/first-day-card";
+import { MatchCelebration } from "@/components/match-celebration";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2 } from "lucide-react";
@@ -597,6 +598,9 @@ export default function Discover() {
   const startInterview = useStartInterview();
   const createMatch = useCreateMatch();
   const discoverPass = useDiscoverPass();
+  // Set when a like lands on someone who'd already liked you — the server
+  // turns it straight into a match (see POST /api/matches).
+  const [celebrating, setCelebrating] = useState<{ matchId: number; otherUserId: string; name: string; photoUrl: string | null } | null>(null);
   const qc = useQueryClient();
   // Checked up front, not just on tap: once today's likes are used up, the
   // whole deck stops (not just the Like button) — see the empty-state block
@@ -732,6 +736,16 @@ export default function Discover() {
   // stops, not just the Like button: there's no point browsing further
   // today if nothing you tap can turn into a like. Passing stays free and
   // never trips this.
+  const celebration = celebrating && (
+    <MatchCelebration
+      matchId={celebrating.matchId}
+      otherUserId={celebrating.otherUserId}
+      otherName={celebrating.name}
+      otherPhotoUrl={celebrating.photoUrl}
+      onClose={() => setCelebrating(null)}
+    />
+  );
+
   if (likesGate && !likesGate.ok) {
     const copy = gateCopy("daily_likes", {
       tier: likesGate.tier as any,
@@ -755,6 +769,7 @@ export default function Discover() {
             {likesGate.requiredTierName || copy.requiredTierName ? `See ${likesGate.requiredTierName || copy.requiredTierName}` : "See plans"}
           </button>
         </div>
+        {celebration}
       </LayoutShell>
     );
   }
@@ -801,6 +816,7 @@ export default function Discover() {
             {filter === "all" && <ExpandSearchOptions userLat={userLat} userLng={userLng} />}
           </div>
         </div>
+        {celebration}
       </LayoutShell>
     );
   }
@@ -907,11 +923,21 @@ export default function Discover() {
 
   const doLike = async (targetProfile: typeof currentProfile) => {
     try {
-      await createMatch.mutateAsync(targetProfile.userId);
+      const result = await createMatch.mutateAsync(targetProfile.userId);
       // The deck-stops-at-the-cap block above reads this same query — without
       // invalidating it, a like that lands exactly on the limit wouldn't lock
       // the deck until the gate's own 60s staleTime happened to expire.
       qc.invalidateQueries({ queryKey: ["/api/gate", "daily_likes"] });
+      if (result?.mutual) {
+        qc.invalidateQueries({ queryKey: ["/api/likes/incoming"] });
+        setCelebrating({
+          matchId: result.id,
+          otherUserId: targetProfile.userId,
+          name: targetProfile.displayName,
+          photoUrl: targetProfile.coverPhotoUrl ?? null,
+        });
+        return;
+      }
       toast({
         title: "Liked!",
         description: `${targetProfile.displayName} will be notified.`,
@@ -1445,6 +1471,7 @@ export default function Discover() {
       )}
 
       {paywall.sheet}
+      {celebration}
     </LayoutShell>
   );
 }

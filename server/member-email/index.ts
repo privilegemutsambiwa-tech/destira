@@ -360,7 +360,7 @@ function plan(members: Member[], ctx: WeekContext, settings: MemberEmailSettings
 
     // One email per member per sweep, most valuable first.
     if (newLikes > 0 && idle > 2 * DAY_MS) {
-      if (add("likes_waiting", `likes:${likeBucket}`, T.likesWaitingEmail(ctxFor(m, "likes_waiting"), { count: newLikes, href: `${o}/matches` }))) continue;
+      if (add("likes_waiting", `likes:${likeBucket}`, T.likesWaitingEmail(ctxFor(m, "likes_waiting"), { count: newLikes, href: `${o}/discover` }))) continue;
     }
     if (age > 10 * 60_000 && age < 3 * DAY_MS) {
       const step = nextStep(m);
@@ -372,7 +372,7 @@ function plan(members: Member[], ctx: WeekContext, settings: MemberEmailSettings
       if (steps.length > 0) {
         if (add("finish_profile", "finish_profile", T.finishProfileEmail(ctxFor(m, "finish_profile"), {
           steps,
-          rewardLine: "Finish your first-day checklist in the app and you'll also unlock 5 free profile looks.",
+          rewardLine: "Finish your first-day checklist in the app and you'll also unlock 7 more days of Flame.",
         }))) continue;
       }
     }
@@ -517,11 +517,11 @@ export async function previewFor(userId: string, kind: MemberEmailKind, now = ne
       const steps = profileSteps(m);
       return T.finishProfileEmail(c, {
         steps: steps.length ? steps : [{ title: "Add a photo", detail: "People say yes to a face.", href: `${o}/photos` }],
-        rewardLine: "Finish your first-day checklist in the app and you'll also unlock 5 free profile looks.",
+        rewardLine: "Finish your first-day checklist in the app and you'll also unlock 7 more days of Flame.",
       });
     }
     case "likes_waiting":
-      return T.likesWaitingEmail(c, { count: Math.max(1, m.pendingLikes.length), href: `${o}/matches` });
+      return T.likesWaitingEmail(c, { count: Math.max(1, m.pendingLikes.length), href: `${o}/discover` });
     case "weekly_digest":
       return T.digestEmail(c, { city: m.city, newPeople, events: evs, likesWaiting: m.pendingLikes.length, eventsHref: `${o}/events`, discoverHref: `${o}/discover` });
     case "win_back":

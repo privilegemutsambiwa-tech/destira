@@ -1283,11 +1283,20 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const userBlockedTarget = await storage.isBlocked(userId, targetId);
       if (userBlockedTarget) return res.status(403).json({ message: "You have blocked this user" });
 
+      const existing = await storage.getActiveMatchBetweenUsers(userId, targetId);
+      // They liked the caller first and the caller just liked them back from
+      // Discover — that's a mutual match, same as the Likes page's like-back
+      // (which isn't counted against the daily cap either).
+      if (existing && existing.status === "pending" && existing.user1Id === targetId && existing.user2Id === userId) {
+        const updated = await storage.updateMatchStatus(existing.id, "matched");
+        void notifyMatch(updated);
+        return res.status(200).json({ ...updated, mutual: true });
+      }
+
       const currentLikes = await storage.getDailyLikeCount(userId);
       const g = await gate.checkGate(userId, "daily_likes", { countOverride: currentLikes });
       if (!g.ok) return res.status(403).json(gate.gateBody(g, "daily_likes"));
 
-      const existing = await storage.getActiveMatchBetweenUsers(userId, targetId);
       if (existing) {
         return res.status(409).json({ message: "Match request already exists", match: existing });
       }

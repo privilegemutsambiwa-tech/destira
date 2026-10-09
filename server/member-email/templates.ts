@@ -135,13 +135,13 @@ export function finishProfileEmail(ctx: LayoutCtx, d: { steps: { title: string; 
 export function likesWaitingEmail(ctx: LayoutCtx, d: { count: number; href: string }): EmailContent {
   const who = d.count === 1 ? "Someone" : `${d.count} people`;
   const subject = `${who} liked you on Destira`;
-  const preheader = "Open the app to see who, and like them back if it's mutual.";
+  const preheader = "Like them back from Discover and it's a match.";
   const body = [
     heading(`${who} liked you.`),
-    para(`${d.count === 1 ? "They're" : "They're all"} waiting on your side. If it's mutual, you can start talking straight away.`),
-    button(d.href, "See who liked you"),
+    para(`${d.count === 1 ? "They're" : "They're all"} waiting on your side. People who like you show up early in your Discover. Like them back and it's an instant match, so you can start talking straight away.`),
+    button(d.href, "Open Discover"),
   ].join("");
-  const text = `${who} liked you on Destira. See who: ${d.href}`;
+  const text = `${who} liked you on Destira. People who like you show up early in your Discover. Like them back and it's a match: ${d.href}`;
   return { subject, preheader, html: layout(ctx, preheader, body), text: text + textFooter(ctx) };
 }
 

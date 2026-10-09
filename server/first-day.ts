@@ -11,7 +11,7 @@ import { db } from "./db";
 import {
   userPhotos, profiles, groupMembers, groups, eventAttendees, matches, subscriptions, firstDayRewards,
 } from "@shared/schema";
-import { and, eq, count, desc, inArray } from "drizzle-orm";
+import { and, eq, or, count, desc, inArray } from "drizzle-orm";
 
 const REWARD_DAYS = 7;
 const DAY_MS = 86_400_000;
@@ -42,7 +42,9 @@ export async function getFirstDayState(userId: string): Promise<FirstDayState> {
       .innerJoin(groups, eq(groups.id, groupMembers.groupId))
       .where(and(eq(groupMembers.userId, userId), eq(groups.isEventChat, false))),
     db.select({ n: count() }).from(eventAttendees).where(and(eq(eventAttendees.userId, userId), inArray(eventAttendees.status, ["going", "waitlisted", "requested"]))),
-    db.select({ n: count() }).from(matches).where(eq(matches.user1Id, userId)),
+    // A like they sent, or one they answered (liking back makes them user2 on a
+    // matched row) — both are "liked someone".
+    db.select({ n: count() }).from(matches).where(or(eq(matches.user1Id, userId), and(eq(matches.user2Id, userId), eq(matches.status, "matched")))),
     db.select({ at: firstDayRewards.claimedAt }).from(firstDayRewards).where(eq(firstDayRewards.userId, userId)),
   ]);
 
