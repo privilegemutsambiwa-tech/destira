@@ -615,9 +615,16 @@ export function StatTile({
   alert,
   trend,
   sparkline,
+  onClick,
+  selected,
+  testId,
 }: {
   label: string;
   value: React.ReactNode;
+  /** Makes the tile a button that opens "what's behind this number". */
+  onClick?: () => void;
+  selected?: boolean;
+  testId?: string;
   /** Only for a genuinely bad reading — a count that should worry you. A
    *  card sitting at a healthy zero (open reports, failed payments) stays
    *  neutral, not colored, so color keeps meaning something. */
@@ -627,13 +634,33 @@ export function StatTile({
   sparkline?: number[];
 }) {
   return (
-    <div style={{ border: `1px solid ${LINE}`, background: SURFACE, borderRadius: 10, padding: 14, minWidth: 0 }}>
+    <div
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-pressed={onClick ? !!selected : undefined}
+      data-testid={testId}
+      style={{
+        border: `1px solid ${selected ? TEXT : LINE}`,
+        background: SURFACE,
+        borderRadius: 10,
+        padding: 14,
+        minWidth: 0,
+        cursor: onClick ? "pointer" : undefined,
+      }}
+    >
       <div style={LABEL}>{label}</div>
       <div style={{ ...SERIF, fontSize: 30, color: alert ? ALERT : TEXT, marginTop: 4 }}>{value}</div>
       {trend && (
         <div style={{ ...MONO, fontSize: 11, color: alert ? `${ALERT}CC` : FAINT, marginTop: 3 }}>{trend}</div>
       )}
       {sparkline && <Sparkline values={sparkline} alert={alert} />}
+      {onClick && (
+        <div style={{ ...MONO, fontSize: 10.5, color: selected ? TEXT : FAINT, marginTop: 8 }}>
+          {selected ? "Hide details" : "See what's behind this ›"}
+        </div>
+      )}
     </div>
   );
 }

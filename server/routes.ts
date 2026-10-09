@@ -46,7 +46,7 @@ import { registerAdminConsole } from "./admin";
 import * as emailTemplates from "./email/templates";
 import { setAdminLockoutHook } from "./admin/auth";
 import { trackActivity } from "./admin/activity";
-import { requestOutcomeMiddleware, recordRequestOutcome } from "./admin/error-rate";
+import { requestOutcomeMiddleware, recordClientCrash } from "./admin/error-rate";
 import { logLlmCall } from "./admin/llm-log";
 import { runNightlyRollup, backfillRecentMetrics } from "./admin/metrics-rollup";
 import { sendDailyDigest, sendWeeklyDigest } from "./email/digest";
@@ -177,7 +177,8 @@ export async function registerRoutes(
   // A render crash caught by a client ErrorBoundary would otherwise be
   // invisible — no server request ever fails, so nothing shows up anywhere.
   // This logs it server-side and counts it in the admin overview's error
-  // rate (recordRequestOutcome(500)) even though the response to the client
+  // rate (recordClientCrash — the page and message are kept so the console
+  // can show which screen crashed) even though the response to the client
   // itself is a clean 204, not a failure.
   app.post("/api/client-errors", (req, res) => {
     const { message, stack, componentStack, url } = req.body || {};
@@ -188,7 +189,7 @@ export async function registerRoutes(
       stack,
       componentStack,
     });
-    recordRequestOutcome(500);
+    recordClientCrash({ url, message });
     res.sendStatus(204);
   });
 
