@@ -9,7 +9,9 @@ import { type EventItem, useMyLeadApplication, useApplyToLead, useEvent, useEven
 import { useGroups } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { peekPendingRsvp, clearPendingRsvp } from "@/lib/pending-rsvp";
+import { useProfile } from "@/hooks/use-profiles";
 import { Loader2, ArrowLeft, Pencil, Flag, X, Share2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -163,6 +165,23 @@ export default function EventDetail({ params }: { params: { id: string } }) {
   const [reportBusy, setReportBusy] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareLink, setShareLink] = useState("");
+  const [seatJustSaved, setSeatJustSaved] = useState(false);
+  const { data: myProfile } = useProfile();
+  const autoRsvpTried = useRef(false);
+
+  // Arrived via "Save my seat" on the signed-out preview: save it now, once.
+  useEffect(() => {
+    if (!event || !user || autoRsvpTried.current) return;
+    if (peekPendingRsvp() !== event.id) return;
+    autoRsvpTried.current = true;
+    clearPendingRsvp();
+    const active = event.myStatus === "going" || event.myStatus === "waitlisted" || event.myStatus === "requested";
+    if (active || event.status !== "published" || event.hostUserId === user.id) return;
+    attend.mutate(
+      { eventId: event.id, seatModel: event.seatModel },
+      { onSuccess: (r) => { setSeatJustSaved(true); toast({ title: r.status === "going" ? "Your seat is saved" : r.status === "waitlisted" ? "You're on the waitlist" : "Request sent to the host" }); } },
+    );
+  }, [event, user, attend, toast]);
 
   const submitEventReport = async () => {
     if (!event) return;
@@ -272,6 +291,25 @@ export default function EventDetail({ params }: { params: { id: string } }) {
             <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">This event was called off</div>
             {event.cancelReason && (
               <p className="text-[13.5px] text-vf-muted mt-1 leading-[1.5]">{event.cancelReason}</p>
+            )}
+          </div>
+        )}
+        {seatJustSaved && (
+          <div className="mb-4 rounded-[14px] border border-vf-mint/30 bg-vf-mint/[0.06] px-4 py-3" data-testid="banner-seat-saved">
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint">You're in</div>
+            <p className="text-[13.5px] text-vf-muted mt-1 leading-[1.5]">
+              {myProfile?.onboardingCompleted
+                ? "Your seat is saved and you've been added to the event chat."
+                : "Your seat is saved. Answer a few quick questions next, so the people going know a bit about who you are."}
+            </p>
+            {!myProfile?.onboardingCompleted && (
+              <button
+                onClick={() => setLocation("/onboarding")}
+                className="mt-2.5 h-9 px-4 rounded-full bg-vf-ember text-vf-ink text-[13px] font-semibold btn-press"
+                data-testid="button-seat-saved-onboarding"
+              >
+                Answer the questions
+              </button>
             )}
           </div>
         )}
@@ -709,8 +747,8 @@ export default function EventDetail({ params }: { params: { id: string } }) {
           <DialogHeader>
             <DialogTitle>Share this event</DialogTitle>
             <DialogDescription>
-              Anyone with this link can see the event — including a friend who isn't on Destira yet. They'll be
-              asked to sign up before they can request a seat.
+              Anyone with this link can see the event, including a friend who isn't on Destira yet. In WhatsApp it
+              shows as a card with the date and how many are going, and they can save a seat in one tap.
             </DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-2 rounded-[12px] border border-vf-line bg-vf-surface2 p-3 text-[13px] text-vf-text break-all" data-testid="text-event-share-link">
@@ -720,8 +758,20 @@ export default function EventDetail({ params }: { params: { id: string } }) {
             <Button variant="ghost" onClick={() => setShareDialogOpen(false)} data-testid="button-close-event-share">
               Close
             </Button>
-            <Button onClick={handleCopyShareLink} data-testid="button-copy-event-share-link">
+            <Button variant="outline" onClick={handleCopyShareLink} data-testid="button-copy-event-share-link">
               Copy link
+            </Button>
+            <Button
+              asChild
+              data-testid="button-whatsapp-event-share"
+            >
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`Come with me to "${event.title}" on Destira ${shareLink}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Send on WhatsApp
+              </a>
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,5 +1,6 @@
 ﻿import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { LayoutShell } from "@/components/layout-shell";
+import { FirstDayCard } from "@/components/first-day-card";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2 } from "lucide-react";
@@ -773,6 +774,7 @@ export default function Discover() {
           <div className="flex gap-2 mb-5" data-testid="filter-chips">
             <ScopePill active={filter === "nearby"} onToggle={() => setFilter(filter === "nearby" ? "all" : "nearby")} />
           </div>
+          <FirstDayCard />
           <StoriesCarousel />
           <div className="text-center py-20 px-6 rounded-[22px] border border-vf-line bg-vf-surface">
             <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 bg-vf-mint/10">
@@ -967,6 +969,7 @@ export default function Discover() {
           </div>
         </div>
 
+        <FirstDayCard />
         <ReadinessStrip />
         <DisclosureIntroStrip />
         <ProfileCompletionStrip />

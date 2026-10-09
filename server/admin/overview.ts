@@ -134,7 +134,7 @@ export async function tileDetail(tile: string): Promise<TileDetail | null> {
       });
       return {
         title: "Monthly recurring revenue",
-        intro: "Where the number comes from: paying members by plan, from the latest nightly count.",
+        intro: "Where the number comes from: members on a paid plan, by plan, from the latest nightly count. Free signup trials are not counted as revenue.",
         rows,
         empty: "No paying members yet.",
         viewAll: { href: "/console/metrics", label: "Open money metrics" },
@@ -243,6 +243,7 @@ export function registerAdminOverviewRoutes(app: Express) {
         mrrDayBefore,
         llmDayBefore,
         payingUsers,
+        trialUsers,
       ] = await Promise.all([
         db.select({ n: count() }).from(reports).where(eq(reports.status, "open")),
         db.select({ n: count() }).from(reports).where(eq(reports.status, "investigating")),
@@ -271,6 +272,7 @@ export function registerAdminOverviewRoutes(app: Express) {
         valueOnDate("money.mrr_usd", dayBeforeYesterday),
         valueOnDate("llm.cost_usd_estimated", dayBeforeYesterday),
         sumByPrefixOnDate("money.paid_subscribers.", yesterday),
+        latestValue("money.trial_subscribers"),
       ]);
 
       const [signups30d, sparkOpenReports, sparkSafety, sparkFeedback, sparkFailedPayments, sparkMrr, sparkLlm] = await Promise.all([
@@ -299,6 +301,7 @@ export function registerAdminOverviewRoutes(app: Express) {
         mrrUsd: mrr, // from yesterday's rollup — see /api/admin/metrics/summary for the date
         mrrUsdDayBefore: mrrDayBefore,
         payingUsersCount: payingUsers, // as of the same rollup date as mrrUsd
+        trialUsersCount: trialUsers, // free signup trials: not revenue, shown separately
         llmSpendYesterdayUsd: llmToday,
         llmSpendDayBeforeUsd: llmDayBefore,
         errorRatePct: err.pct,

@@ -220,10 +220,24 @@ async function rollMatching(dateStr: string) {
 
 // ── money ────────────────────────────────────────────────────────────
 async function rollMoney(dateStr: string) {
-  const activeSubs = await db.select({ tier: subscriptions.tier }).from(subscriptions).where(eq(subscriptions.status, "active"));
+  const activeSubs = await db
+    .select({ tier: subscriptions.tier, provider: subscriptions.provider, currentPeriodEnd: subscriptions.currentPeriodEnd })
+    .from(subscriptions)
+    .where(eq(subscriptions.status, "active"));
+  // Paying = a real (non-trial) plan whose period hasn't lapsed. Every signup
+  // gets a free Flame trial (provider "trial"); counting those as revenue made
+  // MRR read as thousands of dollars that were never charged. Trials are
+  // reported on their own (money.trial_subscribers).
+  const nowMs = Date.now();
+  const live = activeSubs.filter((s) => !s.currentPeriodEnd || s.currentPeriodEnd.getTime() > nowMs);
   let mrrCents = 0;
   const byTier: Record<string, number> = { spark: 0, flame: 0, ember: 0 };
-  for (const s of activeSubs) {
+  let trials = 0;
+  for (const s of live) {
+    if (s.provider === "trial") {
+      trials += 1;
+      continue;
+    }
     const tier = s.tier as keyof typeof LIMITS;
     if (LIMITS[tier]) {
       mrrCents += LIMITS[tier].priceCents;
@@ -231,6 +245,7 @@ async function rollMoney(dateStr: string) {
     }
   }
   await upsert(dateStr, "money.mrr_usd", Math.round(mrrCents) / 100);
+  await upsert(dateStr, "money.trial_subscribers", trials);
   const [totalUsers] = await db.select({ n: count() }).from(users).where(ne(users.id, DESTIRA_SYSTEM_USER_ID));
   await upsert(dateStr, "money.arpu_usd", Number(totalUsers?.n ?? 0) ? Math.round((mrrCents / Number(totalUsers!.n))) / 100 : 0);
   for (const [tier, n] of Object.entries(byTier)) await upsert(dateStr, `money.paid_subscribers.${tier}`, n);

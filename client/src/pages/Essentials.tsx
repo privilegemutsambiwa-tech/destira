@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
+import { peekPendingRsvp } from "@/lib/pending-rsvp";
 import {
   GENDER_OPTIONS,
   SEEKING_OPTIONS,
@@ -145,7 +146,10 @@ export default function Essentials() {
 
   const next = () => {
     if (idx + 1 >= STEPS.length) {
-      setLocation("/onboarding");
+      // Came in through "Save my seat" on a shared event: land them on that
+      // event (where the seat gets saved) before the questions, not after.
+      const rsvpEventId = peekPendingRsvp();
+      setLocation(rsvpEventId ? `/events/${rsvpEventId}` : "/onboarding");
     } else {
       setIdx((i) => i + 1);
     }

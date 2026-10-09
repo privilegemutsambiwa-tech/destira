@@ -1555,6 +1555,46 @@ export const emailAlertConfig = pgTable("email_alert_config", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ── Member lifecycle email (welcome, finish-profile, likes, digest, win-back) ──
+// One row per email a MEMBER was sent (or would have been sent, in log-only
+// mode). dedupeKey makes every kind send at most once per its own window,
+// e.g. "welcome", "win_back:7", "digest:2026-W41".
+export const memberEmailLog = pgTable(
+  "member_email_log",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id").notNull().references(() => users.id),
+    kind: text("kind").notNull(),
+    dedupeKey: text("dedupe_key").notNull(),
+    recipient: text("recipient").notNull(),
+    subject: text("subject").notNull(),
+    status: text("status").notNull(), // sent | failed | logged (not delivered: log-only/test mode)
+    providerMessageId: text("provider_message_id"),
+    error: text("error"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("member_email_log_user_dedupe_idx").on(t.userId, t.dedupeKey),
+    index("member_email_log_created_idx").on(t.createdAt),
+  ],
+);
+export type MemberEmailLog = typeof memberEmailLog.$inferSelect;
+
+// Small key/value store for platform switches an admin flips at runtime
+// (e.g. member email mode). Not for secrets.
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedBy: varchar("updated_by"),
+});
+
+// First-day checklist reward: one row once a member has claimed it.
+export const firstDayRewards = pgTable("first_day_rewards", {
+  userId: varchar("user_id").primaryKey().references(() => users.id),
+  claimedAt: timestamp("claimed_at").defaultNow(),
+});
+
 export const emailLog = pgTable("email_log", {
   id: serial("id").primaryKey(),
   type: text("type").notNull(),

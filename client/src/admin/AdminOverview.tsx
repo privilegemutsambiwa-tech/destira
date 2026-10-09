@@ -216,7 +216,7 @@ export default function AdminOverview() {
             />
             <StatTile
               {...tileProps("mrr")}
-              label={`MRR${data.payingUsersCount != null ? ` · ${data.payingUsersCount} paying` : ""}`}
+              label={`MRR${data.payingUsersCount != null ? ` · ${data.payingUsersCount} paying` : ""}${data.trialUsersCount ? ` · ${data.trialUsersCount} on trial` : ""}`}
               value={<Money usd={data.mrrUsd} />}
               trend={moneyTrendText(data.mrrUsd, data.mrrUsdDayBefore)}
               sparkline={data.sparklines?.mrrUsd}

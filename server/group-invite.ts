@@ -22,6 +22,13 @@ const JOIN_PATH = /^\/join\/([^/?]+)/;
  *  server/vite.ts — that file imports the `vite` package itself, a
  *  devDependency not installed in production. */
 export async function withInviteMeta(url: string, req: Request, page: string): Promise<string> {
+  // Shared event links get the same treatment (server/event-share.ts).
+  // Imported lazily: event-share imports this file's card helpers.
+  if (url.startsWith("/events/")) {
+    const { withEventMeta } = await import("./event-share");
+    const enriched = await withEventMeta(url, req, page);
+    if (enriched != null) return enriched;
+  }
   const match = JOIN_PATH.exec(url);
   if (!match) return page;
   try {
@@ -44,9 +51,9 @@ export async function withInviteMeta(url: string, req: Request, page: string): P
 // throws at module load there — crashing the whole server on boot, not just
 // this feature. process.cwd() is the repo root in both dev and on Render.
 const FONTS_DIR = path.join(process.cwd(), "server", "assets", "fonts");
-const CACHE_DIR = path.join(process.cwd(), "uploads", "share-cards");
-const CARD_W = 1200;
-const CARD_H = 630;
+export const CACHE_DIR = path.join(process.cwd(), "uploads", "share-cards");
+export const CARD_W = 1200;
+export const CARD_H = 630;
 
 export function publicOrigin(req: Request): string {
   return process.env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`;
@@ -70,7 +77,7 @@ export function trimToWord(s: string, max = 150): string {
 }
 
 let fontCache: { name: string; data: Buffer; weight: 400 | 500; style: "normal" }[] | null = null;
-function loadFonts() {
+export function loadFonts() {
   if (fontCache) return fontCache;
   fontCache = [
     { name: "Instrument Serif", data: readFileSync(path.join(FONTS_DIR, "InstrumentSerif-Regular.ttf")), weight: 400, style: "normal" },
@@ -91,7 +98,7 @@ export function groupHeroPhotoUrl(group: Pick<Group, "bannerUrl" | "groupPhotoUr
  *  Satori doesn't fetch remote URLs itself, so any group photo we composite
  *  into the card has to be read straight off disk and inlined. Returns null
  *  for anything not a same-origin local path. */
-function photoDataUri(url: string): string | null {
+export function photoDataUri(url: string): string | null {
   try {
     let abs: string;
     if (url.startsWith("/uploads/")) {

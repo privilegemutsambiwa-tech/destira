@@ -27,6 +27,7 @@ import {
 import type { TwinProfileStructured } from "@shared/schema";
 import * as eventsService from "./events";
 import * as officialEvents from "./official-events";
+import { registerGrowthRoutes } from "./growth-routes";
 import * as eventsFeed from "./events-feed";
 import * as twinEventAlerts from "./services/twin-event-alerts";
 import * as groupGames from "./group-games";
@@ -152,6 +153,10 @@ export async function registerRoutes(
     if (!req.isAuthenticated()) return null;
     return (req.user as any).claims.sub;
   }
+
+  // Phase 1 retention: public event teaser + share card, first-day checklist,
+  // member email unsubscribe and the member-email sweep.
+  registerGrowthRoutes(app, getUserId);
 
   // Reactions and polls are keyed off a bare group-message id with no group
   // id in the URL, so without this a member of ANY group could read/react to

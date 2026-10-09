@@ -56,6 +56,7 @@ const GroupInfoPage = lazy(() => import("@/pages/GroupInfo"));
 const GroupSettings = lazy(() => import("@/pages/GroupSettings"));
 const JoinGroup = lazy(() => import("@/pages/JoinGroup"));
 const Settings = lazy(() => import("@/pages/Settings"));
+const PublicEvent = lazy(() => import("@/pages/PublicEvent"));
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
   const { user, isLoading } = useAuth();
@@ -113,6 +114,15 @@ function EventLinkGate({ params }: { params: { id?: string } }) {
       stashPendingEvent(params.id);
     }
   }, [isLoading, user, params.id]);
+  // Signed out: show the real event (public teaser) with a one-tap
+  // "Save my seat" instead of bouncing them to the generic home page.
+  if (!isLoading && !user && params.id) {
+    return (
+      <ErrorBoundary>
+        <PublicEvent eventId={params.id} />
+      </ErrorBoundary>
+    );
+  }
   return <ProtectedRoute component={EventDetail} params={params} />;
 }
 

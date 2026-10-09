@@ -96,6 +96,7 @@ const NAV = [
   { href: "/console/events/official", label: "Official events" },
   { href: "/console/feedback", label: "Feedback", badgeKey: "openFeedback" as const },
   { href: "/console/metrics", label: "Metrics" },
+  { href: "/console/member-email", label: "Member emails" },
   { href: "/console/email", label: "Email alerts" },
 ];
 // Below the fold, gated separately — support/read_only see neither.

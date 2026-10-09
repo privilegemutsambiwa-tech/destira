@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import {
   ArrowLeft, User, Brain, Shield, Bell, Wrench, Crown, HelpCircle,
   AlertTriangle, ChevronRight, LogOut, Trash2, PauseCircle, Eye, EyeOff,
-  Volume2, MapPin, MessageSquare, Zap, Check, Lock, Mail, Sliders, FileText,
+  Volume2, MapPin, MessageSquare, Zap, Check, Lock, Mail, Sliders, FileText, Heart,
   ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2, Users
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -1957,6 +1957,22 @@ export default function Settings() {
           <ToggleRow icon={Bell} label="Stories" value={notifEnabled("stories")} onChange={(v) => handleToggleNotifPref("stories", v)} testId="toggle-notif-stories" />
           <ToggleRow icon={Brain} label="Interview Requests" value={notifEnabled("interviews")} onChange={(v) => handleToggleNotifPref("interviews", v)} testId="toggle-notif-interviews" />
           <ToggleRow icon={CalendarDays} label="Events Near You" value={notifEnabled("events")} onChange={(v) => handleToggleNotifPref("events", v)} testId="toggle-notif-events" />
+        </div>
+      ),
+    },
+    {
+      id: "email",
+      label: "Email",
+      content: (
+        <div className="vf-card" style={cardStyle}>
+          <ToggleRow icon={Mail} label="Email from Destira" value={notifEnabled("email_all")} onChange={(v) => handleToggleNotifPref("email_all", v)} testId="toggle-email-all" />
+          {notifEnabled("email_all") && (
+            <>
+              <ToggleRow icon={Heart} label="When someone likes you" value={notifEnabled("email_likes")} onChange={(v) => handleToggleNotifPref("email_likes", v)} testId="toggle-email-likes" />
+              <ToggleRow icon={CalendarDays} label="Weekly digest and catch-ups" value={notifEnabled("email_digest")} onChange={(v) => handleToggleNotifPref("email_digest", v)} testId="toggle-email-digest" />
+              <ToggleRow icon={Bell} label="Getting-started tips" value={notifEnabled("email_tips")} onChange={(v) => handleToggleNotifPref("email_tips", v)} testId="toggle-email-tips" />
+            </>
+          )}
         </div>
       ),
     },

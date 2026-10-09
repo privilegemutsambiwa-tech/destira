@@ -21,9 +21,14 @@ export async function sendViaResend(opts: {
   to: string;
   subject: string;
   text: string;
+  /** Optional rich version; mail clients that can't render it fall back to text. */
+  html?: string;
+  /** Overrides EMAIL_FROM (member mail uses EMAIL_FROM_MEMBERS when set). */
+  from?: string;
+  headers?: Record<string, string>;
 }): Promise<{ ok: true; providerMessageId: string } | { ok: false; error: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM || "Destira Ops <onboarding@resend.dev>";
+  const from = opts.from || process.env.EMAIL_FROM || "Destira Ops <onboarding@resend.dev>";
   if (!apiKey) {
     return { ok: false, error: "RESEND_API_KEY not set — email is a no-op until the domain is connected" };
   }
@@ -31,7 +36,14 @@ export async function sendViaResend(opts: {
     const res = await fetch(RESEND_API, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to: [opts.to], subject: opts.subject, text: opts.text }),
+      body: JSON.stringify({
+        from,
+        to: [opts.to],
+        subject: opts.subject,
+        text: opts.text,
+        ...(opts.html ? { html: opts.html } : {}),
+        ...(opts.headers ? { headers: opts.headers } : {}),
+      }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
