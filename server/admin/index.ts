@@ -9,6 +9,7 @@ import { registerAdminEventRoutes } from "./events";
 import { registerAdminFeedbackRoutes } from "./feedback";
 import { registerAdminEmailRoutes } from "./email";
 import { registerAdminMetricsRoutes } from "./metrics";
+import { registerAdminGrowthRoutes } from "./growth";
 import { registerAdminTeamRoutes } from "./team";
 import { registerAdminAccountRoutes } from "./account";
 import { registerAdminMemberEmailRoutes } from "./member-email";
@@ -22,6 +23,7 @@ export function registerAdminConsole(app: Express) {
   registerAdminFeedbackRoutes(app);
   registerAdminEmailRoutes(app);
   registerAdminMetricsRoutes(app);
+  registerAdminGrowthRoutes(app);
   registerAdminTeamRoutes(app);
   registerAdminAccountRoutes(app);
   registerAdminMemberEmailRoutes(app);

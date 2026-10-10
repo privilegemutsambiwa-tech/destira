@@ -1,15 +1,16 @@
 // Referrals service. Growth that never touches matching: a qualified referral
-// grants the REFERRER five profile_view_grants (looking someone up), never an
-// extra daily read.
+// gives BOTH people a free week of plan time (grantPlanDays below) and the
+// referrer five profile_view_grants (looking someone up) — never an extra
+// daily read, never placement.
 //
 // The reward transaction locks the pending referral row FOR UPDATE and
 // re-asserts status = 'pending' before granting, so a double-fired
 // checkQualification (e.g. two profile writes in quick succession) can never
 // double-grant.
 import { db } from "./db";
-import { referralCodes, referrals, profileViewGrants } from "@shared/schema";
+import { referralCodes, referrals, profileViewGrants, subscriptions, profiles } from "@shared/schema";
 import { storage } from "./storage";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, sql } from "drizzle-orm";
 
 // Crockford-ish: 32 glyphs, no O/0/I/1 so a code is safe to read aloud.
 const CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -17,6 +18,49 @@ const CODE_LEN = 8;
 const REFERRAL_REWARD_VIEWS = 5;
 const READINESS_GATE = 40; // getProfileCompletion score, 0-100
 const CAP_PER_30_DAYS = 50;
+export const REFERRAL_REWARD_DAYS = 7;
+// Free weeks a referrer can earn per 30 days. Each one needs a real friend
+// to finish onboarding, but this bounds what a farm of throwaway accounts
+// could ever mint. The invited friend's own week is never capped.
+const WEEKS_CAP_PER_30_DAYS = 8;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Add `days` of plan time. A running plan (trial or paid) runs that much
+ *  longer at its own tier; anyone without one gets that long on Spark. */
+async function grantPlanDays(tx: Tx, userId: string, days: number): Promise<void> {
+  const now = new Date();
+  const add = days * DAY_MS;
+  const [sub] = await tx
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, userId))
+    .orderBy(desc(subscriptions.createdAt))
+    .limit(1);
+  const running =
+    sub && sub.status === "active" && sub.tier !== "free" && sub.currentPeriodEnd && sub.currentPeriodEnd > now;
+  if (sub && running) {
+    await tx
+      .update(subscriptions)
+      .set({ currentPeriodEnd: new Date(sub.currentPeriodEnd!.getTime() + add), updatedAt: now })
+      .where(eq(subscriptions.id, sub.id));
+  } else if (sub) {
+    await tx
+      .update(subscriptions)
+      .set({ tier: "spark", status: "active", provider: "referral", cancelAtPeriodEnd: false, currentPeriodStart: now, currentPeriodEnd: new Date(now.getTime() + add), updatedAt: now })
+      .where(eq(subscriptions.id, sub.id));
+  } else {
+    await tx.insert(subscriptions).values({
+      userId, tier: "spark", status: "active", provider: "referral", currentPeriodStart: now, currentPeriodEnd: new Date(now.getTime() + add),
+    });
+  }
+}
+
+async function firstName(userId: string): Promise<string> {
+  const p = await storage.getProfile(userId);
+  return (p?.displayName || "").trim().split(/\s+/)[0] || "Someone";
+}
 
 export type AttachResult =
   | { ok: true }
@@ -95,48 +139,96 @@ export async function checkQualification(invitedUserId: string): Promise<void> {
   const { score } = await storage.getProfileCompletion(invitedUserId);
   if (score < READINESS_GATE) return;
 
-  await db.transaction(async (tx) => {
+  await rewardReferral(invitedUserId);
+}
+
+/** The reward itself, once the invited user has passed the gates above.
+ *  Exported for scripts/assert-referral-rewards.ts. */
+export async function rewardReferral(invitedUserId: string): Promise<void> {
+  const outcome = await db.transaction(async (tx) => {
     const [row] = await tx
       .select()
       .from(referrals)
       .where(and(eq(referrals.invitedUserId, invitedUserId), eq(referrals.status, "pending")))
       .for("update");
-    if (!row) return; // already handled by a concurrent call
+    if (!row) return null; // already handled by a concurrent call
 
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const [{ n }] = await tx
-      .select({ n: sql<number>`count(*)` })
-      .from(profileViewGrants)
-      .where(
-        and(
-          eq(profileViewGrants.userId, row.referrerUserId),
-          eq(profileViewGrants.reason, "referral"),
-          gte(profileViewGrants.createdAt, since),
+    const since = new Date(Date.now() - 30 * DAY_MS);
+    const [[{ n: viewGrants }], [{ n: weekGrants }]] = await Promise.all([
+      tx
+        .select({ n: sql<number>`count(*)` })
+        .from(profileViewGrants)
+        .where(
+          and(
+            eq(profileViewGrants.userId, row.referrerUserId),
+            eq(profileViewGrants.reason, "referral"),
+            gte(profileViewGrants.createdAt, since),
+          ),
         ),
-      );
+      tx
+        .select({ n: sql<number>`count(*)` })
+        .from(referrals)
+        .where(
+          and(
+            eq(referrals.referrerUserId, row.referrerUserId),
+            gt(referrals.referrerRewardDays, 0),
+            gte(referrals.qualifiedAt, since),
+          ),
+        ),
+    ]);
+    const referrerGetsViews = Number(viewGrants) < CAP_PER_30_DAYS;
+    const referrerGetsWeek = Number(weekGrants) < WEEKS_CAP_PER_30_DAYS;
 
-    if (Number(n) >= CAP_PER_30_DAYS) {
-      await tx
-        .update(referrals)
-        .set({ status: "qualified", qualifiedAt: new Date() })
-        .where(eq(referrals.id, row.id));
-      console.warn(
-        `[referrals] 30-day cap hit for referrer ${row.referrerUserId}; referral ${row.id} held at 'qualified', no grant`,
-      );
-      return;
+    // The friend who joined always gets their week.
+    await grantPlanDays(tx, invitedUserId, REFERRAL_REWARD_DAYS);
+    if (referrerGetsWeek) await grantPlanDays(tx, row.referrerUserId, REFERRAL_REWARD_DAYS);
+    if (referrerGetsViews) {
+      await tx.insert(profileViewGrants).values({
+        userId: row.referrerUserId,
+        amount: REFERRAL_REWARD_VIEWS,
+        reason: "referral",
+        expiresAt: null,
+      });
     }
-
+    const rewarded = referrerGetsWeek || referrerGetsViews;
+    if (!rewarded) {
+      console.warn(
+        `[referrals] 30-day caps hit for referrer ${row.referrerUserId}; referral ${row.id} held at 'qualified', referrer not granted`,
+      );
+    }
     await tx
       .update(referrals)
-      .set({ status: "rewarded", qualifiedAt: new Date() })
+      .set({
+        status: rewarded ? "rewarded" : "qualified",
+        qualifiedAt: new Date(),
+        referrerRewardDays: referrerGetsWeek ? REFERRAL_REWARD_DAYS : 0,
+        invitedRewardDays: REFERRAL_REWARD_DAYS,
+      })
       .where(eq(referrals.id, row.id));
-    await tx.insert(profileViewGrants).values({
-      userId: row.referrerUserId,
-      amount: REFERRAL_REWARD_VIEWS,
-      reason: "referral",
-      expiresAt: null,
-    });
+    return { referrerUserId: row.referrerUserId, referrerGetsWeek };
   });
+  if (!outcome) return;
+
+  // Tell both of them, outside the transaction.
+  const [inviterName, friendName] = await Promise.all([firstName(outcome.referrerUserId), firstName(invitedUserId)]);
+  storage
+    .createNotification(
+      invitedUserId,
+      "referral_reward",
+      "A free week, from a friend",
+      `You joined through ${inviterName}'s invite, so you both get a free week on Destira.`,
+    )
+    .catch(() => {});
+  storage
+    .createNotification(
+      outcome.referrerUserId,
+      "referral_reward",
+      `${friendName} joined from your invite`,
+      outcome.referrerGetsWeek
+        ? `${friendName} finished setting up, so you both get a free week on Destira.`
+        : `${friendName} finished setting up and got a free week. You've reached this month's limit of free weeks from invites.`,
+    )
+    .catch(() => {});
 }
 
 /** For a user who signed up before entering a code. Same once-only rules. */
@@ -150,6 +242,10 @@ export interface ReferralSummary {
   code: string;
   counts: { pending: number; qualified: number; rewarded: number };
   viewsEarned: number;
+  daysEarned: number;
+  rewardDays: number;
+  // Friends who joined with this member's code — first name only.
+  friends: { firstName: string; status: "setting_up" | "joined"; joinedAt: string | null }[];
 }
 
 export async function getReferralSummary(userId: string): Promise<ReferralSummary> {
@@ -171,5 +267,39 @@ export async function getReferralSummary(userId: string): Promise<ReferralSummar
     .from(profileViewGrants)
     .where(and(eq(profileViewGrants.userId, userId), eq(profileViewGrants.reason, "referral")));
 
-  return { code, counts, viewsEarned: Number(earned) };
+  const mine = await db
+    .select({
+      invitedUserId: referrals.invitedUserId,
+      status: referrals.status,
+      days: referrals.referrerRewardDays,
+      createdAt: referrals.createdAt,
+    })
+    .from(referrals)
+    .where(eq(referrals.referrerUserId, userId))
+    .orderBy(desc(referrals.createdAt))
+    .limit(50);
+  const names = mine.length
+    ? await db
+        .select({ userId: profiles.userId, displayName: profiles.displayName })
+        .from(profiles)
+        .where(inArray(profiles.userId, mine.map((m) => m.invitedUserId)))
+    : [];
+  const nameOf = new Map(names.map((n) => [n.userId, (n.displayName || "").trim().split(/\s+/)[0]]));
+  const friends = mine.map((m) => ({
+    firstName: nameOf.get(m.invitedUserId) || "A friend",
+    status: (m.status === "pending" ? "setting_up" : "joined") as "setting_up" | "joined",
+    joinedAt: m.createdAt ? m.createdAt.toISOString() : null,
+  }));
+  const daysEarned = mine.reduce((sum, m) => sum + (m.days ?? 0), 0);
+
+  return { code, counts, viewsEarned: Number(earned), daysEarned, rewardDays: REFERRAL_REWARD_DAYS, friends };
+}
+
+/** Who a code belongs to — first name only, for "Rudo invited you". */
+export async function getInviterFirstName(rawCode: string): Promise<string | null> {
+  const code = rawCode.trim().toUpperCase();
+  if (!/^[2-9A-HJ-NP-Z]{8}$/.test(code)) return null;
+  const [owner] = await db.select().from(referralCodes).where(eq(referralCodes.code, code));
+  if (!owner) return null;
+  return firstName(owner.userId);
 }

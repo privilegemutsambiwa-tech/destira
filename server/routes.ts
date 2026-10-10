@@ -41,6 +41,7 @@ import * as gate from "./gate";
 import { gateCopy } from "@shared/entitlements";
 import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
+import { recordShare } from "./growth";
 import { referralClaimSchema } from "@shared/schema";
 import * as disclosure from "./disclosure";
 import * as groupInvite from "./group-invite";
@@ -4861,7 +4862,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
-  // Referrals — bringing a friend gets you profile views, never an extra read.
+  // Referrals — a friend who joins gets you both a free week (plus profile
+  // views for the inviter); never an extra read, never placement.
   app.get("/api/referrals/me", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -4898,6 +4900,36 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     } catch (err) {
       console.error("Referral claim error:", err);
       res.status(500).json({ message: "Failed to claim code" });
+    }
+  });
+
+  // Public: "Rudo invited you" on the landing page. First name only, and only
+  // for a code its owner chose to share.
+  app.get("/api/referrals/inviter/:code", async (req, res) => {
+    try {
+      const firstName = await referralsService.getInviterFirstName(String(req.params.code));
+      if (!firstName) return res.sendStatus(404);
+      res.json({ firstName, rewardDays: referralsService.REFERRAL_REWARD_DAYS });
+    } catch (err) {
+      console.error("Inviter lookup error:", err);
+      res.sendStatus(500);
+    }
+  });
+
+  // One row per tap on a share action, for the console's Growth page.
+  app.post("/api/growth/share", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const { kind, format, targetId } = req.body ?? {};
+    if ((kind !== "event" && kind !== "invite") || (format !== "status_card" && format !== "link")) {
+      return res.status(400).json({ message: "Invalid share" });
+    }
+    try {
+      await recordShare(userId, kind, format, targetId == null ? null : String(targetId).slice(0, 64));
+      res.sendStatus(204);
+    } catch (err) {
+      console.error("Share log error:", err);
+      res.sendStatus(500);
     }
   });
 

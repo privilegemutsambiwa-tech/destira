@@ -675,6 +675,11 @@ export const referrals = pgTable(
     status: text("status").notNull().default("pending"),
     createdAt: timestamp("created_at").defaultNow(),
     qualifiedAt: timestamp("qualified_at"),
+    // Days of plan time each side got when the invite qualified ("you both
+    // get a free week"). 0 = none: a referral rewarded before the free week
+    // existed, or the referrer was over the monthly cap.
+    referrerRewardDays: integer("referrer_reward_days").notNull().default(0),
+    invitedRewardDays: integer("invited_reward_days").notNull().default(0),
   },
   (t) => ({
     invitedIdx: uniqueIndex("referrals_invited_user_idx").on(t.invitedUserId),
@@ -687,6 +692,28 @@ export const profileViewGrants = pgTable("profile_view_grants", {
   amount: integer("amount").notNull(),
   reason: text("reason").notNull(), // weekly | referral | ember
   expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Where a member came from — first touch, recorded once at signup from the
+// vf_src cookie the client sets on a signed-out visitor's first page view.
+// source: referral | share_card | event | group | campaign | search | social
+//       | other_site | direct
+export const signupSources = pgTable("signup_sources", {
+  userId: varchar("user_id").primaryKey().references(() => users.id),
+  source: text("source").notNull(),
+  detail: text("detail"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Each tap on a share action (an event or invite, as a link or a Status
+// card) — so the console can show shares next to the signups they bring.
+export const shareEvents = pgTable("share_events", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  kind: text("kind").notNull(), // event | invite
+  format: text("format").notNull(), // status_card | link
+  targetId: text("target_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

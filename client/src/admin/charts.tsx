@@ -362,3 +362,42 @@ export function ReportVolumeStrip({ series }: { series: { date: string; value: n
     </div>
   );
 }
+
+// ── Growth: daily signups, invited (friends + shares) in EMBER on top ────
+export function GrowthSignupsChart({
+  series,
+  days,
+}: {
+  series: { date: string; invited: number; other: number }[];
+  days: number;
+}) {
+  const reduced = usePrefersReducedMotion();
+  const invited = series.reduce((s, r) => s + r.invited, 0);
+  const total = invited + series.reduce((s, r) => s + r.other, 0);
+  if (!series.length || total === 0) return <ChartEmpty note={`No signups in the last ${days} days.`} />;
+  return (
+    <div>
+      <ChartFigure
+        label={`Signups — last ${days} days`}
+        figure={`${total} total · ${invited} from friends and shares`}
+      />
+      <ResponsiveContainer width="100%" height={190}>
+        <BarChart data={series} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+          <CartesianGrid stroke={grid} vertical={false} />
+          <XAxis
+            dataKey="date"
+            tick={axisTick}
+            tickFormatter={(d: string) => d.slice(5)}
+            interval={Math.max(0, Math.floor(series.length / 7) - 1)}
+            axisLine={{ stroke: LINE }}
+            tickLine={false}
+          />
+          <YAxis tick={axisTick} allowDecimals={false} axisLine={false} tickLine={false} width={30} />
+          <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(255,255,255,.04)" }} />
+          <Bar dataKey="other" name="everyone else" stackId="s" fill={MUTED} isAnimationActive={!reduced} />
+          <Bar dataKey="invited" name="friends + shares" stackId="s" fill={EMBER} isAnimationActive={!reduced} radius={[2, 2, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}

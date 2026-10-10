@@ -6,6 +6,7 @@ import { DestiraLockup } from "@/components/brand/logo";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 import { photos as HERO_PHOTOS, type Photo } from "@/lib/photos";
+import { pendingReferralCode } from "@/lib/attribution";
 
 /* ------------------------------------------------------------------ *
  *  Landing — marketing page, route "/" for unauthenticated visitors.
@@ -544,12 +545,16 @@ export default function Landing() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // ?ref=CODE → stash for 30 days so signup can attribute the referral.
+  // ?ref=CODE is stashed app-wide (lib/attribution.ts, from main.tsx) so it
+  // also works on an event link. Here it just names who invited them.
+  const [inviter, setInviter] = useState<{ firstName: string; rewardDays: number } | null>(null);
   useEffect(() => {
-    const ref = new URLSearchParams(window.location.search).get("ref");
-    if (ref && /^[2-9A-HJ-NP-Z]{8}$/i.test(ref)) {
-      document.cookie = `vf_ref=${ref.toUpperCase()}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
-    }
+    const code = pendingReferralCode();
+    if (!code) return;
+    fetch(`/api/referrals/inviter/${code}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setInviter(d))
+      .catch(() => {});
   }, []);
 
   // Page-level head meta. (No react-helmet in this repo — a native effect
@@ -657,6 +662,15 @@ export default function Landing() {
         <div className="max-w-[1180px] mx-auto w-full pt-20 lg:pt-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] items-center gap-12 lg:gap-[clamp(40px,5vw,88px)]">
           {/* LEFT — type column (unchanged copy) */}
           <div>
+            {inviter && (
+              <div
+                className="mb-6 inline-flex items-center gap-2 rounded-full border border-vf-ember/40 bg-vf-ember/10 px-4 py-2 text-[13.5px] text-vf-text"
+                data-testid="banner-invited-by"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-vf-ember" aria-hidden="true" />
+                {inviter.firstName} invited you. Join and you both get a free week.
+              </div>
+            )}
             <Reveal>
               <Eyebrow>
                 <RotatingPlace /> · Free to join
@@ -1178,10 +1192,11 @@ export default function Landing() {
               className="font-serif font-normal text-vf-text mt-3"
               style={{ fontSize: "clamp(20px, 2.6vw, 30px)", lineHeight: 1.15, letterSpacing: "-0.015em" }}
             >
-              Every friend who joins gets you five more profile views.
+              Bring a friend, and you both get a free week.
             </p>
             <p className="mt-3 text-[14.5px] leading-[1.6] text-vf-muted max-w-[62ch]">
-              Profile views are for looking someone up properly. They never buy you a match —
+              When someone joins with your invite and finishes setting up, you each get an extra
+              week of your plan, or a week of Spark if you're on Free. It never buys you a match —
               your twin still does all the introducing, and that part is not for sale.
             </p>
           </Reveal>

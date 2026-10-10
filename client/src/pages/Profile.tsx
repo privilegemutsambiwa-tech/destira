@@ -41,6 +41,7 @@ const PROMPT_BANK = [
 /** Shown once the user is clearly enjoying it (readiness > 60) and hasn't
  *  referred anyone yet. Dismissal persists. */
 function ReferralNudge({ completionScore }: { completionScore: number }) {
+  const [, setLocation] = useLocation();
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem(NUDGE_KEY) === "1"; } catch { return false; }
   });
@@ -55,7 +56,7 @@ function ReferralNudge({ completionScore }: { completionScore: number }) {
     setDismissed(true);
     try { localStorage.setItem(NUDGE_KEY, "1"); } catch { /* noop */ }
   };
-  const copy = () => { navigator.clipboard?.writeText(data.url).catch(() => {}); };
+  const invite = () => setLocation("/invite");
 
   return (
     <div className="relative rounded-[18px] border border-vf-line bg-vf-surface2 p-4 pr-10 vf-card" data-testid="referral-nudge">
@@ -69,14 +70,14 @@ function ReferralNudge({ completionScore }: { completionScore: number }) {
       </button>
       <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">Bring your people</div>
       <p className="text-[14px] text-vf-text mt-1.5 leading-[1.5]">
-        Every friend who joins gets you five more profile views. Your daily read stays one a day.
+        Bring a friend and you both get a free week once they've set up their twin.
       </p>
       <button
-        onClick={copy}
+        onClick={invite}
         className="mt-3 inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-4 h-9 text-[13px] btn-press vf-btn-primary hover:bg-[var(--vf-ember-soft)] transition-colors"
         data-testid="button-nudge-copy"
       >
-        Copy invite link
+        Invite friends
       </button>
     </div>
   );

@@ -4,7 +4,7 @@ import { isAuthenticated, createSessionUser } from "./replitAuth";
 import { hashPassword, verifyPassword } from "./password";
 import { supabaseAuthClient } from "./supabase";
 import type { User } from "@shared/models/auth";
-import * as referrals from "../../referrals";
+import { attributeNewSignup } from "../../growth";
 import { storage } from "../../storage";
 import { generateOpaqueToken, hashOpaqueToken } from "../../admin/crypto";
 import { sendViaResend, resendConfigured } from "../../email/resend";
@@ -19,17 +19,6 @@ async function checkIsOnboarded(userId: string): Promise<boolean> {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// No cookie-parser in the app — pull one cookie value straight off the header.
-function readCookie(req: any, name: string): string | null {
-  const raw = req.headers?.cookie;
-  if (typeof raw !== "string") return null;
-  for (const part of raw.split(";")) {
-    const [k, ...v] = part.trim().split("=");
-    if (k === name) return decodeURIComponent(v.join("="));
-  }
-  return null;
-}
 
 function sanitizeUser(user: User) {
   const { passwordHash, ...safe } = user as User & { passwordHash?: string | null };
@@ -157,20 +146,14 @@ export function registerAuthRoutes(app: Express): void {
         console.error("[signup] failed to start trial subscription:", err);
       });
 
-      req.login(createSessionUser(user), (err: any) => {
+      req.login(createSessionUser(user), async (err: any) => {
         if (err) {
           console.error("[signup] req.login failed:", err);
           return res.status(500).json({ message: "Account created, but sign-in failed. Please log in." });
         }
-        // Attribute a referral if the visitor arrived via ?ref=CODE.
-        const refCode = readCookie(req, "vf_ref");
-        if (refCode) {
-          referrals
-            .attachReferral(user.id, refCode)
-            .then((r) => { if (r.ok) return referrals.checkQualification(user.id); })
-            .catch(() => {});
-          res.setHeader("Set-Cookie", "vf_ref=; Path=/; Max-Age=0; SameSite=Lax");
-        }
+        // Referral code (?ref=) and where they came from, if the client
+        // stamped either before signup.
+        await attributeNewSignup(user.id, req, res);
         res.status(201).json(sanitizeUser(user));
       });
     } catch (error) {
@@ -322,6 +305,7 @@ export function registerAuthRoutes(app: Express): void {
       }
 
       let user = await authStorage.getUserByEmail(normalizedEmail);
+      const isNewUser = !user;
       if (user) {
         if (avatarUrl && !user.profileImageUrl) {
           user = await authStorage.updateUser(user.id, { profileImageUrl: avatarUrl });
@@ -349,12 +333,14 @@ export function registerAuthRoutes(app: Express): void {
 
       const isOnboarded = await checkIsOnboarded(user.id);
 
-      req.login(createSessionUser(user), (err: any) => {
+      req.login(createSessionUser(user), async (err: any) => {
         if (err) {
           console.error("[google-callback] req.login failed:", err);
           return res.status(500).json({ message: "Signed in with Google, but session setup failed." });
         }
-        res.json({ ...sanitizeUser(user), isOnboarded });
+        // Google signups used to skip referral attribution entirely.
+        if (isNewUser) await attributeNewSignup(user!.id, req, res);
+        res.json({ ...sanitizeUser(user!), isOnboarded });
       });
     } catch (error) {
       console.error("Google callback error:", error);

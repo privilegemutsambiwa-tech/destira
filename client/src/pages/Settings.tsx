@@ -117,53 +117,29 @@ function ChevronRow({ icon: Icon, label, sublabel, onClick, destructive, testId 
 }
 
 function InviteRow() {
-  const { data } = useQuery<{ code: string; url: string; counts: { pending: number; qualified: number; rewarded: number }; viewsEarned: number }>({
+  const [, setLocation] = useLocation();
+  const { data } = useQuery<{ friends: unknown[]; daysEarned: number }>({
     queryKey: ["/api/referrals/me"],
   });
-  const [copied, setCopied] = useState(false);
-
-  const joined = data ? data.counts.pending + data.counts.qualified + data.counts.rewarded : 0;
-  const views = data?.viewsEarned ?? 0;
-
-  const copy = async () => {
-    if (!data?.url) return;
-    try {
-      await navigator.clipboard.writeText(data.url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch { /* clipboard blocked */ }
-  };
+  const joined = data?.friends.length ?? 0;
+  const weeks = data ? Math.floor(data.daysEarned / 7) : 0;
 
   return (
-    <div style={{ padding: "14px 16px" }} data-testid="row-referral">
-      <div className="flex items-center gap-3">
-        <Plus className="w-5 h-5 shrink-0" style={{ color: MUTED }} />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium" style={{ color: TEXT }}>Invite a friend</p>
-          <p style={{ ...MONO_EYEBROW, color: FAINT, marginTop: "3px" }}>
-            {joined} joined · {views} views earned
-          </p>
-        </div>
-        <button
-          onClick={copy}
-          disabled={!data}
-          className="text-xs font-semibold px-3 py-1.5 rounded-lg btn-press disabled:opacity-40 transition-colors duration-150 hover:border-vf-text/25"
-          style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: copied ? MINT : TEXT }}
-          data-testid="button-copy-referral"
-        >
-          {copied ? "Copied" : "Copy link"}
-        </button>
+    <button
+      onClick={() => setLocation("/invite")}
+      className="group w-full flex items-center gap-3 text-left"
+      style={{ padding: "14px 16px" }}
+      data-testid="row-referral"
+    >
+      <Plus className="w-5 h-5 shrink-0" style={{ color: MUTED }} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium" style={{ color: TEXT }}>Invite a friend, you both get a free week</p>
+        <p style={{ ...MONO_EYEBROW, color: FAINT, marginTop: "3px" }}>
+          {joined} joined · {weeks} {weeks === 1 ? "week" : "weeks"} earned
+        </p>
       </div>
-      {data?.code && (
-        <div
-          className="mt-2.5 text-xs px-3 py-2 rounded-lg select-all"
-          style={{ background: ELEVATED, border: `1px solid ${BORDER}`, color: MUTED, fontFamily: '"DM Mono", ui-monospace, monospace', letterSpacing: "0.12em" }}
-          data-testid="text-referral-code"
-        >
-          {data.code}
-        </div>
-      )}
-    </div>
+      <ChevronRight className="w-4 h-4 transition-transform duration-150 group-hover:translate-x-0.5" style={{ color: MUTED }} />
+    </button>
   );
 }
 

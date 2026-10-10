@@ -12,7 +12,9 @@ import { useLocation } from "wouter";
 import { useEffect, useRef, useState } from "react";
 import { peekPendingRsvp, clearPendingRsvp } from "@/lib/pending-rsvp";
 import { useProfile } from "@/hooks/use-profiles";
-import { Loader2, ArrowLeft, Pencil, Flag, X, Share2 } from "lucide-react";
+import { Loader2, ArrowLeft, Pencil, Flag, X, Share2, ImageIcon } from "lucide-react";
+import { shareStatusCard, logShare } from "@/lib/status-card";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -168,6 +170,10 @@ export default function EventDetail({ params }: { params: { id: string } }) {
   const [seatJustSaved, setSeatJustSaved] = useState(false);
   const { data: myProfile } = useProfile();
   const autoRsvpTried = useRef(false);
+  const [makingCard, setMakingCard] = useState(false);
+  // The sharer's invite code rides along on event links, so a friend who
+  // signs up from one counts as their invite (you both get a free week).
+  const { data: referral } = useQuery<{ code: string }>({ queryKey: ["/api/referrals/me"], enabled: !!user });
 
   // Arrived via "Save my seat" on the signed-out preview: save it now, once.
   useEffect(() => {
@@ -207,10 +213,19 @@ export default function EventDetail({ params }: { params: { id: string } }) {
   // published, so (unlike a group) there's no separate token to mint first.
   // A friend who isn't signed up yet still gets funneled back here after
   // signup (see EventLinkGate / pending-invite.ts in App.tsx).
+  const eventShareUrl = (extra = "") => {
+    if (!event) return "";
+    const params = new URLSearchParams();
+    if (referral?.code) params.set("ref", referral.code);
+    const qs = [params.toString(), extra].filter(Boolean).join("&");
+    return `${window.location.origin}/events/${event.id}${qs ? `?${qs}` : ""}`;
+  };
+
   const handleShareEvent = async () => {
     if (!event) return;
-    const url = `${window.location.origin}/events/${event.id}`;
+    const url = eventShareUrl();
     const shareData = { title: event.title, text: `Come to "${event.title}" on Destira`, url };
+    logShare("event", "link", event.id);
     try {
       if (navigator.share) {
         await navigator.share(shareData);
@@ -222,6 +237,41 @@ export default function EventDetail({ params }: { params: { id: string } }) {
       if (err instanceof Error && err.name === "AbortError") return;
       setShareLink(url);
       setShareDialogOpen(true);
+    }
+  };
+
+  const handleStatusCard = async () => {
+    if (!event) return;
+    setMakingCard(true);
+    try {
+      const mine = event.hostUserId === user?.id;
+      const going = event.myStatus === "going";
+      const place = [event.venueName, event.suburb, event.city].filter(Boolean).join(" · ");
+      const goingCount = event.resonance?.goingCount ?? 0;
+      const url = eventShareUrl("utm_source=status&utm_content=event");
+      const outcome = await shareStatusCard(
+        {
+          eyebrow: mine ? "I'm hosting" : going ? "I'm going" : "Who's coming?",
+          title: event.title,
+          lines: [
+            `${formatFullDate(event.startsAt)} · ${formatTime(event.startsAt)}`,
+            ...(place ? [place] : []),
+            ...(goingCount > 0 ? [`${goingCount} going so far`] : []),
+          ],
+          footer: "Save a seat on Destira",
+          imageUrl: event.coverImageUrl,
+        },
+        `${mine ? "I'm hosting" : going ? "I'm going to" : "Come to"} "${event.title}". Save a seat: ${url}`,
+        "destira-event.png",
+      );
+      if (outcome !== "cancelled") logShare("event", "status_card", event.id);
+      if (outcome === "downloaded") {
+        toast({ title: "Card saved", description: "Post it as your Status. The link is copied for the caption." });
+      }
+    } catch {
+      toast({ title: "Couldn't make the card", variant: "destructive" });
+    } finally {
+      setMakingCard(false);
     }
   };
 
@@ -519,6 +569,16 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                 >
                   <Share2 className="w-3.5 h-3.5" /> Share
                 </button>
+                {event.status === "published" && (
+                  <button
+                    onClick={handleStatusCard}
+                    disabled={makingCard}
+                    className="inline-flex items-center gap-1.5 text-[12.5px] text-vf-faint hover:text-vf-text transition-colors disabled:opacity-60"
+                    data-testid="button-status-card-event"
+                  >
+                    {makingCard ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />} Post to Status
+                  </button>
+                )}
                 {!isHost && (
                   <button
                     onClick={() => setReportOpen(true)}
