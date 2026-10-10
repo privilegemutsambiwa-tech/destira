@@ -31,9 +31,9 @@ export interface ResonanceRead {
 const FALLBACK_AXES = ["Values", "Pace", "Openness", "Independence"];
 const SUMMARIES = [
   "Close on values, but you two move through life at very different speeds.",
-  "Easy to talk to, harder to pin down — she keeps her cards close.",
+  "Easy to talk to, harder to pin down — they keep their cards close.",
   "A lot of overlap in how you spend a weekend. Less in what you want long-term.",
-  "Warm and open. The read is thinner than usual because her profile is still light.",
+  "Warm and open. The read is thinner than usual because their profile is still light.",
   "You'd get on. Whether it goes anywhere is a different question.",
 ];
 

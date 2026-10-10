@@ -368,26 +368,21 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
           )}
         </div>
 
-        {/* This cluster overlaps the cover photo's bottom edge (the negative
-            margin above) only when there IS a cover — its scrim stays
-            fixed-dark regardless of theme, so name/age/meta stay fixed light
-            to match. With no cover there's no overlap and no dark scrim, so
-            this falls through to the theme-aware colors below instead. */}
+        {/* Only the portrait overlaps the cover (the negative margin above);
+            this cluster always lands below the cover's bottom edge — under
+            the portrait on phones, bottom-aligned beside it on desktop — so
+            it sits on the page ground and uses theme colors. (Forcing light
+            text here when a cover existed made the name unreadable in light
+            mode.) */}
         <div className="mt-3 lg:mt-0 lg:pb-2 min-w-0">
           {meta && (
-            <div
-              className={`${EYEBROW} mb-1.5`}
-              style={hasCover ? { color: "rgba(245,240,234,0.75)" } : undefined}
-            >
+            <div className={`${EYEBROW} mb-1.5`}>
               {meta}
             </div>
           )}
-          <h1
-            className="font-serif font-normal leading-none tracking-[-0.02em] text-[clamp(30px,6vw,44px)]"
-            style={hasCover ? { color: "#F5F0EA" } : { color: "var(--vf-text)" }}
-          >
+          <h1 className="font-serif font-normal leading-none tracking-[-0.02em] text-[clamp(30px,6vw,44px)] text-vf-text">
             {name}
-            {profile.age ? <span style={hasCover ? { color: "#F5F0EA" } : undefined}>, {profile.age}</span> : null}
+            {profile.age ? <span>, {profile.age}</span> : null}
           </h1>
           {preview ? (
             <div className="mt-3.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">

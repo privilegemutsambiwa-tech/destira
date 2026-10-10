@@ -97,7 +97,7 @@ export default function Onboarding() {
         isPublic,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
-      setLocation("/plans?intro=1");
+      setLocation("/meet-your-twin");
     } catch (e: any) {
       toast({ title: e?.message || "Couldn't finish", variant: "destructive" });
     }

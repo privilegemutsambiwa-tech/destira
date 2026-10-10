@@ -29,6 +29,7 @@ const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const Signup = lazy(() => import("@/pages/Signup"));
 const AuthCallback = lazy(() => import("@/pages/AuthCallback"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
+const MeetYourTwin = lazy(() => import("@/pages/MeetYourTwin"));
 const Profile = lazy(() => import("@/pages/Profile"));
 const ProfileView = lazy(() => import("@/pages/ProfileView"));
 const Matches = lazy(() => import("@/pages/Matches"));
@@ -184,6 +185,9 @@ function Router() {
       </Route>
       <Route path="/onboarding">
         <ProtectedRoute component={Onboarding} />
+      </Route>
+      <Route path="/meet-your-twin">
+        <ProtectedRoute component={MeetYourTwin} />
       </Route>
       <Route path="/profile">
         <ProtectedRoute component={Profile} />

@@ -28,6 +28,7 @@ import type { TwinProfileStructured } from "@shared/schema";
 import * as eventsService from "./events";
 import * as officialEvents from "./official-events";
 import { registerGrowthRoutes } from "./growth-routes";
+import { getDailyPicks } from "./daily-picks";
 import * as eventsFeed from "./events-feed";
 import * as twinEventAlerts from "./services/twin-event-alerts";
 import * as groupGames from "./group-games";
@@ -1783,6 +1784,58 @@ Only include structured_updates fields if the conversation clearly reveals them.
     }
   }
 
+  // "Meet your twin", right after onboarding: the member's own twin answering
+  // two questions people commonly ask, built with the exact prompt and
+  // disclosure filters a real interview uses — so what they see here is what
+  // others will get, not a mock-up. Plus one suggested person to try it on.
+  app.post("/api/twin/preview", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    if (!checkAIRateLimit(userId)) return res.status(429).json({ message: "Too many requests. Please wait a moment." });
+    try {
+      const me = await storage.getProfile(userId);
+      if (!me) return res.status(404).json({ message: "Profile not found" });
+      const first = (me.displayName || "you").split(/\s+/)[0];
+      const questions = [
+        `What's ${first} like on a free weekend?`,
+        // Not "what are they looking for" — relationship goals sit behind a
+        // disclosure category that's closed by default, so a brand-new
+        // member's first look at their twin would just be a refusal.
+        `What would ${first}'s friends say ${first} is like?`,
+      ];
+      const systemPrompt = await buildInterviewSystemPrompt(me);
+      const answers = await Promise.all(
+        questions.map(async (q) => {
+          try {
+            const completion = await completeText([{ role: "system", content: systemPrompt }, { role: "user", content: q }], { maxTokens: 300 });
+            const a = await finalizeInterviewReply(completion.text || "", me, q);
+            logLlmCall({ callType: "twin_preview", userId, usageMetadata: completion.usage, fallbackInputText: q, fallbackOutputText: a }).catch(() => {});
+            const answer = a.trim() || null;
+            // The disclosure layer swapped the reply for the refusal line —
+            // flagged so the screen can explain it instead of showing a bare
+            // "That's X's to tell you" as someone's first look at their twin.
+            return { question: q, answer, withheld: answer === disclosureRefusal(first) };
+          } catch {
+            return { question: q, answer: null, withheld: false };
+          }
+        }),
+      );
+
+      let suggestion: { userId: string; displayName: string; photoUrl: string | null; reason: string | null } | null = null;
+      try {
+        const picks = await getDailyPicks(userId);
+        const open = picks.picks.find((p) => p.status === "open") ?? picks.picks[0];
+        if (open) suggestion = { userId: open.userId, displayName: open.displayName, photoUrl: open.photoUrl, reason: open.reasons[0] ?? null };
+      } catch {
+        /* the suggestion is optional */
+      }
+      res.json({ answers, suggestion });
+    } catch (e) {
+      console.error("Twin preview error:", e);
+      res.status(500).json({ message: "Couldn't reach your twin right now" });
+    }
+  });
+
   app.post("/api/interviews/:id/chat", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -1792,6 +1845,10 @@ Only include structured_updates fields if the conversation clearly reveals them.
 
     const interview = await storage.getInterview(interviewId);
     if (!interview) return res.status(404).json({ message: "Interview not found" });
+    // Only the person who opened the interview talks to the twin in it —
+    // without this, anyone signed in could post into (and append to the
+    // stored transcript of) someone else's interview by guessing its id.
+    if (interview.requesterId !== userId) return res.sendStatus(403);
 
     const targetProfile = await storage.getProfile(interview.targetId);
     if (!targetProfile) return res.status(404).json({ message: "Target profile not found" });
