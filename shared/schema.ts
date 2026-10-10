@@ -1595,6 +1595,17 @@ export const firstDayRewards = pgTable("first_day_rewards", {
   claimedAt: timestamp("claimed_at").defaultNow(),
 });
 
+// "Tonight's three": one row per member per Harare day, written the first
+// time that day's picks are asked for (or by the 19:00 push sweep), so the
+// three never reshuffle after the member starts acting on them.
+export const dailyPicks = pgTable("daily_picks", {
+  userId: varchar("user_id").notNull().references(() => users.id),
+  pickDate: date("pick_date").notNull(),
+  picks: jsonb("picks").$type<{ userId: string; reasons: string[] }[]>().notNull(),
+  notifiedAt: timestamp("notified_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [uniqueIndex("daily_picks_user_date_idx").on(t.userId, t.pickDate)]);
+
 export const emailLog = pgTable("email_log", {
   id: serial("id").primaryKey(),
   type: text("type").notNull(),

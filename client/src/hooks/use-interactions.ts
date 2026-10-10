@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { requestPushNudge } from "@/lib/engagement-prompts";
 
 export function useIncomingLikes() {
   return useQuery({
@@ -89,7 +90,12 @@ export function useCreateMatch() {
       }
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/matches"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/matches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/likes/outgoing"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/likes/incoming"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-picks"] });
+    },
   });
 }
 
@@ -505,6 +511,7 @@ export function useJoinGroup() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      requestPushNudge("lounge");
     },
   });
 }

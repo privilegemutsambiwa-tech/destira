@@ -2,6 +2,9 @@
 import { LayoutShell } from "@/components/layout-shell";
 import { FirstDayCard } from "@/components/first-day-card";
 import { MatchCelebration } from "@/components/match-celebration";
+import { TonightsThree } from "@/components/tonights-three";
+import { InstallCard } from "@/components/install-card";
+import { requestPushNudge } from "@/lib/engagement-prompts";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2 } from "lucide-react";
@@ -790,6 +793,7 @@ export default function Discover() {
             <ScopePill active={filter === "nearby"} onToggle={() => setFilter(filter === "nearby" ? "all" : "nearby")} />
           </div>
           <FirstDayCard />
+          <TonightsThree />
           <StoriesCarousel />
           <div className="text-center py-20 px-6 rounded-[22px] border border-vf-line bg-vf-surface">
             <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 bg-vf-mint/10">
@@ -928,8 +932,8 @@ export default function Discover() {
       // invalidating it, a like that lands exactly on the limit wouldn't lock
       // the deck until the gate's own 60s staleTime happened to expire.
       qc.invalidateQueries({ queryKey: ["/api/gate", "daily_likes"] });
+      requestPushNudge("like");
       if (result?.mutual) {
-        qc.invalidateQueries({ queryKey: ["/api/likes/incoming"] });
         setCelebrating({
           matchId: result.id,
           otherUserId: targetProfile.userId,
@@ -996,6 +1000,8 @@ export default function Discover() {
         </div>
 
         <FirstDayCard />
+        <TonightsThree />
+        <InstallCard />
         <ReadinessStrip />
         <DisclosureIntroStrip />
         <ProfileCompletionStrip />

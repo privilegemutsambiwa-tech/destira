@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { requestPushNudge } from "@/lib/engagement-prompts";
 
 export type SeatModel = "open" | "capped" | "curated";
 export type AttendeeStatus = "going" | "waitlisted" | "requested" | "declined" | "cancelled";
@@ -511,6 +512,7 @@ export function useAttendEvent() {
       return { prevList, prevDetail };
     },
     onSuccess: (result, { eventId }) => {
+      requestPushNudge("rsvp");
       const patch = { myStatus: result.status, myWaitlistPosition: result.waitlistPosition };
       queryClient.setQueryData<EventItem[] | undefined>(["/api/events"], (old) =>
         old?.map((e) => (e.id === eventId ? { ...e, ...patch } : e))

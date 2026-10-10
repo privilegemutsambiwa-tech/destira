@@ -15,6 +15,7 @@ import {
   useOutgoingLikes,
   useIncomingLikes,
   useStartInterview,
+  useCreateMatch,
   useUnmatch,
   useTwinTalkSummary,
   UpgradeRequiredError,
@@ -24,6 +25,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { resonanceRead, vouches, overlap, distanceKm } from "@/lib/profile-derived";
 import { PhotoLightbox } from "@/components/photo-lightbox";
 import { withFrom } from "@/lib/from-route";
+import { MatchCelebration } from "@/components/match-celebration";
+import { requestPushNudge } from "@/lib/engagement-prompts";
 
 /** Small mono "Edit" affordance for an editable region in the preview. Quiet
  *  by default (visible-but-unobtrusive on touch, no hover to reveal it),
@@ -93,6 +96,8 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const { data: transcriptGate } = useGate("read_transcript");
   const { data: twinTalk } = useTwinTalkSummary(userId);
   const paywall = usePaywall();
+  const createMatch = useCreateMatch();
+  const [celebrating, setCelebrating] = useState<{ matchId: number } | null>(null);
   const startInterview = useStartInterview();
   const unmatch = useUnmatch();
 
@@ -192,6 +197,24 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
           } else {
             toast({ title: "Couldn't start that", description: err?.message, variant: "destructive" });
           }
+        },
+      }),
+    );
+
+  // Liking from a full profile (opened from tonight's three, a lounge, a
+  // story…). If they'd already liked you, the server makes it a match.
+  const like = () =>
+    paywall.guard("daily_likes", () =>
+      createMatch.mutate(userId, {
+        onSuccess: (result: any) => {
+          queryClient.invalidateQueries({ queryKey: ["/api/gate", "daily_likes"] });
+          requestPushNudge("like");
+          if (result?.mutual) setCelebrating({ matchId: result.id });
+          else toast({ title: "Liked!", description: `${name} will be notified.` });
+        },
+        onError: (err: any) => {
+          if (err?.message?.includes("upgradeRequired")) paywall.guard("daily_likes", () => {});
+          else toast({ title: "Could not like", description: "Something went wrong. Please try again.", variant: "destructive" });
         },
       }),
     );
@@ -372,6 +395,17 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
             </div>
           ) : (
             <div className="mt-3.5 flex items-center justify-center lg:justify-start gap-4 flex-wrap">
+              {(!match || match.role === "incoming") && (
+                <button
+                  onClick={like}
+                  disabled={createMatch.isPending}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink text-[14px] font-semibold px-6 min-h-[44px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-50"
+                  data-testid="button-like-profile"
+                >
+                  {createMatch.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {match?.role === "incoming" ? "Like back" : "Like"}
+                </button>
+              )}
               <button
                 onClick={openTwin}
                 disabled={startInterview.isPending}
@@ -895,6 +929,15 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
             </div>
           </div>
         </div>
+      )}
+      {celebrating && (
+        <MatchCelebration
+          matchId={celebrating.matchId}
+          otherUserId={userId}
+          otherName={name}
+          otherPhotoUrl={portraitUrl || coverUrl}
+          onClose={() => setCelebrating(null)}
+        />
       )}
     </ViewShell>
   );

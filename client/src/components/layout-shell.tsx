@@ -13,6 +13,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { LocationPermissionModal } from "./location-permission-modal";
+import { PushNudge } from "./push-nudge";
 import { ProximityAlerts } from "./proximity-alerts";
 import { DestiraLockup } from "./brand/logo";
 import { TrialBanner } from "./trial-banner";
@@ -53,6 +54,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
   return (
     <div className="min-h-dvh bg-vf-ink">
       <LocationPermissionModal />
+      <PushNudge />
       <ProximityAlerts />
 
       {/* Mobile/tablet-portrait header — logo centered. Persists through

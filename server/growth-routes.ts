@@ -1,10 +1,11 @@
-// Routes for Phase 1 retention: the signed-out event teaser + share card,
-// the first-day checklist, member email unsubscribe, and the background
-// member-email sweep.
+// Growth/retention routes: the signed-out event teaser + share card, the
+// first-day checklist, member email unsubscribe, tonight's three, and the
+// background member-email and daily-picks sweeps.
 import type { Express, Request } from "express";
 import { getPublicEventTeaser, getOrRenderEventShareCard } from "./event-share";
 import { getFirstDayState, claimFirstDayReward, FirstDayNotDoneError } from "./first-day";
 import * as memberEmail from "./member-email";
+import { getDailyPicks, runDailyPicksPushSweep } from "./daily-picks";
 import { escapeHtml } from "./group-invite";
 
 export function registerGrowthRoutes(app: Express, getUserId: (req: Request) => string | null) {
@@ -108,6 +109,18 @@ export function registerGrowthRoutes(app: Express, getUserId: (req: Request) => 
     }
   });
 
+  // ── tonight's three ───────────────────────────────────────────────
+  app.get("/api/daily-picks", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      res.json(await getDailyPicks(userId));
+    } catch (e) {
+      console.error("Daily picks error:", e);
+      res.status(500).json({ message: "Failed to load tonight's picks" });
+    }
+  });
+
   // ── background sweep ──────────────────────────────────────────────
   const sweep = () =>
     memberEmail
@@ -118,4 +131,13 @@ export function registerGrowthRoutes(app: Express, getUserId: (req: Request) => 
       .catch((e) => console.error("[member-email] sweep failed:", e));
   setTimeout(sweep, 20_000);
   setInterval(sweep, 15 * 60 * 1000);
+
+  const picksSweep = () =>
+    runDailyPicksPushSweep()
+      .then((r) => {
+        if ("notified" in r && r.notified) console.log("[daily-picks] notified", r.notified);
+      })
+      .catch((e) => console.error("[daily-picks] sweep failed:", e));
+  setTimeout(picksSweep, 30_000);
+  setInterval(picksSweep, 10 * 60 * 1000);
 }

@@ -1303,6 +1303,14 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       await storage.incrementDailyLikes(userId);
       const match = await storage.createMatch(userId, targetId);
       res.status(201).json(match);
+      // No name — "who" stays a paid feature (see_who_asked). One tag, so a
+      // run of likes collapses into a single notification instead of a pile.
+      push.sendCategorizedPush(targetId, "matches", {
+        title: "Someone liked you",
+        body: "Like them back from Discover and it's a match.",
+        url: "/discover",
+        tag: "likes-waiting",
+      }).catch(() => {});
     } catch (e) {
       console.error("Match create error:", e);
       res.status(500).json({ message: "Failed to create match" });
