@@ -1,7 +1,8 @@
 // Referrals service. Growth that never touches matching: a qualified referral
-// gives BOTH people a free week of plan time (grantPlanDays below) and the
-// referrer five profile_view_grants (looking someone up) — never an extra
-// daily read, never placement.
+// gives BOTH people a free week of plan time (grantPlanDays below) — or, for
+// someone already on a paid plan, PAID_REWARD_VIEWS profile views instead —
+// and the referrer five profile_view_grants (looking someone up) on top.
+// Never an extra daily read, never placement.
 //
 // The reward transaction locks the pending referral row FOR UPDATE and
 // re-asserts status = 'pending' before granting, so a double-fired
@@ -10,7 +11,7 @@
 import { db } from "./db";
 import { referralCodes, referrals, profileViewGrants, subscriptions, profiles } from "@shared/schema";
 import { storage } from "./storage";
-import { and, desc, eq, gt, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, or, sql } from "drizzle-orm";
 
 // Crockford-ish: 32 glyphs, no O/0/I/1 so a code is safe to read aloud.
 const CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -19,13 +20,18 @@ const REFERRAL_REWARD_VIEWS = 5;
 const READINESS_GATE = 40; // getProfileCompletion score, 0-100
 const CAP_PER_30_DAYS = 50;
 export const REFERRAL_REWARD_DAYS = 7;
-// Free weeks a referrer can earn per 30 days. Each one needs a real friend
-// to finish onboarding, but this bounds what a farm of throwaway accounts
-// could ever mint. The invited friend's own week is never capped.
-const WEEKS_CAP_PER_30_DAYS = 8;
+// What a member on a PAID plan gets instead of the week: extending a paid
+// period would give away time they're paying for.
+export const PAID_REWARD_VIEWS = 20;
+// Rewards (a week, or the paid-plan views) a referrer can earn per 30 days.
+// Each one needs a real friend to finish onboarding, but this bounds what a
+// farm of throwaway accounts could ever mint. The invited friend's own
+// reward is never capped.
+export const REWARDS_CAP_PER_30_DAYS = 4;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Reward = "week" | "views";
 
 /** Add `days` of plan time. A running plan (trial or paid) runs that much
  *  longer at its own tier; anyone without one gets that long on Spark. */
@@ -55,6 +61,25 @@ async function grantPlanDays(tx: Tx, userId: string, days: number): Promise<void
       userId, tier: "spark", status: "active", provider: "referral", currentPeriodStart: now, currentPeriodEnd: new Date(now.getTime() + add),
     });
   }
+}
+
+/** On a plan someone actually paid for — not a trial or an invite week. */
+async function isOnPaidPlan(tx: Tx, userId: string): Promise<boolean> {
+  const [sub] = await tx
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, userId))
+    .orderBy(desc(subscriptions.createdAt))
+    .limit(1);
+  return (
+    !!sub &&
+    sub.status === "active" &&
+    sub.tier !== "free" &&
+    !!sub.currentPeriodEnd &&
+    sub.currentPeriodEnd > new Date() &&
+    sub.provider !== "trial" &&
+    sub.provider !== "referral"
+  );
 }
 
 async function firstName(userId: string): Promise<string> {
@@ -154,7 +179,7 @@ export async function rewardReferral(invitedUserId: string): Promise<void> {
     if (!row) return null; // already handled by a concurrent call
 
     const since = new Date(Date.now() - 30 * DAY_MS);
-    const [[{ n: viewGrants }], [{ n: weekGrants }]] = await Promise.all([
+    const [[{ n: viewGrants }], [{ n: bigRewards }]] = await Promise.all([
       tx
         .select({ n: sql<number>`count(*)` })
         .from(profileViewGrants)
@@ -171,26 +196,36 @@ export async function rewardReferral(invitedUserId: string): Promise<void> {
         .where(
           and(
             eq(referrals.referrerUserId, row.referrerUserId),
-            gt(referrals.referrerRewardDays, 0),
             gte(referrals.qualifiedAt, since),
+            or(gt(referrals.referrerRewardDays, 0), gte(referrals.referrerRewardViews, PAID_REWARD_VIEWS)),
           ),
         ),
     ]);
-    const referrerGetsViews = Number(viewGrants) < CAP_PER_30_DAYS;
-    const referrerGetsWeek = Number(weekGrants) < WEEKS_CAP_PER_30_DAYS;
+    const underCap = Number(bigRewards) < REWARDS_CAP_PER_30_DAYS;
+    const baseViews = Number(viewGrants) < CAP_PER_30_DAYS ? REFERRAL_REWARD_VIEWS : 0;
 
-    // The friend who joined always gets their week.
-    await grantPlanDays(tx, invitedUserId, REFERRAL_REWARD_DAYS);
-    if (referrerGetsWeek) await grantPlanDays(tx, row.referrerUserId, REFERRAL_REWARD_DAYS);
-    if (referrerGetsViews) {
+    // The friend who joined always gets theirs: a week, or views if paid.
+    const invitedPaid = await isOnPaidPlan(tx, invitedUserId);
+    const invitedReward: Reward = invitedPaid ? "views" : "week";
+    if (invitedPaid) {
+      await tx.insert(profileViewGrants).values({ userId: invitedUserId, amount: PAID_REWARD_VIEWS, reason: "referral", expiresAt: null });
+    } else {
+      await grantPlanDays(tx, invitedUserId, REFERRAL_REWARD_DAYS);
+    }
+
+    let referrerReward: Reward | "none" = "none";
+    if (underCap) referrerReward = (await isOnPaidPlan(tx, row.referrerUserId)) ? "views" : "week";
+    if (referrerReward === "week") await grantPlanDays(tx, row.referrerUserId, REFERRAL_REWARD_DAYS);
+    const referrerViews = baseViews + (referrerReward === "views" ? PAID_REWARD_VIEWS : 0);
+    if (referrerViews > 0) {
       await tx.insert(profileViewGrants).values({
         userId: row.referrerUserId,
-        amount: REFERRAL_REWARD_VIEWS,
+        amount: referrerViews,
         reason: "referral",
         expiresAt: null,
       });
     }
-    const rewarded = referrerGetsWeek || referrerGetsViews;
+    const rewarded = referrerReward !== "none" || referrerViews > 0;
     if (!rewarded) {
       console.warn(
         `[referrals] 30-day caps hit for referrer ${row.referrerUserId}; referral ${row.id} held at 'qualified', referrer not granted`,
@@ -201,11 +236,13 @@ export async function rewardReferral(invitedUserId: string): Promise<void> {
       .set({
         status: rewarded ? "rewarded" : "qualified",
         qualifiedAt: new Date(),
-        referrerRewardDays: referrerGetsWeek ? REFERRAL_REWARD_DAYS : 0,
-        invitedRewardDays: REFERRAL_REWARD_DAYS,
+        referrerRewardDays: referrerReward === "week" ? REFERRAL_REWARD_DAYS : 0,
+        referrerRewardViews: referrerViews,
+        invitedRewardDays: invitedReward === "week" ? REFERRAL_REWARD_DAYS : 0,
+        invitedRewardViews: invitedReward === "views" ? PAID_REWARD_VIEWS : 0,
       })
       .where(eq(referrals.id, row.id));
-    return { referrerUserId: row.referrerUserId, referrerGetsWeek };
+    return { referrerUserId: row.referrerUserId, referrerReward, invitedReward };
   });
   if (!outcome) return;
 
@@ -215,19 +252,20 @@ export async function rewardReferral(invitedUserId: string): Promise<void> {
     .createNotification(
       invitedUserId,
       "referral_reward",
-      "A free week, from a friend",
-      `You joined through ${inviterName}'s invite, so you both get a free week on Destira.`,
+      outcome.invitedReward === "week" ? "A free week, from a friend" : "Profile views, from a friend",
+      outcome.invitedReward === "week"
+        ? `You joined through ${inviterName}'s invite, so you get a free week on Destira.`
+        : `You joined through ${inviterName}'s invite, so you get ${PAID_REWARD_VIEWS} extra profile views.`,
     )
     .catch(() => {});
+  const referrerLine =
+    outcome.referrerReward === "week"
+      ? `${friendName} finished setting up, so you get a free week on Destira.`
+      : outcome.referrerReward === "views"
+        ? `${friendName} finished setting up, so you get ${PAID_REWARD_VIEWS} extra profile views.`
+        : `${friendName} finished setting up and got their reward. You've reached this month's limit of ${REWARDS_CAP_PER_30_DAYS} invite rewards.`;
   storage
-    .createNotification(
-      outcome.referrerUserId,
-      "referral_reward",
-      `${friendName} joined from your invite`,
-      outcome.referrerGetsWeek
-        ? `${friendName} finished setting up, so you both get a free week on Destira.`
-        : `${friendName} finished setting up and got a free week. You've reached this month's limit of free weeks from invites.`,
-    )
+    .createNotification(outcome.referrerUserId, "referral_reward", `${friendName} joined from your invite`, referrerLine)
     .catch(() => {});
 }
 
@@ -244,6 +282,8 @@ export interface ReferralSummary {
   viewsEarned: number;
   daysEarned: number;
   rewardDays: number;
+  paidRewardViews: number;
+  monthlyCap: number;
   // Friends who joined with this member's code — first name only.
   friends: { firstName: string; status: "setting_up" | "joined"; joinedAt: string | null }[];
 }
@@ -292,7 +332,16 @@ export async function getReferralSummary(userId: string): Promise<ReferralSummar
   }));
   const daysEarned = mine.reduce((sum, m) => sum + (m.days ?? 0), 0);
 
-  return { code, counts, viewsEarned: Number(earned), daysEarned, rewardDays: REFERRAL_REWARD_DAYS, friends };
+  return {
+    code,
+    counts,
+    viewsEarned: Number(earned),
+    daysEarned,
+    rewardDays: REFERRAL_REWARD_DAYS,
+    paidRewardViews: PAID_REWARD_VIEWS,
+    monthlyCap: REWARDS_CAP_PER_30_DAYS,
+    friends,
+  };
 }
 
 /** Who a code belongs to — first name only, for "Rudo invited you". */

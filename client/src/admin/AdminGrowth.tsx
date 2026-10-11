@@ -17,6 +17,7 @@ interface GrowthData {
     joined: number;
     finishedSetup: number;
     freeWeeksGiven: number;
+    profileViewsGiven: number;
     topReferrers: { userId: string; name: string; joined: number; finished: number }[];
   };
   shares: { byKind: { kind: string; format: string; count: number }[]; sharers: number; signupsFromShares: number };
@@ -179,8 +180,9 @@ export default function AdminGrowth() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <tbody>
                   <tr><td style={tdLabel}>Signed up with an invite</td><td style={td}>{data.referrals.joined}</td></tr>
-                  <tr><td style={tdLabel}>Finished setting up (both got a week)</td><td style={td}>{data.referrals.finishedSetup}</td></tr>
+                  <tr><td style={tdLabel}>Finished setting up (both rewarded)</td><td style={td}>{data.referrals.finishedSetup}</td></tr>
                   <tr><td style={tdLabel}>Free weeks given, both sides</td><td style={td}>{data.referrals.freeWeeksGiven}</td></tr>
+                  <tr><td style={tdLabel}>Profile views given (incl. paid members' rewards)</td><td style={td}>{data.referrals.profileViewsGiven}</td></tr>
                 </tbody>
               </table>
               <div style={{ ...LABEL, margin: "16px 0 6px" }}>Top inviters</div>

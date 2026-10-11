@@ -1196,7 +1196,8 @@ export default function Landing() {
             </p>
             <p className="mt-3 text-[14.5px] leading-[1.6] text-vf-muted max-w-[62ch]">
               When someone joins with your invite and finishes setting up, you each get an extra
-              week of your plan, or a week of Spark if you're on Free. It never buys you a match —
+              week of your trial, or a week of Spark if you're on Free — or 20 extra profile views
+              if you're already on a paid plan. It never buys you a match —
               your twin still does all the introducing, and that part is not for sale.
             </p>
           </Reveal>

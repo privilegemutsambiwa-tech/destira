@@ -86,16 +86,20 @@ export function registerAdminGrowthRoutes(app: Express) {
           status: referrals.status,
           referrerDays: referrals.referrerRewardDays,
           invitedDays: referrals.invitedRewardDays,
+          referrerViews: referrals.referrerRewardViews,
+          invitedViews: referrals.invitedRewardViews,
         })
         .from(referrals)
         .where(gte(referrals.createdAt, since));
       const perReferrer = new Map<string, { joined: number; finished: number }>();
       let finished = 0;
       let freeDays = 0;
+      let viewsGiven = 0;
       for (const r of refRows) {
         const done = r.status !== "pending";
         if (done) finished++;
         freeDays += (r.referrerDays ?? 0) + (r.invitedDays ?? 0);
+        viewsGiven += (r.referrerViews ?? 0) + (r.invitedViews ?? 0);
         const p = perReferrer.get(r.referrerUserId) ?? { joined: 0, finished: 0 };
         p.joined++;
         if (done) p.finished++;
@@ -144,6 +148,7 @@ export function registerAdminGrowthRoutes(app: Express) {
           joined: refRows.length,
           finishedSetup: finished,
           freeWeeksGiven: Math.round((freeDays / 7) * 10) / 10,
+          profileViewsGiven: viewsGiven,
           topReferrers,
         },
         shares: {

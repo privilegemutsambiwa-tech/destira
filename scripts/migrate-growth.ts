@@ -16,6 +16,8 @@ async function main() {
   await run(`
     ALTER TABLE referrals ADD COLUMN IF NOT EXISTS referrer_reward_days integer NOT NULL DEFAULT 0;
     ALTER TABLE referrals ADD COLUMN IF NOT EXISTS invited_reward_days integer NOT NULL DEFAULT 0;
+    ALTER TABLE referrals ADD COLUMN IF NOT EXISTS referrer_reward_views integer NOT NULL DEFAULT 0;
+    ALTER TABLE referrals ADD COLUMN IF NOT EXISTS invited_reward_views integer NOT NULL DEFAULT 0;
     CREATE TABLE IF NOT EXISTS signup_sources (
       user_id varchar PRIMARY KEY REFERENCES users(id),
       source text NOT NULL,

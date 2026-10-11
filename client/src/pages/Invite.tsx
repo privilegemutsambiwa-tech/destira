@@ -14,8 +14,11 @@ interface ReferralSummary {
   code: string;
   url: string;
   counts: { pending: number; qualified: number; rewarded: number };
+  viewsEarned: number;
   daysEarned: number;
   rewardDays: number;
+  paidRewardViews: number;
+  monthlyCap: number;
   friends: { firstName: string; status: "setting_up" | "joined"; joinedAt: string | null }[];
 }
 
@@ -90,7 +93,8 @@ export default function Invite() {
           </h1>
           <p className="text-[14.5px] text-vf-muted leading-[1.6] mt-3">
             When someone joins with your link and finishes setting up, you each get an extra week of your
-            plan, or a week of Spark if you're on Free. It never buys a match.
+            trial, or a week of Spark if you're on Free. On a paid plan you get{" "}
+            {data?.paidRewardViews ?? 20} extra profile views instead. It never buys a match.
           </p>
         </div>
 
@@ -114,6 +118,12 @@ export default function Invite() {
                 <div className="text-[12.5px] text-vf-muted mt-1.5">{weeks === 1 ? "free week earned" : "free weeks earned"}</div>
               </div>
             </div>
+
+            {data.viewsEarned > 0 && (
+              <p className="text-[12.5px] text-vf-muted -mt-3" data-testid="text-views-earned">
+                Plus {data.viewsEarned} profile views earned from invites.
+              </p>
+            )}
 
             <div className="flex flex-col gap-2.5">
               <button
@@ -165,8 +175,8 @@ export default function Invite() {
             )}
 
             <p className="text-[12px] text-vf-faint leading-[1.55]">
-              Up to 8 free weeks a month from invites. Your friend's week only starts once they've finished
-              setting up their twin.
+              Up to {data.monthlyCap} invite rewards a month. Your friend's reward only arrives once they've
+              finished setting up their twin.
             </p>
           </>
         )}

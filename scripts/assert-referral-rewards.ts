@@ -4,7 +4,7 @@
 //   npx tsx --env-file=.env.dev scripts/assert-referral-rewards.ts
 //
 // Covers how the week lands for each kind of plan, that a double-fire never
-// double-grants, the referrer's monthly cap, the summary the Invite page
+// double-grants, the referrer's monthly cap, paid members getting views, the summary the Invite page
 // reads, and signup attribution from the vf_ref / vf_src cookies.
 import { db } from "../server/db";
 import { users } from "../shared/models/auth";
@@ -40,7 +40,11 @@ async function cleanup() {
   await db.delete(users).where(inArray(users.id, ids));
 }
 
-async function member(id: string, name: string, plan: { tier: string; endsIn: number | null; status?: string } | null) {
+async function member(
+  id: string,
+  name: string,
+  plan: { tier: string; endsIn: number | null; status?: string; provider?: string } | null,
+) {
   await db.insert(users).values({ id, email: `${id}@local.test` });
   await db.insert(profiles).values({ userId: id, displayName: name });
   if (plan) {
@@ -49,7 +53,7 @@ async function member(id: string, name: string, plan: { tier: string; endsIn: nu
       userId: id,
       tier: plan.tier,
       status: plan.status ?? "active",
-      provider: "trial",
+      provider: plan.provider ?? "trial",
       currentPeriodStart: new Date(now - 10 * DAY),
       currentPeriodEnd: plan.endsIn == null ? null : new Date(now + plan.endsIn * DAY),
     });
@@ -97,24 +101,45 @@ async function main() {
   check("lapsed referrer: Spark, active, ends in 7 days", c.tier === "spark" && c.status === "active" && near(c.currentPeriodEnd, now + 7 * DAY));
   check("friend with no plan row: Spark for 7 days", !!d && d.tier === "spark" && near(d.currentPeriodEnd, now + 7 * DAY));
 
-  // ── referrer cap: 8 weeks a month, the friend still gets theirs ──
+  // ── referrer cap: 4 rewards a month, the friend still gets theirs ──
   await member("test-gr-cap", "Cap", { tier: "flame", endsIn: 5 });
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 5; i++) {
     const id = `test-gr-f${i}`;
     await member(id, `Friend${i}`, { tier: "flame", endsIn: 30 });
     await invite("test-gr-cap", id);
     await referralsService.rewardReferral(id);
   }
   const cap = await subOf("test-gr-cap");
-  check("capped referrer got exactly 8 weeks", near(cap.currentPeriodEnd, now + (5 + 56) * DAY));
-  const [ninth] = await db.select().from(referrals).where(eq(referrals.invitedUserId, "test-gr-f8"));
-  check("9th friend still gets their week", ninth.invitedRewardDays === 7 && near((await subOf("test-gr-f8")).currentPeriodEnd, now + 37 * DAY));
-  check("9th referral: referrer gets no week, still rewarded (views)", ninth.referrerRewardDays === 0 && ninth.status === "rewarded");
+  check("capped referrer got exactly 4 weeks", near(cap.currentPeriodEnd, now + (5 + 28) * DAY));
+  const [fifth] = await db.select().from(referrals).where(eq(referrals.invitedUserId, "test-gr-f4"));
+  check("5th friend still gets their week", fifth.invitedRewardDays === 7 && near((await subOf("test-gr-f4")).currentPeriodEnd, now + 37 * DAY));
+  check("5th referral: referrer gets no week, base views only", fifth.referrerRewardDays === 0 && fifth.referrerRewardViews === 5 && fifth.status === "rewarded");
+
+  // ── paid referrer: views instead of a week, paid period untouched ──
+  await member("test-gr-paid", "Pat", { tier: "flame", endsIn: 20, provider: "ecocash" });
+  await member("test-gr-p1", "Pia", { tier: "flame", endsIn: 30 });
+  await invite("test-gr-paid", "test-gr-p1");
+  await referralsService.rewardReferral("test-gr-p1");
+  const [paidRow] = await db.select().from(referrals).where(eq(referrals.invitedUserId, "test-gr-p1"));
+  check("paid referrer: paid period not extended", near((await subOf("test-gr-paid")).currentPeriodEnd, now + 20 * DAY));
+  check("paid referrer: 5 base + 20 views, no days", paidRow.referrerRewardDays === 0 && paidRow.referrerRewardViews === 25);
+  const paidGrants = await db.select().from(profileViewGrants).where(eq(profileViewGrants.userId, "test-gr-paid"));
+  check("paid referrer: 25 views actually granted", paidGrants.reduce((n, g) => n + g.amount, 0) === 25);
+  check("their trial friend still gets a week", paidRow.invitedRewardDays === 7 && near((await subOf("test-gr-p1")).currentPeriodEnd, now + 37 * DAY));
+
+  // ── paid friend: views instead of a week ──
+  await member("test-gr-p2", "Pip", { tier: "spark", endsIn: 12, provider: "ecocash" });
+  await invite("test-gr-a", "test-gr-p2");
+  await referralsService.rewardReferral("test-gr-p2");
+  const [paidFriend] = await db.select().from(referrals).where(eq(referrals.invitedUserId, "test-gr-p2"));
+  check("paid friend: 20 views, no days, period untouched", paidFriend.invitedRewardViews === 20 && paidFriend.invitedRewardDays === 0 && near((await subOf("test-gr-p2")).currentPeriodEnd, now + 12 * DAY));
+  check("trial referrer of a paid friend still gets a week", near((await subOf("test-gr-a")).currentPeriodEnd, now + 24 * DAY));
 
   // ── summary the Invite page reads ──
   const summary = await referralsService.getReferralSummary("test-gr-a");
-  check("summary lists the friend by first name", summary.friends.length === 1 && summary.friends[0].firstName === "Ben" && summary.friends[0].status === "joined");
-  check("summary counts 7 days earned", summary.daysEarned === 7 && summary.rewardDays === 7);
+  check("summary lists friends by first name", summary.friends.length === 2 && summary.friends.some((f) => f.firstName === "Ben" && f.status === "joined"));
+  check("summary counts 14 days earned (two friends)", summary.daysEarned === 14 && summary.rewardDays === 7);
+  check("summary states the paid reward and cap", summary.paidRewardViews === 20 && summary.monthlyCap === 4);
   check("inviter lookup gives first name only", (await referralsService.getInviterFirstName(summary.code)) === "Ana");
   check("inviter lookup rejects junk", (await referralsService.getInviterFirstName("nope")) === null);
 

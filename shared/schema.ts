@@ -675,11 +675,14 @@ export const referrals = pgTable(
     status: text("status").notNull().default("pending"),
     createdAt: timestamp("created_at").defaultNow(),
     qualifiedAt: timestamp("qualified_at"),
-    // Days of plan time each side got when the invite qualified ("you both
-    // get a free week"). 0 = none: a referral rewarded before the free week
-    // existed, or the referrer was over the monthly cap.
+    // What each side got when the invite qualified: a free week of plan time,
+    // or (on a paid plan) profile views instead. The referrer's views also
+    // include the base five every invite earns. 0 days = no week: a paid
+    // member, a referral from before the free week, or over the monthly cap.
     referrerRewardDays: integer("referrer_reward_days").notNull().default(0),
     invitedRewardDays: integer("invited_reward_days").notNull().default(0),
+    referrerRewardViews: integer("referrer_reward_views").notNull().default(0),
+    invitedRewardViews: integer("invited_reward_views").notNull().default(0),
   },
   (t) => ({
     invitedIdx: uniqueIndex("referrals_invited_user_idx").on(t.invitedUserId),
