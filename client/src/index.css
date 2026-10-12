@@ -30,6 +30,7 @@
   --vf-ember: 11 100% 65%;         /* #FF6B4A */
   --vf-ember-soft: #FF7A57;
   --vf-mint: 160 60% 73%;          /* #8FE3C7 — AI-twin layer, never anything else */
+  --vf-lens: #F5F0EA;              /* the logo's ring overlap: cream on dark ground */
   --vf-mint-vivid: #8FE3C7;        /* decorative-only (the twin orb, the dial's glow) — kept vivid regardless of theme; --vf-mint itself darkens in light mode for text/border contrast and would flatten into the orb's own gradient endpoint otherwise */
   --vf-gold: 43 74% 66%;           /* #E9C46A — Ember premium only */
   --vf-warn: #FFC46B;
@@ -54,6 +55,7 @@
     --vf-ember: 11 55% 45%;        /* #B34B34 — darker/lower-lightness, same hue; works as text (5:1 on ground) and as a filled-button background under white text (5.3:1) */
     --vf-ember-soft: #C25A3D;
     --vf-mint: 160 23% 36%;        /* #487264 — 5.1:1 on ground; the pale mint-tint fills elsewhere come for free from this at low opacity (bg-vf-mint/10 etc), not a separate token */
+    --vf-lens: #1A1418;            /* logo overlap: ink on light ground, as on the app icon */
     --vf-mint-vivid: #5FBFA0;
     --vf-gold: 43 38% 36%;         /* #806C3A — 4.8:1 on ground */
     --vf-warn: #8C6C3B;
@@ -77,6 +79,7 @@
   --vf-ember: 11 55% 45%;
   --vf-ember-soft: #C25A3D;
   --vf-mint: 160 23% 36%;
+  --vf-lens: #1A1418;
   --vf-mint-vivid: #5FBFA0;
   --vf-gold: 43 38% 36%;
   --vf-warn: #8C6C3B;

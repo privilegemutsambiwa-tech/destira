@@ -10,6 +10,7 @@ import { existsSync, readFileSync, mkdirSync } from "fs";
 import path from "path";
 import crypto from "crypto";
 import satori from "satori";
+import { BRAND_ICON_DATA_URI, SHARE_CARD_DESIGN } from "./brand-mark";
 import sharp from "sharp";
 import type { Request } from "express";
 import { and, eq, count } from "drizzle-orm";
@@ -102,7 +103,7 @@ function cardHash(t: PublicEventTeaser): string {
   // Going count is bucketed so the card refreshes as momentum builds without
   // re-rendering on every single RSVP.
   const bucket = t.goingCount < 10 ? t.goingCount : Math.floor(t.goingCount / 5) * 5;
-  const basis = `${t.id}:${t.title}:${t.startsAt}:${t.coverImageUrl ?? ""}:${t.suburb ?? ""}:${bucket}:${t.status}`;
+  const basis = `${SHARE_CARD_DESIGN}:${t.id}:${t.title}:${t.startsAt}:${t.coverImageUrl ?? ""}:${t.suburb ?? ""}:${bucket}:${t.status}`;
   return crypto.createHash("sha1").update(basis).digest("hex").slice(0, 16);
 }
 
@@ -141,12 +142,14 @@ async function renderEventCardSvg(t: PublicEventTeaser): Promise<string> {
             ],
           },
         },
-        // brand mark
+        // Destira mark, top-right corner: the app icon
         {
-          type: "div",
+          type: "img",
           props: {
-            style: { position: "absolute", top: 48, right: 56, width: 56, height: 56, borderRadius: 14, background: "#FF6B4A", display: "flex", alignItems: "center", justifyContent: "center" },
-            children: [{ type: "div", props: { style: { width: 22, height: 22, borderRadius: "50%", background: "#FFF6EE", display: "flex" } } }],
+            src: BRAND_ICON_DATA_URI,
+            width: 56,
+            height: 56,
+            style: { position: "absolute", top: 48, right: 56, width: 56, height: 56 },
           },
         },
         {
@@ -228,6 +231,7 @@ export async function withEventMeta(url: string, req: Request, page: string): Pr
     ].join("\n    ");
     return page
       .replace(/<title>.*?<\/title>/, `<title>${escapeHtml(title)}</title>`)
+      .replace(/\s*<meta[^>]*data-og-default[^>]*>/g, "")
       .replace("</head>", `    ${tags}\n  </head>`);
   } catch (e) {
     console.error("Event OG render error:", e);

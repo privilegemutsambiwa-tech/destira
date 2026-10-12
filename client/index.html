@@ -50,11 +50,31 @@
         }
       })();
     </script>
+    <!-- Icons: the two rings on a cream tile (scripts/generate-brand-assets.mjs).
+         Google's results use a 48px multiple, so 48/96/192 are all offered. -->
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
     <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg" />
     <link rel="icon" type="image/png" sizes="16x16" href="/brand/destira-favicon-16.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/brand/destira-favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/brand/destira-favicon-48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/brand/destira-favicon-96.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/brand/destira-icon-192.png" />
     <link rel="apple-touch-icon" href="/brand/destira-icon-180.png" />
+    <!-- Link previews (WhatsApp, Facebook, X) for any page without its own.
+         Event and group links replace these server-side (data-og-default). -->
+    <meta name="description" content="Personality-first dating. Your AI twin meets theirs first and does the awkward part, so you only talk to people worth talking to." data-og-default />
+    <meta property="og:site_name" content="Destira" data-og-default />
+    <meta property="og:type" content="website" data-og-default />
+    <meta property="og:title" content="Destira: come and find your person" data-og-default />
+    <meta property="og:description" content="Your AI twin meets theirs first and does the awkward part. Free to join." data-og-default />
+    <meta property="og:image" content="https://destira.date/brand/og-default.png" data-og-default />
+    <meta property="og:image:width" content="1200" data-og-default />
+    <meta property="og:image:height" content="630" data-og-default />
+    <meta name="twitter:card" content="summary_large_image" data-og-default />
+    <meta name="twitter:image" content="https://destira.date/brand/og-default.png" data-og-default />
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"Organization","name":"Destira","url":"https://destira.date","logo":"https://destira.date/brand/destira-icon-512.png"}
+    </script>
     <link rel="manifest" href="/manifest.webmanifest" />
     <!-- The three fonts actually used (Instrument Serif, DM Sans, DM Mono) load
          via index.css's own @import — these preconnects just warm the DNS/TLS

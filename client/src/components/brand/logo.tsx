@@ -2,14 +2,17 @@ import { useId } from "react";
 
 // The Overlap. Two rings — ember (#FF6B4A, the human) in front, mint
 // (#8FE3C7, the AI twin) behind — tilted 15°, with the lens where they
-// intersect lit in cream. The lens is the resonance. Geometry is transcribed
+// intersect filled in: cream on a dark ground, ink on a light one (--vf-lens),
+// so it always reads. The lens is the resonance. Geometry is transcribed
 // verbatim from the brand spec / docs/redesign-reference; do not "clean up"
 // the viewBox or the circle coordinates.
 
 const EMBER = "#FF6B4A";
 const MINT = "#8FE3C7";
 const CREAM = "#F5F0EA";
-const TILE_LENS = "#FFF6EE";
+// Matches the app icon (scripts/generate-brand-assets.mjs): cream tile, ink lens.
+const TILE_BG = "#F7F1EA";
+const TILE_LENS = "#1A1418";
 
 /** Exclusion zone around the lockup = one ring radius = 0.315 × mark width. */
 export const CLEARSPACE = 0.315;
@@ -34,7 +37,7 @@ export type MarkVariant = "colour" | "mono" | "tile";
 interface DestiraMarkProps {
   /** Rendered width in px. Height follows the artwork ratio. */
   size: number;
-  /** colour = ember+mint+cream · mono = currentColor throughout · tile = lens on an ember square (use <28px). */
+  /** colour = ember+mint+lens · mono = currentColor throughout · tile = the app icon, rings on cream (use <28px). */
   variant?: MarkVariant;
   /** aria-hidden the mark when it sits beside the wordmark so the lockup announces once. */
   decorative?: boolean;
@@ -67,15 +70,15 @@ export function DestiraMark({ size, variant = "colour", decorative = false, clas
       >
         <defs>
           <clipPath id={clipId}>
-            <circle cx="96" cy="60" r="34" />
+            <circle cx="38.87" cy="32" r="14.6" />
           </clipPath>
         </defs>
-        <rect x="0" y="0" width="64" height="64" rx="14" fill={EMBER} />
-        <g transform="translate(-34.2 -17.6) scale(0.827)">
-          <g transform="rotate(-15 80 60)">
-            <g clipPath={`url(#${clipId})`}>
-              <circle cx="64" cy="60" r="34" fill={TILE_LENS} />
-            </g>
+        <rect x="0" y="0" width="64" height="64" rx="14" fill={TILE_BG} />
+        <g transform="rotate(-15 32 32)">
+          <circle cx="38.87" cy="32" r="14.6" fill="none" stroke={MINT} strokeWidth="6.2" />
+          <circle cx="25.13" cy="32" r="14.6" fill="none" stroke={EMBER} strokeWidth="6.2" />
+          <g clipPath={`url(#${clipId})`}>
+            <circle cx="25.13" cy="32" r="14.6" fill={TILE_LENS} />
           </g>
         </g>
       </svg>
@@ -103,7 +106,7 @@ export function DestiraMark({ size, variant = "colour", decorative = false, clas
         <circle cx="96" cy="60" r="34" fill="none" stroke={isMono ? "currentColor" : MINT} strokeWidth={stroke} />
         <circle cx="64" cy="60" r="34" fill="none" stroke={isMono ? "currentColor" : EMBER} strokeWidth={stroke} />
         <g clipPath={`url(#${clipId})`}>
-          <circle cx="64" cy="60" r="34" fill={isMono ? "currentColor" : CREAM} />
+          <circle cx="64" cy="60" r="34" fill={isMono ? "currentColor" : `var(--vf-lens, ${CREAM})`} />
         </g>
       </g>
     </svg>

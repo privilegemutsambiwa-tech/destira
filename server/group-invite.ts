@@ -6,6 +6,7 @@
 import { readFileSync, existsSync, mkdirSync } from "fs";
 import path from "path";
 import satori from "satori";
+import { BRAND_ICON_DATA_URI, SHARE_CARD_DESIGN } from "./brand-mark";
 import sharp from "sharp";
 import crypto from "crypto";
 import type { Request } from "express";
@@ -205,30 +206,14 @@ async function renderCardSvg(group: Group, memberCount: number): Promise<string>
             },
           },
         },
-        // Destira mark, top-right corner — small ember tile with the lens
+        // Destira mark, top-right corner: the app icon
         {
-          type: "div",
+          type: "img",
           props: {
-            style: {
-              position: "absolute",
-              top: 40,
-              right: 40,
-              width: 56,
-              height: 56,
-              borderRadius: 14,
-              background: "#FF6B4A",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            },
-            children: [
-              {
-                type: "div",
-                props: {
-                  style: { width: 22, height: 22, borderRadius: "50%", background: "#FFF6EE", display: "flex" },
-                },
-              },
-            ],
+            src: BRAND_ICON_DATA_URI,
+            width: 56,
+            height: 56,
+            style: { position: "absolute", top: 40, right: 40, width: 56, height: 56 },
           },
         },
         // name + member count
@@ -284,7 +269,7 @@ async function renderCardSvg(group: Group, memberCount: number): Promise<string>
 }
 
 function cacheKeyFor(group: Group): string {
-  const basis = `${group.id}:${groupHeroPhotoUrl(group) ?? ""}:${group.name}:${group.description ?? ""}`;
+  const basis = `${SHARE_CARD_DESIGN}:${group.id}:${groupHeroPhotoUrl(group) ?? ""}:${group.name}:${group.description ?? ""}`;
   return crypto.createHash("sha1").update(basis).digest("hex").slice(0, 16);
 }
 
@@ -398,5 +383,6 @@ export function renderInviteHtml(indexHtmlTemplate: string, meta: ReturnType<typ
 
   return indexHtmlTemplate
     .replace(/<title>.*?<\/title>/, `<title>${escapeHtml(meta.title)}</title>`)
-    .replace("</head>", `    ${tags}\n  </head>`);
+    .replace(/\s*<meta[^>]*data-og-default[^>]*>/g, "")
+      .replace("</head>", `    ${tags}\n  </head>`);
 }
