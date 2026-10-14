@@ -7,6 +7,7 @@ import { getFirstDayState, claimFirstDayReward, FirstDayNotDoneError } from "./f
 import * as memberEmail from "./member-email";
 import { getDailyPicks, runDailyPicksPushSweep } from "./daily-picks";
 import { escapeHtml } from "./group-invite";
+import { getSignedUrl, keyFromUploadUrl } from "./storage/objectStorage";
 
 export function registerGrowthRoutes(app: Express, getUserId: (req: Request) => string | null) {
   // ── public event teaser (no sign-in) ──────────────────────────────
@@ -14,8 +15,13 @@ export function registerGrowthRoutes(app: Express, getUserId: (req: Request) => 
     try {
       const teaser = await getPublicEventTeaser(Number(req.params.id));
       if (!teaser) return res.status(404).json({ message: "This event isn't public" });
+      // /uploads/* is members-only, so a signed-out visitor needs a signed link
+      // to see the cover. (The share card reads the file itself, so the
+      // teaser keeps the plain path everywhere else.)
+      const key = keyFromUploadUrl(teaser.coverImageUrl);
+      const coverImageUrl = key ? await getSignedUrl(key, 24 * 60 * 60).catch(() => null) : teaser.coverImageUrl;
       res.setHeader("Cache-Control", "public, max-age=60");
-      res.json(teaser);
+      res.json({ ...teaser, coverImageUrl });
     } catch (e) {
       console.error("Public event teaser error:", e);
       res.status(500).json({ message: "Failed to load event" });
