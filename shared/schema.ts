@@ -558,6 +558,9 @@ export const storyMedia = pgTable("story_media", {
   textContent: text("text_content"),
   caption: text("caption"),
   orderIndex: integer("order_index").default(0),
+  // A story made from an event's "Post to Status": viewers get a live
+  // "See the event" panel (server/event-seats.ts) that opens it.
+  eventId: integer("event_id").references(() => events.id, { onDelete: "set null" }),
 });
 
 export const storyLikes = pgTable("story_likes", {
@@ -715,7 +718,7 @@ export const shareEvents = pgTable("share_events", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   kind: text("kind").notNull(), // event | invite
-  format: text("format").notNull(), // status_card | link
+  format: text("format").notNull(), // status_card | link | destira_story
   targetId: text("target_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });

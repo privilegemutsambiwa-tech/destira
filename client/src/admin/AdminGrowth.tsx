@@ -213,7 +213,8 @@ export default function AdminGrowth() {
             <Section title="Shares" note="Taps on a share action in this window.">
               <table style={{ width: "100%", borderCollapse: "collapse" }} data-testid="growth-shares">
                 <tbody>
-                  <tr><td style={tdLabel}>Event Status cards</td><td style={td}>{shareCount("event", "status_card")}</td></tr>
+                  <tr><td style={tdLabel}>Event Destira stories</td><td style={td}>{shareCount("event", "destira_story")}</td></tr>
+                  <tr><td style={tdLabel}>Event WhatsApp Status cards</td><td style={td}>{shareCount("event", "status_card")}</td></tr>
                   <tr><td style={tdLabel}>Event links</td><td style={td}>{shareCount("event", "link")}</td></tr>
                   <tr><td style={tdLabel}>Invite Status cards</td><td style={td}>{shareCount("invite", "status_card")}</td></tr>
                   <tr><td style={tdLabel}>Invite links / WhatsApp messages</td><td style={td}>{shareCount("invite", "link")}</td></tr>

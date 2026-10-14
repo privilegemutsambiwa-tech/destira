@@ -5,6 +5,7 @@
 // actually grants.
 import { readFileSync, existsSync, mkdirSync } from "fs";
 import path from "path";
+import { getObjectBuffer, keyFromUploadUrl } from "./storage/objectStorage";
 import satori from "satori";
 import { BRAND_ICON_DATA_URI, SHARE_CARD_DESIGN } from "./brand-mark";
 import sharp from "sharp";
@@ -119,6 +120,22 @@ export function photoDataUri(url: string): string | null {
   }
 }
 
+/** Like photoDataUri, but also finds /uploads photos kept in object storage
+ *  (production), where the server's own disk has none. Shrunk to card size
+ *  so a phone-camera original doesn't bloat the layout. Null on any miss. */
+export async function loadPhotoDataUri(url: string): Promise<string | null> {
+  const local = photoDataUri(url);
+  const key = keyFromUploadUrl(url);
+  try {
+    const buf = local ? Buffer.from(local.split(",")[1] ?? "", "base64") : key ? await getObjectBuffer(key) : null;
+    if (!buf) return null;
+    const jpg = await sharp(buf).resize({ width: 1200, withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
+    return `data:image/jpeg;base64,${jpg.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
 interface InviteResolution {
   valid: boolean;
   reason?: "invalid" | "expired";
@@ -157,7 +174,7 @@ export async function resolveInvite(token: string): Promise<InviteResolution> {
  *  already either installed or trivial to add, no headless Chrome needed. */
 async function renderCardSvg(group: Group, memberCount: number): Promise<string> {
   const photoUrl = groupHeroPhotoUrl(group);
-  const photoDataUrl = photoUrl ? photoDataUri(photoUrl) : null;
+  const photoDataUrl = photoUrl ? await loadPhotoDataUri(photoUrl) : null;
 
   const tree = {
     type: "div",

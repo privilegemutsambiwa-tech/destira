@@ -1,3 +1,6 @@
+import { readFileSync } from "fs";
+import path from "path";
+
 // The Destira app icon (two rings on a cream tile, ink lens) as an inline
 // image for server-drawn share cards (event-share.ts, group-invite.ts).
 // Same drawing as client/public/brand/favicon.svg, made by
@@ -13,6 +16,18 @@ const ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
 
 // Part of every share-card cache key: bump it when the card design or the
 // mark changes, so cached cards redraw instead of showing the old look.
-export const SHARE_CARD_DESIGN = "rings-cream-1";
+export const SHARE_CARD_DESIGN = "rings-cream-2";
 
-export const BRAND_ICON_DATA_URI = `data:image/svg+xml;base64,${Buffer.from(ICON_SVG).toString("base64")}`;
+// A PNG where the file is there (it always is in the repo and on Render):
+// an SVG nested inside the card's own SVG is the one thing some renderers
+// refuse, and a raster image never is. The SVG stays as the fallback.
+function iconDataUri(): string {
+  try {
+    const png = readFileSync(path.join(process.cwd(), "client", "public", "brand", "destira-favicon-96.png"));
+    return `data:image/png;base64,${png.toString("base64")}`;
+  } catch {
+    return `data:image/svg+xml;base64,${Buffer.from(ICON_SVG).toString("base64")}`;
+  }
+}
+
+export const BRAND_ICON_DATA_URI = iconDataUri();

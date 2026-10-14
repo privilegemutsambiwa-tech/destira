@@ -12,7 +12,10 @@ export interface StatusCard {
   lines: string[]; // up to three short supporting lines
   footer: string; // e.g. "Find me on Destira · code 7KQ2M9XP"
   imageUrl?: string | null; // optional photo for the top of the card
+  date?: { dow: string; day: string; month: string } | null; // calendar tile, top right
+  badge?: string | null; // live urgency line, e.g. "6 women's seats left"
 }
+
 
 const W = 1080;
 const H = 1920;
@@ -134,45 +137,99 @@ export async function renderStatusCard(card: StatusCard): Promise<Blob> {
   const maxW = W - left * 2;
   ctx.textBaseline = "alphabetic";
 
+  // Calendar tile, top right: the date is the first thing people check.
+  if (card.date) {
+    const tw = 190, th = 214, tx = W - 90 - tw, ty = 64;
+    ctx.fillStyle = TEXT;
+    ctx.beginPath();
+    ctx.roundRect(tx, ty, tw, th, 28);
+    ctx.fill();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#B34B34";
+    ctx.font = '500 34px "DM Mono", ui-monospace, monospace';
+    ctx.fillText(card.date.dow.toUpperCase(), tx + tw / 2, ty + 56);
+    ctx.fillStyle = INK;
+    ctx.font = '120px "Instrument Serif", Georgia, serif';
+    ctx.fillText(card.date.day, tx + tw / 2, ty + 160);
+    ctx.fillStyle = "#6B5F68";
+    ctx.font = '500 28px "DM Mono", ui-monospace, monospace';
+    ctx.fillText(card.date.month.toUpperCase(), tx + tw / 2, ty + 196);
+    ctx.textAlign = "left";
+  }
+
+  // Live badge above the eyebrow: a reason to tap now, not later.
+  if (card.badge) {
+    ctx.font = '600 38px "DM Sans", system-ui, sans-serif';
+    const bw = ctx.measureText(card.badge).width + 96;
+    const by = textTop - 132;
+    ctx.fillStyle = "rgba(245,240,234,0.14)";
+    ctx.beginPath();
+    ctx.roundRect(left, by, bw, 72, 36);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(245,240,234,0.45)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = MINT;
+    ctx.beginPath();
+    ctx.arc(left + 36, by + 36, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = TEXT;
+    ctx.textBaseline = "middle";
+    ctx.fillText(card.badge, left + 62, by + 38);
+    ctx.textBaseline = "alphabetic";
+  }
+
   ctx.fillStyle = EMBER;
   ctx.font = '500 32px "DM Mono", ui-monospace, monospace';
   ctx.fillText(card.eyebrow.toUpperCase(), left, textTop);
 
+  // Title: as big as fits in three lines (a long event name steps down a
+  // size instead of crowding the details below it).
   ctx.fillStyle = TEXT;
-  ctx.font = '124px "Instrument Serif", Georgia, serif';
-  const titleLines = wrap(ctx, card.title, maxW, 4);
-  let y = textTop + 140;
+  let titleSize = 124;
+  let titleLines: string[] = [];
+  for (const size of [124, 108, 94]) {
+    titleSize = size;
+    ctx.font = `${size}px "Instrument Serif", Georgia, serif`;
+    titleLines = wrap(ctx, card.title, maxW, 3);
+    if (!titleLines.at(-1)?.endsWith("…")) break;
+  }
+  let y = textTop + 30 + titleSize;
   for (const l of titleLines) {
     ctx.fillText(l, left, y);
-    y += 124;
+    y += titleSize;
   }
 
+  // Details stop above the footer row, whatever the title took.
+  const fy = H - 230;
   ctx.fillStyle = MUTED;
   ctx.font = '44px "DM Sans", system-ui, sans-serif';
   y += 30;
   for (const l of card.lines.slice(0, 3)) {
     for (const piece of wrap(ctx, l, maxW, 2)) {
+      if (y > fy - 50) break;
       ctx.fillText(piece, left, y);
       y += 62;
     }
   }
 
-  // Where to go, as text — a link inside a Status image can't be tapped.
-  const fy = H - 230;
-  ctx.fillStyle = MUTED;
-  ctx.font = '34px "DM Mono", ui-monospace, monospace';
-  ctx.fillText(window.location.host, left, fy - 40);
-
-  // Footer pill.
+  // Footer pill, with where to go beside it: a link inside a Status image
+  // can't be tapped, so the address is spelled out.
   ctx.font = '500 38px "DM Sans", system-ui, sans-serif';
-  const fw = Math.min(maxW, ctx.measureText(card.footer).width + 80);
+  const fw = Math.min(maxW - 280, ctx.measureText(card.footer).width + 80);
   ctx.fillStyle = EMBER;
   ctx.beginPath();
   ctx.roundRect(left, fy, fw, 100, 50);
   ctx.fill();
   ctx.fillStyle = INK;
   ctx.textBaseline = "middle";
-  ctx.fillText(card.footer, left + 40, fy + 52, maxW - 80);
+  ctx.fillText(card.footer, left + 40, fy + 52, fw - 80);
+  ctx.fillStyle = MUTED;
+  ctx.font = '32px "DM Mono", ui-monospace, monospace';
+  ctx.textAlign = "right";
+  ctx.fillText(window.location.host, W - left, fy + 52);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
 
   return new Promise((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't draw the card"))), "image/png"),
@@ -183,7 +240,11 @@ export type ShareOutcome = "shared" | "downloaded" | "cancelled";
 
 /** Render, then share as a file (phones) or download + copy the caption. */
 export async function shareStatusCard(card: StatusCard, caption: string, filename: string): Promise<ShareOutcome> {
-  const blob = await renderStatusCard(card);
+  return shareStatusBlob(await renderStatusCard(card), caption, filename);
+}
+
+/** Share an already-drawn card (so a preview and the share use one image). */
+export async function shareStatusBlob(blob: Blob, caption: string, filename: string): Promise<ShareOutcome> {
   const file = new File([blob], filename, { type: "image/png" });
   if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
     try {
@@ -211,7 +272,7 @@ export async function shareStatusCard(card: StatusCard, caption: string, filenam
 }
 
 /** Fire-and-forget log for the console's Growth page. */
-export function logShare(kind: "event" | "invite", format: "status_card" | "link", targetId?: string | number | null) {
+export function logShare(kind: "event" | "invite", format: "status_card" | "link" | "destira_story", targetId?: string | number | null) {
   fetch("/api/growth/share", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

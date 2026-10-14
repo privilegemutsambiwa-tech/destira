@@ -16,7 +16,7 @@ import type { Request } from "express";
 import { and, eq, count } from "drizzle-orm";
 import { db } from "./db";
 import { events, eventAttendees, groups, profiles, type Event } from "@shared/schema";
-import { CACHE_DIR, CARD_W, CARD_H, loadFonts, photoDataUri, publicOrigin, trimToWord, escapeHtml } from "./group-invite";
+import { CACHE_DIR, CARD_W, CARD_H, loadFonts, loadPhotoDataUri, publicOrigin, trimToWord, escapeHtml } from "./group-invite";
 
 const HARARE_UTC_OFFSET_H = 2;
 
@@ -112,7 +112,7 @@ export function eventShareCardUrl(origin: string, t: PublicEventTeaser): string 
 }
 
 async function renderEventCardSvg(t: PublicEventTeaser): Promise<string> {
-  const photo = t.coverImageUrl ? photoDataUri(t.coverImageUrl) : null;
+  const photo = t.coverImageUrl ? await loadPhotoDataUri(t.coverImageUrl) : null;
   const local = new Date(new Date(t.startsAt).getTime() + HARARE_UTC_OFFSET_H * 3_600_000);
   const dow = local.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" }).toUpperCase();
   const dayNum = String(local.getUTCDate());

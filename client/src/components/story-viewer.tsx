@@ -12,12 +12,75 @@ import { UpgradeRequiredError } from "@/hooks/use-interactions";
 import { StoryEngagersSheet } from "@/components/story-engagers-sheet";
 import { withFrom } from "@/lib/from-route";
 
+interface StoryEvent {
+  id: number;
+  title: string;
+  startsAt: string;
+  venueName: string | null;
+  suburb: string | null;
+  city: string | null;
+  status: string;
+  going: number;
+  seatsLeft: number | null;
+  womenSeatsLeft: number | null;
+  menSeatsLeft: number | null;
+}
+
 interface StoryMedia {
   id: number;
   type: string;
   url: string | null;
   textContent?: string | null;
   caption?: string | null;
+  // Set when the story was posted from an event's "Post to Status".
+  event?: StoryEvent | null;
+}
+
+/** On a story made from an event: what it is, live seats, and a way in. */
+function StoryEventPanel({ event, onOpen }: { event: StoryEvent; onOpen: () => void }) {
+  const d = new Date(event.startsAt);
+  const when = `${d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} · ${d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+  const place = event.city || event.suburb;
+  const live =
+    event.status === "cancelled"
+      ? "This event was called off"
+      : event.womenSeatsLeft != null && event.menSeatsLeft != null
+        ? event.womenSeatsLeft + event.menSeatsLeft === 0
+          ? "Full: join the waitlist"
+          : event.going === 0
+            ? `${event.womenSeatsLeft} women's · ${event.menSeatsLeft} men's seats open`
+            : `${event.going} going · ${event.womenSeatsLeft + event.menSeatsLeft} seats left`
+        : event.seatsLeft != null
+          ? `${event.going} going · ${event.seatsLeft} seats left`
+          : `${event.going} going`;
+  return (
+    <div
+      className="mb-3 flex items-center gap-3 rounded-2xl p-3"
+      style={{ background: "rgba(12,9,16,0.78)", border: "1px solid rgba(245,240,234,0.18)", backdropFilter: "blur(8px)" }}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      data-testid={`story-event-panel-${event.id}`}
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-white text-[15px] font-semibold leading-tight truncate">{event.title}</p>
+        <p className="text-[12.5px] mt-0.5 truncate" style={{ color: "rgba(245,240,234,0.72)" }}>
+          {when}{place ? ` · ${place}` : ""}
+        </p>
+        <p className="text-[12.5px] mt-1 flex items-center gap-1.5 truncate" style={{ color: "#F5F0EA" }}>
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: event.status === "cancelled" ? "#A79FB4" : "#8FE3C7" }} />
+          {live}
+        </p>
+      </div>
+      <button
+        onClick={onOpen}
+        className="shrink-0 h-10 px-4 rounded-full font-semibold text-[14px]"
+        style={{ background: "#FF6B4A", color: "#0C0910" }}
+        data-testid="button-story-see-event"
+      >
+        See the event
+      </button>
+    </div>
+  );
 }
 
 interface StoryData {
@@ -194,7 +257,8 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
 
   useEffect(() => {
     if (isPaused || !imageLoaded) return;
-    const DURATION = 5000;
+    // An event story holds twice as long: there's a panel to read and tap.
+    const DURATION = currentMedia?.event ? 10000 : 5000;
     const INTERVAL = 50;
     const increment = (INTERVAL / DURATION) * 100;
     timerRef.current = setInterval(() => {
@@ -377,6 +441,9 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
         )}
 
         <div className="absolute bottom-0 left-0 right-0 z-10 p-3 bg-gradient-to-t from-vf-scrim/80 to-transparent">
+          {currentMedia?.event && (
+            <StoryEventPanel event={currentMedia.event} onOpen={() => { onClose(); setLocation(`/events/${currentMedia.event!.id}`); }} />
+          )}
           {onInterviewTwin && (
             <button
               className="w-full flex items-center justify-center gap-2 font-semibold mb-3"
@@ -543,7 +610,8 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
 
   useEffect(() => {
     if (isPaused || !imageLoaded) return;
-    const DURATION = 5000;
+    // An event story holds twice as long: there's a panel to read and tap.
+    const DURATION = currentMedia?.event ? 10000 : 5000;
     const INTERVAL = 50;
     const increment = (INTERVAL / DURATION) * 100;
     timerRef.current = setInterval(() => {
@@ -712,6 +780,9 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
           className="absolute bottom-0 left-0 right-0 z-10 p-4 bg-gradient-to-t from-vf-scrim/80 to-transparent"
           onClick={(e) => e.stopPropagation()}
         >
+          {currentMedia?.event && (
+            <StoryEventPanel event={currentMedia.event} onOpen={() => { onClose(); setLocation(`/events/${currentMedia.event!.id}`); }} />
+          )}
           <div className="flex items-center gap-4 mb-3">
             <button
               className="flex items-center gap-1.5 text-white text-sm"

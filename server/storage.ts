@@ -21,6 +21,7 @@ import {
   type InviteRequest, type InsertInviteRequest
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
+import { getStoryEventCard, type StoryEventCard } from "./event-seats";
 import { coerceTraits, applyTraitSignals } from "./personality";
 import type { PhotoRole } from "@shared/schema";
 import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lt, lte, inArray, notInArray, isNotNull, isNull } from "drizzle-orm";
@@ -300,9 +301,9 @@ export interface IStorage {
   getActiveStories(): Promise<any[]>;
   getUserStories(userId: string): Promise<Story[]>;
   deleteExpiredStories(): Promise<void>;
-  addStoryMedia(storyId: number, type: string, url: string | null, caption?: string, textContent?: string): Promise<StoryMedia>;
+  addStoryMedia(storyId: number, type: string, url: string | null, caption?: string, textContent?: string, eventId?: number): Promise<StoryMedia>;
   deleteStory(id: number): Promise<void>;
-  getStoryMedia(storyId: number): Promise<StoryMedia[]>;
+  getStoryMedia(storyId: number): Promise<(StoryMedia & { event?: StoryEventCard | null })[]>;
   likeStory(storyId: number, userId: string): Promise<StoryLike>;
   unlikeStory(storyId: number, userId: string): Promise<void>;
   getStoryLikes(storyId: number): Promise<StoryLike[]>;
@@ -2396,11 +2397,12 @@ export class DatabaseStorage implements IStorage {
     await db.delete(storyViews).where(inArray(storyViews.storyId, expiredIds));
   }
 
-  async addStoryMedia(storyId: number, type: string, url: string | null, caption?: string, textContent?: string): Promise<StoryMedia> {
+  async addStoryMedia(storyId: number, type: string, url: string | null, caption?: string, textContent?: string, eventId?: number): Promise<StoryMedia> {
     const values: any = { storyId, type };
     if (url !== null) values.url = url;
     if (caption) values.caption = caption;
     if (textContent) values.textContent = textContent;
+    if (eventId) values.eventId = eventId;
     const [media] = await db.insert(storyMedia).values(values).returning();
     return media;
   }
@@ -2413,8 +2415,13 @@ export class DatabaseStorage implements IStorage {
     await db.delete(stories).where(eq(stories.id, id));
   }
 
-  async getStoryMedia(storyId: number): Promise<StoryMedia[]> {
-    return db.select().from(storyMedia).where(eq(storyMedia.storyId, storyId));
+  // Every story read goes through here, so an event story always carries the
+  // live event panel, wherever it is shown.
+  async getStoryMedia(storyId: number): Promise<(StoryMedia & { event?: StoryEventCard | null })[]> {
+    const media = await db.select().from(storyMedia).where(eq(storyMedia.storyId, storyId));
+    return Promise.all(
+      media.map(async (m) => (m.eventId ? { ...m, event: await getStoryEventCard(m.eventId) } : m)),
+    );
   }
 
   async likeStory(storyId: number, userId: string): Promise<StoryLike> {
@@ -2898,6 +2905,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(stories).where(eq(stories.userId, userId));
     // Profile (last, FK anchor)
     await db.delete(profiles).where(eq(profiles.userId, userId));
+
   }
 }
 

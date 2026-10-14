@@ -42,6 +42,7 @@ import { gateCopy } from "@shared/entitlements";
 import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
 import { recordShare } from "./growth";
+import { getEventSeats, canShareEventToStory } from "./event-seats";
 import { referralClaimSchema } from "@shared/schema";
 import * as disclosure from "./disclosure";
 import * as groupInvite from "./group-invite";
@@ -4463,6 +4464,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       const story = await storage.createStory(userId, expiresAt);
       
+      // From an event's "Post to Status": the story links to that event.
+      const eventId = Number(req.body.eventId) || undefined;
+      if (eventId && !(await canShareEventToStory(eventId))) {
+        return res.status(400).json({ message: "That event can't be shared" });
+      }
+
       let mediaUrl = "";
       if (req.file) {
         const filename = generateFilename(req.file.originalname);
@@ -4473,7 +4480,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       }
       
       if (mediaUrl) {
-        await storage.addStoryMedia(story.id, "image", mediaUrl, caption);
+        await storage.addStoryMedia(story.id, "image", mediaUrl, caption, undefined, eventId);
       }
       
       const media = await storage.getStoryMedia(story.id);
@@ -4916,12 +4923,21 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Live seat numbers for the Status card's badge ("6 women's seats left").
+  app.get("/api/events/:id/seats", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const seats = await getEventSeats(Number(req.params.id)).catch(() => null);
+    if (!seats) return res.sendStatus(404);
+    res.json(seats);
+  });
+
   // One row per tap on a share action, for the console's Growth page.
   app.post("/api/growth/share", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     const { kind, format, targetId } = req.body ?? {};
-    if ((kind !== "event" && kind !== "invite") || (format !== "status_card" && format !== "link")) {
+    if ((kind !== "event" && kind !== "invite") || (format !== "status_card" && format !== "link" && format !== "destira_story")) {
       return res.status(400).json({ message: "Invalid share" });
     }
     try {

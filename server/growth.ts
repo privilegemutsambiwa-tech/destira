@@ -83,7 +83,7 @@ export async function attributeNewSignup(userId: string, req: Request, res: Resp
 export async function recordShare(
   userId: string,
   kind: "event" | "invite",
-  format: "status_card" | "link",
+  format: "status_card" | "link" | "destira_story",
   targetId: string | null,
 ): Promise<void> {
   await db.insert(shareEvents).values({ userId, kind, format, targetId });

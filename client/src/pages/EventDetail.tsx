@@ -13,12 +13,12 @@ import { useEffect, useRef, useState } from "react";
 import { peekPendingRsvp, clearPendingRsvp } from "@/lib/pending-rsvp";
 import { useProfile } from "@/hooks/use-profiles";
 import { Loader2, ArrowLeft, Pencil, Flag, X, Share2, ImageIcon } from "lucide-react";
-import { shareStatusCard, logShare } from "@/lib/status-card";
+import { renderStatusCard, shareStatusBlob, logShare } from "@/lib/status-card";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 function toLocalInput(dateStr: string): string {
   const d = new Date(dateStr);
@@ -240,6 +240,26 @@ export default function EventDetail({ params }: { params: { id: string } }) {
     }
   };
 
+  // "Post to Status": one card, two places to put it — the member's
+  // Destira story (with a live "See the event" panel for viewers) or their
+  // WhatsApp Status (link in the caption, since images aren't tappable there).
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [statusCard, setStatusCard] = useState<{ blob: Blob; url: string } | null>(null);
+  const [postingStory, setPostingStory] = useState(false);
+
+  const seatsBadge = (s: { going: number; seatsLeft: number | null; womenSeatsLeft: number | null; menSeatsLeft: number | null }) => {
+    if (s.womenSeatsLeft != null && s.menSeatsLeft != null) {
+      // Nobody in yet: lead with what makes it easy to say yes.
+      if (s.going === 0) return `Free · ${s.womenSeatsLeft + s.menSeatsLeft} seats, half for women`;
+      if (s.womenSeatsLeft > 0 && s.menSeatsLeft > 0) return `${s.womenSeatsLeft} women's and ${s.menSeatsLeft} men's seats left`;
+      if (s.womenSeatsLeft > 0) return `${s.womenSeatsLeft} women's ${s.womenSeatsLeft === 1 ? "seat" : "seats"} left`;
+      if (s.menSeatsLeft > 0) return `${s.menSeatsLeft} men's ${s.menSeatsLeft === 1 ? "seat" : "seats"} left`;
+      return "Waitlist open";
+    }
+    if (s.seatsLeft != null) return s.seatsLeft > 0 ? `${s.seatsLeft} ${s.seatsLeft === 1 ? "seat" : "seats"} left` : "Waitlist open";
+    return s.going > 0 ? `${s.going} going` : null;
+  };
+
   const handleStatusCard = async () => {
     if (!event) return;
     setMakingCard(true);
@@ -247,31 +267,76 @@ export default function EventDetail({ params }: { params: { id: string } }) {
       const mine = event.hostUserId === user?.id;
       const going = event.myStatus === "going";
       const place = [event.venueName, event.suburb, event.city].filter(Boolean).join(" · ");
-      const goingCount = event.resonance?.goingCount ?? 0;
-      const url = eventShareUrl("utm_source=status&utm_content=event");
-      const outcome = await shareStatusCard(
-        {
-          eyebrow: mine ? "I'm hosting" : going ? "I'm going" : "Who's coming?",
-          title: event.title,
-          lines: [
-            `${formatFullDate(event.startsAt)} · ${formatTime(event.startsAt)}`,
-            ...(place ? [place] : []),
-            ...(goingCount > 0 ? [`${goingCount} going so far`] : []),
-          ],
-          footer: "Save a seat on Destira",
-          imageUrl: event.coverImageUrl,
+      const seats = await fetch(`/api/events/${event.id}/seats`, { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+      const d = new Date(event.startsAt);
+      const blob = await renderStatusCard({
+        eyebrow: mine ? "I'm hosting" : going ? "I'm going" : "Who's coming?",
+        title: event.title,
+        lines: [`${formatFullDate(event.startsAt)} · ${formatTime(event.startsAt)}`, ...(place ? [place] : [])],
+        footer: "Save a seat on Destira",
+        imageUrl: event.coverImageUrl,
+        date: {
+          dow: d.toLocaleDateString("en-GB", { weekday: "short" }),
+          day: String(d.getDate()),
+          month: d.toLocaleDateString("en-GB", { month: "short" }),
         },
-        `${mine ? "I'm hosting" : going ? "I'm going to" : "Come to"} "${event.title}". Save a seat: ${url}`,
-        "destira-event.png",
-      );
-      if (outcome !== "cancelled") logShare("event", "status_card", event.id);
-      if (outcome === "downloaded") {
-        toast({ title: "Card saved", description: "Post it as your Status. The link is copied for the caption." });
-      }
+        badge: seats ? seatsBadge(seats) : null,
+      });
+      setStatusCard((prev) => {
+        if (prev) URL.revokeObjectURL(prev.url);
+        return { blob, url: URL.createObjectURL(blob) };
+      });
+      setStatusOpen(true);
     } catch {
       toast({ title: "Couldn't make the card", variant: "destructive" });
     } finally {
       setMakingCard(false);
+    }
+  };
+
+  const postToDestiraStory = async () => {
+    if (!event || !statusCard) return;
+    setPostingStory(true);
+    try {
+      const form = new FormData();
+      form.append("media", new File([statusCard.blob], "destira-event.png", { type: "image/png" }));
+      form.append("eventId", String(event.id));
+      const res = await fetch("/api/stories", { method: "POST", body: form, credentials: "include" });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || "Couldn't post");
+      logShare("event", "destira_story", event.id);
+      queryClient.invalidateQueries({ queryKey: ["/api/stories/feed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] });
+      setStatusOpen(false);
+      toast({ title: "Posted to your story", description: "Anyone who views it can open the event and save a seat." });
+    } catch (err) {
+      toast({ title: "Couldn't post your story", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+    } finally {
+      setPostingStory(false);
+    }
+  };
+
+  const postToWhatsAppStatus = async () => {
+    if (!event || !statusCard) return;
+    const mine = event.hostUserId === user?.id;
+    const going = event.myStatus === "going";
+    const url = eventShareUrl("utm_source=status&utm_content=event");
+    try {
+      const outcome = await shareStatusBlob(
+        statusCard.blob,
+        `${mine ? "I'm hosting" : going ? "I'm going to" : "Come to"} "${event.title}". Save a seat: ${url}`,
+        "destira-event.png",
+      );
+      if (outcome !== "cancelled") {
+        logShare("event", "status_card", event.id);
+        setStatusOpen(false);
+      }
+      if (outcome === "downloaded") {
+        toast({ title: "Card saved", description: "Post it as your Status. The link is copied for the caption." });
+      }
+    } catch {
+      toast({ title: "Couldn't share the card", variant: "destructive" });
     }
   };
 
@@ -799,6 +864,35 @@ export default function EventDetail({ params }: { params: { id: string } }) {
               {reportBusy ? "Sending…" : "Send report"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={statusOpen} onOpenChange={setStatusOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Post to Status</DialogTitle>
+            <DialogDescription>
+              Put this card on your Destira story, where people can tap through to the event, or on your WhatsApp Status.
+            </DialogDescription>
+          </DialogHeader>
+          {statusCard && (
+            <img
+              src={statusCard.url}
+              alt="Your Status card for this event"
+              className="mx-auto w-[180px] max-w-full rounded-[14px] shadow-lg"
+              style={{ aspectRatio: "9 / 16" }}
+              data-testid="img-status-card-preview"
+            />
+          )}
+          <div className="flex flex-col gap-2.5 mt-1">
+            <Button onClick={postToDestiraStory} disabled={postingStory} data-testid="button-post-destira-story">
+              {postingStory && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              Post to my Destira story
+            </Button>
+            <Button variant="outline" onClick={postToWhatsAppStatus} data-testid="button-post-whatsapp-status">
+              Share to WhatsApp Status
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
