@@ -15,6 +15,7 @@ import AdminMemberEmail from "./AdminMemberEmail";
 import AdminFeedback from "./AdminFeedback";
 import AdminMetrics from "./AdminMetrics";
 import AdminGrowth from "./AdminGrowth";
+import AdminOfficialStatus from "./AdminOfficialStatus";
 import AdminEmailConfig from "./AdminEmailConfig";
 import AdminTeam from "./AdminTeam";
 import AdminAccount from "./AdminAccount";
@@ -75,6 +76,7 @@ function AdminApp() {
         <Route path="/console/feedback" component={AdminFeedback} />
         <Route path="/console/metrics" component={AdminMetrics} />
         <Route path="/console/growth" component={AdminGrowth} />
+        <Route path="/console/status" component={AdminOfficialStatus} />
         <Route path="/console/email" component={AdminEmailConfig} />
         {(role === "owner" || role === "admin") && <Route path="/console/team" component={AdminTeam} />}
         {(role === "owner" || role === "admin") && <Route path="/console/account" component={AdminAccount} />}

@@ -94,6 +94,7 @@ const NAV = [
   { href: "/console/reports", label: "Reports", badgeKey: "openReports" as const },
   { href: "/console/events", label: "Events", badgeKey: "pendingEvents" as const },
   { href: "/console/events/official", label: "Official events" },
+  { href: "/console/status", label: "Destira status" },
   { href: "/console/feedback", label: "Feedback", badgeKey: "openFeedback" as const },
   { href: "/console/metrics", label: "Metrics" },
   { href: "/console/growth", label: "Growth" },

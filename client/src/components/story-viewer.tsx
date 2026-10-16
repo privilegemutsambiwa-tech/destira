@@ -5,7 +5,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
 import { shrinkImage } from "@/lib/shrink-image";
 import { Textarea } from "@/components/ui/textarea";
-import { Heart, MessageCircle, X, Plus, Eye, Send, ChevronLeft, ChevronRight, Trash2, Camera, Pencil, Brain, Image as ImageIcon } from "lucide-react";
+import { Heart, MessageCircle, X, Plus, Eye, Send, ChevronLeft, ChevronRight, Trash2, Camera, Pencil, Brain, Image as ImageIcon, Volume2, VolumeX } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { UpgradeRequiredError } from "@/hooks/use-interactions";
@@ -34,6 +34,84 @@ interface StoryMedia {
   caption?: string | null;
   // Set when the story was posted from an event's "Post to Status".
   event?: StoryEvent | null;
+  // Official Destira stories: an optional in-app button, and a video's length.
+  ctaLabel?: string | null;
+  ctaUrl?: string | null;
+  durationSec?: number | null;
+}
+
+/** A story's photo or video, filling the frame. Videos start muted (the
+ *  browser's rule) with a sound toggle, and pause while the story is held. */
+function StoryMediaView({
+  media,
+  paused,
+  onReady,
+  testId,
+}: {
+  media: StoryMedia;
+  paused: boolean;
+  onReady: () => void;
+  testId: string;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(true);
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (paused) v.pause();
+    else v.play().catch(() => {});
+  }, [paused, media.url]);
+  if (media.type === "video" && media.url) {
+    return (
+      <>
+        <video
+          ref={videoRef}
+          src={media.url}
+          className="w-full h-full object-contain"
+          autoPlay
+          muted={muted}
+          playsInline
+          preload="auto"
+          onCanPlay={onReady}
+          data-testid={testId}
+        />
+        <button
+          onClick={(e) => { e.stopPropagation(); setMuted((m) => !m); }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="absolute top-20 right-3 z-20 w-9 h-9 rounded-full flex items-center justify-center text-white"
+          style={{ background: "rgba(12,9,16,0.55)" }}
+          aria-label={muted ? "Turn sound on" : "Turn sound off"}
+          data-testid="button-story-sound"
+        >
+          {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+        </button>
+      </>
+    );
+  }
+  return (
+    <img
+      src={media.url ?? ""}
+      alt={media.caption || "Story"}
+      className="w-full h-full object-contain"
+      onLoad={onReady}
+      data-testid={testId}
+    />
+  );
+}
+
+/** An official story's button, e.g. "Invite a friend" → /invite. */
+function StoryLinkButton({ label, onOpen }: { label: string; onOpen: () => void }) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onOpen(); }}
+      onPointerDown={(e) => e.stopPropagation()}
+      className="mb-3 w-full h-12 rounded-full font-semibold text-[15px]"
+      style={{ background: "#FF6B4A", color: "#0C0910" }}
+      data-testid="button-story-cta"
+    >
+      {label}
+    </button>
+  );
 }
 
 /** On a story made from an event: what it is, live seats, and a way in. */
@@ -88,11 +166,14 @@ interface StoryData {
   userId: string;
   createdAt: string;
   expiresAt: string;
+  // When it went out (scheduled official posts go out later than they're made).
+  publishAt?: string;
   media: StoryMedia[];
   likeCount?: number;
   viewCount?: number;
   likedByMe?: boolean;
   viewedByMe?: boolean;
+  isOfficial?: boolean;
 }
 
 export type OwnStory = StoryData & { viewCount: number; likeCount: number; commentCount?: number };
@@ -258,7 +339,12 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
   useEffect(() => {
     if (isPaused || !imageLoaded) return;
     // An event story holds twice as long: there's a panel to read and tap.
-    const DURATION = currentMedia?.event ? 10000 : 5000;
+    const DURATION =
+      currentMedia?.type === "video" && currentMedia.durationSec
+        ? currentMedia.durationSec * 1000
+        : currentMedia?.event || currentMedia?.ctaUrl
+          ? 10000
+          : 5000;
     const INTERVAL = 50;
     const increment = (INTERVAL / DURATION) * 100;
     timerRef.current = setInterval(() => {
@@ -372,7 +458,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
             </Avatar>
             <div>
               <p className="text-white text-sm font-medium" data-testid="text-story-user">{userName || currentStory.userId}</p>
-              <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }} data-testid="text-story-time">{formatTime(currentStory.createdAt)}</p>
+              <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }} data-testid="text-story-time">{formatTime(currentStory.publishAt ?? currentStory.createdAt)}</p>
             </div>
           </div>
           <button
@@ -403,16 +489,17 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
               </p>
             </div>
           ) : currentMedia?.url ? (
-            <img
-              src={currentMedia.url}
-              alt={currentMedia.caption || "Story"}
-              className="w-full h-full object-contain"
-              onLoad={() => setImageLoaded(true)}
-              data-testid={`img-story-${currentStory.id}`}
+            <StoryMediaView
+              media={currentMedia}
+              paused={isPaused}
+              onReady={() => setImageLoaded(true)}
+              testId={`img-story-${currentStory.id}`}
             />
           ) : null}
 
-          {currentMedia?.caption && !isTextStory && (
+          {/* Official posts carry their words in the artwork; the caption is
+              their alt text, not a second line on top of the design. */}
+          {currentMedia?.caption && !isTextStory && !currentStory.isOfficial && (
             <div className="absolute bottom-28 left-0 right-0 px-4 text-center">
               <p className="text-white text-lg font-medium drop-shadow-lg" data-testid="text-story-caption">{currentMedia.caption}</p>
             </div>
@@ -444,7 +531,10 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
           {currentMedia?.event && (
             <StoryEventPanel event={currentMedia.event} onOpen={() => { onClose(); setLocation(`/events/${currentMedia.event!.id}`); }} />
           )}
-          {onInterviewTwin && (
+          {!currentMedia?.event && currentMedia?.ctaLabel && currentMedia.ctaUrl?.startsWith("/") && (
+            <StoryLinkButton label={currentMedia.ctaLabel} onOpen={() => { onClose(); setLocation(currentMedia.ctaUrl!); }} />
+          )}
+          {onInterviewTwin && !currentStory.isOfficial && (
             <button
               className="w-full flex items-center justify-center gap-2 font-semibold mb-3"
               style={{
@@ -473,13 +563,15 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
             >
               <Heart className="w-5 h-5" fill={currentStory.likedByMe ? "#FF6B4A" : "none"} />
             </button>
-            <button
-              className="w-8 h-8 flex items-center justify-center text-white"
-              onClick={() => { setIsPaused(true); commentInputRef.current?.focus(); }}
-              data-testid="button-comment-story"
-            >
-              <MessageCircle className="w-5 h-5" />
-            </button>
+            {!currentStory.isOfficial && (
+              <button
+                className="w-8 h-8 flex items-center justify-center text-white"
+                onClick={() => { setIsPaused(true); commentInputRef.current?.focus(); }}
+                data-testid="button-comment-story"
+              >
+                <MessageCircle className="w-5 h-5" />
+              </button>
+            )}
             {currentStory.viewCount !== undefined && (
               <div className="flex items-center gap-1 ml-auto text-xs" style={{ color: "rgba(255,255,255,0.7)" }} data-testid="text-view-count">
                 <Eye className="w-4 h-4" />
@@ -487,7 +579,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-2 ${currentStory.isOfficial ? "hidden" : ""}`}>
             <Input
               ref={commentInputRef}
               placeholder="Send a comment..."
@@ -611,7 +703,12 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
   useEffect(() => {
     if (isPaused || !imageLoaded) return;
     // An event story holds twice as long: there's a panel to read and tap.
-    const DURATION = currentMedia?.event ? 10000 : 5000;
+    const DURATION =
+      currentMedia?.type === "video" && currentMedia.durationSec
+        ? currentMedia.durationSec * 1000
+        : currentMedia?.event || currentMedia?.ctaUrl
+          ? 10000
+          : 5000;
     const INTERVAL = 50;
     const increment = (INTERVAL / DURATION) * 100;
     timerRef.current = setInterval(() => {
@@ -704,7 +801,7 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
             </Avatar>
             <div>
               <p className="text-white text-sm font-medium" data-testid="text-own-story-label">Your Story</p>
-              <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>{formatTime(currentStory.createdAt)}</p>
+              <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>{formatTime(currentStory.publishAt ?? currentStory.createdAt)}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -745,12 +842,11 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
               </p>
             </div>
           ) : currentMedia?.url ? (
-            <img
-              src={currentMedia.url}
-              alt={currentMedia.caption || "Your Story"}
-              className="w-full h-full object-contain"
-              onLoad={() => setImageLoaded(true)}
-              data-testid={`img-own-story-${currentStory.id}`}
+            <StoryMediaView
+              media={currentMedia}
+              paused={isPaused}
+              onReady={() => setImageLoaded(true)}
+              testId={`img-own-story-${currentStory.id}`}
             />
           ) : null}
         </div>

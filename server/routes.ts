@@ -43,6 +43,8 @@ import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } f
 import * as referralsService from "./referrals";
 import { recordShare } from "./growth";
 import { getEventSeats, canShareEventToStory } from "./event-seats";
+import { ensureTodaysOfficialStories, startOfficialStoriesSweep } from "./official-stories";
+import { DESTIRA_SYSTEM_USER_ID as OFFICIAL_STORY_USER } from "./system-user";
 import { referralClaimSchema } from "@shared/schema";
 import * as disclosure from "./disclosure";
 import * as groupInvite from "./group-invite";
@@ -1273,6 +1275,19 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     } catch (e) {
       console.error("Discover pass error:", e);
       res.status(500).json({ message: "Failed to record pass" });
+    }
+  });
+
+  // Free for everyone: an accidental pass shouldn't cost money to take back.
+  app.delete("/api/discover/pass/:targetId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      await storage.undoDiscoverPass(userId, String(req.params.targetId));
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("Undo pass error:", e);
+      res.status(500).json({ message: "Couldn't undo that pass" });
     }
   });
 
@@ -4509,6 +4524,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     try {
       await storage.deleteExpiredStories();
+      // Cheap after the first call each day; the sweep normally beats us to it.
+      await ensureTodaysOfficialStories().catch((e) => console.error("[official-stories]", e));
       const requesterProfile = await storage.getProfile(userId);
       const seekingGenders = (requesterProfile?.seekingGenders ?? []) as string[];
       const seeAllGenders = seekingGenders.length === 0 || seekingGenders.includes("everyone");
@@ -4521,6 +4538,21 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         const media = await storage.getStoryMedia(s.id);
         const likes = await storage.getStoryLikes(s.id);
         const views = await storage.getStoryViews(s.id);
+        // The official Destira account: the brand, not a person.
+        if (s.userId === OFFICIAL_STORY_USER) {
+          return {
+            ...s,
+            displayName: "Destira",
+            photoUrl: "/brand/destira-icon-192.png",
+            gender: null,
+            isOfficial: true,
+            media,
+            likeCount: likes.length,
+            viewCount: views.length,
+            likedByMe: likes.some((l: any) => l.userId === userId),
+            viewedByMe: views.some((v: any) => v.userId === userId),
+          };
+        }
         return {
           ...s,
           displayName: profile?.displayName || "User",
@@ -4533,8 +4565,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
           viewedByMe: views.some((v: any) => v.userId === userId),
         };
       }));
-      const enriched = enrichedAll.filter((s) =>
-        s.userId === userId || seeAllGenders || genderMatchesSeeking(s.gender, seekingGenders)
+      const enriched = enrichedAll.filter((s: any) =>
+        s.isOfficial || s.userId === userId || seeAllGenders || genderMatchesSeeking(s.gender, seekingGenders)
       );
       res.json(enriched);
     } catch (e) {
@@ -4684,6 +4716,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (!text?.trim()) return res.status(400).json({ message: "Comment text required" });
       const story = await storage.getStory(parseInt(req.params.id));
       if (!story) return res.status(404).json({ message: "Story not found" });
+      // Nobody reads replies to the Destira account.
+      if (story.userId === OFFICIAL_STORY_USER) return res.status(400).json({ message: "Replies are off on Destira posts" });
       if (await storage.isBlocked(story.userId, userId) || await storage.isBlocked(userId, story.userId)) {
         return res.sendStatus(403);
       }
@@ -5909,6 +5943,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       .catch((e) => console.error("[official-events] sweep failed:", e));
   setTimeout(sweepOfficial, 8_000);
   setInterval(sweepOfficial, 15 * 60 * 1000);
+  startOfficialStoriesSweep();
   setTimeout(initialBackfill, 12_000);
   setInterval(() => {
     runNightlyRollup()

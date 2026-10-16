@@ -10,6 +10,7 @@ import { registerAdminFeedbackRoutes } from "./feedback";
 import { registerAdminEmailRoutes } from "./email";
 import { registerAdminMetricsRoutes } from "./metrics";
 import { registerAdminGrowthRoutes } from "./growth";
+import { registerAdminOfficialStoryRoutes } from "./official-stories";
 import { registerAdminTeamRoutes } from "./team";
 import { registerAdminAccountRoutes } from "./account";
 import { registerAdminMemberEmailRoutes } from "./member-email";
@@ -24,6 +25,7 @@ export function registerAdminConsole(app: Express) {
   registerAdminEmailRoutes(app);
   registerAdminMetricsRoutes(app);
   registerAdminGrowthRoutes(app);
+  registerAdminOfficialStoryRoutes(app);
   registerAdminTeamRoutes(app);
   registerAdminAccountRoutes(app);
   registerAdminMemberEmailRoutes(app);

@@ -2,6 +2,7 @@
 import { LayoutShell } from "@/components/layout-shell";
 import { FirstDayCard } from "@/components/first-day-card";
 import { MatchCelebration } from "@/components/match-celebration";
+import { DecisionDock } from "@/components/decision-dock";
 import { TonightsThree } from "@/components/tonights-three";
 import { InstallCard } from "@/components/install-card";
 import { requestPushNudge } from "@/lib/engagement-prompts";
@@ -225,13 +226,17 @@ function StoriesCarousel() {
 
   const grouped = useMemo(() => {
     if (!stories || stories.length === 0) return [];
-    const byUser: Record<string, { userId: string; displayName: string; photoUrl: string; stories: any[] }> = {};
+    const byUser: Record<string, { userId: string; displayName: string; photoUrl: string; isOfficial: boolean; stories: any[] }> = {};
     stories.forEach((s: any) => {
       if (!byUser[s.userId]) {
-        byUser[s.userId] = { userId: s.userId, displayName: s.displayName || "User", photoUrl: s.photoUrl || "", stories: [] };
+        byUser[s.userId] = { userId: s.userId, displayName: s.displayName || "User", photoUrl: s.photoUrl || "", isOfficial: !!s.isOfficial, stories: [] };
       }
       byUser[s.userId].stories.push(s);
     });
+    // Destira's own posts play in the order they went out through the day.
+    for (const g of Object.values(byUser)) {
+      if (g.isOfficial) g.stories.sort((a: any, b: any) => String(a.publishAt).localeCompare(String(b.publishAt)));
+    }
     const groups = Object.values(byUser);
     // Anyone with at least one story you haven't opened yet sorts to the
     // front (in the server's newest-first order among themselves); everyone
@@ -239,7 +244,9 @@ function StoriesCarousel() {
     // relative order. A stable sort (guaranteed by the spec since ES2019)
     // makes this a clean partition rather than a real re-sort.
     const hasUnviewed = (g: { stories: any[] }) => g.stories.some((s) => !s.viewedByMe);
-    return [...groups].sort((a, b) => (hasUnviewed(b) ? 1 : 0) - (hasUnviewed(a) ? 1 : 0));
+    const sorted = [...groups].sort((a, b) => (hasUnviewed(b) ? 1 : 0) - (hasUnviewed(a) ? 1 : 0));
+    // The official Destira status always leads the row.
+    return [...sorted.filter((g) => g.isOfficial), ...sorted.filter((g) => !g.isOfficial)];
   }, [stories]);
 
   const viewingGroup = viewingUserId ? grouped.find((g) => g.userId === viewingUserId) || null : null;
@@ -329,8 +336,20 @@ function StoriesCarousel() {
                 </Avatar>
               </div>
             </div>
-            <span style={{ fontSize: "11px", color: "var(--vf-muted)", maxWidth: `${STORY_SIZE}px`, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span
+              className="inline-flex items-center gap-1"
+              style={{ fontSize: "11px", color: u.isOfficial ? "hsl(var(--vf-text))" : "var(--vf-muted)", fontWeight: u.isOfficial ? 600 : undefined, maxWidth: `${STORY_SIZE}px`, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            >
               {u.displayName.split(" ")[0]}
+              {u.isOfficial && (
+                <span
+                  className="inline-flex items-center justify-center w-3 h-3 rounded-full shrink-0"
+                  style={{ background: "#FF6B4A" }}
+                  aria-label="Official"
+                >
+                  <Check className="w-2 h-2" style={{ color: "#0C0910" }} strokeWidth={4} />
+                </span>
+              )}
             </span>
           </button>
           );
@@ -589,6 +608,34 @@ export default function Discover() {
   // drives the disabled prop so the buttons visibly lock while it settles.
   const isActingRef = useRef(false);
   const [isActing, setIsActing] = useState(false);
+  // Which way the current card leaves: left for a pass, right for a like.
+  const [exitDir, setExitDir] = useState<"left" | "right" | null>(null);
+  // The last pass, offered back for a few seconds (free, like it should be).
+  const [undoPass, setUndoPass] = useState<{ userId: string; name: string } | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keyboard shortcuts read the latest handlers through this; it's reset to
+  // null every render and only filled in when a card is actually showing.
+  const keyActionsRef = useRef<{ pass: () => void; like: () => void; interview: () => void; undo: () => void } | null>(null);
+  keyActionsRef.current = null;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const a = keyActionsRef.current;
+      if (!a || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      // Never while typing, and never under an open dialog or sheet.
+      if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      const k = e.key.toLowerCase();
+      if (k === "arrowleft") { e.preventDefault(); a.pass(); }
+      else if (k === "arrowright") { e.preventDefault(); a.like(); }
+      else if (k === "i") a.interview();
+      else if (k === "z") a.undo();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
   // The actual browsing order, as a list of ids — not re-derived from
   // scratch each render. Tapping a "Next up" card must permanently rotate
   // the previous front card out of the immediate preview window (otherwise
@@ -867,8 +914,26 @@ export default function Discover() {
     isActingRef.current = true;
     setIsActing(true);
     const passedProfile = currentProfile;
+    setExitDir("left");
+    navigator.vibrate?.(8);
     handleNext(passedProfile.userId);
     discoverPass.mutate(passedProfile.userId);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoPass({ userId: passedProfile.userId, name: passedProfile.displayName || "them" });
+    undoTimerRef.current = setTimeout(() => setUndoPass(null), 6000);
+  };
+
+  // Brings the last passed card back to the front and forgets the pass.
+  const handleUndoPass = () => {
+    if (!undoPass) return;
+    const { userId } = undoPass;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoPass(null);
+    setExitDir(null);
+    setEvaluatedIds((prev) => { const next = new Set(prev); next.delete(userId); return next; });
+    // Back to the front of the deck, not the end of the line.
+    setDeckOrder((prev) => [userId, ...prev.filter((id) => id !== userId)]);
+    fetch(`/api/discover/pass/${encodeURIComponent(userId)}`, { method: "DELETE", credentials: "include" }).catch(() => {});
   };
 
   const doBlock = async () => {
@@ -914,6 +979,10 @@ export default function Discover() {
     paywall.guard("daily_likes", () => {
       // Optimistic: the card leaves the deck the instant the tap lands, like a
       // swipe — the actual like request finishes in the background.
+      setExitDir("right");
+      navigator.vibrate?.(12);
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      setUndoPass(null);
       handleNext(likedProfile.userId);
       doLike(likedProfile);
     }).finally(() => {
@@ -977,6 +1046,7 @@ export default function Discover() {
   const aboutText: string = currentProfile.aboutMe || currentProfile.bio || "";
 
   const upcoming = profiles.slice(1, 3);
+  keyActionsRef.current = { pass: handlePass, like: handleLike, interview: handleInterview, undo: handleUndoPass };
 
   return (
     <LayoutShell>
@@ -1008,13 +1078,26 @@ export default function Discover() {
 
         <StoriesCarousel />
 
-        <AnimatePresence mode="wait">
+        {/* The card and its action bar share a box, so the bar only rides the
+            bottom of the screen while the card is on it. */}
+        <div className="relative">
+        <AnimatePresence mode="wait" custom={exitDir}>
           <motion.div
             key={currentProfile.userId}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
+            custom={exitDir}
+            variants={{
+              enter: { opacity: 0, y: 10 },
+              show: { opacity: 1, y: 0, x: 0, rotate: 0 },
+              leave: (dir: "left" | "right" | null) => ({
+                opacity: 0,
+                x: dir === "left" ? -140 : dir === "right" ? 140 : 0,
+                rotate: dir === "left" ? -3 : dir === "right" ? 3 : 0,
+              }),
+            }}
+            initial="enter"
+            animate="show"
+            exit="leave"
+            transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
             className="relative rounded-[26px] border border-vf-line bg-vf-surface grid grid-cols-1 md:grid-cols-2 mb-4"
             data-testid="card-profile"
           >
@@ -1184,36 +1267,6 @@ export default function Discover() {
               >
                 Full profile <ArrowRight className="w-3.5 h-3.5" />
               </button>
-
-              <div className="flex gap-2.5 flex-wrap mt-auto pt-2">
-                <button
-                  onClick={handlePass}
-                  disabled={isActing}
-                  className="flex items-center justify-center w-12 h-12 rounded-full border border-vf-text/14 text-vf-faint hover:text-vf-text hover:border-vf-text/25 transition-colors btn-press shrink-0 disabled:opacity-50"
-                  data-testid="button-pass"
-                  aria-label="Pass"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={handleInterview}
-                  disabled={startInterview.isPending}
-                  className="flex-1 min-w-[160px] flex items-center justify-center gap-2 h-12 rounded-full border border-vf-mint/35 bg-vf-mint/10 text-vf-mint font-medium text-[14px] transition-colors hover:bg-vf-mint/15 btn-press"
-                  data-testid="button-interview"
-                >
-                  {startInterview.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
-                  Interview Twin
-                </button>
-                <button
-                  onClick={handleLike}
-                  disabled={isActing || createMatch.isPending}
-                  className="flex items-center justify-center w-12 h-12 rounded-full shrink-0 font-semibold btn-press transition-colors bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] disabled:opacity-50"
-                  data-testid="button-like"
-                  aria-label="Like"
-                >
-                  {createMatch.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Heart className="w-5 h-5" />}
-                </button>
-              </div>
             </div>
 
             {/* Resonance medallion — a wax seal pinned to the seam between
@@ -1243,6 +1296,18 @@ export default function Discover() {
             )}
           </motion.div>
         </AnimatePresence>
+
+        <DecisionDock
+          name={currentProfile.displayName || ""}
+          onPass={handlePass}
+          onLike={handleLike}
+          onInterview={handleInterview}
+          busy={isActing}
+          likePending={createMatch.isPending}
+          interviewPending={startInterview.isPending}
+          undo={undoPass ? { name: undoPass.name, onUndo: handleUndoPass } : null}
+        />
+        </div>
 
         <div className="flex items-center justify-between px-1 mb-8">
           <p className="text-xs text-vf-faint">

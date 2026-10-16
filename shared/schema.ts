@@ -548,6 +548,11 @@ export const stories = pgTable("stories", {
   userId: varchar("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   expiresAt: timestamp("expires_at").notNull(),
+  // Shown from this moment (official Destira stories are scheduled through
+  // the day); members' own stories go out immediately.
+  publishAt: timestamp("publish_at").notNull().defaultNow(),
+  // The library item an official Destira story was made from.
+  officialItemId: integer("official_item_id"),
 });
 
 export const storyMedia = pgTable("story_media", {
@@ -561,6 +566,41 @@ export const storyMedia = pgTable("story_media", {
   // A story made from an event's "Post to Status": viewers get a live
   // "See the event" panel (server/event-seats.ts) that opens it.
   eventId: integer("event_id").references(() => events.id, { onDelete: "set null" }),
+  // Official stories: an optional button (an in-app path like /invite), and
+  // a video's length so the viewer can time it.
+  ctaLabel: text("cta_label"),
+  ctaUrl: text("cta_url"),
+  durationSec: integer("duration_sec"),
+});
+
+// The official Destira status library. Every day 2–3 items go out as stories
+// from the Destira account (server/official-stories.ts): anything scheduled
+// for that date first, then evergreen items in rotation, least recently shown
+// first.
+export const officialStoryItems = pgTable("official_story_items", {
+  id: serial("id").primaryKey(),
+  mediaUrl: text("media_url").notNull(),
+  mediaType: text("media_type").notNull(), // image | video
+  durationSec: integer("duration_sec"),
+  caption: text("caption"),
+  ctaLabel: text("cta_label"),
+  ctaUrl: text("cta_url"),
+  eventId: integer("event_id").references(() => events.id, { onDelete: "set null" }),
+  scheduledFor: date("scheduled_for"), // a specific day (Harare), or null
+  evergreen: boolean("evergreen").notNull().default(true),
+  active: boolean("active").notNull().default(true),
+  timesShown: integer("times_shown").notNull().default(0),
+  lastShownOn: date("last_shown_on"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// One row per day once that day's official stories exist (so they're made
+// once, whichever server instance gets there first).
+export const officialStoryDays = pgTable("official_story_days", {
+  day: date("day").primaryKey(),
+  storyIds: integer("story_ids").array(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const storyLikes = pgTable("story_likes", {

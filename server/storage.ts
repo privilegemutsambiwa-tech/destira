@@ -160,6 +160,7 @@ export interface IStorage {
   getGroupsForUser(targetUserId: string, viewerUserId: string): Promise<Array<{ id: number; name: string; iconUrl: string | null; viewerIsMember: boolean; categoryTags: string[] | null }>>;
 
   recordDiscoverPass(userId: string, targetId: string): Promise<void>;
+  undoDiscoverPass(userId: string, targetId: string): Promise<void>;
   createMatch(user1Id: string, user2Id: string): Promise<Match>;
   getMatches(userId: string): Promise<Match[]>;
   getMatch(id: number): Promise<Match | undefined>;
@@ -1054,6 +1055,12 @@ export class DatabaseStorage implements IStorage {
     await db.insert(discoverPasses)
       .values({ userId, targetId })
       .onConflictDoNothing();
+  }
+
+  // "Undo" on Discover: the pass never happened, so they can come back.
+  async undoDiscoverPass(userId: string, targetId: string): Promise<void> {
+    await db.delete(discoverPasses)
+      .where(and(eq(discoverPasses.userId, userId), eq(discoverPasses.targetId, targetId)));
   }
 
   async createMatch(user1Id: string, user2Id: string): Promise<Match> {
@@ -2336,7 +2343,7 @@ export class DatabaseStorage implements IStorage {
 
   async getStory(id: number): Promise<Story | undefined> {
     const [story] = await db.select().from(stories).where(
-      and(eq(stories.id, id), gt(stories.expiresAt, new Date()))
+      and(eq(stories.id, id), gt(stories.expiresAt, new Date()), lte(stories.publishAt, new Date()))
     );
     return story;
   }
@@ -2348,13 +2355,15 @@ export class DatabaseStorage implements IStorage {
         userId: stories.userId,
         createdAt: stories.createdAt,
         expiresAt: stories.expiresAt,
+        publishAt: stories.publishAt,
         firstName: users.firstName,
         profileImageUrl: users.profileImageUrl,
       })
       .from(stories)
       .innerJoin(users, eq(stories.userId, users.id))
-      .where(gt(stories.expiresAt, new Date()))
-      .orderBy(desc(stories.createdAt));
+      // Scheduled stories (official Destira ones) wait for their moment.
+      .where(and(gt(stories.expiresAt, new Date()), lte(stories.publishAt, new Date())))
+      .orderBy(desc(stories.publishAt));
 
     const grouped: Record<string, { userId: string; user: { firstName: string | null; profileImageUrl: string | null }; stories: any[] }> = {};
     for (const row of activeStories) {
@@ -2370,6 +2379,7 @@ export class DatabaseStorage implements IStorage {
         userId: row.userId,
         createdAt: row.createdAt,
         expiresAt: row.expiresAt,
+        publishAt: row.publishAt,
       });
     }
     return Object.values(grouped);
