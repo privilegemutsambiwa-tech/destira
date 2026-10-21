@@ -8,23 +8,21 @@ import { periodPriceCents, PERIOD_DAYS, type BillingPeriod } from "@shared/entit
 import { and, eq, lt, isNull, or } from "drizzle-orm";
 import { MockProvider } from "./mock";
 import { PaynowProvider, paynowConfigured } from "./paynow";
-import { NardoPayProvider, nardopayConfigured } from "./nardopay";
-import { maskPhone, WALLET_METHODS, type PaymentMethod, type PaymentProvider, type PaymentStatus } from "./types";
+import { NardoPayProvider } from "./nardopay";
+import { maskPhone, type PaymentMethod, type PaymentProvider, type PaymentStatus } from "./types";
 import { alertPaymentSuccess, alertPaymentFailed, alertPaymentStuck } from "../email/templates";
 
 const mock = new MockProvider();
 const paynow = new PaynowProvider();
 const nardopay = new NardoPayProvider();
 
-// NardoPay is the active gateway for the wallet methods (EcoCash/OneMoney/
-// InnBucks); Paynow is a fallback if it isn't configured; mock is the last
-// resort so the flow is always reviewable without live creds. Card stays on
-// Paynow — NardoPay's create-payment-link-api here is wallet-only.
+// Paynow is the active gateway for every method (EcoCash/OneMoney/InnBucks
+// wallets and card); mock is the fallback so the flow is always reviewable
+// without live creds. NardoPay no longer takes new payments — it stays wired
+// up below (providerByStoredName + its webhook) only so payments it started
+// before the switch can still confirm.
 export function providerFor(method: PaymentMethod): { provider: PaymentProvider; name: string } {
   if (process.env.PAYMENTS_MOCK === "1") return { provider: mock, name: "mock" };
-  if (WALLET_METHODS.has(method) && nardopayConfigured()) {
-    return { provider: nardopay, name: `nardopay_${method}` };
-  }
   if (paynowConfigured()) {
     const name = method === "card" || method === "ecocash_card" ? "paynow_card" : `paynow_${method}`;
     return { provider: paynow, name };
