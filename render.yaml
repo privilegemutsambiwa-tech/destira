@@ -64,6 +64,6 @@ services:
       - key: PAYNOW_INTEGRATION_KEY
         sync: false
       - key: PAYNOW_RESULT_URL
-        value: https://destira.date/api/payments/webhook/paynow
+        value: https://www.destira.date/api/payments/webhook/paynow
       - key: PAYNOW_RETURN_URL
-        value: https://destira.date/plans/pay/return
+        value: https://www.destira.date/plans/pay/return

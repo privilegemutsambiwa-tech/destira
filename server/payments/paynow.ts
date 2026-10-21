@@ -37,6 +37,18 @@ import { WALLET_METHODS } from "./types";
 const WALLET_URL = "https://www.paynow.co.zw/interface/remotetransaction";
 const CARD_URL = "https://www.paynow.co.zw/interface/initiatetransaction";
 
+// Paynow rejects a request with an empty resulturl/returnurl, so these fall
+// back to URLs built from the app's own address instead of relying on
+// PAYNOW_RESULT_URL / _RETURN_URL being set. www, not the bare domain — the
+// bare domain 307-redirects, and Paynow's server-to-server result POST
+// shouldn't have to follow a redirect to reach us.
+function appBaseUrl(): string {
+  return (
+    process.env.PUBLIC_APP_URL ||
+    (process.env.NODE_ENV === "production" ? "https://www.destira.date" : "http://localhost:5000")
+  ).replace(/\/+$/, "");
+}
+
 export function paynowConfigured(): boolean {
   return !!(process.env.PAYNOW_INTEGRATION_ID && process.env.PAYNOW_INTEGRATION_KEY);
 }
@@ -73,8 +85,8 @@ export class PaynowProvider implements PaymentProvider {
   readonly id = "paynow";
   private id_ = process.env.PAYNOW_INTEGRATION_ID || "";
   private key = process.env.PAYNOW_INTEGRATION_KEY || "";
-  private resultUrl = process.env.PAYNOW_RESULT_URL || "";
-  private returnUrl = process.env.PAYNOW_RETURN_URL || "";
+  private resultUrl = process.env.PAYNOW_RESULT_URL || `${appBaseUrl()}/api/payments/webhook/paynow`;
+  private returnUrl = process.env.PAYNOW_RETURN_URL || `${appBaseUrl()}/plans/pay/return`;
 
   async initiate(input: InitiateInput): Promise<InitiateResult> {
     if (!paynowConfigured()) throw new Error("Paynow is not configured (PAYNOW_INTEGRATION_ID / _KEY)");
