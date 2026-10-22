@@ -417,6 +417,20 @@ function ScopePill({ active, onToggle }: { active: boolean; onToggle: () => void
   );
 }
 
+// The way out of "Within 20km" — the pill toggles it too, but a nearby-only
+// deck should have an obvious back, the same as every other scoped screen.
+function BackToEveryone({ onBack }: { onBack: () => void }) {
+  return (
+    <button
+      onClick={onBack}
+      className="inline-flex items-center gap-1 -ml-1 mb-3 text-[13px] text-vf-muted hover:text-vf-text transition-colors"
+      data-testid="button-discover-back"
+    >
+      <ChevronLeft className="w-4 h-4" /> Back to everyone
+    </button>
+  );
+}
+
 function ReadinessStrip() {
   const { data: r } = useTwinReadiness();
   const dismiss = useDismissReminder();
@@ -591,7 +605,15 @@ export default function Discover() {
   // (a `matches` row for a like, `discover_passes` for a pass) so it holds
   // across reloads and future sessions too, not just this one.
   const [evaluatedIds, setEvaluatedIds] = useState<Set<string>>(() => new Set());
-  const [filter, setFilter] = useState<FilterChip>(getInitialFilter);
+  const [filter, setFilterState] = useState<FilterChip>(getInitialFilter);
+  // Mirrors the scope into the URL (replace, not push), so coming back from a
+  // full profile — which links back with ?from= — lands on the same deck.
+  const setFilter = useCallback((f: FilterChip) => {
+    setFilterState(f);
+    try {
+      window.history.replaceState(window.history.state, "", f === "nearby" ? "/discover?filter=nearby" : "/discover");
+    } catch {}
+  }, []);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
   // Stable bits only (name/photo don't change from a like/comment/view) — the
@@ -673,7 +695,7 @@ export default function Discover() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setFilter(params.get("filter") === "nearby" ? "nearby" : "all");
+    setFilterState(params.get("filter") === "nearby" ? "nearby" : "all");
   }, [woLocation]);
 
   useEffect(() => {
@@ -713,29 +735,35 @@ export default function Discover() {
   // anyone evaluated or filtered out drops off; everyone else keeps their
   // relative position, which is what makes the "Next up" rotation below
   // actually work.
+  //
+  // "Within 20km" sorts by distance HERE, once, as candidates join the deck —
+  // never on every render. Re-sorting the rendered list each time used to
+  // snap the nearest person straight back to the front, so tapping a "Next
+  // up" card in nearby mode did nothing. A filter change starts a fresh order.
+  const deckFilterRef = useRef(filter);
   useEffect(() => {
-    const availableIds: string[] = eligibleForFilter
-      .map((p: any) => p.userId as string)
-      .filter((id: string) => !evaluatedIds.has(id));
+    let available: any[] = eligibleForFilter.filter((p: any) => !evaluatedIds.has(p.userId));
+    if (filter === "nearby") {
+      available = [...available].sort((a: any, b: any) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+    }
+    const availableIds: string[] = available.map((p: any) => p.userId as string);
     const availableSet = new Set(availableIds);
+    const filterChanged = deckFilterRef.current !== filter;
+    deckFilterRef.current = filter;
     setDeckOrder((prev) => {
-      const kept = prev.filter((id) => availableSet.has(id));
+      const kept = (filterChanged ? [] : prev).filter((id) => availableSet.has(id));
       const keptSet = new Set(kept);
       const added = availableIds.filter((id) => !keptSet.has(id));
       const next = [...kept, ...added];
       const unchanged = next.length === prev.length && next.every((id, i) => id === prev[i]);
       return unchanged ? prev : next;
     });
-  }, [eligibleForFilter, evaluatedIds]);
+  }, [eligibleForFilter, evaluatedIds, filter]);
 
   const profiles = useMemo(() => {
     const byId = new Map<string, any>(eligibleForFilter.map((p: any) => [p.userId as string, p]));
-    let list: any[] = deckOrder.map((id) => byId.get(id)).filter((p): p is any => !!p);
-    if (filter === "nearby") {
-      list = [...list].sort((a: any, b: any) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
-    }
-    return list;
-  }, [eligibleForFilter, filter, deckOrder]);
+    return deckOrder.map((id) => byId.get(id)).filter((p): p is any => !!p);
+  }, [eligibleForFilter, deckOrder]);
 
   // Always the front of the deck — evaluating a profile removes it from
   // `profiles` above (via evaluatedIds), so there's no index to advance,
@@ -809,8 +837,13 @@ export default function Discover() {
           <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 bg-vf-ember/10">
             <Heart className="w-10 h-10 text-vf-ember" />
           </div>
-          <h3 className="font-serif text-xl mb-2 text-vf-text">That's today's likes</h3>
+          <h3 className="font-serif text-xl mb-2 text-vf-text">
+            You've used today's {likesGate.limit != null ? `${likesGate.limit} ` : ""}likes
+          </h3>
           <p className="text-sm text-vf-muted">{likesGate.line || copy.line}</p>
+          <p className="text-sm text-vf-muted mt-3" data-testid="text-discover-paused">
+            Discover is paused until then — you'll see new people {resetLabel(likesGate.resetAt) === "at midnight" || !likesGate.resetAt ? "tomorrow" : resetLabel(likesGate.resetAt)}. Or move up a plan to keep going now.
+          </p>
           <button
             onClick={() => setLocation(withFrom(`/plans?feature=daily_likes`, "/discover"))}
             className="mt-5 h-11 px-6 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
@@ -829,6 +862,7 @@ export default function Discover() {
       <LayoutShell>
         <div className="max-w-lg mx-auto">
           <div className="mb-6">
+            {filter === "nearby" && <BackToEveryone onBack={() => setFilter("all")} />}
             <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2">
               {weekday} · no read yet
             </div>
@@ -1057,8 +1091,9 @@ export default function Discover() {
       <div className="max-w-3xl lg:max-w-5xl xl:max-w-6xl mx-auto">
         <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
           <div>
+            {filter === "nearby" && <BackToEveryone onBack={() => setFilter("all")} />}
             <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2">
-              {weekday} · one read ready
+              {weekday} · {filter === "nearby" ? "within 20km" : "one read ready"}
             </div>
             <h1 className="font-serif font-normal text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-[-0.02em] text-vf-text">
               Discover
@@ -1261,7 +1296,7 @@ export default function Discover() {
               )}
 
               <button
-                onClick={() => setLocation(`/u/${currentProfile.userId}`)}
+                onClick={() => setLocation(withFrom(`/u/${currentProfile.userId}`, filter === "nearby" ? "/discover?filter=nearby" : "/discover"))}
                 className="self-start inline-flex items-center gap-1.5 text-[13px] text-vf-text hover:text-vf-ember transition-colors"
                 data-testid="link-full-profile"
               >

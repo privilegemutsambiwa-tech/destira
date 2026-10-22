@@ -2,7 +2,7 @@ import type React from "react";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil } from "lucide-react";
+import { ChevronLeft, Loader2, Pencil } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
@@ -24,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { resonanceRead, vouches, overlap, distanceKm } from "@/lib/profile-derived";
 import { PhotoLightbox } from "@/components/photo-lightbox";
-import { withFrom } from "@/lib/from-route";
+import { withFrom, getFromRoute } from "@/lib/from-route";
 import { MatchCelebration } from "@/components/match-celebration";
 import { requestPushNudge } from "@/lib/engagement-prompts";
 
@@ -49,7 +49,34 @@ function EditAffordance({ onClick, label = "Edit" }: { onClick: () => void; labe
  *  it. Real /u/:userId visits keep the normal LayoutShell. */
 function ViewShell({ preview, children }: { preview: boolean; children: React.ReactNode }) {
   if (preview) return <div className="px-4 py-6 sm:px-6">{children}</div>;
-  return <LayoutShell>{children}</LayoutShell>;
+  return (
+    <LayoutShell>
+      <BackBar />
+      {children}
+    </LayoutShell>
+  );
+}
+
+/** A profile opens from many places (Discover, Likes, Lounge, a chat…). An
+ *  explicit ?from= wins; otherwise step back through history, and only fall
+ *  back to Discover when there's nothing to go back to (a shared link). */
+function BackBar() {
+  const [, setLocation] = useLocation();
+  const goBack = () => {
+    const from = getFromRoute(window.location.search, "");
+    if (from) setLocation(from);
+    else if (window.history.length > 1) window.history.back();
+    else setLocation("/discover");
+  };
+  return (
+    <button
+      onClick={goBack}
+      className="inline-flex items-center gap-1 -ml-1 mb-4 text-[13px] text-vf-muted hover:text-vf-text transition-colors"
+      data-testid="button-profile-back"
+    >
+      <ChevronLeft className="w-4 h-4" /> Back
+    </button>
+  );
 }
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
