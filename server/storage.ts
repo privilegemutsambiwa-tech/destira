@@ -24,6 +24,7 @@ import { users } from "@shared/models/auth";
 import { getStoryEventCard, type StoryEventCard } from "./event-seats";
 import { coerceTraits, applyTraitSignals } from "./personality";
 import type { PhotoRole } from "@shared/schema";
+import { localDayKey, userTimezone } from "./gate";
 import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lt, lte, inArray, notInArray, isNotNull, isNull } from "drizzle-orm";
 
 export class PhotoNotFoundError extends Error {
@@ -2826,7 +2827,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async incrementDailyLikes(userId: string): Promise<number> {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDayKey(await userTimezone(userId));
     const existing = await db.select().from(dailyLikeCounts).where(
       and(eq(dailyLikeCounts.userId, userId), eq(dailyLikeCounts.date, today))
     );
@@ -2843,7 +2844,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDailyLikeCount(userId: string): Promise<number> {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDayKey(await userTimezone(userId));
     const [row] = await db.select().from(dailyLikeCounts).where(
       and(eq(dailyLikeCounts.userId, userId), eq(dailyLikeCounts.date, today))
     );

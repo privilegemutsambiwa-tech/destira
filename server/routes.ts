@@ -38,7 +38,7 @@ import * as proximity from "./services/twin-proximity-alerts";
 import * as push from "./push";
 import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema, reminderKindEnum, initiatePaymentSchema, locationReportSchema, updateProximitySettingsSchema, proximityAlerts, placeInvisibility, pushSubscriptions, places, suburbCentroids } from "@shared/schema";
 import * as gate from "./gate";
-import { gateCopy } from "@shared/entitlements";
+import { gateCopy, LIMITS } from "@shared/entitlements";
 import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } from "@shared/schema";
 import * as referralsService from "./referrals";
 import { recordShare } from "./growth";
@@ -1444,7 +1444,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         storage.updateInterviewSummary(interview.id, JSON.stringify({ lines })).catch(() => {});
       }
 
-      res.json({ exists: true, lines, total: realExchanges.length });
+      // The transcript cap is enforced here, not just hidden in the page — a
+      // tier below the full-transcript one only ever receives its own lines.
+      const tg = await gate.checkGate(userId, "read_transcript");
+      const cap = LIMITS[tg.tier].transcriptLines;
+      const visible = tg.ok || cap == null ? lines : (lines ?? []).slice(0, cap);
+      res.json({ exists: true, lines: visible, total: realExchanges.length });
     } catch (e) {
       console.error("Twin talk summary error:", e);
       res.status(500).json({ exists: false });

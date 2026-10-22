@@ -93,7 +93,20 @@ export function nextMidnightISO(tz?: string | null): string {
   return new Date(now.getTime() + (86_400_000 - msIntoDay)).toISOString();
 }
 
-async function userTimezone(userId: string): Promise<string | null> {
+/** Today's date (YYYY-MM-DD) in `tz` — the key the daily like counter is
+ *  stored under. Must agree with nextMidnightISO: the sheet says the likes
+ *  come back "at midnight", so the counter has to roll over at the user's
+ *  own midnight, not UTC's (02:00 in Harare). Server time when tz is bad. */
+export function localDayKey(tz?: string | null): string {
+  try {
+    if (tz) {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    }
+  } catch {}
+  return new Date().toISOString().slice(0, 10);
+}
+
+export async function userTimezone(userId: string): Promise<string | null> {
   const [p] = await db.select({ tz: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));
   return p?.tz ?? null;
 }
@@ -115,7 +128,7 @@ async function usage(userId: string, feature: Feature): Promise<number> {
       return db
         .select({ n: dailyLikeCounts.count })
         .from(dailyLikeCounts)
-        .where(and(eq(dailyLikeCounts.userId, userId), eq(dailyLikeCounts.date, new Date().toISOString().slice(0, 10))))
+        .where(and(eq(dailyLikeCounts.userId, userId), eq(dailyLikeCounts.date, localDayKey(await userTimezone(userId)))))
         .then((r) => r[0]?.n ?? 0);
     case "start_interview":
       return db
