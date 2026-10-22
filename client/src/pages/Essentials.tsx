@@ -6,6 +6,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
 import { peekPendingRsvp } from "@/lib/pending-rsvp";
+import { useAuth } from "@/hooks/use-auth";
+import { trackRegistrationOnce } from "@/lib/pixel";
 import {
   GENDER_OPTIONS,
   SEEKING_OPTIONS,
@@ -68,6 +70,12 @@ export default function Essentials() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: profile, isLoading } = useProfile();
+  const { user } = useAuth();
+
+  // Every new account passes through here once: the ad campaigns' sign-up signal.
+  useEffect(() => {
+    if (user?.id) trackRegistrationOnce(user.id);
+  }, [user?.id]);
 
   const [idx, setIdx] = useState(0);
   const step: Step = STEPS[idx];

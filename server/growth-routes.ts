@@ -2,12 +2,15 @@
 // first-day checklist, member email unsubscribe, tonight's three, and the
 // background member-email and daily-picks sweeps.
 import type { Express, Request } from "express";
-import { getPublicEventTeaser, getOrRenderEventShareCard } from "./event-share";
+import { getPublicEventTeaser, getOrRenderEventShareCard, getUpcomingPublicEvents } from "./event-share";
 import { getFirstDayState, claimFirstDayReward, FirstDayNotDoneError } from "./first-day";
 import * as memberEmail from "./member-email";
 import { getDailyPicks, runDailyPicksPushSweep } from "./daily-picks";
 import { escapeHtml } from "./group-invite";
 import { getSignedUrl, keyFromUploadUrl } from "./storage/objectStorage";
+import { count, eq } from "drizzle-orm";
+import { db } from "./db";
+import { profiles } from "@shared/schema";
 
 export function registerGrowthRoutes(app: Express, getUserId: (req: Request) => string | null) {
   // ── public event teaser (no sign-in) ──────────────────────────────
@@ -25,6 +28,45 @@ export function registerGrowthRoutes(app: Express, getUserId: (req: Request) => 
     } catch (e) {
       console.error("Public event teaser error:", e);
       res.status(500).json({ message: "Failed to load event" });
+    }
+  });
+
+  // ── the signed-out homepage's live content ────────────────────────
+  // Real upcoming public events and the real member count, so the page never
+  // has to make numbers up. Cached for a minute; the page hides what's empty.
+  let landingCache: { at: number; body: unknown } | null = null;
+  app.get("/api/public/landing", async (_req, res) => {
+    try {
+      if (!landingCache || Date.now() - landingCache.at > 60_000) {
+        const [upcoming, [members]] = await Promise.all([
+          getUpcomingPublicEvents(4),
+          db.select({ n: count() }).from(profiles).where(eq(profiles.onboardingCompleted, true)),
+        ]);
+        const events = await Promise.all(
+          upcoming.map(async (t) => {
+            const key = keyFromUploadUrl(t.coverImageUrl);
+            const coverImageUrl = key ? await getSignedUrl(key, 24 * 60 * 60).catch(() => null) : t.coverImageUrl;
+            return {
+              id: t.id,
+              title: t.title,
+              startsAt: t.startsAt,
+              suburb: t.suburb,
+              city: t.city,
+              coverImageUrl,
+              goingCount: t.goingCount,
+              isFull: t.isFull,
+              costLine: t.costLine,
+              isOfficial: t.isOfficial,
+            };
+          }),
+        );
+        landingCache = { at: Date.now(), body: { events, memberCount: Number(members?.n ?? 0) } };
+      }
+      res.setHeader("Cache-Control", "public, max-age=60");
+      res.json(landingCache.body);
+    } catch (e) {
+      console.error("Landing content error:", e);
+      res.json({ events: [], memberCount: 0 });
     }
   });
 

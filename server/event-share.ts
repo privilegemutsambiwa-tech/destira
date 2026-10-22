@@ -13,7 +13,7 @@ import satori from "satori";
 import { BRAND_ICON_DATA_URI, SHARE_CARD_DESIGN } from "./brand-mark";
 import sharp from "sharp";
 import type { Request } from "express";
-import { and, eq, count } from "drizzle-orm";
+import { and, eq, count, gt, asc } from "drizzle-orm";
 import { db } from "./db";
 import { events, eventAttendees, groups, profiles, type Event } from "@shared/schema";
 import { CACHE_DIR, CARD_W, CARD_H, loadFonts, loadPhotoDataUri, publicOrigin, trimToWord, escapeHtml } from "./group-invite";
@@ -88,6 +88,18 @@ export async function getPublicEventTeaser(eventId: number): Promise<PublicEvent
           : "Free to join",
     hasLead: !!e.leadUserId,
   };
+}
+
+/** The next few public events, soonest first, for the signed-out homepage. */
+export async function getUpcomingPublicEvents(limit = 4): Promise<PublicEventTeaser[]> {
+  const rows = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(and(eq(events.visibility, "public"), eq(events.status, "published"), gt(events.startsAt, new Date())))
+    .orderBy(asc(events.startsAt))
+    .limit(limit * 2);
+  const teasers = await Promise.all(rows.map((r) => getPublicEventTeaser(r.id)));
+  return teasers.filter((t): t is PublicEventTeaser => !!t && t.status === "published").slice(0, limit);
 }
 
 function whenLine(iso: string): string {

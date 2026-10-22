@@ -13,6 +13,7 @@ import {
   type OnboardingQuestion,
 } from "@/hooks/use-onboarding";
 import { useToast } from "@/hooks/use-toast";
+import { takeQuizAnswers } from "@/lib/landing-quiz";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 const INPUT =
@@ -71,12 +72,25 @@ export default function Onboarding() {
       if (q.answerText) t[q.id] = q.answerText;
       if (q.selectedOptions?.length) c[q.id] = q.selectedOptions;
     });
+    // Answers given in the homepage quiz (lib/landing-quiz.ts) before the
+    // account existed: saved now as real answers, unless already answered.
+    const imported = new Set<number>();
+    const fromHomepage = takeQuizAnswers();
+    if (fromHomepage) {
+      data.questions.forEach((q) => {
+        const v = fromHomepage[q.orderIndex];
+        if (!v || q.answered || !q.options?.includes(v)) return;
+        c[q.id] = [v];
+        imported.add(q.id);
+        saveAnswer.mutate({ questionId: q.id, selectedOptions: [v] });
+      });
+    }
     setText(t);
     setChoice(c);
     if (!data.nickname) setStep("nickname");
-    else if (data.readiness.answeredCount === 0) setStep("deal");
+    else if (data.readiness.answeredCount === 0 && imported.size === 0) setStep("deal");
     else {
-      const firstUnanswered = data.questions.findIndex((q) => !q.answered);
+      const firstUnanswered = data.questions.findIndex((q) => !q.answered && !imported.has(q.id));
       setStep(firstUnanswered === -1 ? data.questions.length - 1 : firstUnanswered);
     }
     setSeeded(true);

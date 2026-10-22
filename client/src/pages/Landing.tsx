@@ -1,25 +1,34 @@
 import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarHeart, ChevronDown, Flag, Lock, MessageCircle, ShieldCheck, SlidersHorizontal, Sparkles, Users } from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
 import { DestiraLockup } from "@/components/brand/logo";
 import { ResonanceDial } from "@/components/resonance-dial";
-import { ResonanceAxes } from "@/components/resonance-axes";
 import { photos as HERO_PHOTOS, type Photo } from "@/lib/photos";
 import { pendingReferralCode } from "@/lib/attribution";
+import { supabase } from "@/lib/supabase";
+import { trackEvent, trackPageView } from "@/lib/pixel";
+import { LANDING_QUIZ, saveQuizAnswers, twinNote, type QuizAnswers } from "@/lib/landing-quiz";
 
 /* ------------------------------------------------------------------ *
- *  Landing — marketing page, route "/" for unauthenticated visitors.
+ *  Landing — route "/" for signed-out visitors, and where the ads land.
+ *  Built for a cold visitor on a phone: say what Destira is in one line,
+ *  offer one-tap sign-up immediately, then let them try it (the quiz and
+ *  the twin demo) before asking again.
  *
- *  Section order (headlines carry the whole argument on their own):
  *    1  Nav
- *    2  Hero          — "You have not been unlucky."
- *    3  The Turn      — "Your twin goes first."          + live transcript
- *    4  The Read      — [pending review of 1-3]
- *    5  Communities   — [pending]
- *    6  The Objection — [pending]
- *    7  Closing CTA   — [pending]
- *    8  Footer        — [pending]
+ *    2  Hero          — headline matched to the ad (?v=), Google + email
+ *    3  Quiz          — three real onboarding questions → the twin's note
+ *    4  How it works  — three steps
+ *    5  Ask a twin    — tap a question, see how a twin answers (and refuses)
+ *    6  Happening soon — real upcoming public events (/api/public/landing)
+ *    7  Why switch    — the difference from swiping, side by side
+ *    8  Safety        — the twin never speaks as you; you set its limits
+ *    9  FAQ
+ *   10  Closing CTA, footer, and a sticky sign-up bar on phones
+ *
+ *  Every number shown is real or absent: no invented member counts.
  * ------------------------------------------------------------------ */
 
 function isInIframe() {
@@ -278,252 +287,457 @@ function RotatingBackdrop({
   );
 }
 
-function Eyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-      {children}
-    </div>
-  );
-}
+// ── Message match ────────────────────────────────────────────────────
+// Each ad set links with ?v=<key> so the first line someone reads continues
+// the ad they tapped. Unknown or missing keys get the default. Kept for the
+// visit, so coming back to "/" from /signup shows the same promise.
+const HEADLINES: Record<string, { lead: string; accent: string; sub: string }> = {
+  default: {
+    lead: "Meet people you",
+    accent: "actually click with.",
+    sub: "Your AI twin chats with other members' twins first, then brings you the people you'd really get on with, and tells you why. No endless swiping. No cold openers.",
+  },
+  twin: {
+    lead: "Your AI twin breaks",
+    accent: "the ice for you.",
+    sub: "It has the awkward first conversation with other members' twins, then shows you who you'd click with and why. You only step in when it's worth it.",
+  },
+  events: {
+    lead: "Meet new people",
+    accent: "at real events.",
+    sub: "Dinners, hikes, game nights and more, hosted by Destira and its members. Your AI twin points out who's going that you'd actually get on with.",
+  },
+  serious: {
+    lead: "For people who are",
+    accent: "done with games.",
+    sub: "Everyone here is looking for something real. Your AI twin finds the people who want what you want, before either of you spends an evening finding out.",
+  },
+};
 
-// Vision order: Zimbabwe → the rest of Africa → the world. Destira is not a
-// Zimbabwe-only product; it starts there.
-const PLACES = [
-  "Harare",
-  "Bulawayo",
-  "Nairobi",
-  "Lagos",
-  "Accra",
-  "Kampala",
-  "Cape Town",
-  "Dar es Salaam",
-  "Kigali",
-  "London",
-  "Berlin",
-  "New York",
-  "São Paulo",
-  "Sydney",
-];
-
-/** A place name that cycles through PLACES with a soft fade. Static (first item)
- *  under prefers-reduced-motion. Decorative — the sentence around it still reads
- *  with any single value. */
-function RotatingPlace({ className = "" }: { className?: string }) {
-  const reduce = usePrefersReducedMotion();
-  const [i, setI] = useState(0);
-  const [shown, setShown] = useState(true);
-
-  useEffect(() => {
-    if (reduce) return;
-    const id = window.setInterval(() => {
-      setShown(false);
-      window.setTimeout(() => {
-        setI((n) => (n + 1) % PLACES.length);
-        setShown(true);
-      }, 240);
-    }, 2400);
-    return () => window.clearInterval(id);
-  }, [reduce]);
-
-  return (
-    <span
-      className={`inline-block transition-opacity [transition-duration:240ms] ${shown ? "opacity-100" : "opacity-0"} ${className}`}
-      aria-hidden="true"
-    >
-      {PLACES[i]}
-    </span>
-  );
-}
-
-/** The primary ember CTA — routes straight to open signup. */
-function SignupButton({
-  label = "Create your account",
-  className = "",
-}: {
-  label?: string;
-  className?: string;
-}) {
-  const [, setLocation] = useLocation();
-  return (
-    <button
-      onClick={() => setLocation("/signup")}
-      className={`inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-7 h-12 text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] ${className}`}
-      data-testid="button-create-account"
-    >
-      {label}
-    </button>
-  );
-}
-
-/** Inline email capture — removes a page from the signup funnel by carrying the
- *  address straight into /signup as step one. */
-function EmailCapture({ className = "" }: { className?: string }) {
-  const [, setLocation] = useLocation();
-  const [email, setEmail] = useState("");
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setLocation("/signup");
-      return;
+function useHeadline() {
+  const [key] = useState(() => {
+    let v = "";
+    try {
+      v = new URLSearchParams(window.location.search).get("v")?.toLowerCase() ?? "";
+      if (v && HEADLINES[v]) sessionStorage.setItem("destira.v", v);
+      else v = sessionStorage.getItem("destira.v") ?? "";
+    } catch {
+      /* storage blocked: default headline */
     }
-    setLocation(`/signup?email=${encodeURIComponent(trimmed)}`);
+    return HEADLINES[v] ? v : "default";
+  });
+  return HEADLINES[key];
+}
+
+// ── Sign-up buttons ──────────────────────────────────────────────────
+
+async function startGoogle(): Promise<void> {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: `${window.location.origin}/auth/callback` },
+  });
+  if (error) throw error;
+}
+
+/** Google (one tap for most phones) above email. The pair every CTA uses. */
+function SignupButtons({ className = "", testId = "hero" }: { className?: string; testId?: string }) {
+  const [, setLocation] = useLocation();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const google = async () => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      await startGoogle();
+    } catch {
+      setFailed(true);
+    } finally {
+      // On the web the page navigates away; this only matters if it didn't.
+      window.setTimeout(() => setBusy(false), 4000);
+    }
   };
 
   return (
-    <form onSubmit={submit} className={`flex flex-col sm:flex-row gap-2.5 max-w-[440px] ${className}`}>
-      <input
-        type="email"
-        inputMode="email"
-        autoComplete="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="you@email.com"
-        aria-label="Your email"
-        className="flex-1 rounded-full border border-vf-line bg-vf-text/5 px-5 h-12 text-[14.5px] text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow"
-        data-testid="input-hero-email"
-      />
+    <div className={`flex flex-col gap-2.5 w-full max-w-[400px] ${className}`}>
       <button
-        type="submit"
-        className="inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-6 h-12 text-[14.5px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] shrink-0"
-        data-testid="button-hero-email-continue"
+        onClick={google}
+        disabled={busy}
+        className="inline-flex items-center justify-center gap-2.5 rounded-full bg-vf-surface border border-vf-line text-vf-text font-semibold h-[52px] text-[15.5px] btn-press shadow-[0_1px_2px_rgba(0,0,0,0.06)] disabled:opacity-70"
+        data-testid={`button-${testId}-google`}
       >
-        Create your twin
+        <FcGoogle className="w-5 h-5" />
+        {busy ? "Opening Google…" : "Continue with Google"}
       </button>
-    </form>
-  );
-}
-
-/** Static ON/OFF pill toggle from the Twin screen — decorative here. */
-function BoundaryToggle({ label, on }: { label: string; on: boolean }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span
-        className={`w-[42px] h-[24px] rounded-full shrink-0 flex items-center p-[3px] ${
-          on ? "bg-vf-mint justify-end" : "bg-vf-text/[0.14] justify-start"
-        }`}
+      <button
+        onClick={() => setLocation("/signup")}
+        className="inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-white font-semibold h-[52px] text-[15.5px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
+        data-testid={`button-${testId}-email`}
       >
-        <span className="block w-[18px] h-[18px] rounded-full bg-vf-ink" />
-      </span>
-      <span className="text-[13.5px] text-vf-soft">{label}</span>
+        Sign up with email
+      </button>
+      {failed && <p className="text-[13px] text-vf-ember">Couldn't open Google. Try again, or use email.</p>}
     </div>
   );
 }
 
-const TRANSCRIPT: { who: "HERS" | "YOURS"; text: string }[] = [
-  { who: "HERS", text: "She won't move cities again for someone. She's said it twice, both unprompted." },
-  { who: "YOURS", text: "He isn't asking anyone to. He wants someone who already built a life here." },
-  { who: "HERS", text: "Then the thing they'd argue about isn't the thing they think it is." },
-  { who: "YOURS", text: "Agreed. Put them in a room." },
-];
+function Eyebrow({ children, tone = "faint" }: { children: React.ReactNode; tone?: "faint" | "mint" | "ember" }) {
+  const color = tone === "mint" ? "text-vf-mint" : tone === "ember" ? "text-vf-ember" : "text-vf-faint";
+  return <div className={`font-mono text-[11px] uppercase tracking-[0.16em] ${color}`}>{children}</div>;
+}
 
-/** Self-animating twin-to-twin transcript. Types lines in alternately,
- *  loops with a hold, pauses off-screen, freezes complete under
- *  prefers-reduced-motion. Purely decorative — aria-hidden. */
-function TwinTranscript() {
-  const reduce = usePrefersReducedMotion();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-  const [step, setStep] = useState(0); // count of fully-typed lines
-  const [typed, setTyped] = useState(""); // partial text of the line being typed
+function SectionHeading({ id, children, className = "" }: { id?: string; children: React.ReactNode; className?: string }) {
+  return (
+    <h2
+      id={id}
+      className={`font-serif font-normal text-vf-text mt-3 ${className}`}
+      style={{ fontSize: "clamp(30px, 4.4vw, 50px)", lineHeight: 1.06, letterSpacing: "-0.02em" }}
+    >
+      {children}
+    </h2>
+  );
+}
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), {
-      threshold: 0.3,
-    });
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
+// ── 3 · The quiz ─────────────────────────────────────────────────────
 
-  useEffect(() => {
-    if (reduce || !visible) return;
-    let cancelled = false;
-    const timers: number[] = [];
+function TwinQuiz() {
+  const [answers, setAnswers] = useState<QuizAnswers>({});
+  const [i, setI] = useState(0);
+  const started = useRef(false);
+  const done = i >= LANDING_QUIZ.length;
 
-    if (step >= TRANSCRIPT.length) {
-      timers.push(
-        window.setTimeout(() => {
-          if (!cancelled) {
-            setStep(0);
-            setTyped("");
-          }
-        }, 3000),
-      );
-      return () => {
-        cancelled = true;
-        timers.forEach(window.clearTimeout);
-      };
+  const pick = (orderIndex: number, value: string) => {
+    if (!started.current) {
+      started.current = true;
+      trackEvent("ViewContent", { content_name: "twin_quiz" });
     }
-
-    const line = TRANSCRIPT[step].text;
-    const perChar = Math.max(14, Math.floor(1600 / line.length));
-    let i = 0;
-    const tick = () => {
-      if (cancelled) return;
-      i += 1;
-      setTyped(line.slice(0, i));
-      if (i < line.length) {
-        timers.push(window.setTimeout(tick, perChar));
-      } else {
-        timers.push(
-          window.setTimeout(() => {
-            if (!cancelled) {
-              setStep((s) => s + 1);
-              setTyped("");
-            }
-          }, 900),
-        );
+    const next = { ...answers, [orderIndex]: value };
+    setAnswers(next);
+    window.setTimeout(() => {
+      setI((n) => n + 1);
+      if (i + 1 >= LANDING_QUIZ.length) {
+        saveQuizAnswers(next);
+        trackEvent("Lead", { content_name: "twin_quiz" });
       }
-    };
-    timers.push(window.setTimeout(tick, 250));
+    }, 180);
+  };
 
-    return () => {
-      cancelled = true;
-      timers.forEach(window.clearTimeout);
-    };
-  }, [step, visible, reduce]);
+  const restart = () => {
+    setAnswers({});
+    setI(0);
+  };
 
-  const lines = reduce
-    ? TRANSCRIPT
-    : [
-        ...TRANSCRIPT.slice(0, step),
-        ...(step < TRANSCRIPT.length ? [{ who: TRANSCRIPT[step].who, text: typed }] : []),
-      ];
+  const note = done ? twinNote(answers) : null;
+  const q = LANDING_QUIZ[Math.min(i, LANDING_QUIZ.length - 1)];
 
   return (
     <div
-      ref={containerRef}
-      className="rounded-[22px] border border-vf-mint/[0.22] bg-vf-surface2 p-6 min-h-[340px]"
-      aria-hidden="true"
+      className="rounded-[28px] border border-vf-mint/25 p-5 sm:p-8 shadow-[0_20px_60px_-30px_rgba(0,0,0,0.35)]"
+      style={{ background: "linear-gradient(160deg, hsl(var(--vf-mint) / 0.10), var(--vf-surface) 55%)" }}
+      data-testid="twin-quiz"
     >
-      <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint mb-5">
-        twin transcript
-      </div>
-      <div className="flex flex-col gap-4">
-        {lines.map((line, i) => (
-          <div key={i} className="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
-            <span
-              className={`font-mono text-[10.5px] uppercase pt-0.5 ${
-                line.who === "HERS" ? "text-vf-mint" : "text-vf-ember"
-              }`}
-            >
-              {line.who}
-            </span>
-            <span className="text-[14.5px] leading-[1.55] text-vf-text">{line.text}</span>
+      {!done ? (
+        <div key={i} className="animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="flex items-center justify-between">
+            <Eyebrow tone="mint">Question {i + 1} of {LANDING_QUIZ.length}</Eyebrow>
+            <div className="flex gap-1.5" aria-hidden="true">
+              {LANDING_QUIZ.map((_, n) => (
+                <span key={n} className={`h-1.5 rounded-full transition-all ${n <= i ? "w-6 bg-vf-mint" : "w-3 bg-vf-text/15"}`} />
+              ))}
+            </div>
           </div>
+          <p className="font-serif text-vf-text mt-4" style={{ fontSize: "clamp(23px, 3vw, 30px)", lineHeight: 1.15 }}>
+            {q.prompt}
+          </p>
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {q.options.map((o) => {
+              const on = answers[q.orderIndex] === o.value;
+              return (
+                <button
+                  key={o.value}
+                  onClick={() => pick(q.orderIndex, o.value)}
+                  className={`text-left rounded-[16px] border px-4 py-3.5 text-[15px] font-medium transition-all btn-press ${
+                    on ? "border-vf-mint bg-vf-mint/15 text-vf-text" : "border-vf-line bg-vf-surface text-vf-text hover:border-vf-mint/50"
+                  }`}
+                  data-testid={`quiz-option-${q.orderIndex}`}
+                >
+                  {o.label}
+                </button>
+              );
+            })}
+          </div>
+          {i > 0 && (
+            <button onClick={() => setI((n) => n - 1)} className="mt-4 text-[13px] text-vf-muted underline underline-offset-2">
+              Back
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="animate-in fade-in zoom-in-95 duration-500" data-testid="quiz-result">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-vf-mint animate-pulse" aria-hidden="true" />
+            <Eyebrow tone="mint">Your twin's first note about you</Eyebrow>
+          </div>
+          <p className="font-serif text-vf-text mt-4" style={{ fontSize: "clamp(22px, 2.8vw, 28px)", lineHeight: 1.25 }}>
+            “{note!.about}”
+          </p>
+          <p className="mt-4 text-[15.5px] leading-[1.6] text-vf-muted">
+            It would look for <span className="text-vf-text font-medium">{note!.looksFor}</span>, and talk to their twin
+            before you ever have to.
+          </p>
+          <div className="mt-6 rounded-[16px] bg-vf-mint/10 border border-vf-mint/20 px-4 py-3 text-[14px] leading-[1.5] text-vf-text">
+            <b className="font-semibold">Your 3 answers are saved.</b> Create your free account and your twin starts with
+            them, already part-way to its first introductions.
+          </div>
+          <SignupButtons className="mt-5" testId="quiz" />
+          <button onClick={restart} className="mt-4 text-[13px] text-vf-muted underline underline-offset-2">
+            Start over
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 5 · Ask a twin ───────────────────────────────────────────────────
+// A fictional member's twin, so visitors can feel how it answers, including
+// how it declines a topic its owner hasn't switched on.
+
+const ASK_EXAMPLES: { q: string; a: string; refused?: boolean }[] = [
+  {
+    q: "What's she like on a free weekend?",
+    a: "Saturday mornings she's at the Avondale market before nine. Afternoons are for her sister's kids. She keeps Sunday slow on purpose.",
+  },
+  {
+    q: "What would be a deal-breaker?",
+    a: "Someone who goes quiet instead of saying what's wrong. She'd rather have the hard conversation early than guess for a week.",
+  },
+  {
+    q: "How much does she earn?",
+    a: "That's not something she's switched on for me to discuss. If it matters, it's a question for her, later, in person.",
+    refused: true,
+  },
+  {
+    q: "Would we get on?",
+    a: "Probably on the things that matter: you both say what's bothering you straight away. You'd differ on pace. She plans, you improvise.",
+  },
+];
+
+function AskATwin() {
+  const reduce = usePrefersReducedMotion();
+  const [active, setActive] = useState<number | null>(null);
+  const [typed, setTyped] = useState("");
+
+  useEffect(() => {
+    if (active == null) return;
+    const full = ASK_EXAMPLES[active].a;
+    if (reduce) {
+      setTyped(full);
+      return;
+    }
+    setTyped("");
+    let n = 0;
+    const id = window.setInterval(() => {
+      n += 2;
+      setTyped(full.slice(0, n));
+      if (n >= full.length) window.clearInterval(id);
+    }, 16);
+    return () => window.clearInterval(id);
+  }, [active, reduce]);
+
+  const ex = active != null ? ASK_EXAMPLES[active] : null;
+
+  return (
+    <div className="rounded-[28px] border border-vf-line bg-vf-surface p-5 sm:p-7" data-testid="ask-a-twin">
+      <div className="flex items-center gap-3">
+        <div className="relative" aria-hidden="true">
+          <span
+            className="w-12 h-12 rounded-full flex items-center justify-center font-serif text-[22px] text-white"
+            style={{ background: "linear-gradient(135deg, hsl(var(--vf-ember)), var(--vf-mint-vivid))" }}
+          >
+            R
+          </span>
+          <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-vf-mint border-2 border-vf-surface" />
+        </div>
+        <div>
+          <div className="text-[15px] font-semibold text-vf-text">Rufaro's twin</div>
+          <div className="text-[12.5px] text-vf-muted">An example member · answers only what she allows</div>
+        </div>
+      </div>
+
+      <div className="mt-5 min-h-[120px] rounded-[18px] bg-vf-surface2 p-4" aria-live="polite">
+        {ex ? (
+          <>
+            <div className="flex justify-end">
+              <span className="rounded-[14px] rounded-br-[4px] bg-vf-ember text-white px-3.5 py-2 text-[14px] max-w-[85%]">{ex.q}</span>
+            </div>
+            <div className="mt-3 flex">
+              <span
+                className={`rounded-[14px] rounded-bl-[4px] px-3.5 py-2.5 text-[14.5px] leading-[1.5] max-w-[92%] ${
+                  ex.refused ? "bg-vf-text/[0.06] text-vf-muted italic" : "bg-vf-mint/15 text-vf-text"
+                }`}
+              >
+                {typed}
+                {typed.length < ex.a.length && <span className="inline-block w-1.5 h-4 align-middle bg-vf-mint/70 ml-0.5 animate-pulse" />}
+              </span>
+            </div>
+          </>
+        ) : (
+          <p className="text-[14.5px] text-vf-muted">Tap a question below to ask her twin.</p>
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {ASK_EXAMPLES.map((e, n) => (
+          <button
+            key={e.q}
+            onClick={() => setActive(n)}
+            className={`rounded-full border px-3.5 py-2 text-[13.5px] transition-colors btn-press ${
+              active === n ? "border-vf-ember bg-vf-ember/10 text-vf-text" : "border-vf-line text-vf-text hover:border-vf-ember/50"
+            }`}
+            data-testid={`ask-chip-${n}`}
+          >
+            {e.q}
+          </button>
         ))}
       </div>
     </div>
   );
 }
 
+// ── 6 · Happening soon ───────────────────────────────────────────────
+
+interface LandingEvent {
+  id: number;
+  title: string;
+  startsAt: string;
+  suburb: string | null;
+  city: string | null;
+  coverImageUrl: string | null;
+  goingCount: number;
+  isFull: boolean;
+  costLine: string;
+  isOfficial: boolean;
+}
+
+function eventDay(iso: string) {
+  const d = new Date(iso);
+  return {
+    dow: d.toLocaleDateString(undefined, { weekday: "short" }),
+    day: d.toLocaleDateString(undefined, { day: "numeric" }),
+    mon: d.toLocaleDateString(undefined, { month: "short" }),
+    time: d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
+  };
+}
+
+function EventCard({ e }: { e: LandingEvent }) {
+  const [, setLocation] = useLocation();
+  const when = eventDay(e.startsAt);
+  const place = [e.suburb, e.city].filter(Boolean).join(", ");
+  return (
+    <button
+      onClick={() => setLocation(`/events/${e.id}`)}
+      className="group text-left shrink-0 w-[78%] sm:w-auto snap-start rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden btn-press"
+      data-testid={`landing-event-${e.id}`}
+    >
+      <div className="relative aspect-[16/10] bg-vf-surface2">
+        {e.coverImageUrl && (
+          <img src={e.coverImageUrl} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+        )}
+        <div className="absolute top-3 left-3 rounded-[12px] bg-vf-surface/95 text-center px-2.5 py-1.5 shadow-sm">
+          <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-vf-ember">{when.dow}</div>
+          <div className="font-serif text-[20px] leading-none text-vf-text mt-0.5">{when.day}</div>
+          <div className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-vf-muted mt-0.5">{when.mon}</div>
+        </div>
+        {e.isOfficial && (
+          <span className="absolute top-3 right-3 rounded-full bg-vf-ember text-white text-[11px] font-semibold px-2.5 py-1">Destira event</span>
+        )}
+      </div>
+      <div className="p-4">
+        <div className="text-[16px] font-semibold text-vf-text leading-snug line-clamp-2">{e.title}</div>
+        <div className="mt-1.5 text-[13px] text-vf-muted">
+          {when.time}
+          {place && ` · ${place}`}
+        </div>
+        <div className="mt-3 flex items-center justify-between text-[12.5px]">
+          <span className="text-vf-muted">{e.costLine}</span>
+          {e.isFull ? (
+            <span className="text-vf-ember font-medium">Full</span>
+          ) : e.goingCount > 0 ? (
+            <span className="inline-flex items-center gap-1 text-vf-text font-medium">
+              <Users className="w-3.5 h-3.5" /> {e.goingCount} going
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ── 9 · FAQ ──────────────────────────────────────────────────────────
+
+const FAQ: { q: string; a: React.ReactNode }[] = [
+  {
+    q: "Is Destira free?",
+    a: "Yes, joining is free: your twin, Discover, matches, chat, the Lounge and free events. Paid plans add extras such as reading full twin transcripts and hosting your own events. They're paid upfront and never renew on their own.",
+  },
+  {
+    q: "Will the AI pretend to be me?",
+    a: "No. Your twin never messages anyone as you and never agrees to a date for you. It only answers questions about you, only on topics you've switched on, and you can change those any time.",
+  },
+  {
+    q: "What is an AI twin, exactly?",
+    a: "A private assistant that learns from your answers to a few questions. When someone is curious about you, they ask your twin instead of starting with a cold “hey”. It also talks to other members' twins to find people you'd get on with.",
+  },
+  {
+    q: "Who is on Destira?",
+    a: "Adults (18+) who want to actually meet people. Destira started in Harare, Zimbabwe, and anyone can join from anywhere.",
+  },
+  {
+    q: "Do I need photos to start?",
+    a: "No. You can join, answer your twin's questions and look around first. Adding photos later helps people say yes.",
+  },
+  {
+    q: "Is my information safe?",
+    a: (
+      <>
+        We never sell your data. You decide what your twin may discuss, you can block or report anyone, and you can download or
+        delete everything from Settings.{" "}
+        <a href="/privacy" className="text-vf-ember underline underline-offset-2">
+          Read the privacy policy
+        </a>
+        .
+      </>
+    ),
+  },
+];
+
+function FaqItem({ q, a }: { q: string; a: React.ReactNode }) {
+  return (
+    <details className="group border-b border-vf-line py-1 [&_summary::-webkit-details-marker]:hidden">
+      <summary className="flex items-center justify-between gap-4 cursor-pointer list-none py-4 text-[16.5px] font-medium text-vf-text">
+        {q}
+        <ChevronDown className="w-5 h-5 shrink-0 text-vf-muted transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="pb-5 -mt-1 text-[15px] leading-[1.65] text-vf-muted max-w-[62ch]">{a}</div>
+    </details>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────
+
 export default function Landing() {
   const inIframe = isInIframe();
   const [, setLocation] = useLocation();
   const [scrolled, setScrolled] = useState(false);
+  const headline = useHeadline();
+
+  const heroCtaRef = useRef<HTMLDivElement>(null);
+  const closingRef = useRef<HTMLElement>(null);
+  const [heroCtaVisible, setHeroCtaVisible] = useState(true);
+  const [closingVisible, setClosingVisible] = useState(false);
+
+  const [live, setLive] = useState<{ events: LandingEvent[]; memberCount: number }>({ events: [], memberCount: 0 });
 
   const handleDemo = async () => {
     try {
@@ -539,11 +753,37 @@ export default function Landing() {
   };
 
   useEffect(() => {
+    trackPageView();
+    fetch("/api/public/landing")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setLive({ events: d.events ?? [], memberCount: d.memberCount ?? 0 }))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // The phone's sticky sign-up bar: only once the hero's buttons have scrolled
+  // away, and not on top of the closing section's own buttons.
+  useEffect(() => {
+    const watch = (el: Element | null, set: (v: boolean) => void) => {
+      if (!el) return () => {};
+      const io = new IntersectionObserver(([entry]) => set(entry.isIntersecting), { threshold: 0 });
+      io.observe(el);
+      return () => io.disconnect();
+    };
+    const a = watch(heroCtaRef.current, setHeroCtaVisible);
+    const b = watch(closingRef.current, setClosingVisible);
+    return () => {
+      a();
+      b();
+    };
+  }, []);
+  const showStickyBar = !heroCtaVisible && !closingVisible;
 
   // ?ref=CODE is stashed app-wide (lib/attribution.ts, from main.tsx) so it
   // also works on an event link. Here it just names who invited them.
@@ -557,16 +797,9 @@ export default function Landing() {
       .catch(() => {});
   }, []);
 
-  // Page-level head meta. (No react-helmet in this repo — a native effect
-  // gets the same title/OG tags without a new dep + provider.)
-  //
-  // document.title is deliberately left alone here — it stays the static
-  // "Destira" from index.html. Overriding it to a longer string used to mean
-  // a PWA/shortcut installed from this route got a different name than one
-  // installed from anywhere else in the app (two separate "Destira" entries
-  // on the Chrome New Tab page, one titled "Destira — reson…"). og:title
-  // below is what link previews actually read; it doesn't need to match the
-  // tab/shortcut title.
+  // Page-level head meta. document.title stays the static "Destira" from
+  // index.html (a PWA installed from here would otherwise get a different
+  // name); og:* is what link previews read.
   useEffect(() => {
     const created: HTMLMetaElement[] = [];
     const setMeta = (attr: "name" | "property", key: string, content: string) => {
@@ -580,15 +813,17 @@ export default function Landing() {
       el.setAttribute("content", content);
     };
     const desc =
-      "Photographs cannot tell you how someone argues, what they want in three years, or whether they will actually turn up. So we stopped asking you to guess.";
+      "Your AI twin chats with other members' twins first, then shows you who you'd actually click with, and why. Free to join.";
     setMeta("name", "description", desc);
-    setMeta("property", "og:title", "Destira — resonance over photographs");
+    setMeta("property", "og:title", "Destira: meet people you actually click with");
     setMeta("property", "og:description", desc);
     setMeta("property", "og:image", "/brand/og-default.png");
     return () => {
       created.forEach((m) => m.remove());
     };
   }, []);
+
+  const members = live.memberCount >= 300 ? Math.floor(live.memberCount / 100) * 100 : 0;
 
   return (
     <div className="min-h-dvh bg-vf-ink text-vf-text">
@@ -601,13 +836,7 @@ export default function Landing() {
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>
             <strong>Dev note:</strong> Login won't work in the Replit preview pane. Open the app directly:{" "}
-            <a
-              href={window.location.origin}
-              target="_blank"
-              rel="noreferrer"
-              className="underline font-bold"
-              data-testid="link-open-direct"
-            >
+            <a href={window.location.origin} target="_blank" rel="noreferrer" className="underline font-bold" data-testid="link-open-direct">
               {window.location.origin}
             </a>
           </span>
@@ -616,344 +845,247 @@ export default function Landing() {
 
       {/* ============ 1 · NAV ============ */}
       <nav
-        className="sticky top-0 z-50 transition-all duration-300"
-        style={{
-          backdropFilter: scrolled ? "blur(12px)" : "none",
-          background: scrolled ? "rgba(12,9,16,0.7)" : "transparent",
-          borderBottom: `1px solid ${scrolled ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0)"}`,
-        }}
+        className={`sticky top-0 z-50 transition-all duration-300 border-b ${
+          scrolled ? "bg-vf-ink/85 backdrop-blur-md border-vf-line" : "bg-transparent border-transparent"
+        }`}
         data-testid="landing-nav"
       >
-        <div className="max-w-[1180px] mx-auto flex items-center justify-between px-6 h-16">
+        <div className="max-w-[1180px] mx-auto flex items-center justify-between px-5 sm:px-6 h-16">
           <a href="/" className="flex items-center" data-testid="link-logo">
             <DestiraLockup orientation="horizontal" size={28} />
           </a>
           <div className="flex items-center gap-4 sm:gap-6">
-            <a
-              href="#how-it-works"
-              className="hidden md:inline text-[14px] text-vf-muted hover:text-vf-text transition-colors"
-            >
+            <a href="#how-it-works" className="hidden md:inline text-[14px] text-vf-muted hover:text-vf-text transition-colors">
               How it works
             </a>
-            <a
-              href="#communities"
-              className="hidden md:inline text-[14px] text-vf-muted hover:text-vf-text transition-colors"
-            >
-              The Lounge
+            <a href="#faq" className="hidden md:inline text-[14px] text-vf-muted hover:text-vf-text transition-colors">
+              FAQ
             </a>
             <button
               onClick={() => setLocation("/login")}
-              className="text-[14px] text-vf-text hover:text-vf-muted transition-colors"
+              className="text-[14.5px] font-medium text-vf-text hover:text-vf-muted transition-colors"
               data-testid="nav-log-in"
             >
               Log in
             </button>
-            <SignupButton label="Sign up" className="!h-10 !px-5 text-[13.5px]" />
+            <button
+              onClick={() => setLocation("/signup")}
+              className="hidden sm:inline-flex items-center rounded-full bg-vf-ember text-white font-semibold h-10 px-5 text-[14px] btn-press"
+              data-testid="nav-sign-up"
+            >
+              Join free
+            </button>
           </div>
         </div>
       </nav>
 
       {/* ============ 2 · HERO ============ */}
-      <section
-        className="relative px-6 pb-[88px] lg:pb-0 lg:min-h-dvh lg:flex lg:items-center"
-        aria-labelledby="hero-heading"
-        data-testid="section-hero"
-      >
-        <div className="max-w-[1180px] mx-auto w-full pt-20 lg:pt-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] items-center gap-12 lg:gap-[clamp(40px,5vw,88px)]">
-          {/* LEFT — type column (unchanged copy) */}
+      <section className="relative px-5 sm:px-6 pt-6 sm:pt-10 lg:pt-14 pb-16 lg:pb-24" aria-labelledby="hero-heading" data-testid="section-hero">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[520px] -z-0"
+          style={{ background: "radial-gradient(60% 60% at 80% 10%, hsl(var(--vf-ember) / 0.12), transparent 70%), radial-gradient(50% 50% at 0% 30%, hsl(var(--vf-mint) / 0.12), transparent 70%)" }}
+        />
+        <div className="relative max-w-[1180px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] items-center gap-10 lg:gap-16">
           <div>
             {inviter && (
               <div
-                className="mb-6 inline-flex items-center gap-2 rounded-full border border-vf-ember/40 bg-vf-ember/10 px-4 py-2 text-[13.5px] text-vf-text"
+                className="mb-5 inline-flex items-center gap-2 rounded-full border border-vf-ember/40 bg-vf-ember/10 px-4 py-2 text-[13.5px] text-vf-text"
                 data-testid="banner-invited-by"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-vf-ember" aria-hidden="true" />
                 {inviter.firstName} invited you. Join and you both get a free week.
               </div>
             )}
-            <Reveal>
-              <Eyebrow>
-                <RotatingPlace /> · Free to join
-              </Eyebrow>
-              <span className="sr-only">In Harare and opening city by city across Africa and the world. Free to join.</span>
-            </Reveal>
-            <Reveal delay={80}>
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-vf-line bg-vf-surface/70 px-3.5 py-1.5 text-[12.5px] font-medium text-vf-muted">
+                <span className="relative flex w-2 h-2" aria-hidden="true">
+                  <span className="absolute inset-0 rounded-full bg-vf-mint animate-ping opacity-60" />
+                  <span className="relative w-2 h-2 rounded-full bg-vf-mint" />
+                </span>
+                Dating with an AI twin · Free to join
+              </div>
+            </div>
+            <div>
               <h1
                 id="hero-heading"
                 className="font-serif font-normal text-vf-text mt-5"
-                style={{
-                  fontSize: "clamp(38px, 6.5vw, 86px)",
-                  lineHeight: 1.02,
-                  letterSpacing: "-0.025em",
-                }}
+                style={{ fontSize: "clamp(40px, 7vw, 80px)", lineHeight: 1.0, letterSpacing: "-0.03em" }}
               >
-                Come and find
+                {headline.lead}
                 <br />
-                <em className="italic text-vf-ember">your person.</em>
+                <em className="italic text-vf-ember">{headline.accent}</em>
               </h1>
-            </Reveal>
-            <Reveal delay={160}>
-              <p className="mt-7 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
-                If it feels like everybody else got the simple version of this, you are not
-                behind and you are not too late. Destira is a place to actually meet people,
-                wherever you are — your AI twin does the first awkward part, and the rest is a
-                home worth spending time in: groups, events, and a feed that is about the people.
-              </p>
-            </Reveal>
-            <Reveal delay={240}>
-              <div className="mt-9">
-                <EmailCapture />
-                <p className="mt-3 text-[13px] text-vf-faint">
-                  Free, forever. No swiping through strangers.{" "}
+            </div>
+            <div>
+              <p className="mt-5 text-[16.5px] md:text-[18px] leading-[1.6] text-vf-muted max-w-[52ch]">{headline.sub}</p>
+            </div>
+            <div>
+              <div ref={heroCtaRef} className="mt-7">
+                <SignupButtons />
+                <p className="mt-3.5 text-[13px] text-vf-muted">
+                  Free · 18+ · About 2 minutes{" "}
                   <span aria-hidden="true">·</span>{" "}
-                  <button
-                    onClick={() => setLocation("/login")}
-                    className="text-vf-muted hover:text-vf-text transition-colors underline underline-offset-2"
-                    data-testid="hero-log-in"
-                  >
-                    Already here? Log in
+                  <button onClick={() => setLocation("/login")} className="underline underline-offset-2 hover:text-vf-text" data-testid="hero-log-in">
+                    I have an account
                   </button>
                 </p>
+                {members > 0 && (
+                  <p className="mt-4 inline-flex items-center gap-2 text-[13.5px] text-vf-text">
+                    <Users className="w-4 h-4 text-vf-mint" />
+                    Join {members.toLocaleString()}+ people already on Destira
+                  </p>
+                )}
               </div>
-            </Reveal>
-
-            {/* Below lg (1024) this column runs full-width, which on an
-                iPad's 768–1023px portrait band would stretch a phone-sized
-                4:5 photo well past 1000px tall — constrain it so tablet
-                portrait gets a sane single photo, not a full-bleed poster. */}
-            <div className="lg:hidden mt-10 max-w-[420px] mx-auto md:mx-0">
-              <RotatingPhoto slots={HERO_SET} ratio="4/5" priority />
             </div>
           </div>
 
-          {/* RIGHT — two-image stagger, desktop only */}
-          <Reveal delay={200} className="hidden lg:block">
-            <div className="relative group">
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -inset-10 translate-x-8 -translate-y-8"
-                style={{
-                  background: "radial-gradient(45% 45% at 65% 30%, rgba(255,107,74,0.35), rgba(12,9,16,0) 70%)",
-                  filter: "blur(60px)",
-                  opacity: 0.1,
-                }}
-              />
-              <RotatingPhoto
-                slots={HERO_SET}
-                ratio="4/5"
-                priority
-                className="relative transition-transform duration-500 ease-out motion-safe:group-hover:scale-[1.015]"
-              />
-              <div
-                className="absolute w-[46%] rotate-[-3deg] transition-transform duration-500 ease-out motion-safe:group-hover:rotate-[-1.5deg]"
-                style={{ bottom: "-8%", left: "-14%", zIndex: 3, boxShadow: "0 0 0 4px #0C0910", borderRadius: "20px" }}
-              >
-                <RotatingPhoto
-                  slots={HERO_SET}
-                  ratio="1/1"
-                  startIndex={heroOffset(1 / 6)}
-                  caption="THURSDAY · THE LISTENING ROOM"
-                />
+          {/* The product in one glance: a person, a resonance score, and the reason. */}
+          <div>
+            <div className="relative max-w-[440px] mx-auto lg:mx-0 lg:ml-auto">
+              <RotatingPhoto slots={HERO_SET} ratio="4/5" priority className="shadow-[0_30px_80px_-30px_rgba(0,0,0,0.45)]" />
+              <div className="absolute -left-3 sm:-left-8 top-6 rounded-[16px] bg-vf-surface/95 backdrop-blur border border-vf-line px-3.5 py-2.5 shadow-lg max-w-[230px] animate-in fade-in slide-in-from-left-4 duration-700">
+                <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-vf-mint">
+                  <Sparkles className="w-3 h-3" /> Twins talking
+                </div>
+                <p className="text-[13px] leading-[1.4] text-vf-text mt-1">“You both say what's bothering you straight away.”</p>
+              </div>
+              <div className="absolute -right-2 sm:-right-6 -bottom-6 rounded-[20px] bg-vf-surface border border-vf-line p-3.5 pr-5 shadow-xl flex items-center gap-3.5 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <ResonanceDial score={87} size={60} />
+                <div>
+                  <div className="text-[14px] font-semibold text-vf-text">87% resonance</div>
+                  <div className="text-[12.5px] text-vf-muted">Strong on values · see why</div>
+                </div>
               </div>
             </div>
-          </Reveal>
-        </div>
-
-        <div className="hidden lg:flex absolute left-1/2 -translate-x-1/2 bottom-8 flex-col items-center gap-3">
-          <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-            How it actually works
-          </span>
-          <span className="w-px h-10 bg-vf-text/20" aria-hidden="true" />
+          </div>
         </div>
       </section>
 
-      {/* ============ 3 · BELONGING ============ */}
-      <section
-        className="px-6"
-        style={{ paddingBlock: "clamp(72px, 10vh, 128px)" }}
-        aria-labelledby="belonging-heading"
-        data-testid="section-belonging"
-      >
-        <div className="max-w-[720px] mx-auto text-center">
-          <Reveal>
-            <Eyebrow>You are not late</Eyebrow>
-          </Reveal>
-          <Reveal delay={80}>
-            <h2
-              id="belonging-heading"
-              className="font-serif font-normal text-vf-text mt-4"
-              style={{ fontSize: "clamp(28px, 3.6vw, 44px)", lineHeight: 1.1, letterSpacing: "-0.02em" }}
-            >
-              Everyone here is looking for the same thing you are.
-            </h2>
-          </Reveal>
-          <Reveal delay={160}>
-            <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted mx-auto max-w-[56ch]">
-              Nobody on Destira is here to collect matches and disappear. It is built for
-              meeting — groups you actually show up to, events on real evenings, and people who
-              got tired of pretending they weren't looking. It started in Harare. It opens in a
-              new city most months.
-            </p>
-          </Reveal>
-          <Reveal delay={240}>
-            <div className="mt-10 flex flex-col sm:flex-row sm:divide-x divide-vf-line border-y border-vf-line">
-              {[
-                ["Your twin talks first", "the first message is never cold"],
-                ["Built for meeting", "every match points at a real evening"],
-                ["Free forever", "the twin, the groups, the events — all of it"],
-              ].map(([label, sub]) => (
-                <div key={label} className="flex-1 py-5 px-4">
-                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-text">
-                    {label}
-                  </div>
-                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mt-1.5">
-                    {sub}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ============ 4 · THE TURN ============ */}
-      <section
-        id="how-it-works"
-        className="px-6"
-        style={{ paddingBlock: "clamp(88px, 12vh, 160px)" }}
-        aria-labelledby="turn-heading"
-        data-testid="section-turn"
-      >
-        <div className="max-w-[1180px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-16 items-start">
+      {/* ============ 3 · QUIZ ============ */}
+      <section id="try" className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="quiz-heading" data-testid="section-quiz">
+        <div className="max-w-[1080px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-8 lg:gap-14 items-center">
           <div>
             <Reveal>
-              <Eyebrow>How it works</Eyebrow>
-            </Reveal>
-            <Reveal delay={80}>
-              <h2
-                id="turn-heading"
-                className="font-serif font-normal text-vf-text mt-4"
-                style={{ fontSize: "clamp(32px, 4.4vw, 52px)", lineHeight: 1.05, letterSpacing: "-0.02em" }}
-              >
-                Your twin goes first.
-              </h2>
-            </Reveal>
-            <Reveal delay={160}>
-              <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
-                You talk to your twin — an AI that learns how you think, what you have already
-                decided about your life, and what you will not compromise on. Then it talks to
-                theirs.
-              </p>
-            </Reveal>
-            <Reveal delay={240}>
-              <p className="mt-4 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
-                Two twins have the conversation you would have had on an awkward first date, in
-                ninety seconds, before either of you gives up an evening. Then you read what was
-                said. Both sides. Including the parts that do not flatter you.
+              <Eyebrow tone="mint">Try it · 30 seconds</Eyebrow>
+              <SectionHeading id="quiz-heading">See what your twin would say about you.</SectionHeading>
+              <p className="mt-4 text-[16px] md:text-[17px] leading-[1.6] text-vf-muted max-w-[46ch]">
+                Three taps. These are real questions from Destira, so your answers carry straight into your account
+                when you join.
               </p>
             </Reveal>
           </div>
-
-          <Reveal delay={120}>
-            <TwinTranscript />
-            <div className="mt-4">
-              <RotatingPhoto
-                slots={HERO_SET}
-                ratio="16/9"
-                startIndex={heroOffset(2 / 6)}
-                caption="NINETY SECONDS OF TWIN CONVERSATION, THEN AN ACTUAL EVENING"
-              />
-            </div>
+          <Reveal delay={100}>
+            <TwinQuiz />
           </Reveal>
         </div>
       </section>
 
-      {/* ============ 5 · THE READ ============ */}
-      <section
-        className="px-6"
-        style={{ paddingBlock: "clamp(88px, 12vh, 160px)" }}
-        aria-labelledby="read-heading"
-        data-testid="section-read"
-      >
+      {/* ============ 4 · HOW IT WORKS ============ */}
+      <section id="how-it-works" className="px-5 sm:px-6 py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="how-heading" data-testid="section-how">
         <div className="max-w-[1180px] mx-auto">
-          <div className="max-w-[720px]">
+          <Reveal>
+            <Eyebrow>How it works</Eyebrow>
+            <SectionHeading id="how-heading">Less swiping. Better first dates.</SectionHeading>
+          </Reveal>
+          <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+            {[
+              {
+                icon: MessageCircle,
+                title: "Tell your twin who you are",
+                body: "Answer a few quick questions. Your twin learns what matters to you and what you won't compromise on.",
+              },
+              {
+                icon: Sparkles,
+                title: "Twins talk first",
+                body: "Your twin chats with other members' twins, then brings you the people you'd get on with, with the reasons shown.",
+              },
+              {
+                icon: CalendarHeart,
+                title: "You take it from there",
+                body: "Say hi to a match who already has something in common with you, or meet people at a small event nearby.",
+              },
+            ].map((s, n) => (
+              <Reveal key={s.title} delay={n * 90}>
+                <div className="h-full rounded-[24px] border border-vf-line bg-vf-surface p-6" data-testid={`how-step-${n + 1}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="w-11 h-11 rounded-full bg-vf-ember/10 text-vf-ember flex items-center justify-center">
+                      <s.icon className="w-5 h-5" />
+                    </span>
+                    <span className="font-serif text-[40px] leading-none text-vf-text/15">{n + 1}</span>
+                  </div>
+                  <div className="mt-5 text-[19px] font-semibold text-vf-text">{s.title}</div>
+                  <p className="mt-2 text-[15px] leading-[1.6] text-vf-muted">{s.body}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ============ 5 · ASK A TWIN ============ */}
+      <section className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="ask-heading" data-testid="section-ask">
+        <div className="max-w-[1080px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14 items-center">
+          <Reveal>
+            <Eyebrow tone="ember">No more cold openers</Eyebrow>
+            <SectionHeading id="ask-heading">Curious about someone? Ask their twin.</SectionHeading>
+            <p className="mt-4 text-[16px] md:text-[17px] leading-[1.6] text-vf-muted max-w-[48ch]">
+              Instead of “hey” and a long wait, ask what you actually want to know. Their twin answers honestly, and
+              politely declines anything they've kept private.
+            </p>
+          </Reveal>
+          <Reveal delay={100}>
+            <AskATwin />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ============ 6 · HAPPENING SOON ============ */}
+      {live.events.length > 0 && (
+        <section className="py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="events-heading" data-testid="section-events">
+          <div className="max-w-[1180px] mx-auto px-5 sm:px-6">
             <Reveal>
-              <Eyebrow>Who your twin brings you</Eyebrow>
-            </Reveal>
-            <Reveal delay={80}>
-              <h2
-                id="read-heading"
-                className="font-serif font-normal text-vf-text mt-4"
-                style={{ fontSize: "clamp(32px, 4.4vw, 52px)", lineHeight: 1.05, letterSpacing: "-0.02em" }}
-              >
-                People, with the reasons shown.
-              </h2>
-            </Reveal>
-            <Reveal delay={160}>
-              <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
-                Your twin brings you people it has already talked to — each with a resonance
-                score and the four things it is built from, including the one you score worst on.
-                We would rather tell you she moves slower than you do than sell you a match we
-                cannot defend.
+              <Eyebrow>Happening soon</Eyebrow>
+              <SectionHeading id="events-heading">Meet people in real life, too.</SectionHeading>
+              <p className="mt-4 text-[16px] leading-[1.6] text-vf-muted max-w-[52ch]">
+                Small gatherings hosted by Destira and its members. Tap one to see the details.
               </p>
             </Reveal>
           </div>
-
-          <Reveal delay={200} className="mt-12">
-            <div className="max-w-[460px] mx-auto rounded-[26px] border border-vf-line bg-vf-surface p-6 md:p-8 flex flex-col gap-6">
-              <div className="flex items-center gap-5 flex-wrap">
-                <ResonanceDial score={87} size={96} />
-                <div className="min-w-0">
-                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted">
-                    Resonance read
-                  </div>
-                  <p className="text-[15px] leading-relaxed text-vf-text mt-1.5 max-w-[240px]">
-                    Strong on how you both handle conflict. Thin on pace — she moves slower than you do.
-                  </p>
-                </div>
-              </div>
-              <ResonanceAxes
-                axes={[
-                  { label: "How you argue", value: 94 },
-                  { label: "What you want next", value: 89 },
-                  { label: "Daily rhythm", value: 71 },
-                  { label: "Pace", value: 58 },
-                ]}
-              />
-              <div className="rounded-[18px] border border-vf-mint/20 bg-vf-mint/[0.05] p-4">
-                <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-mint mb-3">
-                  Twin transcript
-                </div>
-                <div className="flex flex-col gap-2.5">
-                  <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2.5">
-                    <span className="font-mono text-[10px] uppercase text-vf-mint pt-0.5">Hers</span>
-                    <span className="text-[13.5px] leading-[1.5] text-vf-text">
-                      She won't move cities again for someone.
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2.5">
-                    <span className="font-mono text-[10px] uppercase text-vf-ember pt-0.5">Yours</span>
-                    <span className="text-[13.5px] leading-[1.5] text-vf-text">
-                      He isn't asking anyone to. He wants someone who already built a life here.
-                    </span>
-                  </div>
-                </div>
-              </div>
+          <div className="mt-8 max-w-[1180px] mx-auto">
+            <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory px-5 sm:px-6 pb-2 [scrollbar-width:none]">
+              {live.events.map((e) => (
+                <EventCard key={e.id} e={e} />
+              ))}
             </div>
-          </Reveal>
+          </div>
+        </section>
+      )}
 
-          <Reveal delay={120} className="mt-12">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-6 max-w-[900px] mx-auto">
+      {/* ============ 7 · WHY SWITCH ============ */}
+      <section className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="why-heading" data-testid="section-why">
+        <div className="max-w-[880px] mx-auto">
+          <Reveal>
+            <Eyebrow>Why people switch</Eyebrow>
+            <SectionHeading id="why-heading">Not another swiping app.</SectionHeading>
+          </Reveal>
+          <Reveal delay={100}>
+            <div className="mt-8 rounded-[24px] border border-vf-line bg-vf-surface overflow-hidden">
+              <div className="grid grid-cols-[1fr_1fr] sm:grid-cols-[0.8fr_1fr_1fr] text-[12px] font-mono uppercase tracking-[0.12em] border-b border-vf-line">
+                <div className="hidden sm:block p-4 text-vf-faint" />
+                <div className="p-4 text-vf-faint">Swiping apps</div>
+                <div className="p-4 text-vf-ember bg-vf-ember/[0.06]">Destira</div>
+              </div>
               {[
-                ["No cold openers", "Your twins talk before you do, so nobody starts from nothing."],
-                ["No paid matches", "We do not sell you back people who already liked you."],
-                ["No guessing", "Every score opens into the conversation it came from."],
-              ].map(([label, note]) => (
-                <div key={label}>
-                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-                    {label}
-                  </div>
-                  <p className="mt-2 text-[14px] leading-[1.6] text-vf-muted">{note}</p>
+                ["First message", "“Hey” and hoping", "Your twins already found common ground"],
+                ["Who you see", "Whoever swiped right", "People your twin talked to, with reasons"],
+                ["Your time", "Hours of swiping", "A few questions, then your twin does the work"],
+                ["Meeting up", "Up to you to arrange", "Events and groups to show up to"],
+              ].map(([label, them, us]) => (
+                <div key={label} className="grid grid-cols-[1fr_1fr] sm:grid-cols-[0.8fr_1fr_1fr] border-b last:border-b-0 border-vf-line">
+                  <div className="col-span-2 sm:col-span-1 px-4 pt-4 sm:p-4 text-[13px] font-semibold text-vf-text">{label}</div>
+                  <div className="p-4 pt-2 sm:pt-4 text-[14px] text-vf-muted">{them}</div>
+                  <div className="p-4 pt-2 sm:pt-4 text-[14px] text-vf-text font-medium bg-vf-ember/[0.06]">{us}</div>
                 </div>
               ))}
             </div>
@@ -961,221 +1093,25 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 6 · THE FOUR PILLARS ============ */}
-      <section
-        className="px-6"
-        style={{ paddingBlock: "clamp(88px, 12vh, 160px)" }}
-        aria-labelledby="inside-heading"
-        data-testid="section-inside"
-      >
+      {/* ============ 8 · SAFETY ============ */}
+      <section className="px-5 sm:px-6 py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="safety-heading" data-testid="section-safety">
         <div className="max-w-[1180px] mx-auto">
-          <div className="max-w-[720px]">
-            <Reveal>
-              <Eyebrow>Everything is free, on day one</Eyebrow>
-            </Reveal>
-            <Reveal delay={80}>
-              <h2
-                id="inside-heading"
-                className="font-serif font-normal text-vf-text mt-4"
-                style={{ fontSize: "clamp(32px, 4.4vw, 52px)", lineHeight: 1.05, letterSpacing: "-0.02em" }}
-              >
-                Four things it's actually built from.
-              </h2>
-            </Reveal>
-            <Reveal delay={160}>
-              <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
-                No trial, no tiers to compare, nothing held back to sell you later. This is the
-                free account.
-              </p>
-            </Reveal>
-          </div>
-
-          {/* The twin is the pillar everything else depends on, so it gets
-              the full-width slot and the supporting detail (resonance,
-              transcripts, boundaries — three separate flat cards before)
-              folded in as facets of one thing, not three more things. The
-              other three sit level with each other below it. */}
-          <Reveal delay={200} className="mt-12">
-            <div
-              className="rounded-[28px] border border-vf-mint/[0.18] p-7 sm:p-9 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-8 lg:gap-12 lg:items-center"
-              style={{ background: "linear-gradient(155deg, rgba(143,227,199,0.06), var(--vf-surface2) 60%)" }}
-              data-testid="pillar-twin"
-            >
-              <div>
-                <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint">
-                  Pillar 01 · The AI twin
-                </div>
-                <h3
-                  className="font-serif font-normal text-vf-text mt-3"
-                  style={{ fontSize: "clamp(24px, 2.6vw, 32px)", lineHeight: 1.15, letterSpacing: "-0.015em" }}
-                >
-                  Your twin talks first, so you don't start from nothing.
-                </h3>
-                <p className="mt-4 text-[15px] md:text-[16px] leading-[1.65] text-vf-muted max-w-[52ch]">
-                  It learns from how you talk to it, then has the awkward first conversation for
-                  you — with someone else's twin, in ninety seconds, before either of you gives up
-                  an evening. It never sends messages as you and never agrees to anything on your
-                  behalf.
-                </p>
-                <div className="mt-6 flex flex-wrap gap-2.5">
-                  {[
-                    "Resonance, scored honestly",
-                    "Transcripts you can read",
-                    "Boundaries you set",
-                  ].map((facet) => (
-                    <span
-                      key={facet}
-                      className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-vf-mint border border-vf-mint/25 bg-vf-mint/[0.06] rounded-full px-3 py-1.5"
-                    >
-                      {facet}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-row lg:flex-col items-center gap-6 lg:gap-5">
-                <ResonanceDial score={87} size={92} />
-                <div className="flex flex-col gap-1.5 text-[12.5px] leading-[1.4] max-w-[190px]">
-                  <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
-                    <span className="font-mono uppercase text-vf-mint">Hers</span>
-                    <span className="text-vf-text">Won't move cities again for someone.</span>
-                  </div>
-                  <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
-                    <span className="font-mono uppercase text-vf-ember">Yours</span>
-                    <span className="text-vf-text">Isn't asking anyone to.</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <Reveal>
+            <Eyebrow tone="mint">You stay in control</Eyebrow>
+            <SectionHeading id="safety-heading">Your twin works for you. Never as you.</SectionHeading>
           </Reveal>
-
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              {
-                n: "02",
-                title: "Interest Lounges",
-                body:
-                  "Rooms for the things you actually do — musicians, runners, long dinners. Talk to people like you first; your twin sits in and learns who you are with your own people.",
-                fragment: (
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex -space-x-2">
-                      {["#3A3350", "#4A2F3A", "#2E4A3F"].map((bg, i) => (
-                        <span
-                          key={i}
-                          className="w-6 h-6 rounded-full border-2 border-vf-surface2"
-                          style={{ background: bg }}
-                        />
-                      ))}
-                    </div>
-                    <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-                      412 members
-                    </span>
-                  </div>
-                ),
-              },
-              {
-                n: "03",
-                title: "Local Events",
-                body:
-                  "Small hosted evenings, starting in Harare and rolling out city by city. Your twin flags who's going that you'd actually get on with.",
-                fragment: (
-                  <div className="w-14 rounded-[12px] border border-vf-line bg-vf-surface overflow-hidden text-center">
-                    <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-faint py-1 border-b border-vf-line">
-                      Thu
-                    </div>
-                    <div className="font-serif text-vf-text text-[22px] py-1.5">14</div>
-                  </div>
-                ),
-              },
-              {
-                n: "04",
-                title: "Story-based Discovery",
-                body:
-                  "Post a moment, see everyone else's. Discovery here is a story you post, not a profile you optimize — a feed that's actually about the people.",
-                fragment: (
-                  <div className="flex -space-x-1.5">
-                    {["#4A2F3A", "#2E4A3F", "#3A3350"].map((bg, i) => (
-                      <span key={i} className="w-8 h-8 rounded-full p-[2px]" style={{ background: "#FF6B4A" }}>
-                        <span className="block w-full h-full rounded-full border-2 border-vf-surface2" style={{ background: bg }} />
-                      </span>
-                    ))}
-                  </div>
-                ),
-              },
-            ].map((card, i) => (
-              <Reveal key={card.n} delay={i * 80}>
-                <div
-                  className="h-full rounded-[22px] border border-vf-line bg-vf-surface2 p-6 flex flex-col gap-3"
-                  data-testid={`inside-card-${card.n}`}
-                >
-                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-                    Pillar {card.n}
-                  </div>
-                  <div className="text-[18px] text-vf-text">{card.title}</div>
-                  <p className="text-[14px] leading-[1.6] text-vf-muted flex-1">{card.body}</p>
-                  <div className="mt-1 min-h-[44px] flex items-center">{card.fragment}</div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-
-          <Reveal delay={120}>
-            <p className="mt-10 text-center text-[14px] text-vf-muted">
-              Ember, our paid tier, only makes your twin work harder. It never buys you matches.
-            </p>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ============ 7 · COMMUNITIES ============ */}
-      <section
-        id="communities"
-        className="px-6"
-        style={{ paddingBlock: "clamp(88px, 12vh, 160px)" }}
-        aria-labelledby="communities-heading"
-        data-testid="section-communities"
-      >
-        <div className="max-w-[1180px] mx-auto">
-          <div className="max-w-[720px]">
-            <Reveal>
-              <Eyebrow>The Lounge</Eyebrow>
-            </Reveal>
-            <Reveal delay={80}>
-              <h2
-                id="communities-heading"
-                className="font-serif font-normal text-vf-text mt-4"
-                style={{ fontSize: "clamp(30px, 3.6vw, 44px)", lineHeight: 1.05, letterSpacing: "-0.02em" }}
-              >
-                Groups you actually show up to.
-              </h2>
-            </Reveal>
-            <Reveal delay={160}>
-              <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted max-w-[56ch]">
-                Rooms for the things you actually do — musicians, runners, long dinners. You talk
-                to people like you first, and your twin sits in and learns who you are with your
-                own people, which is a better signal than anything you would write about yourself.
-              </p>
-            </Reveal>
-          </div>
-
-          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-5">
-            {[
-              ["Late Practice", "412 members · musicians with day jobs", 3 / 6],
-              ["Sunday Trail", "1,208 members · 6am starts, no excuses", 4 / 6],
-              ["Table for Six", "330 members · long dinners, dating with intent", 5 / 6],
-            ].map(([name, meta, offset], i) => (
-              <Reveal key={name as string} delay={i * 80}>
-                <div className="rounded-[22px] border border-vf-line bg-vf-surface overflow-hidden">
-                  <RotatingPhoto
-                    slots={HERO_SET}
-                    ratio="3/2"
-                    startIndex={heroOffset(offset as number)}
-                    style={{ borderRadius: 0 }}
-                  />
-                  <div className="p-5">
-                    <div className="text-[16px] text-vf-text">{name}</div>
-                    <div className="text-[13px] text-vf-muted mt-1">{meta}</div>
-                  </div>
+              { icon: ShieldCheck, title: "Never speaks as you", body: "It never sends a message in your name or agrees to a date for you." },
+              { icon: SlidersHorizontal, title: "You set the limits", body: "Choose exactly which topics it may discuss. Change them any time." },
+              { icon: Flag, title: "Block and report", body: "Block anyone in a tap. Reports are reviewed by the Destira team." },
+              { icon: Lock, title: "Adults only, your data", body: "18+ only. We never sell your data, and you can delete everything." },
+            ].map((t, n) => (
+              <Reveal key={t.title} delay={n * 70}>
+                <div className="h-full rounded-[22px] border border-vf-line bg-vf-surface p-5">
+                  <t.icon className="w-6 h-6 text-vf-mint" />
+                  <div className="mt-4 text-[16.5px] font-semibold text-vf-text">{t.title}</div>
+                  <p className="mt-1.5 text-[14.5px] leading-[1.55] text-vf-muted">{t.body}</p>
                 </div>
               </Reveal>
             ))}
@@ -1183,179 +1119,114 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 5.5 · BRING YOUR PEOPLE (strip, not a section) ============ */}
-      <div className="px-6" data-testid="strip-referral">
-        <div className="max-w-[1180px] mx-auto border-y border-vf-line py-8 md:py-10">
+      {/* ============ 9 · FAQ ============ */}
+      <section id="faq" className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="faq-heading" data-testid="section-faq">
+        <div className="max-w-[760px] mx-auto">
           <Reveal>
-            <Eyebrow>Bring your people</Eyebrow>
-            <p
-              className="font-serif font-normal text-vf-text mt-3"
-              style={{ fontSize: "clamp(20px, 2.6vw, 30px)", lineHeight: 1.15, letterSpacing: "-0.015em" }}
-            >
-              Bring a friend, and you both get a free week.
-            </p>
-            <p className="mt-3 text-[14.5px] leading-[1.6] text-vf-muted max-w-[62ch]">
-              When someone joins with your invite and finishes setting up, you each get an extra
-              week of your trial, or a week of Spark if you're on Free — or 20 extra profile views
-              if you're already on a paid plan. It never buys you a match —
-              your twin still does all the introducing, and that part is not for sale.
-            </p>
+            <Eyebrow>Questions</Eyebrow>
+            <SectionHeading id="faq-heading">Good to know.</SectionHeading>
           </Reveal>
-        </div>
-      </div>
-
-      {/* ============ 6 · THE OBJECTION ============ */}
-      <section
-        className="px-6"
-        style={{ paddingBlock: "clamp(88px, 12vh, 160px)" }}
-        aria-labelledby="objection-heading"
-        data-testid="section-objection"
-      >
-        <div className="max-w-[720px] mx-auto text-center">
-          <Reveal>
-            <Eyebrow>The obvious worry</Eyebrow>
-          </Reveal>
-          <Reveal delay={80}>
-            <h2
-              id="objection-heading"
-              className="font-serif font-normal text-vf-text mt-4"
-              style={{ fontSize: "clamp(32px, 4.4vw, 52px)", lineHeight: 1.05, letterSpacing: "-0.02em" }}
-            >
-              It is not pretending to be you.
-            </h2>
-          </Reveal>
-          <Reveal delay={160}>
-            <p className="mt-6 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted mx-auto max-w-[56ch]">
-              Your twin never sends a message as you, never agrees to a date for you, and never
-              discusses anything you have not switched on. You can read every word it has said. You
-              can strike any fact out of its memory.
-            </p>
-          </Reveal>
-          <Reveal delay={240}>
-            <p className="mt-4 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted mx-auto max-w-[56ch]">
-              It is not a mask. It is the part of dating that should have been automated years ago:
-              finding out, early, whether this is worth an evening.
-            </p>
-          </Reveal>
-          <Reveal delay={320}>
-            <div
-              className="mt-10 inline-flex flex-col gap-3.5 rounded-[18px] border border-vf-line bg-vf-surface2 p-6 text-left"
-              aria-hidden="true"
-            >
-              <BoundaryToggle label="Can discuss wanting kids" on />
-              <BoundaryToggle label="Can discuss my past, in outline" on />
-              <BoundaryToggle label="Cannot discuss earnings" on={false} />
-            </div>
-          </Reveal>
+          <div className="mt-6 border-t border-vf-line">
+            {FAQ.map((f) => (
+              <FaqItem key={f.q} q={f.q} a={f.a} />
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* ============ 8 · CLOSING CTA ============ */}
+      {/* ============ 10 · CLOSING CTA ============ */}
       <section
-        className="relative px-6 flex items-center justify-center overflow-hidden"
-        style={{ minHeight: "78vh" }}
+        ref={closingRef}
+        className="relative px-5 sm:px-6 py-24 sm:py-32 flex items-center justify-center overflow-hidden"
         aria-labelledby="closing-heading"
         data-testid="section-closing"
       >
-        {/* full-bleed backdrop: rotates through the same weighted set */}
-        <div className="absolute inset-0" aria-hidden="true" data-photo-slot="closing-fullbleed">
+        <div className="absolute inset-0" aria-hidden="true">
           <RotatingBackdrop slots={HERO_SET} startIndex={heroOffset(11 / 12)} />
-          {/* legibility scrim + top/bottom fade into the page */}
-          <div
-            className="absolute inset-0"
-            style={{ background: "linear-gradient(rgba(12,9,16,0.72), rgba(12,9,16,0.88))" }}
-          />
-          <div className="absolute inset-x-0 top-0 h-[120px] bg-gradient-to-b from-vf-ink to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 h-[120px] bg-gradient-to-t from-vf-ink to-transparent" />
+          <div className="absolute inset-0" style={{ background: "linear-gradient(rgba(12,9,16,0.70), rgba(12,9,16,0.86))" }} />
         </div>
-        <div className="relative max-w-[820px] mx-auto text-center">
+        <div className="relative max-w-[720px] mx-auto text-center flex flex-col items-center">
           <Reveal>
             <h2
               id="closing-heading"
-              className="font-serif font-normal text-vf-text"
-              style={{ fontSize: "clamp(44px, 8vw, 104px)", lineHeight: 1.02, letterSpacing: "-0.025em" }}
+              className="font-serif font-normal"
+              style={{ color: "#F5F0EA", fontSize: "clamp(40px, 7vw, 84px)", lineHeight: 1.02, letterSpacing: "-0.025em" }}
             >
-              Your person is already here.
+              Your person might already be here.
             </h2>
           </Reveal>
-          <Reveal delay={120}>
-            <p className="mt-7 text-[16px] md:text-[17px] leading-[1.65] text-vf-muted mx-auto max-w-[56ch]">
-              Free to join, free to stay. Your twin asks four questions, then you are in —
-              matches, groups, events, the whole thing. No photos needed to begin.
+          <Reveal delay={100}>
+            <p className="mt-5 text-[16.5px] leading-[1.6] max-w-[46ch] mx-auto" style={{ color: "rgba(245,240,234,0.78)" }}>
+              Join free in about two minutes. Your twin gets to work as soon as you've answered a few questions.
             </p>
           </Reveal>
-          <Reveal delay={200}>
-            <div className="mt-9 flex flex-col items-center gap-3">
-              <EmailCapture className="w-full mx-auto sm:justify-center" />
-              <p className="text-[13px] text-vf-faint">
-                Two minutes. Four questions. Nothing to lose.
-              </p>
-            </div>
+          <Reveal delay={180} className="w-full flex justify-center">
+            <SignupButtons className="mt-8" testId="closing" />
           </Reveal>
         </div>
       </section>
 
-      {/* ============ 9 · FOOTER ============ */}
-      <footer className="px-6 border-t border-vf-line" data-testid="landing-footer">
-        <div className="max-w-[1180px] mx-auto py-14 flex flex-col md:flex-row gap-10 md:gap-16 md:items-start md:justify-between">
+      {/* ============ FOOTER ============ */}
+      <footer className="px-5 sm:px-6 border-t border-vf-line pb-24 sm:pb-0" data-testid="landing-footer">
+        <div className="max-w-[1180px] mx-auto py-12 flex flex-col md:flex-row gap-10 md:gap-16 md:items-start md:justify-between">
           <div>
-            <div className="text-vf-text">
-              <DestiraLockup orientation="horizontal" size={28} />
-            </div>
-            <p className="mt-4 text-[13px] text-vf-muted">Made in Harare.</p>
-            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint">
-              Resonance over photographs
-            </p>
-            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint">
-              Starting in Zimbabwe · Africa next · then everywhere
-            </p>
+            <DestiraLockup orientation="horizontal" size={28} />
+            <p className="mt-4 text-[13px] text-vf-muted">Made in Harare. Open everywhere.</p>
           </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 sm:gap-12 text-[13.5px]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 sm:gap-12 text-[14px]">
             <div className="flex flex-col gap-2.5">
-              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">
-                Product
-              </span>
-              <button
-                onClick={() => setLocation("/login")}
-                className="text-left text-vf-muted hover:text-vf-text transition-colors"
-                data-testid="footer-link-login"
-              >
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">Destira</span>
+              <button onClick={() => setLocation("/signup")} className="text-left text-vf-muted hover:text-vf-text" data-testid="footer-link-signup">
+                Join free
+              </button>
+              <button onClick={() => setLocation("/login")} className="text-left text-vf-muted hover:text-vf-text" data-testid="footer-link-login">
                 Log in
               </button>
-              <button
-                onClick={handleDemo}
-                className="text-left text-vf-muted hover:text-vf-text transition-colors"
-                data-testid="footer-link-demo"
-              >
+              <button onClick={handleDemo} className="text-left text-vf-muted hover:text-vf-text" data-testid="footer-link-demo">
                 Try a demo
               </button>
             </div>
             <div className="flex flex-col gap-2.5">
-              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">
-                Community
-              </span>
-              <a href="#how-it-works" className="text-vf-muted hover:text-vf-text transition-colors">
-                How it works
-              </a>
-              <a href="#communities" className="text-vf-muted hover:text-vf-text transition-colors">
-                Communities
-              </a>
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">Learn</span>
+              <a href="#how-it-works" className="text-vf-muted hover:text-vf-text">How it works</a>
+              <a href="#faq" className="text-vf-muted hover:text-vf-text">FAQ</a>
             </div>
             <div className="flex flex-col gap-2.5">
-              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">
-                Legal
-              </span>
-              <a href="#" className="text-vf-muted hover:text-vf-text transition-colors">
-                Terms
-              </a>
-              <a href="#" className="text-vf-muted hover:text-vf-text transition-colors">
-                Privacy
-              </a>
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">Legal</span>
+              <a href="/privacy" className="text-vf-muted hover:text-vf-text">Privacy</a>
+              <a href="/delete-account" className="text-vf-muted hover:text-vf-text">Delete account</a>
             </div>
           </div>
         </div>
       </footer>
+
+      {/* ============ STICKY SIGN-UP (phones) ============ */}
+      <div
+        className={`sm:hidden fixed inset-x-0 bottom-0 z-40 px-4 pt-3 bg-vf-ink/95 backdrop-blur-md border-t border-vf-line transition-transform duration-300 ${
+          showStickyBar ? "translate-y-0" : "translate-y-full"
+        }`}
+        style={{ paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))" }}
+        aria-hidden={!showStickyBar}
+        data-testid="sticky-signup"
+      >
+        <div className="flex gap-2.5">
+          <button
+            onClick={() => startGoogle().catch(() => setLocation("/signup"))}
+            className="w-[52px] h-[52px] shrink-0 rounded-full bg-vf-surface border border-vf-line flex items-center justify-center btn-press"
+            aria-label="Continue with Google"
+            tabIndex={showStickyBar ? 0 : -1}
+          >
+            <FcGoogle className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setLocation("/signup")}
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-white font-semibold h-[52px] text-[15.5px] btn-press"
+            tabIndex={showStickyBar ? 0 : -1}
+          >
+            Join Destira free <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
