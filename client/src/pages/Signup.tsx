@@ -6,6 +6,7 @@ import { DestiraLockup } from "@/components/brand/logo";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
+import { isNativeApp, NATIVE_AUTH_REDIRECT, openNativeOAuth } from "@/lib/native";
 import { ageFromDob, MIN_AGE } from "@shared/essentials";
 import { consumePendingInvite, resolvePendingInviteRoute } from "@/lib/pending-invite";
 
@@ -107,11 +108,21 @@ export default function Signup() {
     setError(null);
     setGoogleLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      // In the store app Google refuses its in-app web view, so sign-in
+      // opens in a system browser tab and returns via a link to the app.
+      const native = isNativeApp();
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
+        options: {
+          redirectTo: native ? NATIVE_AUTH_REDIRECT : `${window.location.origin}/auth/callback`,
+          skipBrowserRedirect: native,
+        },
       });
       if (error) throw error;
+      if (native && data?.url) {
+        await openNativeOAuth(data.url);
+        setGoogleLoading(false);
+      }
     } catch {
       setError("Couldn't start Google sign-in. Try again.");
       setGoogleLoading(false);

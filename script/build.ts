@@ -2,6 +2,7 @@ import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
 import { checkAdminRoutes } from "../scripts/check-admin-routes";
+import { newBundleId, packageAppBundle } from "./app-bundle";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -44,7 +45,12 @@ async function buildAll() {
   await rm("dist", { recursive: true, force: true });
 
   console.log("building client...");
+  // The same build is the app's screens; it needs to know its own id to
+  // tell when an update is newer (client/src/lib/app-update.ts).
+  const bundleId = newBundleId();
+  process.env.VITE_BUNDLE_ID = bundleId;
   await viteBuild();
+  await packageAppBundle("dist/public", "dist/app-bundle", bundleId);
 
   console.log("building server...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));

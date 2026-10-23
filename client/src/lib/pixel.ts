@@ -2,12 +2,14 @@
 // into sign-ups and Meta can find more people like them. Destira's pixel ID
 // is built in (it's public in every page anyway); VITE_META_PIXEL_ID
 // overrides it, and VITE_META_PIXEL_ID=off turns it off (local builds).
+// Never loaded inside the store app (installs are measured by the store).
 //
 // Events sent, nothing else:
 //   PageView              every signed-out landing visit
 //   ViewContent           the homepage quiz was started
 //   Lead                  the homepage quiz was finished
 //   CompleteRegistration  a new account reached the basics screen (once per account)
+import { isNativeApp } from "./native";
 
 const DESTIRA_PIXEL_ID = "1741505700253566";
 const configured = (import.meta.env.VITE_META_PIXEL_ID as string | undefined)?.trim();
@@ -25,7 +27,7 @@ declare global {
 let started = false;
 
 function start(): boolean {
-  if (!PIXEL_ID || typeof window === "undefined") return false;
+  if (!PIXEL_ID || isNativeApp() || typeof window === "undefined") return false;
   if (started) return true;
   started = true;
   // Meta's standard loader, written out instead of pasted as a minified blob.
@@ -59,7 +61,7 @@ export function trackEvent(name: "ViewContent" | "Lead" | "CompleteRegistration"
 
 /** CompleteRegistration, at most once per account on this device. */
 export function trackRegistrationOnce(userId: string) {
-  if (!PIXEL_ID) return;
+  if (!PIXEL_ID || isNativeApp()) return;
   const key = `destira.px.reg.${userId}`;
   try {
     if (localStorage.getItem(key)) return;

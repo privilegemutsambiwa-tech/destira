@@ -3,10 +3,12 @@
 // with the lens where they overlap in ink. Re-run after any change to the mark:
 //
 //   node scripts/generate-brand-assets.mjs
-//   npx capacitor-assets generate --android   # then rebuild the app icons
+//   npx @capacitor/assets@3 generate --android --iconBackgroundColor "#F7F1EA" --iconBackgroundColorDark "#F7F1EA" --splashBackgroundColor "#FBF8F5" --splashBackgroundColorDark "#0C0910"
+//   (run on demand, not installed: it pulls in old packages with known vulnerabilities)
 //
-// Writes client/public/brand/*, client/public/favicon.ico and assets/* (the
-// sources capacitor-assets turns into Android icons and launch screens).
+// Writes client/public/brand/*, client/public/favicon.ico, assets/* (the
+// sources capacitor-assets turns into Android icons and launch screens) and
+// the Android notification icon (res/drawable-*/ic_stat_destira.png).
 import sharp from "sharp";
 import opentype from "opentype.js";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
@@ -103,6 +105,20 @@ for (const [name, bg, lens] of [["splash.png", C.page, C.ink], ["splash-dark.png
     .composite([{ input: mark, gravity: "center" }]).png().toFile(`${ASSETS}/${name}`);
 }
 
+// Android status-bar notification icon: white on transparent, the overlap
+// cut out so the two rings still read at 24dp.
+{
+  const statusIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <g transform="rotate(-15 32 32)" fill="none" stroke="#FFFFFF" stroke-width="6">
+    <circle cx="38.87" cy="32" r="16.5"/><circle cx="25.13" cy="32" r="16.5"/>
+  </g></svg>`;
+  const res = "android/app/src/main/res";
+  for (const [dir, px] of [["mdpi", 24], ["hdpi", 36], ["xhdpi", 48], ["xxhdpi", 72], ["xxxhdpi", 96]]) {
+    mkdirSync(`${res}/drawable-${dir}`, { recursive: true });
+    await save(`${res}/drawable-${dir}/ic_stat_destira.png`, statusIcon, px);
+  }
+}
+
 // ── link preview card (og:image), 1200×630 ─────────────────────────────
 const font = (p) => opentype.parse(readFileSync(p).buffer.slice(0));
 const serif = font("node_modules/@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff");
@@ -123,5 +139,18 @@ const og = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" v
   ${text(mono, "DESTIRA.DATE", left, 566, 21, C.emberText, 0.16)}
 </svg>`;
 await sharp(Buffer.from(og)).png().toFile(`${BRAND}/og-default.png`);
+
+// Google Play feature graphic, 1024×500: the same card, refit.
+mkdirSync("docs/play-store", { recursive: true });
+const fg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <rect width="1024" height="500" fill="${C.page}"/>
+  ${rings({ cx: 830, cy: 250, r: 170, stroke: 30, lens: C.ink, id: "FG" })}
+  <g transform="translate(64 52) scale(0.85)">${iconSvg({ background: false }).replace(/<\/?svg[^>]*>/g, "").replace(/id="L"/, 'id="FGS"').replace("url(#L)", "url(#FGS)")}</g>
+  ${text(serif, "destira", 126, 92, 44, C.ink)}
+  ${text(serif, "Come and find", 64, 262, 84, C.ink, -0.015)}
+  ${text(serifItalic, "your person.", 64, 346, 84, C.emberText, -0.015)}
+  ${text(mono, "YOUR AI TWIN MEETS THEIRS FIRST", 64, 420, 19, C.muted, 0.16)}
+</svg>`;
+await sharp(Buffer.from(fg)).png().toFile("docs/play-store/feature-graphic.png");
 
 console.log("brand assets written");

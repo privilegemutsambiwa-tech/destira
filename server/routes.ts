@@ -36,7 +36,7 @@ import * as onboarding from "./onboarding";
 import * as payments from "./payments";
 import * as proximity from "./services/twin-proximity-alerts";
 import * as push from "./push";
-import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema, reminderKindEnum, initiatePaymentSchema, locationReportSchema, updateProximitySettingsSchema, proximityAlerts, placeInvisibility, pushSubscriptions, places, suburbCentroids } from "@shared/schema";
+import { updateEventPreferencesSchema, eventSearchQuerySchema, hostEventSchema, cancelEventSchema, reminderKindEnum, initiatePaymentSchema, locationReportSchema, updateProximitySettingsSchema, proximityAlerts, placeInvisibility, pushSubscriptions, deviceTokens, places, suburbCentroids } from "@shared/schema";
 import * as gate from "./gate";
 import { gateCopy, LIMITS } from "@shared/entitlements";
 import { updatePhotoRoleSchema, updatePhotoFocalSchema, profilePromptsSchema } from "@shared/schema";
@@ -1051,6 +1051,37 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       res.json({ ok: true });
     } catch (e) {
       console.error("Push subscribe error:", e);
+      res.status(500).json({ message: "Failed" });
+    }
+  });
+
+  // The Android/iOS app's Firebase token. A token moves to whoever signed in
+  // on that phone last, so a shared phone never pushes to the previous member.
+  app.post("/api/push/device", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const parsed = z.object({ token: z.string().min(20).max(4096), platform: z.enum(["android", "ios"]) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid body" });
+    try {
+      await db
+        .insert(deviceTokens)
+        .values({ userId, token: parsed.data.token, platform: parsed.data.platform })
+        .onConflictDoUpdate({ target: deviceTokens.token, set: { userId, platform: parsed.data.platform, lastSeenAt: new Date() } });
+      res.json({ ok: true, delivering: push.appPushConfigured() });
+    } catch (e) {
+      res.status(500).json({ message: "Failed" });
+    }
+  });
+
+  app.delete("/api/push/device", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const parsed = z.object({ token: z.string().min(20).max(4096) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid body" });
+    try {
+      await db.delete(deviceTokens).where(and(eq(deviceTokens.token, parsed.data.token), eq(deviceTokens.userId, userId)));
+      res.json({ ok: true });
+    } catch (e) {
       res.status(500).json({ message: "Failed" });
     }
   });
@@ -4949,6 +4980,27 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
+  // Android App Links: lets the Destira app open destira.date links (events,
+  // invites, groups). ANDROID_APP_CERT_SHA256 holds the app's signing
+  // certificate fingerprint(s), comma-separated — from Play Console → App
+  // integrity once it's on the Play Store, or the upload key before that.
+  app.get("/.well-known/assetlinks.json", (_req, res) => {
+    const fingerprints = (process.env.ANDROID_APP_CERT_SHA256 || "")
+      .split(",")
+      .map((f) => f.trim().toUpperCase())
+      .filter((f) => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(f));
+    res.json(
+      fingerprints.length
+        ? [
+            {
+              relation: ["delegate_permission/common.handle_all_urls"],
+              target: { namespace: "android_app", package_name: "date.destira.app", sha256_cert_fingerprints: fingerprints },
+            },
+          ]
+        : [],
+    );
+  });
+
   // Public: "Rudo invited you" on the landing page. First name only, and only
   // for a code its owner chose to share.
   app.get("/api/referrals/inviter/:code", async (req, res) => {
@@ -5095,9 +5147,17 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     try {
       const { confirmation } = req.body;
       if (confirmation !== "DELETE") return res.status(400).json({ message: "Type DELETE to confirm" });
+      // The photo files themselves, not just their rows — read before the rows go.
+      const photoKeys = (await storage.getUserPhotos(userId))
+        .flatMap((p) => [p.photoUrl, p.variants?.w800, p.variants?.w1600])
+        .map(keyFromUploadUrl)
+        .filter((k): k is string => k !== null);
       await storage.deleteAllUserData(userId);
       req.logout?.(() => {});
       res.json({ success: true });
+      // After the response, like a single photo delete: a storage hiccup leaves
+      // an orphaned file for a sweep, never a failed account deletion.
+      await Promise.allSettled(photoKeys.map((k) => deleteObject(k)));
     } catch (err) {
       res.status(500).json({ message: "Failed to delete account" });
     }

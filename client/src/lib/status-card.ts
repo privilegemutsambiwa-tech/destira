@@ -6,6 +6,9 @@
 // Desktop / browsers that can't share files: the image downloads and the
 // caption is copied, so it can still be posted by hand.
 
+import { isNativeApp, nativeShareImage } from "./native";
+import { publicOrigin } from "./app-api";
+
 export interface StatusCard {
   eyebrow: string; // small caps line above the title, e.g. "I'm going"
   title: string; // big serif line
@@ -227,7 +230,7 @@ export async function renderStatusCard(card: StatusCard): Promise<Blob> {
   ctx.fillStyle = MUTED;
   ctx.font = '32px "DM Mono", ui-monospace, monospace';
   ctx.textAlign = "right";
-  ctx.fillText(window.location.host, W - left, fy + 52);
+  ctx.fillText(new URL(publicOrigin()).host, W - left, fy + 52);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
 
@@ -245,6 +248,9 @@ export async function shareStatusCard(card: StatusCard, caption: string, filenam
 
 /** Share an already-drawn card (so a preview and the share use one image). */
 export async function shareStatusBlob(blob: Blob, caption: string, filename: string): Promise<ShareOutcome> {
+  // The store app: the browser's file sharing doesn't exist in an app's web
+  // view, so the card goes out through the phone's own share sheet.
+  if (isNativeApp()) return nativeShareImage(blob, filename, caption);
   const file = new File([blob], filename, { type: "image/png" });
   if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
     try {

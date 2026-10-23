@@ -5,11 +5,22 @@ import { AlertTriangle, ArrowRight, CalendarHeart, ChevronDown, Flag, Lock, Mess
 import { FcGoogle } from "react-icons/fc";
 import { DestiraLockup } from "@/components/brand/logo";
 import { ResonanceDial } from "@/components/resonance-dial";
-import { photos as HERO_PHOTOS, type Photo } from "@/lib/photos";
+import { photos as BUNDLED_PHOTOS, type Photo } from "@/lib/photos";
+import { isNativeApp } from "@/lib/native";
 import { pendingReferralCode } from "@/lib/attribution";
 import { supabase } from "@/lib/supabase";
+import { NATIVE_AUTH_REDIRECT, openNativeOAuth } from "@/lib/native";
 import { trackEvent, trackPageView } from "@/lib/pixel";
 import { LANDING_QUIZ, saveQuizAnswers, twinNote, type QuizAnswers } from "@/lib/landing-quiz";
+
+// The app doesn't carry the website's photo library (hundreds of MB); its
+// welcome screen loads these from destira.date and shows the blurred
+// placeholder while offline.
+const PHOTO_ORIGIN = isNativeApp() ? "https://www.destira.date" : "";
+const remote = (u: string) => u.replace(/(^|\s|,)\/photos\//g, `$1${PHOTO_ORIGIN}/photos/`);
+const HERO_PHOTOS: Photo[] = PHOTO_ORIGIN
+  ? BUNDLED_PHOTOS.map((p) => ({ ...p, src: remote(p.src), srcSet: remote(p.srcSet), webpSrcSet: remote(p.webpSrcSet), variants: p.variants.map((v) => ({ ...v, webp: remote(v.webp), jpg: remote(v.jpg) })) }))
+  : BUNDLED_PHOTOS;
 
 /* ------------------------------------------------------------------ *
  *  Landing — route "/" for signed-out visitors, and where the ads land.
@@ -332,11 +343,16 @@ function useHeadline() {
 // ── Sign-up buttons ──────────────────────────────────────────────────
 
 async function startGoogle(): Promise<void> {
-  const { error } = await supabase.auth.signInWithOAuth({
+  const native = isNativeApp();
+  const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: `${window.location.origin}/auth/callback` },
+    options: {
+      redirectTo: native ? NATIVE_AUTH_REDIRECT : `${window.location.origin}/auth/callback`,
+      skipBrowserRedirect: native,
+    },
   });
   if (error) throw error;
+  if (native && data?.url) await openNativeOAuth(data.url);
 }
 
 /** Google (one tap for most phones) above email. The pair every CTA uses. */

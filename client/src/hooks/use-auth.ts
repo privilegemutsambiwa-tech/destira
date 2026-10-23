@@ -1,11 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { User } from "@shared/models/auth";
 import { apiRequest } from "@/lib/queryClient";
+import { isNativeApp } from "@/lib/native";
+import { appSignOut, rememberUser, savedUser } from "@/lib/app-api";
 
 async function fetchUser(): Promise<User | null> {
-  const response = await fetch("/api/auth/user", {
-    credentials: "include",
-  });
+  let response: Response;
+  try {
+    response = await fetch("/api/auth/user", {
+      credentials: "include",
+    });
+  } catch (err) {
+    // No connection: the app opens as the member who was signed in, on
+    // whatever is saved, instead of falling back to the welcome page.
+    const saved = isNativeApp() ? savedUser<User>() : null;
+    if (saved) return saved;
+    throw err;
+  }
 
   if (response.status === 401) {
     return null;
@@ -15,10 +26,19 @@ async function fetchUser(): Promise<User | null> {
     throw new Error(`${response.status}: ${response.statusText}`);
   }
 
-  return response.json();
+  const user = (await response.json()) as User;
+  if (isNativeApp()) rememberUser(user);
+  return user;
 }
 
 async function logout(): Promise<void> {
+  // The app's screens are packaged on the phone, so there's no server page to
+  // navigate to: sign out in the background, then start over at home.
+  if (isNativeApp()) {
+    await appSignOut();
+    window.location.href = "/";
+    return;
+  }
   window.location.href = "/api/logout";
 }
 
@@ -44,6 +64,11 @@ export function useAuth() {
       return (await res.json()) as User;
     },
     onSuccess: (user) => {
+      if (isNativeApp()) {
+        // Start clean: nothing saved on this phone belongs to the new session.
+        queryClient.clear();
+        rememberUser(user);
+      }
       queryClient.setQueryData(["/api/auth/user"], user);
     },
   });
@@ -54,6 +79,11 @@ export function useAuth() {
       return (await res.json()) as User;
     },
     onSuccess: (user) => {
+      if (isNativeApp()) {
+        // Start clean: nothing saved on this phone belongs to the new session.
+        queryClient.clear();
+        rememberUser(user);
+      }
       queryClient.setQueryData(["/api/auth/user"], user);
     },
   });

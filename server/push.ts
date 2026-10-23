@@ -1,13 +1,21 @@
-// Web push. VAPID keys come from env (generate with `npx web-push generate-vapid-keys`):
-//   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (mailto: or https://)
-// If they're unset, push is a no-op — the in-app banner + notification inbox
-// still work. iOS Safari only delivers to a home-screen-installed PWA (16.4+);
-// Android Chrome delivers from the service worker even when closed.
+// Push, two ways, one sendPush:
+//  - Web push (browsers). VAPID keys from env (generate with
+//    `npx web-push generate-vapid-keys`): VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY,
+//    VAPID_SUBJECT (mailto: or https://). iOS Safari only delivers to a
+//    home-screen-installed PWA (16.4+); Android Chrome delivers from the
+//    service worker even when closed.
+//  - The Android/iOS app, through Firebase Cloud Messaging. FIREBASE_SERVICE_ACCOUNT
+//    = the service-account JSON from Firebase console → Project settings →
+//    Service accounts (the whole JSON, on one line).
+// Either unset = that path is a no-op; the in-app banner + notification inbox
+// still work.
 
 import webpush from "web-push";
+import { initializeApp, cert, getApps, type App } from "firebase-admin/app";
+import { getMessaging } from "firebase-admin/messaging";
 import { db } from "./db";
-import { pushSubscriptions, profiles } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { pushSubscriptions, deviceTokens, profiles } from "@shared/schema";
+import { eq, inArray } from "drizzle-orm";
 
 let ready = false;
 try {
@@ -25,8 +33,24 @@ try {
   console.error("[push] setup failed:", e);
 }
 
+let fcmApp: App | null = null;
+try {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (raw) {
+    fcmApp = getApps()[0] ?? initializeApp({ credential: cert(JSON.parse(raw)) });
+  } else {
+    console.log("[push] FIREBASE_SERVICE_ACCOUNT not set — app push disabled (web push unaffected)");
+  }
+} catch (e) {
+  console.error("[push] Firebase setup failed:", e);
+  fcmApp = null;
+}
+
 export function pushConfigured(): boolean {
   return ready;
+}
+export function appPushConfigured(): boolean {
+  return fcmApp !== null;
 }
 export function vapidPublicKey(): string | null {
   return process.env.VAPID_PUBLIC_KEY || null;
@@ -57,8 +81,48 @@ export async function sendCategorizedPush(userId: string, category: Notification
   await sendPush(userId, payload);
 }
 
-// Best-effort. Prunes dead subscriptions (404/410). Never throws.
+// Best-effort, to every browser and phone the member has. Prunes dead
+// subscriptions and tokens. Never throws.
 export async function sendPush(userId: string, payload: PushPayload): Promise<void> {
+  await Promise.all([sendWebPush(userId, payload), sendAppPush(userId, payload)]);
+}
+
+// Tokens Firebase says will never deliver again.
+const DEAD_TOKEN = new Set([
+  "messaging/registration-token-not-registered",
+  "messaging/invalid-registration-token",
+  "messaging/invalid-argument",
+]);
+
+async function sendAppPush(userId: string, payload: PushPayload): Promise<void> {
+  if (!fcmApp) return;
+  try {
+    const rows = await db.select().from(deviceTokens).where(eq(deviceTokens.userId, userId));
+    if (!rows.length) return;
+    const res = await getMessaging(fcmApp).sendEachForMulticast({
+      tokens: rows.map((r) => r.token),
+      notification: { title: payload.title, body: payload.body },
+      data: { url: payload.url ?? "/", ...(payload.tag ? { tag: payload.tag } : {}) },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "destira",
+          icon: "ic_stat_destira",
+          color: "#FF6B4A",
+          ...(payload.tag ? { tag: payload.tag } : {}),
+        },
+      },
+    });
+    const dead = res.responses
+      .map((r, i) => (!r.success && DEAD_TOKEN.has(r.error?.code ?? "") ? rows.at(i)?.token : null))
+      .filter((t): t is string => !!t);
+    if (dead.length) await db.delete(deviceTokens).where(inArray(deviceTokens.token, dead)).catch(() => {});
+  } catch (e) {
+    console.error("[push] app push failed:", e);
+  }
+}
+
+async function sendWebPush(userId: string, payload: PushPayload): Promise<void> {
   if (!ready) return;
   const subs = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
   await Promise.all(

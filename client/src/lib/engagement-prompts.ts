@@ -3,6 +3,7 @@
 // lounge), and "add to home screen" where the browser supports it. Kept in
 // one place so the asks share snoozes and never stack on top of each other.
 
+import { isNativeApp } from "./native";
 export type PushNudgeReason = "like" | "rsvp" | "lounge";
 
 const NUDGE_EVENT = "vf:push-nudge";
@@ -76,6 +77,8 @@ export async function promptInstall(): Promise<boolean> {
 
 export function isStandalone(): boolean {
   try {
+    // The store app counts as installed: never offer to install the web app inside it.
+    if (isNativeApp()) return true;
     return window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true;
   } catch {
     return false;

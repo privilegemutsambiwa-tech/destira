@@ -29,6 +29,7 @@ import { avatarColor } from "@/lib/avatar-color";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { PhotoSourceSheet } from "@/components/photo-source-sheet";
 import { PhotoLightbox } from "@/components/photo-lightbox";
+import { publicOrigin } from "@/lib/app-api";
 
 const PRIVACY_LABELS: Record<string, { icon: any; label: string }> = {
   "open": { icon: Globe, label: "Open" },
@@ -156,7 +157,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
     return (order[a.role] ?? 2) - (order[b.role] ?? 2);
   });
 
-  const makeInviteUrl = (token: string) => `${window.location.origin}/join/${groupId}-${token}`;
+  const makeInviteUrl = (token: string) => `${publicOrigin()}/join/${groupId}-${token}`;
 
   const handleCreateInvite = async () => {
     try {

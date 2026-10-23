@@ -18,13 +18,14 @@ import {
   type Question, type UserAnswer, type QuestionScheduleEntry, type AuditLog,
   type Story, type StoryMedia, type StoryLike, type StoryComment, type StoryView, type Plan,
   type ChatRequest, type BlockedUser, type SupportTicket,
-  type InviteRequest, type InsertInviteRequest
+  type InviteRequest, type InsertInviteRequest,
+  pushSubscriptions, deviceTokens, referrals, referralCodes, profileViewGrants, signupSources, shareEvents, dailyPicks, userActivityDaily,
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import { getStoryEventCard, type StoryEventCard } from "./event-seats";
 import { coerceTraits, applyTraitSignals } from "./personality";
-import type { PhotoRole } from "@shared/schema";
 import { localDayKey, userTimezone } from "./gate";
+import type { PhotoRole } from "@shared/schema";
 import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lt, lte, inArray, notInArray, isNotNull, isNull } from "drizzle-orm";
 
 export class PhotoNotFoundError extends Error {
@@ -2917,6 +2918,26 @@ export class DatabaseStorage implements IStorage {
     // Profile (last, FK anchor)
     await db.delete(profiles).where(eq(profiles.userId, userId));
 
+    // What still identifies the person or reaches them: phones and browsers
+    // that get their notifications, invite and signup records, activity.
+    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+    await db.delete(deviceTokens).where(eq(deviceTokens.userId, userId));
+    await db.delete(referrals).where(or(eq(referrals.referrerUserId, userId), eq(referrals.invitedUserId, userId)));
+    await db.delete(referralCodes).where(eq(referralCodes.userId, userId));
+    await db.delete(profileViewGrants).where(eq(profileViewGrants.userId, userId));
+    await db.delete(signupSources).where(eq(signupSources.userId, userId));
+    await db.delete(shareEvents).where(eq(shareEvents.userId, userId));
+    await db.delete(dailyPicks).where(eq(dailyPicks.userId, userId));
+    await db.delete(userActivityDaily).where(eq(userActivityDaily.userId, userId));
+
+    // The account itself. The row stays as an anonymous id because events,
+    // groups and other members' history still point at it, but nothing on it
+    // identifies the person and it can never sign in again; the email is
+    // free to sign up with afresh.
+    await db
+      .update(users)
+      .set({ email: null, passwordHash: null, firstName: null, lastName: null, profileImageUrl: null, updatedAt: new Date() })
+      .where(eq(users.id, userId));
   }
 }
 

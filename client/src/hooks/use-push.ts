@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
+import { isNativeApp, nativePushAvailable, nativePushPermission, nativeRegisterPush } from "@/lib/native";
 
 // Web push subscription lifecycle. The service worker (/sw.js) does the actual
 // notification display; this hook registers it, asks the browser for permission,
@@ -28,16 +29,39 @@ function getRegistration(): Promise<ServiceWorkerRegistration> {
 }
 
 export function usePushSubscribe() {
+  // In the store app, push goes through Firebase instead of the browser's
+  // web push (which an app's web view doesn't have).
+  const native = isNativeApp();
+  const [nativeReady, setNativeReady] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">(
-    SUPPORTED ? Notification.permission : "unsupported",
+    native ? "unsupported" : SUPPORTED ? Notification.permission : "unsupported",
   );
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (native) {
+      nativePushAvailable().then(async (ok) => {
+        setNativeReady(ok);
+        if (ok) setPermission(await nativePushPermission());
+      });
+      return;
+    }
     if (SUPPORTED) getRegistration().catch(() => {});
-  }, []);
+  }, [native]);
 
   const subscribe = useCallback(async (): Promise<boolean> => {
+    if (native) {
+      setBusy(true);
+      try {
+        const perm = await nativeRegisterPush();
+        setPermission(perm);
+        return perm === "granted";
+      } catch {
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    }
     if (!SUPPORTED) return false;
     setBusy(true);
     try {
@@ -69,10 +93,10 @@ export function usePushSubscribe() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [native]);
 
   const unsubscribe = useCallback(async () => {
-    if (!SUPPORTED) return;
+    if (native || !SUPPORTED) return;
     try {
       const reg = await getRegistration();
       const sub = await reg.pushManager.getSubscription();
@@ -83,7 +107,7 @@ export function usePushSubscribe() {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [native]);
 
-  return { supported: SUPPORTED, permission, busy, subscribe, unsubscribe };
+  return { supported: native ? nativeReady : SUPPORTED, permission, busy, subscribe, unsubscribe };
 }

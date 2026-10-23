@@ -1082,6 +1082,17 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   lastSeenAt: timestamp("last_seen_at").defaultNow(),
 });
 
+// Push tokens for the Android/iOS app (Firebase Cloud Messaging). Web push
+// lives in push_subscriptions above; server/push.ts sends to both.
+export const deviceTokens = pgTable("device_tokens", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  token: text("token").notNull().unique(),
+  platform: text("platform").notNull(), // android | ios
+  createdAt: timestamp("created_at").defaultNow(),
+  lastSeenAt: timestamp("last_seen_at").defaultNow(),
+});
+
 export const DISTANCE_BUCKETS = ["same_place", "few_hundred_m", "this_campus", "this_area"] as const;
 export const proximityModeEnum = z.enum(["off", "campus_work", "everywhere"]);
 export const proximityFloorEnum = z.enum(["sometimes", "strong", "rare"]);

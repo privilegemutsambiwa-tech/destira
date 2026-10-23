@@ -2,6 +2,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
+import { mountAppClient } from "./app-client";
+import { registerAppUpdateRoutes } from "./app-update";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { runMigrations } from 'stripe-replit-sync';
@@ -26,6 +28,12 @@ app.use(
     crossOriginEmbedderPolicy: false,
   }),
 );
+
+// The Android/iOS app (its own packaged copy of the site): CORS for its
+// origins, token sign-in and signed photo links. Must run before the session
+// middleware, which registerRoutes mounts. See server/app-client.ts.
+mountAppClient(app);
+registerAppUpdateRoutes(app);
 
 // Per-IP throttles: /api/auth/* against credential-stuffing / brute-force
 // login attempts (on top of the per-email lockout in replit_integrations/

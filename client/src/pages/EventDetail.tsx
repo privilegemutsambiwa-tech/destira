@@ -14,6 +14,8 @@ import { peekPendingRsvp, clearPendingRsvp } from "@/lib/pending-rsvp";
 import { useProfile } from "@/hooks/use-profiles";
 import { Loader2, ArrowLeft, Pencil, Flag, X, Share2, ImageIcon } from "lucide-react";
 import { renderStatusCard, shareStatusBlob, logShare } from "@/lib/status-card";
+import { isNativeApp, nativeShareLink } from "@/lib/native";
+import { publicOrigin } from "@/lib/app-api";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -218,7 +220,7 @@ export default function EventDetail({ params }: { params: { id: string } }) {
     const params = new URLSearchParams();
     if (referral?.code) params.set("ref", referral.code);
     const qs = [params.toString(), extra].filter(Boolean).join("&");
-    return `${window.location.origin}/events/${event.id}${qs ? `?${qs}` : ""}`;
+    return `${publicOrigin()}/events/${event.id}${qs ? `?${qs}` : ""}`;
   };
 
   const handleShareEvent = async () => {
@@ -227,7 +229,9 @@ export default function EventDetail({ params }: { params: { id: string } }) {
     const shareData = { title: event.title, text: `Come to "${event.title}" on Destira`, url };
     logShare("event", "link", event.id);
     try {
-      if (navigator.share) {
+      if (isNativeApp()) {
+        await nativeShareLink(event.title, shareData.text, url);
+      } else if (navigator.share) {
         await navigator.share(shareData);
       } else {
         setShareLink(url);

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launch screen ground: Destira cream (light) / ink (values-night). -->
+    <color name="destira_launch">#FBF8F5</color>
+    <!-- Notification accent. -->
+    <color name="destira_ember">#FF6B4A</color>
+</resources>

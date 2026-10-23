@@ -1,6 +1,10 @@
+import type React from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { isNativeApp } from "@/lib/native";
+import { offlinePersister, shouldKeepOffline, OFFLINE_MAX_AGE, OFFLINE_BUSTER } from "@/lib/offline-cache";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
@@ -23,6 +27,7 @@ const AdminConsoleRoot = lazy(() => import("@/admin"));
 // would just move the same wait earlier instead of removing it.
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
+import { OfflineBanner } from "@/components/offline-banner";
 const Login = lazy(() => import("@/pages/Login"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
@@ -31,6 +36,8 @@ const AuthCallback = lazy(() => import("@/pages/AuthCallback"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
 const MeetYourTwin = lazy(() => import("@/pages/MeetYourTwin"));
 const Invite = lazy(() => import("@/pages/Invite"));
+const PrivacyPolicy = lazy(() => import("@/pages/Legal").then((m) => ({ default: m.PrivacyPolicy })));
+const DeleteAccountInfo = lazy(() => import("@/pages/Legal").then((m) => ({ default: m.DeleteAccountInfo })));
 const Profile = lazy(() => import("@/pages/Profile"));
 const ProfileView = lazy(() => import("@/pages/ProfileView"));
 const Matches = lazy(() => import("@/pages/Matches"));
@@ -176,6 +183,9 @@ function Router() {
     <Switch>
       <Route path="/" component={user ? AuthenticatedHome : Landing} />
       <Route path="/login" component={Login} />
+      {/* Public: the store listings and the law link to these. */}
+      <Route path="/privacy" component={PrivacyPolicy} />
+      <Route path="/delete-account" component={DeleteAccountInfo} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/signup" component={Signup} />
@@ -319,14 +329,40 @@ function App() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <AppQueryProvider>
       <TooltipProvider>
         <Toaster />
+        <OfflineBanner />
         <ErrorBoundary>
           <Router />
         </ErrorBoundary>
       </TooltipProvider>
-    </QueryClientProvider>
+    </AppQueryProvider>
+  );
+}
+
+// In the Android/iOS app the data cache is saved on the phone and restored at
+// launch (lib/offline-cache.ts), so the app opens on its last-known screens
+// even offline. Restored data is then refreshed as soon as there's a
+// connection. The website keeps the plain in-memory cache.
+const native = isNativeApp();
+if (native) queryClient.setDefaultOptions({ queries: { ...queryClient.getDefaultOptions().queries, gcTime: OFFLINE_MAX_AGE } });
+
+function AppQueryProvider({ children }: { children: React.ReactNode }) {
+  if (!native) return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister: offlinePersister,
+        maxAge: OFFLINE_MAX_AGE,
+        buster: OFFLINE_BUSTER,
+        dehydrateOptions: { shouldDehydrateQuery: shouldKeepOffline },
+      }}
+      onSuccess={() => queryClient.invalidateQueries()}
+    >
+      {children}
+    </PersistQueryClientProvider>
   );
 }
 
