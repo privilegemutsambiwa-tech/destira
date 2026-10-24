@@ -3,6 +3,7 @@ import type { User } from "@shared/models/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { isNativeApp } from "@/lib/native";
 import { appSignOut, rememberUser, savedUser } from "@/lib/app-api";
+import { clearOutbox } from "@/lib/outbox";
 
 async function fetchUser(): Promise<User | null> {
   let response: Response;
@@ -32,6 +33,7 @@ async function fetchUser(): Promise<User | null> {
 }
 
 async function logout(): Promise<void> {
+  clearOutbox();
   // The app's screens are packaged on the phone, so there's no server page to
   // navigate to: sign out in the background, then start over at home.
   if (isNativeApp()) {

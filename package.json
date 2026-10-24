@@ -36,6 +36,7 @@
     "@capacitor/share": "^7.0.4",
     "@capacitor/splash-screen": "^7.0.5",
     "@capacitor/status-bar": "^7.0.6",
+    "@capgo/capacitor-native-biometric": "^7.6.0",
     "@capgo/capacitor-updater": "^7.53.0",
     "@electric-sql/pglite": "^0.5.8",
     "@hookform/resolvers": "^3.10.0",

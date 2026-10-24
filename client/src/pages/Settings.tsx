@@ -17,6 +17,7 @@ import { useSubscription, useGenerateAboutMe } from "@/hooks/use-interactions";
 import { useCancelSubscription } from "@/hooks/use-payments";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { AppLockSetting } from "@/components/app-lock";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from "@/components/ui/dialog";
@@ -1858,6 +1859,7 @@ export default function Settings() {
           <ChevronRow icon={User} label="Edit Profile" onClick={() => setLocation("/profile")} testId="row-edit-profile" />
           <ChevronRow icon={Mail} label="Change Email" sublabel="Update your email address" onClick={() => setActivePanel("change-email")} testId="row-change-email" />
           <ChevronRow icon={Lock} label="Change Password" sublabel="Update your password" onClick={() => setActivePanel("change-password")} testId="row-change-password" />
+          <AppLockSetting Row={ToggleRow} />
         </div>
       ),
     },

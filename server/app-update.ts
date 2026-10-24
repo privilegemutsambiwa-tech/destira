@@ -13,9 +13,10 @@ interface BundleInfo {
   size: number;
 }
 
-// dist/index.cjs runs from dist/, next to dist/app-bundle. APP_BUNDLE_DIR
+// npm start runs from the repo root, beside dist/app-bundle (__dirname isn't
+// available when the dev server runs this as an ES module). APP_BUNDLE_DIR
 // points elsewhere for testing updates locally.
-const bundleDir = process.env.APP_BUNDLE_DIR || path.resolve(__dirname, "app-bundle");
+const bundleDir = process.env.APP_BUNDLE_DIR || path.resolve(process.cwd(), "dist", "app-bundle");
 
 let cached: BundleInfo | null | undefined;
 function latest(): BundleInfo | null {

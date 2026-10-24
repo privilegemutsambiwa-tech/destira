@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { clientTag } from "@/lib/crash-report";
 import { AlertTriangle } from "lucide-react";
 
 interface Props {
@@ -31,6 +32,7 @@ export class ErrorBoundary extends Component<Props, State> {
         stack: error.stack,
         componentStack: info.componentStack,
         url: window.location.href,
+        ...clientTag(),
       }),
     }).catch(() => {});
   }

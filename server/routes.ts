@@ -191,15 +191,19 @@ export async function registerRoutes(
   // can show which screen crashed) even though the response to the client
   // itself is a clean 204, not a failure.
   app.post("/api/client-errors", (req, res) => {
-    const { message, stack, componentStack, url } = req.body || {};
+    const { message, stack, componentStack, url, client, version } = req.body || {};
+    // "app" or "web", and which build of the screens (an over-the-air update
+    // that breaks shows up under its own version).
+    const source = client === "app" || client === "web" ? `${client} ${String(version ?? "").slice(0, 40)}`.trim() : null;
     console.error("[client-error]", {
       userId: getUserId(req),
+      source,
       url,
       message,
       stack,
       componentStack,
     });
-    recordClientCrash({ url, message });
+    recordClientCrash({ url, message: source ? `[${source}] ${message}` : message });
     res.sendStatus(204);
   });
 

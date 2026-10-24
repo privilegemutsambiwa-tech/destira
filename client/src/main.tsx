@@ -7,6 +7,8 @@ import { captureAttribution } from "./lib/attribution";
 import { initNative, isNativeApp } from "./lib/native";
 import { installAppApi } from "./lib/app-api";
 import { initAppUpdates } from "./lib/app-update";
+import { initOutbox } from "./lib/outbox";
+import { initCrashReporting } from "./lib/crash-report";
 
 // In the Android/iOS app: send /api requests to the server with the member's
 // token (the screens themselves are packaged in the app). No-op on the web.
@@ -18,6 +20,8 @@ if (!window.location.pathname.startsWith("/console")) captureAttribution();
 // Android/iOS app shell only: status bar, back button, deep links.
 initNative();
 initAppUpdates();
+initOutbox();
+initCrashReporting();
 
 // The website's service worker (web push, install). The app has its own push
 // and packaged screens, so it doesn't register one.

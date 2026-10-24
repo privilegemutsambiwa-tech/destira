@@ -34,6 +34,8 @@ import { LinkPreviewCard } from "@/components/link-preview-card";
 import { avatarColor } from "@/lib/avatar-color";
 import { RichCard, CardHeader, StatusPill, GAME_ICON_LABEL, GameProgress } from "@/components/game-room";
 import { PhotoSourceSheet } from "@/components/photo-source-sheet";
+import { enqueue, isConnectionError } from "@/lib/outbox";
+import { OutboxBubbles } from "@/components/outbox-bubbles";
 
 interface MessageAction {
   icon: React.ReactNode;
@@ -424,9 +426,18 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
       payload.replyToMessageId = replyTo.id;
       setReplyTo(null);
     }
+    // No connection: it waits in the outbox and sends itself later.
+    if (navigator.onLine === false) {
+      enqueue("group", groupId, text, payload.replyToMessageId);
+      return;
+    }
     try {
       await sendMessage.mutateAsync(payload);
     } catch (error: any) {
+      if (isConnectionError(error)) {
+        enqueue("group", groupId, text, payload.replyToMessageId);
+        return;
+      }
       toast({ title: "Couldn't send that", description: error?.message || "Must join group first.", variant: "destructive" });
     }
   };
@@ -882,6 +893,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
             </p>
           </div>
         )}
+        <OutboxBubbles kind="group" targetId={groupId} />
         <div ref={messagesEndRef} />
       </div>
 

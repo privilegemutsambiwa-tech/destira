@@ -8,6 +8,8 @@
 // website keeps using its own cookie exactly as before.
 import { isNativeApp } from "./native";
 import { clearOfflineCache } from "./offline-cache";
+import { clearOutbox } from "./outbox";
+import { setAppLockEnabled } from "./app-lock";
 
 /** Where the app's data comes from. Overridden for emulator testing with
  *  VITE_APP_API_BASE=http://10.0.2.2:5001 at build time. */
@@ -68,6 +70,7 @@ export async function appSignOut(): Promise<void> {
   }
   writeToken(null);
   rememberUser(null);
+  setAppLockEnabled(false);
   // The next person to use this phone mustn't see this member's data.
   await clearOfflineCache();
 }
@@ -109,6 +112,7 @@ export function installAppApi() {
     if (res.status === 401 && token && url.endsWith("/api/auth/user")) {
       writeToken(null);
       rememberUser(null);
+      clearOutbox();
       void clearOfflineCache();
     }
     return res;

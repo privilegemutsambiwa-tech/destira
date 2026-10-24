@@ -15,6 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { parseDestiraLink } from "@/lib/link-preview";
 import { LinkPreviewCard } from "@/components/link-preview-card";
+import { enqueue, isConnectionError } from "@/lib/outbox";
+import { OutboxBubbles } from "@/components/outbox-bubbles";
 import { avatarColor } from "@/lib/avatar-color";
 
 // A lower-pressure first step than a cold 1:1 thread: if this pair already
@@ -159,9 +161,18 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
     if (!input.trim()) return;
     const text = input;
     setInput("");
+    // No connection: it waits in the outbox and sends itself later.
+    if (navigator.onLine === false) {
+      enqueue("direct", matchId, text);
+      return;
+    }
     try {
       await sendMessage.mutateAsync(text);
     } catch (error) {
+      if (isConnectionError(error)) {
+        enqueue("direct", matchId, text);
+        return;
+      }
       console.error("Failed to send:", error);
       // Restore the draft instead of silently losing it — a flaky connection
       // shouldn't make someone's message vanish with zero feedback.
@@ -245,6 +256,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
             <p className="text-sm text-vf-muted">You're now matched. Start the conversation.</p>
           </div>
         )}
+        <OutboxBubbles kind="direct" targetId={matchId} />
         <div ref={messagesEndRef} />
       </div>
 
