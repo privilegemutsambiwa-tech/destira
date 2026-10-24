@@ -18,6 +18,7 @@ import { useCancelSubscription } from "@/hooks/use-payments";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { AppLockSetting } from "@/components/app-lock";
+import { PushTestRow } from "@/components/push-test";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from "@/components/ui/dialog";
@@ -1936,6 +1937,7 @@ export default function Settings() {
           <ToggleRow icon={Bell} label="Stories" value={notifEnabled("stories")} onChange={(v) => handleToggleNotifPref("stories", v)} testId="toggle-notif-stories" />
           <ToggleRow icon={Brain} label="Interview Requests" value={notifEnabled("interviews")} onChange={(v) => handleToggleNotifPref("interviews", v)} testId="toggle-notif-interviews" />
           <ToggleRow icon={CalendarDays} label="Events Near You" value={notifEnabled("events")} onChange={(v) => handleToggleNotifPref("events", v)} testId="toggle-notif-events" />
+          <PushTestRow Row={ChevronRow} />
         </div>
       ),
     },

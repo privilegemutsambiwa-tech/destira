@@ -140,6 +140,15 @@ export async function nativeRegisterPush(): Promise<NotificationPermission> {
   return perm;
 }
 
+/** After a member signs in: hand this phone's token to the server under
+ *  their account. At startup nobody may be signed in yet, so the first
+ *  attempt can be refused; this is the retry. Silent; no prompt. */
+export async function syncNativePushToken() {
+  if (!(await nativePushAvailable())) return;
+  addPushListeners();
+  if ((await nativePushPermission()) === "granted") PushNotifications.register().catch(() => {});
+}
+
 // At startup: re-register silently when permission was already given, so the
 // server always has this phone's current token (tokens rotate).
 async function initNativePush() {

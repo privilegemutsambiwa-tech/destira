@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "174622453397",
+    "project_id": "destira-12898",
+    "storage_bucket": "destira-12898.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:174622453397:android:c730c6ef5d6001afec759c",
+        "android_client_info": {
+          "package_name": "date.destira.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5-pY4YoedwPlfSIl6Uhu_WxpCDRszFvc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:174622453397:android:25d8dcac03e32b41ec759c",
+        "android_client_info": {
+          "package_name": "destira.date"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5-pY4YoedwPlfSIl6Uhu_WxpCDRszFvc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

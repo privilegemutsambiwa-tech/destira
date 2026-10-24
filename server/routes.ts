@@ -1028,6 +1028,39 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     res.json({ key: push.vapidPublicKey(), configured: push.pushConfigured() });
   });
 
+  // Settings → Notifications → "Send a test notification": proves the whole
+  // path to this member's phones and browsers. Says what's missing instead
+  // of failing silently. At most once every 30 seconds per member.
+  const lastPushTest = new Map<string, number>();
+  app.post("/api/push/test", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const last = lastPushTest.get(userId) ?? 0;
+    if (Date.now() - last < 30_000) return res.status(429).json({ message: "Give it a few seconds before trying again." });
+    lastPushTest.set(userId, Date.now());
+    try {
+      const [phones, browsers] = await Promise.all([
+        db.select({ id: deviceTokens.id }).from(deviceTokens).where(eq(deviceTokens.userId, userId)),
+        db.select({ endpoint: pushSubscriptions.endpoint }).from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId)),
+      ]);
+      await push.sendPush(userId, {
+        title: "Destira",
+        body: "Notifications are working. You'll hear about matches, messages and events here.",
+        url: "/settings",
+        tag: "push-test",
+      });
+      res.json({
+        phones: push.appPushConfigured() ? phones.length : 0,
+        browsers: push.pushConfigured() ? browsers.length : 0,
+        appPushConfigured: push.appPushConfigured(),
+        webPushConfigured: push.pushConfigured(),
+      });
+    } catch (e) {
+      console.error("Push test error:", e);
+      res.status(500).json({ message: "Couldn't send the test" });
+    }
+  });
+
   app.post("/api/push/subscribe", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);

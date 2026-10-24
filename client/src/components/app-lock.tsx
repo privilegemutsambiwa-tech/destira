@@ -17,6 +17,15 @@ export function AppLockGate() {
   const unlock = async () => {
     if (prompting.current) return;
     prompting.current = true;
+    // The phone's own lock was removed since app lock was turned on: there's
+    // nothing left to unlock with, so stand down rather than lock the member
+    // out of their account. (Removing it needed that phone's PIN anyway.)
+    if (!(await appLockAvailable())) {
+      setAppLockEnabled(false);
+      prompting.current = false;
+      setLocked(false);
+      return;
+    }
     const ok = await verifyOwner();
     prompting.current = false;
     if (ok) setLocked(false);

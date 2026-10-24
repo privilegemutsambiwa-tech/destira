@@ -3,7 +3,7 @@ import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { isNativeApp } from "@/lib/native";
+import { isNativeApp, syncNativePushToken } from "@/lib/native";
 import { offlinePersister, shouldKeepOffline, OFFLINE_MAX_AGE, OFFLINE_BUSTER } from "@/lib/offline-cache";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -169,6 +169,12 @@ function AuthenticatedHome() {
 function Router() {
   const { user, isLoading } = useAuth();
   const [location] = useLocation();
+
+  // In the app: whenever someone signs in (email or Google), link this
+  // phone's notifications to them.
+  useEffect(() => {
+    if (user?.id && native) void syncNativePushToken();
+  }, [user?.id]);
 
   if (isLoading) {
     return <DestiraLoadingScreen />;
