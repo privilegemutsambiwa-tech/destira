@@ -5,7 +5,7 @@
 import type { Express } from "express";
 import fs from "fs";
 import path from "path";
-import { ANDROID_APK_KEY, appDownloadUrl } from "./storage/objectStorage";
+import { ANDROID_APK_KEY, ANDROID_MANIFEST_KEY, appDownloadUrl, readAppDownloadJson } from "./storage/objectStorage";
 
 interface BundleInfo {
   version: string;
@@ -30,7 +30,45 @@ function latest(): BundleInfo | null {
   return cached;
 }
 
+interface AndroidRelease {
+  versionCode: number;
+  versionName: string;
+  publishedAt: string;
+}
+
+// The APK on offer at /download/android, as script/publish-apk.ts described
+// it (uploads/android/latest.json locally). Re-read every few minutes so a
+// new upload shows up without a deploy.
+let androidRelease: { at: number; value: AndroidRelease | null } | null = null;
+async function latestAndroid(): Promise<AndroidRelease | null> {
+  if (androidRelease && Date.now() - androidRelease.at < 5 * 60 * 1000) return androidRelease.value;
+  let value = await readAppDownloadJson<AndroidRelease>(ANDROID_MANIFEST_KEY).catch(() => null);
+  if (!value) {
+    // Locally (no storage): uploads/android/latest.json, beside the APK.
+    try {
+      value = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "uploads", ANDROID_MANIFEST_KEY), "utf-8"));
+    } catch {
+      value = null;
+    }
+  }
+  androidRelease = { at: Date.now(), value };
+  return value;
+}
+
 export function registerAppUpdateRoutes(app: Express) {
+  // The newest Android app: the app compares it with its own versionCode and
+  // asks the member to install it (client/src/lib/app-update.ts).
+  app.get("/api/app/android", async (req, res) => {
+    const info = await latestAndroid();
+    if (!info) return res.status(404).json({ message: "No Android release published" });
+    res.setHeader("Cache-Control", "no-cache");
+    res.json({
+      versionCode: info.versionCode,
+      versionName: info.versionName,
+      url: `${process.env.NODE_ENV === "production" ? "https" : req.protocol}://${req.get("host")}/download/android`,
+    });
+  });
+
   app.get("/api/app/bundle", (req, res) => {
     const info = latest();
     if (!info) return res.status(404).json({ message: "No app update available" });

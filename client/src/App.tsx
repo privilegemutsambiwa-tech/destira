@@ -28,6 +28,7 @@ const AdminConsoleRoot = lazy(() => import("@/admin"));
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
 import { OfflineBanner } from "@/components/offline-banner";
+import { AppUpdatePrompt } from "@/components/app-update-prompt";
 import { AppLockGate } from "@/components/app-lock";
 const Login = lazy(() => import("@/pages/Login"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
@@ -346,6 +347,7 @@ function App() {
           <Router />
         </ErrorBoundary>
         <AppLockGate />
+        <AppUpdatePrompt />
       </TooltipProvider>
     </AppQueryProvider>
   );
