@@ -203,3 +203,40 @@ export function winBackEmail(
   ].filter(Boolean).join("\n");
   return { subject, preheader, html: layout(ctx, preheader, body), text: text + textFooter(ctx) };
 }
+
+/** Paragraphs from an admin's plain text: blank lines split paragraphs,
+ *  single line breaks stay, and https links become clickable. */
+function richText(text: string): string {
+  return text
+    .trim()
+    .split(/\n\s*\n/)
+    .map((p) =>
+      para(
+        esc(p.trim())
+          .replace(/\n/g, "<br>")
+          .replace(/https:\/\/[^\s<]*[^\s<.,;:!?)]/g, (u) => `<a href="${u}" style="color:${C.ember}">${u}</a>`),
+      ),
+    )
+    .join("");
+}
+
+/** A one-off message to every member (Console → Member emails → Announcements). */
+export function announcementEmail(
+  ctx: LayoutCtx,
+  d: { subject: string; heading: string; body: string; button: { label: string; href: string } | null },
+): EmailContent {
+  const preheader = d.body.trim().split("\n")[0].slice(0, 120);
+  const html = [
+    heading(d.heading),
+    ctx.firstName ? para(`Hi ${esc(ctx.firstName)},`) : "",
+    richText(d.body),
+    d.button ? button(d.button.href, d.button.label) : "",
+  ].join("");
+  const text = [
+    d.heading,
+    ctx.firstName ? `Hi ${ctx.firstName},` : "",
+    d.body.trim(),
+    d.button ? `${d.button.label}: ${d.button.href}` : "",
+  ].filter(Boolean).join("\n\n");
+  return { subject: d.subject, preheader, html: layout(ctx, preheader, html), text: text + textFooter(ctx) };
+}

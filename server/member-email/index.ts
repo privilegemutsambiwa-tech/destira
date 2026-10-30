@@ -55,7 +55,7 @@ const PREF_KEY: Record<MemberEmailKind, string> = {
   weekly_digest: "email_digest",
   win_back: "email_digest",
 };
-export const MEMBER_EMAIL_PREF_KEYS = ["email_all", "email_tips", "email_likes", "email_digest"] as const;
+export const MEMBER_EMAIL_PREF_KEYS = ["email_all", "email_tips", "email_likes", "email_digest", "email_news"] as const;
 
 const HARARE_UTC_OFFSET = 2;
 const DAY_MS = 86_400_000;
@@ -133,7 +133,7 @@ export async function setEmailPref(userId: string, scope: string, on: boolean): 
     .where(eq(profiles.userId, userId));
 }
 
-function harareHour(now: Date): number {
+export function harareHour(now: Date): number {
   return (((now.getUTCHours() + HARARE_UTC_OFFSET) % 24) + 24) % 24;
 }
 function harareDay(now: Date): number {
@@ -163,7 +163,7 @@ function cityOf(location: string | null | undefined): string | null {
 
 // ── member snapshot (one batched load, then pure decisions) ─────────
 
-interface Member {
+export interface Member {
   userId: string;
   email: string;
   firstName: string;
@@ -178,7 +178,7 @@ interface Member {
   sentKeys: Set<string>;
 }
 
-async function loadMembers(): Promise<Member[]> {
+export async function loadMembers(): Promise<Member[]> {
   const rows = await db
     .select({
       userId: users.id,
@@ -293,7 +293,8 @@ async function loadWeekContext(now: Date): Promise<WeekContext> {
 
 export interface PlannedEmail {
   userId: string;
-  kind: MemberEmailKind;
+  /** A lifecycle kind, or "announcement" (announcements.ts). */
+  kind: MemberEmailKind | "announcement";
   dedupeKey: string;
   to: string;
   content: T.EmailContent;
@@ -400,7 +401,7 @@ function plan(members: Member[], ctx: WeekContext, settings: MemberEmailSettings
   }
 
   const priority: Record<MemberEmailKind, number> = { likes_waiting: 0, welcome: 1, finish_profile: 2, win_back: 3, weekly_digest: 4 };
-  return out.sort((a, b) => priority[a.kind] - priority[b.kind]);
+  return out.sort((a, b) => priority[a.kind as MemberEmailKind] - priority[b.kind as MemberEmailKind]);
 }
 
 // ── delivery ───────────────────────────────────────────────────────
@@ -414,7 +415,7 @@ function deliveryBlockedReason(to: string): string | null {
   return null;
 }
 
-async function deliver(p: PlannedEmail): Promise<"sent" | "failed" | "logged" | "duplicate"> {
+export async function deliver(p: PlannedEmail): Promise<"sent" | "failed" | "logged" | "duplicate"> {
   // Claim the dedupe key first so two sweeps (or two instances) can never
   // both send the same email.
   const [claimed] = await db
@@ -446,7 +447,7 @@ async function deliver(p: PlannedEmail): Promise<"sent" | "failed" | "logged" | 
   return "failed";
 }
 
-async function sentToday(now: Date): Promise<number> {
+export async function sentToday(now: Date): Promise<number> {
   const start = new Date(now.getTime() - 24 * HOUR_MS);
   const [row] = await db
     .select({ n: sql<number>`count(*)` })

@@ -1,7 +1,7 @@
 // Admin console: member lifecycle email. Mode switch (off/live), daily cap,
 // per-kind switches, a dry run ("who would get what right now"), a rendered
 // preview of each email for any member, a test send to your own inbox, and
-// the send log.
+// the send log. Also announcements: a one-off email to every member.
 import type { Express } from "express";
 import { eq } from "drizzle-orm";
 import { adminRoute } from "./auth";
@@ -9,6 +9,7 @@ import { auditAdmin } from "./audit";
 import { db } from "../db";
 import { users } from "@shared/models/auth";
 import * as memberEmail from "../member-email";
+import * as announcements from "../member-email/announcements";
 import { resendConfigured } from "../email/resend";
 
 function isKind(k: unknown): k is memberEmail.MemberEmailKind {
@@ -105,6 +106,80 @@ export function registerAdminMemberEmailRoutes(app: Express) {
     } catch (e) {
       console.error("[admin] member email test error:", e);
       res.status(500).json({ message: "Test send failed" });
+    }
+  });
+
+  // ── announcements (member-email/announcements.ts) ──────────────────
+  const meOf = async (req: any) => {
+    const userId: string = req.admin.userId;
+    const [me] = await db.select({ email: users.email, firstName: users.firstName }).from(users).where(eq(users.id, userId));
+    return { userId, email: me?.email ?? null, firstName: (me?.firstName ?? "").trim().split(" ")[0] };
+  };
+
+  adminRoute(app, "get", "/api/admin/announcements", "support", async (_req, res) => {
+    try {
+      const [items, audience] = await Promise.all([announcements.listWithProgress(), announcements.audienceSize()]);
+      res.json({ items, audience });
+    } catch (e) {
+      console.error("[admin] announcements load error:", e);
+      res.status(500).json({ message: "Failed to load announcements" });
+    }
+  });
+
+  adminRoute(app, "post", "/api/admin/announcements/preview", "support", async (req, res) => {
+    const v = announcements.validateDraft(req.body);
+    if ("error" in v) return res.status(400).json({ message: v.error });
+    try {
+      res.json(announcements.render(v.draft, await meOf(req)));
+    } catch (e) {
+      console.error("[admin] announcement preview error:", e);
+      res.status(500).json({ message: "Preview failed" });
+    }
+  });
+
+  adminRoute(app, "post", "/api/admin/announcements/test", "admin", async (req, res) => {
+    const v = announcements.validateDraft(req.body);
+    if ("error" in v) return res.status(400).json({ message: v.error });
+    try {
+      const me = await meOf(req);
+      if (!me.email) return res.status(400).json({ message: "Your account has no email address" });
+      const r = await announcements.sendAnnouncementTest(v.draft, me, me.email);
+      await auditAdmin(req, me.userId, "announcement.test", { details: { subject: v.draft.subject, ok: r.ok } });
+      if (!r.ok) return res.status(400).json({ message: r.error });
+      res.json({ ok: true, to: memberEmail.maskEmail(me.email) });
+    } catch (e) {
+      console.error("[admin] announcement test error:", e);
+      res.status(500).json({ message: "Test send failed" });
+    }
+  });
+
+  adminRoute(app, "post", "/api/admin/announcements", "admin", async (req, res) => {
+    const v = announcements.validateDraft(req.body);
+    if ("error" in v) return res.status(400).json({ message: v.error });
+    if (!resendConfigured() && process.env.NODE_ENV === "production") {
+      return res.status(400).json({ message: "Email isn't connected yet (RESEND_API_KEY). Nothing was sent." });
+    }
+    try {
+      const adminUserId = (req as any).admin.userId;
+      const a = await announcements.startAnnouncement(v.draft, adminUserId);
+      await auditAdmin(req, adminUserId, "announcement.send", { details: { id: a.id, subject: a.subject, audience: a.audience } });
+      res.json(a);
+    } catch (e) {
+      console.error("[admin] announcement send error:", e);
+      res.status(500).json({ message: "Couldn't start sending" });
+    }
+  });
+
+  adminRoute(app, "post", "/api/admin/announcements/:id/cancel", "admin", async (req, res) => {
+    try {
+      const adminUserId = (req as any).admin.userId;
+      const ok = await announcements.cancelAnnouncement(String(req.params.id), adminUserId);
+      if (!ok) return res.status(404).json({ message: "That announcement isn't sending" });
+      await auditAdmin(req, adminUserId, "announcement.cancel", { details: { id: req.params.id } });
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("[admin] announcement cancel error:", e);
+      res.status(500).json({ message: "Couldn't stop it" });
     }
   });
 }

@@ -4,7 +4,7 @@ import {
   ArrowLeft, User, Brain, Shield, Bell, Wrench, Crown, HelpCircle,
   AlertTriangle, ChevronRight, LogOut, Trash2, PauseCircle, Eye, EyeOff,
   Volume2, MapPin, MessageSquare, Zap, Check, Lock, Mail, Sliders, FileText, Heart,
-  ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2, Users
+  ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2, Users, Megaphone
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme, type ThemePreference } from "@/hooks/use-theme";
@@ -1952,6 +1952,7 @@ export default function Settings() {
               <ToggleRow icon={Heart} label="When someone likes you" value={notifEnabled("email_likes")} onChange={(v) => handleToggleNotifPref("email_likes", v)} testId="toggle-email-likes" />
               <ToggleRow icon={CalendarDays} label="Weekly digest and catch-ups" value={notifEnabled("email_digest")} onChange={(v) => handleToggleNotifPref("email_digest", v)} testId="toggle-email-digest" />
               <ToggleRow icon={Bell} label="Getting-started tips" value={notifEnabled("email_tips")} onChange={(v) => handleToggleNotifPref("email_tips", v)} testId="toggle-email-tips" />
+              <ToggleRow icon={Megaphone} label="News and updates" value={notifEnabled("email_news")} onChange={(v) => handleToggleNotifPref("email_news", v)} testId="toggle-email-news" />
             </>
           )}
         </div>

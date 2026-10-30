@@ -5,6 +5,7 @@ import type { Express, Request } from "express";
 import { getPublicEventTeaser, getOrRenderEventShareCard, getUpcomingPublicEvents } from "./event-share";
 import { getFirstDayState, claimFirstDayReward, FirstDayNotDoneError } from "./first-day";
 import * as memberEmail from "./member-email";
+import { runAnnouncementSweep } from "./member-email/announcements";
 import { getDailyPicks, runDailyPicksPushSweep } from "./daily-picks";
 import { escapeHtml } from "./group-invite";
 import { getSignedUrl, keyFromUploadUrl } from "./storage/objectStorage";
@@ -120,6 +121,7 @@ export function registerGrowthRoutes(app: Express, getUserId: (req: Request) => 
     email_tips: "tips emails",
     email_likes: "like notifications by email",
     email_digest: "the weekly digest and catch-up emails",
+    email_news: "news and updates from Destira",
   };
   const page = (title: string, body: string) => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head>
 <body style="margin:0;background:#FBF8F5;font-family:Helvetica,Arial,sans-serif;color:#1A1418">
@@ -170,13 +172,20 @@ export function registerGrowthRoutes(app: Express, getUserId: (req: Request) => 
   });
 
   // ── background sweep ──────────────────────────────────────────────
+  // Lifecycle emails first, then any announcement with what's left of the
+  // day's limit.
   const sweep = () =>
     memberEmail
       .runMemberEmailSweep()
       .then((r) => {
         if ("counts" in r && r.counts && Object.keys(r.counts).length) console.log("[member-email]", r.counts);
       })
-      .catch((e) => console.error("[member-email] sweep failed:", e));
+      .catch((e) => console.error("[member-email] sweep failed:", e))
+      .then(() => runAnnouncementSweep())
+      .then((r) => {
+        if (r && "counts" in r && r.counts && Object.keys(r.counts).length) console.log("[announcement]", r.id, r.counts, `${r.remaining} to go`);
+      })
+      .catch((e) => console.error("[announcement] sweep failed:", e));
   setTimeout(sweep, 20_000);
   setInterval(sweep, 15 * 60 * 1000);
 
