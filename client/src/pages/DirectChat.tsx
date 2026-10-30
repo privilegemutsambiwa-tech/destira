@@ -149,6 +149,8 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
 
   const match = matches?.find((m: any) => m.id === matchId);
   const otherName = match?.otherProfile?.displayName || "Match";
+  const otherPhoto: string | null = match?.otherProfile?.coverPhotoUrl || null;
+  const [photoFailed, setPhotoFailed] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -187,15 +189,26 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
         <Button variant="ghost" size="icon" onClick={() => setLocation(backRoute)} aria-label="Back" data-testid="button-back">
           <ArrowLeft className="w-5 h-5 text-vf-text" />
         </Button>
-        <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center font-serif text-lg text-white"
-            style={{ background: avatarColor(match?.otherProfile?.userId) }}
-          >
-            {otherName[0]}
-          </div>
-          <h2 className="text-sm text-vf-text" data-testid="text-chat-name">{otherName}</h2>
-        </div>
+        {/* Their photo and name; tap through to their profile. */}
+        <button
+          type="button"
+          onClick={() => match?.otherProfile?.userId && setLocation(`/u/${match.otherProfile.userId}`)}
+          className="flex items-center gap-3 min-w-0 text-left"
+          aria-label={`Open ${otherName}'s profile`}
+          data-testid="button-chat-profile"
+        >
+          {otherPhoto && !photoFailed ? (
+            <img src={otherPhoto} alt="" onError={() => setPhotoFailed(true)} className="w-10 h-10 rounded-full object-cover shrink-0 bg-vf-surface2" />
+          ) : (
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center font-serif text-lg text-white shrink-0"
+              style={{ background: avatarColor(match?.otherProfile?.userId) }}
+            >
+              {otherName[0]}
+            </div>
+          )}
+          <h2 className="text-sm text-vf-text truncate" data-testid="text-chat-name">{otherName}</h2>
+        </button>
       </div>
 
       <SharedLoungeStrip otherUserId={match?.otherProfile?.userId} otherName={otherName} />

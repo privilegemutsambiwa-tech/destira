@@ -414,3 +414,12 @@
   .story-ring-active { animation: none; }
   .vf-btn-primary:active:not(:disabled) { transform: none; }
 }
+
+/* While offline (components/offline-banner.tsx), the whole app sits below
+   the banner: full-height screens shrink and top-pinned headers move down
+   by its height, so nothing hides behind it. */
+html.vf-offline body { padding-top: var(--vf-offline-bar, 0px); }
+html.vf-offline .h-dvh { height: calc(100dvh - var(--vf-offline-bar, 0px)); }
+html.vf-offline .h-screen { height: calc(100vh - var(--vf-offline-bar, 0px)); }
+html.vf-offline .sticky.top-0 { top: var(--vf-offline-bar, 0px); }
+html.vf-offline .fixed.top-0:not([data-testid="offline-banner"]) { top: var(--vf-offline-bar, 0px); }

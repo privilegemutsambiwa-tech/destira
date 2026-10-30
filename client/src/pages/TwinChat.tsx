@@ -173,7 +173,7 @@ function TwinTrustPanel({
             {memorySummary}
           </p>
         )}
-        <Link href="/settings">
+        <Link href="/settings" asChild>
           <a className="inline-block text-[12.5px] text-vf-faint hover:text-vf-text underline mt-4" data-testid="link-manage-memory">
             Manage or clear this memory →
           </a>

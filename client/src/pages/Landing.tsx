@@ -1,16 +1,16 @@
 import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { AlertTriangle, ArrowRight, CalendarHeart, ChevronDown, Flag, Lock, MessageCircle, ShieldCheck, SlidersHorizontal, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarHeart, ChevronDown, Download, Flag, Lock, MessageCircle, ShieldCheck, SlidersHorizontal, Smartphone, Sparkles, Users } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { DestiraLockup } from "@/components/brand/logo";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { photos as BUNDLED_PHOTOS, type Photo } from "@/lib/photos";
 import { isNativeApp } from "@/lib/native";
 import { pendingReferralCode } from "@/lib/attribution";
-import { supabase } from "@/lib/supabase";
-import { NATIVE_AUTH_REDIRECT, openNativeOAuth } from "@/lib/native";
-import { trackEvent, trackPageView } from "@/lib/pixel";
+import { GoogleSignInCancelled, startGoogleSignIn } from "@/lib/google-signin";
+import { consumePendingInvite, resolvePendingInviteRoute } from "@/lib/pending-invite";
+import { trackCustom, trackEvent, trackPageView } from "@/lib/pixel";
 import { LANDING_QUIZ, saveQuizAnswers, twinNote, type QuizAnswers } from "@/lib/landing-quiz";
 
 // The app doesn't carry the website's photo library (hundreds of MB); its
@@ -342,17 +342,13 @@ function useHeadline() {
 
 // ── Sign-up buttons ──────────────────────────────────────────────────
 
+/** Google sign-in from the welcome page; in the app it finishes here. */
 async function startGoogle(): Promise<void> {
-  const native = isNativeApp();
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: native ? NATIVE_AUTH_REDIRECT : `${window.location.origin}/auth/callback`,
-      skipBrowserRedirect: native,
-    },
-  });
-  if (error) throw error;
-  if (native && data?.url) await openNativeOAuth(data.url);
+  const user = await startGoogleSignIn();
+  if (user) {
+    const pendingInvite = consumePendingInvite();
+    window.location.assign(pendingInvite ? resolvePendingInviteRoute(pendingInvite) : "/");
+  }
 }
 
 /** Google (one tap for most phones) above email. The pair every CTA uses. */
@@ -366,8 +362,8 @@ function SignupButtons({ className = "", testId = "hero" }: { className?: string
     setFailed(false);
     try {
       await startGoogle();
-    } catch {
-      setFailed(true);
+    } catch (e) {
+      if (!(e instanceof GoogleSignInCancelled)) setFailed(true);
     } finally {
       // On the web the page navigates away; this only matters if it didn't.
       window.setTimeout(() => setBusy(false), 4000);
@@ -393,6 +389,57 @@ function SignupButtons({ className = "", testId = "hero" }: { className?: string
         Sign up with email
       </button>
       {failed && <p className="text-[13px] text-vf-ember">Couldn't open Google. Try again, or use email.</p>}
+    </div>
+  );
+}
+
+/** Where the Android app downloads from (server/app-update.ts). */
+const ANDROID_DOWNLOAD = "/download/android";
+
+const isAndroidBrowser = () => typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
+const isIOS = () => typeof navigator !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+/** "Get the Android app": on an Android phone, one tap downloads it and the
+ *  three install steps appear (Android asks people to allow it the first
+ *  time). On a computer, a pointer to open the site on the phone. Not shown
+ *  on iPhone, or inside the app itself. */
+function GetTheApp({ className = "" }: { className?: string }) {
+  const [started, setStarted] = useState(false);
+  if (isNativeApp() || isIOS()) return null;
+  const android = isAndroidBrowser();
+  const onDownload = () => {
+    trackCustom("DownloadAndroidApp", { from: "landing" });
+    setStarted(true);
+  };
+  return (
+    <div className={`w-full max-w-[400px] rounded-[18px] border border-vf-line bg-vf-surface px-4 py-3.5 ${className}`} data-testid="card-get-app">
+      <div className="flex items-center gap-3">
+        <span className="shrink-0 w-10 h-10 rounded-[12px] bg-vf-mint/15 flex items-center justify-center" aria-hidden="true">
+          <Smartphone className="w-5 h-5 text-vf-mint" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[14.5px] font-semibold text-vf-text whitespace-nowrap">Android app</div>
+          <div className="text-[12.5px] text-vf-muted leading-snug">
+            {android ? "Faster, works offline, tells you about replies." : "Open destira.date on your Android phone to install it."}
+          </div>
+        </div>
+        <a
+          href={ANDROID_DOWNLOAD}
+          onClick={onDownload}
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-vf-text text-vf-ink font-semibold h-10 px-4 text-[13.5px] btn-press"
+          data-testid="link-download-android"
+        >
+          <Download className="w-4 h-4" />
+          {android ? "Install" : "Download"}
+        </a>
+      </div>
+      {started && (
+        <ol className="mt-3 pt-3 border-t border-vf-line space-y-1.5 text-[13px] text-vf-text list-decimal pl-5" data-testid="install-steps">
+          <li>When the download finishes, tap <strong>Destira.apk</strong> to open it.</li>
+          <li>If Android asks, tap <strong>Settings</strong> and allow installs from your browser.</li>
+          <li>Tap <strong>Install</strong>, then open Destira and sign in.</li>
+        </ol>
+      )}
     </div>
   );
 }
@@ -755,19 +802,6 @@ export default function Landing() {
 
   const [live, setLive] = useState<{ events: LandingEvent[]; memberCount: number }>({ events: [], memberCount: 0 });
 
-  const handleDemo = async () => {
-    try {
-      const res = await fetch("/api/demo/login", { method: "POST", credentials: "include" });
-      if (res.ok) {
-        window.location.href = "/";
-        return;
-      }
-    } catch {
-      /* fall through to login */
-    }
-    setLocation("/login");
-  };
-
   useEffect(() => {
     trackPageView();
     fetch("/api/public/landing")
@@ -939,6 +973,7 @@ export default function Landing() {
             <div>
               <div ref={heroCtaRef} className="mt-7">
                 <SignupButtons />
+                <GetTheApp className="mt-3" />
                 <p className="mt-3.5 text-[13px] text-vf-muted">
                   Free · 18+ · About 2 minutes{" "}
                   <span aria-hidden="true">·</span>{" "}
@@ -1198,9 +1233,16 @@ export default function Landing() {
               <button onClick={() => setLocation("/login")} className="text-left text-vf-muted hover:text-vf-text" data-testid="footer-link-login">
                 Log in
               </button>
-              <button onClick={handleDemo} className="text-left text-vf-muted hover:text-vf-text" data-testid="footer-link-demo">
-                Try a demo
-              </button>
+              {!isNativeApp() && (
+                <a
+                  href={ANDROID_DOWNLOAD}
+                  onClick={() => trackCustom("DownloadAndroidApp", { from: "footer" })}
+                  className="text-left text-vf-muted hover:text-vf-text"
+                  data-testid="footer-link-android"
+                >
+                  Android app
+                </a>
+              )}
             </div>
             <div className="flex flex-col gap-2.5">
               <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">Learn</span>

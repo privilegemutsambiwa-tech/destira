@@ -17,10 +17,10 @@
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
-        <!-- Android 12+ draws its own launch screen: Destira's ground, the app icon. -->
+        <item name="android:background">@drawable/launch_background</item>
+        <!-- Android 12+ draws its own launch screen: white ground, the vector mark. -->
         <item name="windowSplashScreenBackground">@color/destira_launch</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
         <item name="windowSplashScreenIconBackgroundColor">@color/destira_launch</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>

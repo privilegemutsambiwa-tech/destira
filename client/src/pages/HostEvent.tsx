@@ -686,7 +686,7 @@ export default function HostEvent() {
             <p className="text-[12.5px] text-vf-faint leading-[1.5]">
               {d.isPrivateAddress
                 ? "Private homes are held for review until the photos, video, ID and numbers are in."
-                : "Your first event gets a quick look before it goes public — after that they publish straight away. You can host 3 a week."}
+                : "It goes up as soon as you post it. You can host 3 a week."}
             </p>
           </div>
         )}

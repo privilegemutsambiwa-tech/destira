@@ -5,6 +5,7 @@
 import type { Express } from "express";
 import fs from "fs";
 import path from "path";
+import { ANDROID_APK_KEY, appDownloadUrl } from "./storage/objectStorage";
 
 interface BundleInfo {
   version: string;
@@ -41,6 +42,21 @@ export function registerAppUpdateRoutes(app: Express) {
       // Behind Render's proxy the request arrives as http; the site is https.
       url: `${process.env.NODE_ENV === "production" ? "https" : req.protocol}://${req.get("host")}/app-bundle/${encodeURIComponent(info.version)}.zip`,
     });
+  });
+
+  // The Android app, for installing straight from the website (the landing
+  // page's "Get the Android app"). Always the latest published APK
+  // (script/publish-apk.ts); locally, uploads/android/Destira.apk.
+  app.get("/download/android", async (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const url = await appDownloadUrl(ANDROID_APK_KEY, "Destira.apk");
+    if (url) return res.redirect(302, url);
+    const local = path.resolve(process.cwd(), "uploads", ANDROID_APK_KEY);
+    if (fs.existsSync(local)) {
+      res.setHeader("Content-Type", "application/vnd.android.package-archive");
+      return res.download(local, "Destira.apk");
+    }
+    res.status(404).send("The Android app isn't available to download right now.");
   });
 
   app.get("/app-bundle/:file", (req, res) => {

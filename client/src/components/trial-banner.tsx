@@ -60,7 +60,7 @@ export function TrialBanner() {
           </p>
         </div>
       </div>
-      <Link href={withFrom("/plans", location)}>
+      <Link href={withFrom("/plans", location)} asChild>
         <a
           className="mt-2.5 sm:mt-0 sm:ml-auto inline-flex items-center gap-1 shrink-0 text-[12.5px] font-semibold text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors whitespace-nowrap"
           data-testid="trial-banner-explore"

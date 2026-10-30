@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="destira_launch">#0C0910</color>
+    <!-- The launch screen stays white in dark mode too, like the brand. -->
+    <color name="destira_launch">#FBF8F5</color>
 </resources>

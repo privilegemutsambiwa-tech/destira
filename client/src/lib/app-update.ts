@@ -21,6 +21,9 @@ const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
 let lastCheck = 0;
 let checking = false;
 
+/** Bundle ids start with their build time (yyyymmddhhmm, UTC). */
+const builtAt = (id: string) => id.match(/\d{12}/)?.[0] ?? null;
+
 interface Offer {
   version: string;
   url: string;
@@ -37,6 +40,10 @@ async function checkForUpdate() {
     if (!res.ok) return;
     const offer = (await res.json()) as Offer;
     if (!offer?.version || offer.version === THIS_BUNDLE) return;
+    // A fresh store install can carry newer screens than the website has
+    // published yet: never "update" back to older ones.
+    const offered = builtAt(offer.version), mine = builtAt(THIS_BUNDLE);
+    if (offered && mine && offered <= mine) return;
 
     const nativeBuild = Number((await App.getInfo()).build) || 0;
     if (nativeBuild < offer.minNativeBuild) return; // needs the store update first

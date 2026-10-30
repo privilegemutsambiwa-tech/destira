@@ -35,6 +35,11 @@ const config: CapacitorConfig = {
   plugins: {
     // Over-the-air updates from our own server (client/src/lib/app-update.ts
     // decides when); nothing goes through Capgo's cloud.
+    // Google sign-in through Android's account sheet (lib/google-signin.ts);
+    // the other providers aren't used, so they're left out of the app.
+    SocialLogin: {
+      providers: { google: true, facebook: false, apple: false, twitter: false },
+    },
     CapacitorUpdater: {
       autoUpdate: false,
       appReadyTimeout: 15000,
@@ -46,6 +51,7 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchShowDuration: 900,
       launchAutoHide: true,
+      androidSplashResourceName: "launch_background", // white, vector logo (res/drawable)
       backgroundColor: "#FBF8F5",
       showSpinner: false,
     },

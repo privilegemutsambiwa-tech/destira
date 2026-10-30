@@ -59,6 +59,11 @@ export function trackEvent(name: "ViewContent" | "Lead" | "CompleteRegistration"
   if (start()) window.fbq!("track", name, params ?? {});
 }
 
+/** Our own events (Events Manager can turn them into custom conversions). */
+export function trackCustom(name: "DownloadAndroidApp", params?: Record<string, unknown>) {
+  if (start()) window.fbq!("trackCustom", name, params ?? {});
+}
+
 /** CompleteRegistration, at most once per account on this device. */
 export function trackRegistrationOnce(userId: string) {
   if (!PIXEL_ID || isNativeApp()) return;

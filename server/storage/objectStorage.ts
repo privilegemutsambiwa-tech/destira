@@ -120,3 +120,31 @@ const EXT_CONTENT_TYPES: Record<string, string> = {
 export function inferContentType(filename: string): string {
   return EXT_CONTENT_TYPES[path.extname(filename).toLowerCase()] ?? "application/octet-stream";
 }
+
+// ── App downloads ──
+// The Android APK people install from destira.date/download/android. Its
+// own private bucket: the photo bucket caps files at 10MB, and an APK is
+// bigger. Uploaded by script/publish-apk.ts; handed out as a short-lived
+// signed link by server/app-update.ts.
+export const APP_BUCKET = "app-downloads";
+export const ANDROID_APK_KEY = "android/Destira.apk";
+
+export async function putAppDownload(key: string, data: Buffer, contentType: string): Promise<void> {
+  const c = assertClient();
+  const { data: buckets, error: listError } = await c.storage.listBuckets();
+  if (listError) throw new Error(`Failed to list buckets: ${listError.message}`);
+  if (!buckets?.some((b) => b.name === APP_BUCKET)) {
+    const { error } = await c.storage.createBucket(APP_BUCKET, { public: false, fileSizeLimit: "200MB" });
+    if (error) throw new Error(`Failed to create bucket "${APP_BUCKET}": ${error.message}`);
+  }
+  const { error } = await c.storage.from(APP_BUCKET).upload(key, data, { contentType, upsert: true, cacheControl: "60" });
+  if (error) throw new Error(`Upload of "${key}" failed: ${error.message}`);
+}
+
+/** A link that downloads the file under `filename`; null when storage isn't configured or the file isn't there. */
+export async function appDownloadUrl(key: string, filename: string, expiresInSeconds = 600): Promise<string | null> {
+  if (!client) return null;
+  const { data, error } = await client.storage.from(APP_BUCKET).createSignedUrl(key, expiresInSeconds, { download: filename });
+  if (error || !data) return null;
+  return data.signedUrl;
+}

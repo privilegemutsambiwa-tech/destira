@@ -156,7 +156,7 @@ function EmptyState({
   return (
     <div className="py-12" data-testid="events-empty-state">
       <p className="font-serif text-xl text-vf-text mb-2">{line}</p>
-      <Link href={ctaHref}>
+      <Link href={ctaHref} asChild>
         <a className="text-sm text-vf-mint hover:text-vf-text underline">{ctaLabel}</a>
       </Link>
     </div>

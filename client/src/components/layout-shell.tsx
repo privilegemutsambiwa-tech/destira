@@ -125,7 +125,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
                 <div className="h-full bg-vf-mint" style={{ width: `${score}%` }} />
               </div>
               {remaining > 0 ? (
-                <Link href="/onboarding">
+                <Link href="/onboarding" asChild>
                   <a className="text-[12px] text-vf-mint hover:text-vf-text leading-snug transition-colors" data-testid="link-readiness-next">
                     {readinessCopy}
                   </a>

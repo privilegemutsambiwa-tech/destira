@@ -22,6 +22,12 @@ allprojects {
         google()
         mavenCentral()
     }
+    // @capgo/capacitor-social-login asks for androidx.browser 1.9.0 while its
+    // androidbrowserhelper dependency pins 1.4.0; one version for everyone.
+    // (1.9.0 itself would need compileSdk 36.)
+    configurations.configureEach {
+        resolutionStrategy.force "androidx.browser:browser:1.8.0"
+    }
 }
 
 task clean(type: Delete) {

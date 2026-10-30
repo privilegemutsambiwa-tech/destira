@@ -188,7 +188,9 @@ function Router() {
     <ErrorBoundary resetKey={location}>
     <Suspense fallback={<DestiraLoadingScreen />}>
     <Switch>
-      <Route path="/" component={user ? AuthenticatedHome : Landing} />
+      {/* The app opens straight on sign-in: the marketing page is for the
+          website, and its photos would have to come over the network. */}
+      <Route path="/" component={user ? AuthenticatedHome : isNativeApp() ? Login : Landing} />
       <Route path="/login" component={Login} />
       {/* Public: the store listings and the law link to these. */}
       <Route path="/privacy" component={PrivacyPolicy} />

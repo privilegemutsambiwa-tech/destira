@@ -41,16 +41,16 @@ function StatePicker({
             role="radio"
             aria-checked={active}
             onClick={() => onChange(s)}
-            className={`flex-1 min-h-[44px] rounded-[10px] px-2 py-2 text-[12px] leading-tight transition-colors ${
+            className={`flex-1 min-w-0 min-h-[44px] rounded-[10px] px-1.5 py-2 text-[12.5px] leading-tight break-words transition-colors ${
               active
                 ? "border-2 border-vf-ember bg-vf-ember/10 text-vf-text font-medium"
                 : "border border-vf-line bg-vf-text/[0.03] text-vf-muted hover:text-vf-text"
             }`}
             data-testid={`disclosure-state-${s}`}
           >
-            <span className="flex items-center justify-center gap-1">
+            <span className="flex items-center justify-center gap-1 text-center">
               {active && <Check className="w-3 h-3 shrink-0" aria-hidden="true" />}
-              {STATE_META[s].label}
+              <span className="min-w-0">{STATE_META[s].label}</span>
             </span>
           </button>
         );
@@ -123,11 +123,11 @@ export default function TwinDisclosure() {
 
   return (
     <div className="min-h-dvh bg-vf-ink text-vf-text">
-      <div className="sticky top-0 z-10 bg-vf-ink border-b border-vf-line flex items-center gap-3 px-4 h-14">
-        <button onClick={() => setLocation("/settings")} className="w-8 h-8 flex items-center justify-center" data-testid="button-disclosure-back">
+      <div className="sticky top-0 z-10 bg-vf-ink border-b border-vf-line flex items-center gap-2 px-2 min-h-14 py-2">
+        <button onClick={() => setLocation("/settings")} className="w-10 h-10 flex items-center justify-center shrink-0" aria-label="Back" data-testid="button-disclosure-back">
           <ArrowLeft className="w-5 h-5 text-vf-ember" />
         </button>
-        <h1 className="font-serif text-[20px] text-vf-text">What your twin may discuss</h1>
+        <h1 className="font-serif text-[19px] leading-tight text-vf-text min-w-0">What your twin may discuss</h1>
       </div>
 
       <div className="max-w-[560px] mx-auto px-4 py-6 pb-28 flex flex-col gap-8">

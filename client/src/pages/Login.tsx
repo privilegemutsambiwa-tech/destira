@@ -5,8 +5,7 @@ import { FcGoogle } from "react-icons/fc";
 import { DestiraLockup } from "@/components/brand/logo";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/lib/supabase";
-import { isNativeApp, NATIVE_AUTH_REDIRECT, openNativeOAuth } from "@/lib/native";
+import { GoogleSignInCancelled, googleSignInProblem, passwordSignInProblem, startGoogleSignIn } from "@/lib/google-signin";
 import { consumePendingInvite, resolvePendingInviteRoute } from "@/lib/pending-invite";
 
 const INPUT =
@@ -20,7 +19,6 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [company, setCompany] = useState(""); // honeypot
   const [error, setError] = useState<string | null>(null);
-  const [demoLoading, setDemoLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const goHome = () => {
@@ -44,8 +42,8 @@ export default function Login() {
     try {
       await login({ email: email.trim(), password });
       goHome();
-    } catch {
-      setError("Email or password is wrong.");
+    } catch (e) {
+      setError(passwordSignInProblem(e));
     }
   };
 
@@ -53,37 +51,16 @@ export default function Login() {
     setError(null);
     setGoogleLoading(true);
     try {
-      // In the store app Google refuses its in-app web view, so sign-in
-      // opens in a system browser tab and returns via a link to the app.
-      const native = isNativeApp();
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: native ? NATIVE_AUTH_REDIRECT : `${window.location.origin}/auth/callback`,
-          skipBrowserRedirect: native,
-        },
-      });
-      if (error) throw error;
-      if (native && data?.url) {
-        await openNativeOAuth(data.url);
-        setGoogleLoading(false);
+      // App: Android's account sheet signs in right here. Website: the page
+      // goes to Google and comes back through /auth/callback.
+      const user = await startGoogleSignIn();
+      if (user) {
+        const pendingInvite = consumePendingInvite();
+        setLocation(pendingInvite ? resolvePendingInviteRoute(pendingInvite) : "/");
       }
-    } catch {
-      setError("Couldn't start Google sign-in. Try again.");
+    } catch (e) {
+      if (!(e instanceof GoogleSignInCancelled)) setError(googleSignInProblem(e));
       setGoogleLoading(false);
-    }
-  };
-
-  const handleDemo = async () => {
-    setDemoLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/demo/login", { method: "POST", credentials: "include" });
-      if (!res.ok) throw new Error();
-      window.location.href = "/";
-    } catch {
-      setError("Demo is unavailable right now.");
-      setDemoLoading(false);
     }
   };
 
@@ -183,15 +160,6 @@ export default function Login() {
           >
             {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FcGoogle className="w-4 h-4" />}
             {googleLoading ? "Redirecting…" : "Continue with Google"}
-          </button>
-
-          <button
-            onClick={handleDemo}
-            disabled={demoLoading}
-            className="mt-3 w-full inline-flex items-center justify-center rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/25 h-11 text-sm transition-colors disabled:opacity-50"
-            data-testid="button-demo-login"
-          >
-            {demoLoading ? "Starting demo…" : "Try a demo"}
           </button>
 
           <div className="my-6 h-px bg-vf-line" />

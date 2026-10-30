@@ -16,10 +16,6 @@ import { Browser } from "@capacitor/browser";
 import { Share } from "@capacitor/share";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 
-// Where Google sign-in returns to in the app. Must also be listed under
-// Supabase → Authentication → URL Configuration → Redirect URLs.
-export const NATIVE_AUTH_REDIRECT = "date.destira.app://auth/callback";
-
 // android/.../DestiraNativePlugin.java
 const DestiraNative = registerPlugin<{ hasFirebase(): Promise<{ value: boolean }> }>("DestiraNative");
 
@@ -155,13 +151,6 @@ async function initNativePush() {
   if (!(await nativePushAvailable())) return;
   addPushListeners();
   if ((await nativePushPermission()) === "granted") PushNotifications.register().catch(() => {});
-}
-
-/** Google sign-in for the app: Google refuses sign-in inside an app's web
- *  view, so the consent screen opens in a system browser tab and returns to
- *  the app through NATIVE_AUTH_REDIRECT. */
-export async function openNativeOAuth(oauthUrl: string) {
-  await Browser.open({ url: oauthUrl, presentationStyle: "popover" });
 }
 
 function blobToBase64(blob: Blob): Promise<string> {

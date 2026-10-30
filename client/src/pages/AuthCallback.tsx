@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
-import { queryClient } from "@/lib/queryClient";
+import { finishGoogleSignIn } from "@/lib/google-signin";
 import { DestiraLoadingScreen } from "@/components/brand/logo";
 import { consumePendingInvite, resolvePendingInviteRoute } from "@/lib/pending-invite";
-import type { User } from "@shared/models/auth";
 
 // Landed on after Google hands control back to Supabase, which redirects
 // here with the OAuth result in the URL. supabase-js picks that up on init
@@ -21,15 +20,7 @@ export default function AuthCallback() {
       if (finishing.current) return;
       finishing.current = true;
       try {
-        const res = await fetch("/api/auth/google-callback", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ access_token: accessToken }),
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const user = (await res.json()) as User;
-        queryClient.setQueryData(["/api/auth/user"], user);
+        await finishGoogleSignIn(accessToken);
 
         const pendingInvite = consumePendingInvite();
         setLocation(pendingInvite ? resolvePendingInviteRoute(pendingInvite) : "/discover");

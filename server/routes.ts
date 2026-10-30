@@ -459,6 +459,16 @@ export async function registerRoutes(
   // both failure modes at once: there's no index to drift and no stale
   // question list to fall out of sync with the real ones in the DB.
   async function seedOnboardingIntoTwinMemory(userId: string, answers: { q: string; a: string }[]): Promise<void> {
+    await addOnboardingFacts(userId, answers);
+    await extractStructuredFromOnboarding(userId, answers);
+  }
+
+  // A just-finished member's answers on their way into twin memory, so
+  // "Meet your twin" (POST /api/twin/preview) can wait for them instead of
+  // answering from an empty memory.
+  const onboardingFactsPending = new Map<string, Promise<void>>();
+
+  async function addOnboardingFacts(userId: string, answers: { q: string; a: string }[]): Promise<void> {
     try {
       const obFacts = answers
         .filter((x) => x.a && x.a.trim().length > 0)
@@ -472,7 +482,13 @@ export async function registerRoutes(
           });
         }
       }
+    } catch (e) {
+      console.error("Onboarding twin facts error (non-blocking):", e);
+    }
+  }
 
+  async function extractStructuredFromOnboarding(userId: string, answers: { q: string; a: string }[]): Promise<void> {
+    try {
       const profile = await storage.getProfile(userId);
       if (profile) {
         const extraction = await completeText(
@@ -1883,6 +1899,10 @@ Only include structured_updates fields if the conversation clearly reveals them.
     if (!userId) return res.sendStatus(401);
     if (!checkAIRateLimit(userId)) return res.status(429).json({ message: "Too many requests. Please wait a moment." });
     try {
+      // Straight after onboarding, give the answers a moment to reach twin
+      // memory (a few seconds at most) so the twin doesn't say it knows nothing.
+      const pending = onboardingFactsPending.get(userId);
+      if (pending) await Promise.race([pending, new Promise((r) => setTimeout(r, 20_000))]);
       const me = await storage.getProfile(userId);
       if (!me) return res.status(404).json({ message: "Profile not found" });
       const first = (me.displayName || "you").split(/\s+/)[0];
@@ -2441,6 +2461,11 @@ Only include structured_updates fields if the conversation clearly reveals them.
           const answers = qs
             .filter((q) => q.answered)
             .map((q) => ({ q: q.text, a: q.answerText || (q.selectedOptions || []).join(", ") }));
+          // The answers go into twin memory now, alongside the persona
+          // rather than after it: the next screen asks the twin about them.
+          const facts = addOnboardingFacts(userId, answers);
+          onboardingFactsPending.set(userId, facts);
+          facts.finally(() => onboardingFactsPending.delete(userId));
           completeText(
             [
               {
@@ -2452,7 +2477,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
             { maxTokens: 8192 },
           )
             .then((r) => storage.updateProfile(userId, { twinPersona: r.text || "" }))
-            .then(() => seedOnboardingIntoTwinMemory(userId, answers))
+            .then(() => extractStructuredFromOnboarding(userId, answers))
             .catch((err) => console.error("Twin gen on complete failed:", err));
 
           // Independent of the twin persona above — the Discover resonance
@@ -5908,30 +5933,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
-  // "View Demo" on the landing page: seeds sample data and drops the visitor
-  // straight into a dedicated guest account (not a real signup, and not the
-  // shared auto-login the app used to have for every visitor).
-  app.post("/api/demo/login", async (req: any, res) => {
-    try {
-      await storage.seedDemoData();
-      const demoUser = await authStorage.upsertUser({
-        id: "demo-guest",
-        email: "demo-guest@vibeflow.app",
-        firstName: "Demo",
-        lastName: "Guest",
-      });
-      req.login(createSessionUser(demoUser), (err: any) => {
-        if (err) {
-          console.error("[demo] req.login failed:", err);
-          return res.status(500).json({ message: "Failed to start demo" });
-        }
-        res.json({ success: true });
-      });
-    } catch (e) {
-      console.error("Demo login error:", e);
-      res.status(500).json({ message: "Failed to start demo" });
-    }
-  });
+  // No guest login: a dating app can't have one shared account that any
+  // visitor walks into. (POST /api/demo/login used to do that.)
 
   try {
     await storage.seedDemoData();

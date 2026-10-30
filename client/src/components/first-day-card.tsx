@@ -1,7 +1,7 @@
 // "Your first day on Destira": five steps that turn a fresh account into one
 // that gets something back, with a real reward for finishing (7 more days of
 // Flame). Hidden once claimed, or for a few days after "Not now".
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronRight, Gift, Loader2, X } from "lucide-react";
@@ -47,7 +47,19 @@ export function FirstDayCard() {
       return r.ok ? r.json() : null;
     },
     staleTime: 30_000,
+    refetchOnMount: "always", // a step may have been done on another screen
   });
+
+  // Liking someone, joining a group or saving a seat happens on this same
+  // screen: re-check the steps after anything the member does, so a step
+  // ticks off the moment it's done.
+  const open = !!data && !data.claimed;
+  useEffect(() => {
+    if (!open) return;
+    return qc.getMutationCache().subscribe((e) => {
+      if (e.type === "updated" && e.action.type === "success") qc.invalidateQueries({ queryKey: ["/api/first-day"] });
+    });
+  }, [open, qc]);
 
   const claim = useMutation({
     mutationFn: async () => {

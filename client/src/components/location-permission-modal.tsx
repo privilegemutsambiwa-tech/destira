@@ -6,7 +6,20 @@ import { usePushSubscribe } from "@/hooks/use-push";
 const STORAGE_KEY = "location_permission_asked";
 
 export function LocationPermissionModal() {
-  const [visible, setVisible] = useState(() => !localStorage.getItem(STORAGE_KEY));
+  const [visible, setVisible] = useState(() => {
+    try {
+      return !localStorage.getItem(STORAGE_KEY);
+    } catch {
+      return false;
+    }
+  });
+  const decline = () => {
+    try {
+      localStorage.setItem(STORAGE_KEY, "declined");
+    } catch {
+      /* storage unavailable: it may ask again next visit */
+    }
+  };
   const { enable } = useGeolocation();
   const { subscribe } = usePushSubscribe();
 
@@ -15,18 +28,19 @@ export function LocationPermissionModal() {
   const handleEnable = () => {
     enable();
     subscribe().catch(() => {});
-    setVisible(false);
+    setVisible(false); // enable() records the answer ("asked")
   };
 
   const handleDismiss = () => {
-    localStorage.setItem(STORAGE_KEY, "declined");
+    decline();
     setVisible(false);
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
+      // Above the phone tab bar (also z-50), clear of the system nav bar.
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom) + 1rem))" }}
     >
       <div className="w-full max-w-sm rounded-2xl p-6 relative bg-vf-surface2 border border-vf-line shadow-[0_16px_48px_rgba(0,0,0,0.55)]">
         <button

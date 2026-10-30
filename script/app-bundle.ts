@@ -15,7 +15,7 @@ const LEFT_OUT = new Set(["photos", "uploads"]);
 /** The oldest installed app (Android versionCode) this bundle runs on. Bump
  *  it, together with the app's versionCode, whenever the screens start
  *  needing a native plugin the older app doesn't have. */
-export const MIN_NATIVE_BUILD = 1;
+export const MIN_NATIVE_BUILD = 4; // 1.3: native Google sign-in (capacitor-social-login)
 
 export function newBundleId(): string {
   const commit = (process.env.RENDER_GIT_COMMIT || "").slice(0, 7);

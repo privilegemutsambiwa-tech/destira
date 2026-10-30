@@ -14,6 +14,7 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { PLAN_CARDS, priceLabel } from "@shared/entitlements";
 
 // Below this many total photos (cover + portrait + gallery combined), a
 // profile is genuinely light on the one thing that drives reads the most —
@@ -299,7 +300,10 @@ export default function Profile() {
   const answeredPct = Math.min(Math.round((answered / 100) * 100), 100);
 
   const completionScore = completion?.score ?? profile?.profileCompletionScore ?? 0;
-  const emberActive = subscription?.tier && subscription.tier !== "free";
+  // The member's own plan (a paid one, or the signup trial), else Ember as
+  // the one to look at. Names, prices and pitches come from the plan list.
+  const myPlan = PLAN_CARDS.find((p) => p.tier === subscription?.tier && p.tier !== "free");
+  const ember = PLAN_CARDS.find((p) => p.tier === "ember")!;
 
   if (isLoading) {
     return (
@@ -882,13 +886,24 @@ export default function Profile() {
             <section>
               <SectionLabel>What your twin can say</SectionLabel>
               {facts.length > 0 ? (
-                <div className="mt-3 flex flex-wrap gap-2">
+                // Whole sentences, so a list of boxes that wrap, not pills
+                // (a pill can't hold two lines without the text spilling
+                // past its rounded ends).
+                <ul className="mt-3 flex flex-col gap-2">
                   {facts.slice(0, 10).map((f: any, i: number) => (
-                    <span key={i} className="text-[12.5px] px-2.5 py-1 rounded-full border border-vf-mint/25 bg-vf-mint/10 text-vf-mint" data-testid={`twin-fact-${i}`}>
-                      {f.factText}
-                    </span>
+                    <li
+                      key={i}
+                      className="flex items-start gap-2.5 rounded-[14px] border border-vf-mint/20 bg-vf-mint/[0.07] px-3.5 py-2.5 text-[14px] leading-[1.45] text-vf-text break-words min-w-0"
+                      data-testid={`twin-fact-${i}`}
+                    >
+                      <span className="mt-[7px] w-1.5 h-1.5 rounded-full bg-vf-mint shrink-0" aria-hidden="true" />
+                      <span className="min-w-0">{f.factText}</span>
+                    </li>
                   ))}
-                </div>
+                  {facts.length > 10 && (
+                    <li className="text-[13px] text-vf-muted px-1">+{facts.length - 10} more your twin knows</li>
+                  )}
+                </ul>
               ) : (
                 <p className="text-[14px] text-vf-muted mt-3">Nothing yet — a few conversations fill this in.</p>
               )}
@@ -926,37 +941,34 @@ export default function Profile() {
               </div>
             </section>
 
-            {/* Ember */}
+            {/* Plan */}
             <section
               className="rounded-[22px] border border-vf-gold/30 p-5 vf-card"
               style={{ background: "linear-gradient(150deg, rgba(233,196,106,.11), transparent)" }}
               data-testid="card-ember"
             >
-              {emberActive ? (
+              {myPlan ? (
                 <>
-                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">Ember · active</div>
-                  <p className="text-[13.5px] text-vf-muted mt-2 leading-[1.55]">
-                    Four twin conversations a night, full transcripts, first pick at dinners.
-                  </p>
-                  <button onClick={() => setLocation("/billing")} className="mt-3 text-[13px] text-vf-gold hover:text-vf-text transition-colors" data-testid="button-manage-ember">
-                    Manage
+                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">
+                    {myPlan.name} · {subscription?.isTrial ? "free trial" : "active"}
+                  </div>
+                  <p className="text-[13.5px] text-vf-muted mt-2 leading-[1.55]">{myPlan.pitch}</p>
+                  <button onClick={() => setLocation("/plans")} className="mt-3 text-[13px] text-vf-gold hover:text-vf-text transition-colors" data-testid="button-manage-ember">
+                    {subscription?.isTrial ? "See plans" : "Manage"}
                   </button>
                 </>
               ) : (
                 <>
-                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">Ember · $9.99 / month</div>
-                  <p className="font-serif font-normal text-2xl text-vf-text mt-2 leading-[1.2]">
-                    Four twin conversations a night. Full transcripts. First pick at dinners.
-                  </p>
-                  <p className="text-[13.5px] text-vf-muted mt-3 leading-[1.55]">
-                    Your one daily read stays free and is never for sale. Ember only makes your twin work harder.
-                  </p>
+                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">
+                    {ember.name} · {priceLabel(ember.priceCents)} / month
+                  </div>
+                  <p className="font-serif font-normal text-2xl text-vf-text mt-2 leading-[1.2]">{ember.pitch}</p>
                   <button
-                    onClick={() => setLocation("/billing")}
+                    onClick={() => setLocation("/plans")}
                     className="mt-4 inline-flex items-center rounded-full bg-vf-gold text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press vf-btn-primary hover:bg-[#F3D890] transition-colors"
                     data-testid="button-see-ember"
                   >
-                    See what changes
+                    See plans
                   </button>
                 </>
               )}
