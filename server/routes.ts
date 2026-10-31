@@ -27,6 +27,7 @@ import {
 import type { TwinProfileStructured } from "@shared/schema";
 import * as eventsService from "./events";
 import * as officialEvents from "./official-events";
+import { runOfficialAutopilot } from "./official-autopilot";
 import { registerGrowthRoutes } from "./growth-routes";
 import { getDailyPicks } from "./daily-picks";
 import * as eventsFeed from "./events-feed";
@@ -6040,12 +6041,16 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   setTimeout(sweepPayments, 5_000);
   setInterval(sweepPayments, 5 * 60 * 1000);
   // Official events: call off any that missed their headcount/lead by the 48h
-  // mark, and nudge going attendees when one still has no lead.
+  // mark, and nudge going attendees when one still has no lead. Then the
+  // autopilot tops the calendar back up (server/official-autopilot.ts).
   const sweepOfficial = () =>
     officialEvents
       .sweepOfficialEvents()
       .then((n) => n > 0 && console.log(`[official-events] ${n} event(s) called off`))
-      .catch((e) => console.error("[official-events] sweep failed:", e));
+      .catch((e) => console.error("[official-events] sweep failed:", e))
+      .then(() => runOfficialAutopilot())
+      .then((posted) => posted?.forEach((p) => console.log(`[official-autopilot] posted #${p.id} "${p.title}" for ${p.startsAt.toISOString()}`)))
+      .catch((e) => console.error("[official-autopilot] failed:", e));
   setTimeout(sweepOfficial, 8_000);
   setInterval(sweepOfficial, 15 * 60 * 1000);
   startOfficialStoriesSweep();

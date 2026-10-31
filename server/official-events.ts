@@ -152,6 +152,49 @@ export async function repostOfficialEvent(eventId: number, startsAt: Date): Prom
   });
 }
 
+// Moves an upcoming official event to a new date (same length), with the
+// same notice rule as posting one, and tells everyone who joined.
+export async function rescheduleOfficialEvent(eventId: number, startsAt: Date): Promise<Event> {
+  const [old] = await db.select().from(events).where(eq(events.id, eventId));
+  if (!old || !old.isOfficial) throw new EventNotFoundError();
+  if (old.status !== "published") throw new OfficialEventError("Only an event that's still on can be moved.");
+  if (startsAt.getTime() < Date.now() + OFFICIAL_MIN_LEAD_TIME_HOURS * HOUR_MS) {
+    throw new OfficialEventError(
+      `The new date needs at least ${OFFICIAL_MIN_LEAD_TIME_HOURS} hours' notice so people have time to join before the ${OFFICIAL_DEADLINE_HOURS}h cut-off.`,
+    );
+  }
+  const durationMs = old.endsAt ? old.endsAt.getTime() - old.startsAt.getTime() : null;
+  const [moved] = await db
+    .update(events)
+    .set({
+      startsAt,
+      endsAt: durationMs != null ? new Date(startsAt.getTime() + durationMs) : null,
+      leadNudgedAt: null, // the "still needs a lead" nudge counts from the new date
+    })
+    .where(and(eq(events.id, eventId), eq(events.status, "published")))
+    .returning();
+  if (!moved) throw new OfficialEventError("Only an event that's still on can be moved.");
+
+  const when = startsAt.toLocaleString("en-GB", {
+    weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Africa/Harare",
+  });
+  const audience = await goingUserIds(eventId);
+  if (audience.length > 0) {
+    await db.insert(twinNotifications).values(
+      audience.map((userId) => ({ userId, type: "event_moved", title: `"${old.title}" has a new date`, body: `It's now on ${when}. You're still going.` })),
+    );
+    for (const userId of audience) {
+      sendCategorizedPush(userId, "events", {
+        title: `"${old.title}" has a new date`,
+        body: `Now ${when}. You're still going.`,
+        url: `/events/${eventId}`,
+        tag: `event-moved-${eventId}`,
+      }).catch(() => {});
+    }
+  }
+  return moved;
+}
+
 // ── leads ─────────────────────────────────────────────────────────────
 
 async function requireOfficialPublished(eventId: number): Promise<Event> {

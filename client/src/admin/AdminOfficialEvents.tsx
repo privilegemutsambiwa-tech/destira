@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EVENT_KINDS, EVENT_PLACE_TYPES } from "@shared/event-taxonomy";
-import { adminGet, adminPost, AdminApiError } from "./api";
+import { adminGet, adminPost, adminPatch, AdminApiError } from "./api";
 import { PageHeader, LABEL, LINE, SURFACE, MUTED, FAINT, TEXT, EMBER, formatDateTime } from "./AdminShell";
 
 // Platform-run events: created here, hosted by the Destira system user, and
@@ -45,6 +45,8 @@ export default function AdminOfficialEvents() {
   const [error, setError] = useState<string | null>(null);
   const [repostFor, setRepostFor] = useState<number | null>(null);
   const [repostDate, setRepostDate] = useState("");
+  const [moveFor, setMoveFor] = useState<number | null>(null);
+  const [moveDate, setMoveDate] = useState("");
   const [assignFor, setAssignFor] = useState<number | null>(null);
   const [assignEmail, setAssignEmail] = useState("");
 
@@ -107,6 +109,8 @@ export default function AdminOfficialEvents() {
         sub="Destira-run events. Members join, one volunteers to lead, you approve. Called off automatically 48h out if fewer than the minimum have joined or there's no lead."
       />
       {error && <p style={{ color: EMBER, fontSize: 13, marginBottom: 12 }} data-testid="official-error">{error}</p>}
+
+      <Autopilot onPosted={() => refetch()} />
 
       {!showForm ? (
         <button onClick={() => setShowForm(true)} style={{ ...btn, background: EMBER, color: "#14101C", border: "none", marginBottom: 16 }} data-testid="button-new-official">
@@ -223,6 +227,15 @@ export default function AdminOfficialEvents() {
                       Assign a lead by email
                     </button>
                   )}
+                  {!cancelled && !past && moveFor !== ev.id && (
+                    <button
+                      onClick={() => { setMoveFor(ev.id); setMoveDate(toLocalInput(new Date(ev.startsAt))); setError(null); }}
+                      style={{ ...btn, background: "transparent", color: TEXT, border: `1px solid ${LINE}` }}
+                      data-testid={`button-move-${ev.id}`}
+                    >
+                      Change date
+                    </button>
+                  )}
                   {cancelled && repostFor !== ev.id && (
                     <button
                       onClick={() => { setRepostFor(ev.id); setRepostDate(toLocalInput(new Date(Date.now() + 7 * 24 * 3600 * 1000))); setError(null); }}
@@ -247,6 +260,22 @@ export default function AdminOfficialEvents() {
                     <button onClick={() => setAssignFor(null)} style={{ ...btn, background: "transparent", color: MUTED, border: `1px solid ${LINE}` }}>Cancel</button>
                   </div>
                 )}
+                {moveFor === ev.id && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input type="datetime-local" min={earliest} style={{ ...input, flex: 1 }} value={moveDate} onChange={(e) => setMoveDate(e.target.value)} data-testid={`input-move-${ev.id}`} />
+                      <button
+                        disabled={busy === `m${ev.id}`}
+                        onClick={() => run(`m${ev.id}`, () => adminPost(`/api/admin/events/${ev.id}/reschedule`, { startsAt: new Date(moveDate).toISOString() }), "Failed to change the date", () => setMoveFor(null))}
+                        style={{ ...btn, background: "#2E7D5B", color: "#fff", border: "none" }}
+                      >
+                        Move it
+                      </button>
+                      <button onClick={() => setMoveFor(null)} style={{ ...btn, background: "transparent", color: MUTED, border: `1px solid ${LINE}` }}>Cancel</button>
+                    </div>
+                    <div style={{ fontSize: 12, color: FAINT, marginTop: 4 }}>Everyone who has joined gets a notification with the new date. Times are your computer's time zone.</div>
+                  </div>
+                )}
                 {repostFor === ev.id && (
                   <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
                     <input type="datetime-local" min={earliest} style={{ ...input, flex: 1 }} value={repostDate} onChange={(e) => setRepostDate(e.target.value)} />
@@ -265,6 +294,86 @@ export default function AdminOfficialEvents() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// Keeps official events on the calendar until members host regularly
+// (server/official-autopilot.ts). Saving a change tops the calendar up at once.
+function Autopilot({ onPosted }: { onPosted: () => void }) {
+  const { data, refetch } = useQuery({
+    queryKey: ["admin", "events", "official", "autopilot"],
+    queryFn: () => adminGet("/api/admin/events/official/autopilot"),
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!data) return null;
+  const { settings, officialAhead, memberEventsNext14Days, steppedBack, nextUp, programme } = data;
+
+  const save = async (patch: Record<string, unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await adminPatch("/api/admin/events/official/autopilot", patch);
+      if (r?.posted?.length) onPosted();
+      refetch();
+    } catch (e) {
+      setError(e instanceof AdminApiError ? e.message : "Couldn't save");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const state = !settings.enabled
+    ? "Off: official events are only what you post by hand."
+    : steppedBack
+      ? `Stepped back: members have ${memberEventsNext14Days} public events coming up in the next 2 weeks, so it isn't posting.`
+      : `On: keeps ${settings.keepAhead} official event${settings.keepAhead === 1 ? "" : "s"} ahead on the calendar (${officialAhead} now).`;
+
+  return (
+    <div style={{ border: `1px solid ${LINE}`, borderRadius: 10, background: SURFACE, padding: 14, marginBottom: 16 }} data-testid="official-autopilot">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ ...LABEL, color: MUTED }}>Autopilot</div>
+          <div style={{ fontSize: 14, color: TEXT, marginTop: 4 }} data-testid="official-autopilot-state">{state}</div>
+          <div style={{ fontSize: 12, color: FAINT, marginTop: 4 }}>
+            Posts the next of {programme.length} Harare meetups about a week out, never two on one day. Next up: {nextUp}. Steps back by itself once members
+            host {settings.memberEventsToStepBack}+ public events in a fortnight ({memberEventsNext14Days} now).
+          </div>
+        </div>
+        <button
+          disabled={busy}
+          onClick={() => save({ enabled: !settings.enabled })}
+          style={{ ...btn, background: settings.enabled ? "transparent" : EMBER, color: settings.enabled ? TEXT : "#14101C", border: settings.enabled ? `1px solid ${LINE}` : "none" }}
+          data-testid="official-autopilot-toggle"
+        >
+          {settings.enabled ? "Switch off" : "Turn on"}
+        </button>
+      </div>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 12, fontSize: 13, color: MUTED }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          Keep ahead
+          <select value={settings.keepAhead} disabled={busy} onChange={(e) => save({ keepAhead: Number(e.target.value) })} style={{ ...input, width: 64 }}>
+            {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          Step back at
+          <input
+            type="number"
+            min={1}
+            defaultValue={settings.memberEventsToStepBack}
+            disabled={busy}
+            onBlur={(e) => {
+              const v = Number(e.target.value);
+              if (v > 0 && v !== settings.memberEventsToStepBack) save({ memberEventsToStepBack: v });
+            }}
+            style={{ ...input, width: 64 }}
+          />
+          member events / 2 weeks
+        </label>
+      </div>
+      {error && <p style={{ color: EMBER, fontSize: 12.5, marginTop: 8 }}>{error}</p>}
     </div>
   );
 }

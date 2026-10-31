@@ -8,6 +8,7 @@ import { adminRoute } from "./auth";
 import { auditAdmin } from "./audit";
 import * as eventsService from "../events";
 import * as official from "../official-events";
+import * as autopilot from "../official-autopilot";
 import * as twinEventAlerts from "../services/twin-event-alerts";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
@@ -66,6 +67,46 @@ export function registerAdminEventRoutes(app: Express) {
       res.status(201).json(event);
     } catch (e) {
       handleOfficialError(e, res, "Failed to create official event");
+    }
+  });
+
+  // ── Autopilot: keeps official events on the calendar (official-autopilot.ts)
+  adminRoute(app, "get", "/api/admin/events/official/autopilot", "support", async (_req, res) => {
+    try {
+      res.json(await autopilot.autopilotStatus());
+    } catch (e) {
+      handleOfficialError(e, res, "Failed to load autopilot");
+    }
+  });
+
+  adminRoute(app, "patch", "/api/admin/events/official/autopilot", "admin", async (req, res) => {
+    const body = req.body ?? {};
+    const patch: Partial<autopilot.AutopilotSettings> = {};
+    if (typeof body.enabled === "boolean") patch.enabled = body.enabled;
+    if (typeof body.keepAhead === "number") patch.keepAhead = body.keepAhead;
+    if (typeof body.memberEventsToStepBack === "number") patch.memberEventsToStepBack = body.memberEventsToStepBack;
+    try {
+      const adminUserId = (req as any).admin.userId;
+      await autopilot.updateAutopilotSettings(patch, adminUserId);
+      await auditAdmin(req, adminUserId, "event.official_autopilot", { details: patch });
+      // Switching it on (or asking for more) fills the calendar straight away.
+      const posted = await autopilot.runOfficialAutopilot();
+      res.json({ ...(await autopilot.autopilotStatus()), posted });
+    } catch (e) {
+      handleOfficialError(e, res, "Failed to save autopilot");
+    }
+  });
+
+  adminRoute(app, "post", "/api/admin/events/:id/reschedule", "admin", async (req, res) => {
+    const eventId = Number(req.params.id);
+    const startsAt = new Date(req.body?.startsAt);
+    if (Number.isNaN(startsAt.getTime())) return res.status(400).json({ message: "Pick a new date" });
+    try {
+      const event = await official.rescheduleOfficialEvent(eventId, startsAt);
+      await auditAdmin(req, (req as any).admin.userId, "event.official_reschedule", { targetType: "event", targetId: eventId, details: { startsAt: startsAt.toISOString() } });
+      res.json(event);
+    } catch (e) {
+      handleOfficialError(e, res, "Failed to change the date");
     }
   });
 
