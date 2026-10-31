@@ -11,7 +11,7 @@
 // console (Official events page).
 import { db } from "./db";
 import { appSettings, events } from "@shared/schema";
-import { and, eq, gt, gte, lt, ne } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, lt, ne } from "drizzle-orm";
 import { createOfficialEvent, DESTIRA_SYSTEM_USER_ID, type OfficialEventInput } from "./official-events";
 import * as twinEventAlerts from "./services/twin-event-alerts";
 
@@ -28,6 +28,10 @@ interface Template extends Omit<OfficialEventInput, "startsAt" | "endsAt"> {
 }
 
 const OWN_WAY = "Free to join. Pay for anything you order yourself.";
+
+/** Going needed by the 48h mark (plus a lead) for an autopilot event to go
+ *  ahead. Lower than a hand-posted one's 5 while the app is small. */
+export const AUTOPILOT_MIN_GOING = 3;
 
 // Public, easy-to-find places; the lead confirms the exact spot in the event
 // chat. Kept small and low-cost on purpose: the point is to meet people.
@@ -171,6 +175,19 @@ export async function runOfficialAutopilot(now = new Date()) {
   const status = await autopilotStatus(now);
   const { settings } = status;
   const posted: { id: number; title: string; startsAt: Date }[] = [];
+
+  // Upcoming autopilot events posted before the minimum was lowered.
+  await db
+    .update(events)
+    .set({ minGoing: AUTOPILOT_MIN_GOING })
+    .where(and(
+      eq(events.isOfficial, true),
+      eq(events.status, "published"),
+      gt(events.startsAt, now),
+      gt(events.minGoing, AUTOPILOT_MIN_GOING),
+      inArray(events.title, PROGRAMME.map((p) => p.title)),
+    ));
+
   if (!settings.enabled || status.steppedBack) return posted;
 
   const takenDays = new Set(status.officialDates.map(harareDay));
@@ -184,7 +201,12 @@ export async function runOfficialAutopilot(now = new Date()) {
     // Move the rotation on before posting, so a failure never repeats the same one forever.
     await updateAutopilotSettings({ next }, null);
 
-    const event = await createOfficialEvent({ ...input, startsAt, endsAt: new Date(startsAt.getTime() + hours * 3600_000) });
+    const event = await createOfficialEvent({
+      ...input,
+      startsAt,
+      endsAt: new Date(startsAt.getTime() + hours * 3600_000),
+      minGoing: AUTOPILOT_MIN_GOING,
+    });
     void twinEventAlerts.runTwinEventAlerts(event.id).catch((err) => console.error("twin event alerts failed:", err));
     posted.push({ id: event.id, title: event.title, startsAt: event.startsAt });
   }
