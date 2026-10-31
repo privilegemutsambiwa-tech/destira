@@ -14,13 +14,14 @@ import { destroyAllAdminSessions } from "./session";
 import { resendConfigured, sendViaResend } from "../email/resend";
 import { authStorage } from "../replit_integrations/auth/storage";
 import { ADMIN_ROLES, ADMIN_ROLE_REFERENCE, adminRoleRank, type AdminRole } from "@shared/admin";
+import { publicAppUrl } from "../public-url";
 
 const INVITE_TTL_MS = 24 * 60 * 60 * 1000;
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 function baseUrl(): string {
-  return process.env.PUBLIC_APP_URL || "http://localhost:5000";
+  return publicAppUrl();
 }
 function isValidRole(r: unknown): r is AdminRole {
   return typeof r === "string" && (ADMIN_ROLES as readonly string[]).includes(r);

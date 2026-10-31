@@ -28,6 +28,7 @@ import { and, eq, gte, lt, inArray, sql, desc, ne, isNotNull } from "drizzle-orm
 import { sendViaResend, resendConfigured } from "../email/resend";
 import { DESTIRA_SYSTEM_USER_ID } from "../system-user";
 import * as T from "./templates";
+import { publicAppUrl } from "../public-url";
 
 export const MEMBER_EMAIL_KINDS = ["welcome", "finish_profile", "likes_waiting", "weekly_digest", "win_back"] as const;
 export type MemberEmailKind = (typeof MEMBER_EMAIL_KINDS)[number];
@@ -103,7 +104,7 @@ export async function updateMemberEmailSettings(patch: Partial<MemberEmailSettin
 // ── helpers ────────────────────────────────────────────────────────
 
 export function appOrigin(): string {
-  return (process.env.PUBLIC_APP_URL || "http://localhost:5000").replace(/\/$/, "");
+  return publicAppUrl();
 }
 
 function signingSecret(): string {

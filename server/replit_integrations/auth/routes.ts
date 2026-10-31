@@ -8,6 +8,7 @@ import { attributeNewSignup } from "../../growth";
 import { storage } from "../../storage";
 import { generateOpaqueToken, hashOpaqueToken } from "../../admin/crypto";
 import { sendViaResend, resendConfigured } from "../../email/resend";
+import { publicAppUrl } from "../../public-url";
 
 // A profile only counts as onboarded once the mandatory matching fields —
 // gender and who they're seeking — are actually filled in. Used to decide
@@ -228,7 +229,7 @@ export function registerAuthRoutes(app: Express): void {
       if (user?.passwordHash) {
         const { raw, hash } = generateOpaqueToken();
         await authStorage.createPasswordResetToken(user.id, hash, new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS));
-        const resetUrl = `${process.env.PUBLIC_APP_URL || "http://localhost:5000"}/reset-password?token=${raw}`;
+        const resetUrl = `${publicAppUrl()}/reset-password?token=${raw}`;
         if (resendConfigured()) {
           sendViaResend({
             to: normalizedEmail,

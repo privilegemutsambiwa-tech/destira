@@ -33,6 +33,7 @@ import type {
   PaymentStatus,
 } from "./types";
 import { WALLET_METHODS } from "./types";
+import { publicAppUrl } from "../public-url";
 
 const WALLET_URL = "https://www.paynow.co.zw/interface/remotetransaction";
 const CARD_URL = "https://www.paynow.co.zw/interface/initiatetransaction";
@@ -43,10 +44,7 @@ const CARD_URL = "https://www.paynow.co.zw/interface/initiatetransaction";
 // bare domain 307-redirects, and Paynow's server-to-server result POST
 // shouldn't have to follow a redirect to reach us.
 function appBaseUrl(): string {
-  return (
-    process.env.PUBLIC_APP_URL ||
-    (process.env.NODE_ENV === "production" ? "https://www.destira.date" : "http://localhost:5000")
-  ).replace(/\/+$/, "");
+  return publicAppUrl();
 }
 
 export function paynowConfigured(): boolean {

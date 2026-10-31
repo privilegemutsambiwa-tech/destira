@@ -6,6 +6,7 @@ import { emailAlertConfig, emailLog, adminUsers, users } from "@shared/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { sendViaResend, resendConfigured } from "./resend";
 import { ALERT_META, type AlertType } from "@shared/email-alerts";
+import { publicAppUrl } from "../public-url";
 
 // In-memory dedup — same shape as the login-attempt limiters elsewhere in
 // this codebase. A flapping gateway collapses to one email per window with a
@@ -14,7 +15,7 @@ import { ALERT_META, type AlertType } from "@shared/email-alerts";
 const pending = new Map<AlertType, { firstAt: number; count: number; lastSubject: string; lastText: string }>();
 
 function baseUrl(): string {
-  return process.env.PUBLIC_APP_URL || "http://localhost:5000";
+  return publicAppUrl();
 }
 
 async function getConfig(type: AlertType) {

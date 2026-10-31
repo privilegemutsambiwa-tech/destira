@@ -6,6 +6,7 @@ import { db } from "../db";
 import { metricDaily, reports, payments } from "@shared/schema";
 import { eq, inArray, gte, lte, and } from "drizzle-orm";
 import { sendConfiguredEmail } from "./index";
+import { publicAppUrl } from "../public-url";
 
 function isoDaysAgo(n: number): string {
   return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
@@ -51,7 +52,7 @@ export async function sendDailyDigest(): Promise<void> {
     `Open reports (right now): ${openReports}`,
     `LLM spend (est.): $${(v["llm.cost_usd_estimated"] ?? 0).toFixed(4)}`,
     "",
-    `${(process.env.PUBLIC_APP_URL || "http://localhost:5000")}/console/metrics?date=${date}`,
+    `${publicAppUrl()}/console/metrics?date=${date}`,
   ].join("\n");
 
   await sendConfiguredEmail("daily_digest", `Destira daily — ${date}${leads.length ? ` (${leads.length} flagged)` : ""}`, text);
@@ -73,7 +74,7 @@ export async function sendWeeklyDigest(): Promise<void> {
     `Retention D7 (${isoDaysAgo(14)} cohort): ${retD7["retention.d7_pct"] ?? "—"}%`,
     `LLM spend (est., 7d): $${(v["llm.cost_usd_estimated"] ?? 0).toFixed(2)}`,
     "",
-    `${(process.env.PUBLIC_APP_URL || "http://localhost:5000")}/console/metrics`,
+    `${publicAppUrl()}/console/metrics`,
   ].join("\n");
 
   await sendConfiguredEmail("weekly_digest", `Destira weekly — ${from} to ${to}`, text);
