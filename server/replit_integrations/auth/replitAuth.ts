@@ -48,6 +48,29 @@ const memberSessionStore = process.env.DATABASE_URL
     })
   : new MemoryStore({ checkPeriod: 7 * 24 * 60 * 60 * 1000 });
 
+// express-session "touches" the stored session on every request to push its
+// expiry forward, and holds the response open until that UPDATE finishes:
+// a database round trip added to every tap in the app. The expiry only needs
+// to move forward now and then (sessions last a week), so each session is
+// touched at most once every 10 minutes per server, and the response never
+// waits for it.
+const TOUCH_EVERY_MS = 10 * 60 * 1000;
+const lastTouched = new Map<string, number>();
+if (process.env.DATABASE_URL) {
+  const touch = memberSessionStore.touch!.bind(memberSessionStore);
+  memberSessionStore.touch = (sid, sess, cb) => {
+    const now = Date.now();
+    if (now - (lastTouched.get(sid) ?? 0) >= TOUCH_EVERY_MS) {
+      if (lastTouched.size > 50_000) lastTouched.clear();
+      lastTouched.set(sid, now);
+      touch(sid, sess, (err?: unknown) => {
+        if (err) console.error("[session] touch failed:", err);
+      });
+    }
+    cb?.();
+  };
+}
+
 // Sessions here aren't OAuth tokens with a real expiry, so we set a
 // far-future "exp" — this keeps any token-freshness checks elsewhere in the
 // app satisfied without needing a refresh flow.

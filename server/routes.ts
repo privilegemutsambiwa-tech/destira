@@ -3883,20 +3883,27 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       // Members only, and only messages from after they joined.
       const msgs = await storage.getVisibleGroupMessages(groupId, userId, 200);
       const msgIds = msgs.map(m => m.id);
-      const reactions = msgIds.length > 0 ? await storage.getReactionsForMessages(msgIds) : [];
+      const uniqueUserIds = [...new Set(msgs.map(m => m.userId))];
+      // Polled every few seconds by every open group chat: one query each,
+      // side by side, not one profile lookup per sender in turn.
+      const [reactions, starred, senderProfiles] = await Promise.all([
+        msgIds.length > 0 ? storage.getReactionsForMessages(msgIds) : Promise.resolve([]),
+        storage.getStarredMessages(groupId, userId),
+        uniqueUserIds.length > 0
+          ? db
+              .select({ userId: profiles.userId, subscriptionTier: profiles.subscriptionTier, gender: profiles.gender })
+              .from(profiles)
+              .where(inArray(profiles.userId, uniqueUserIds))
+          : Promise.resolve([]),
+      ]);
       const reactionsByMsg: Record<number, any[]> = {};
       for (const r of reactions) {
         if (!reactionsByMsg[r.messageId]) reactionsByMsg[r.messageId] = [];
         reactionsByMsg[r.messageId].push(r);
       }
-      const starred = await storage.getStarredMessages(groupId, userId);
       const starredMsgIds = new Set(starred.map((s: any) => s.messageId));
-      const uniqueUserIds = [...new Set(msgs.map(m => m.userId))];
       const profilesMap: Record<string, any> = {};
-      for (const uid of uniqueUserIds) {
-        const profile = await storage.getProfile(uid);
-        if (profile) profilesMap[uid] = profile;
-      }
+      for (const p of senderProfiles) profilesMap[p.userId] = p;
       const enriched = msgs.map(m => ({
         ...m,
         reactions: reactionsByMsg[m.id] || [],

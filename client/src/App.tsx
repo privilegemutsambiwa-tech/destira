@@ -12,7 +12,7 @@ import { useProfile } from "@/hooks/use-profiles";
 import { DestiraLoadingScreen } from "@/components/brand/logo";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { consumePendingInvite, resolvePendingInviteRoute, stashPendingEvent } from "@/lib/pending-invite";
-import { useEffect, useLayoutEffect, lazy, Suspense } from "react";
+import { useEffect, useLayoutEffect, useState, lazy, createElement, Suspense, type ComponentType } from "react";
 
 // Code-split and NOT linked from anywhere in the member app (no nav item, no
 // Settings row) — reachable only by knowing the exact path. Own session
@@ -30,44 +30,86 @@ import Landing from "@/pages/Landing";
 import { OfflineBanner } from "@/components/offline-banner";
 import { AppUpdatePrompt } from "@/components/app-update-prompt";
 import { AppLockGate } from "@/components/app-lock";
-const Login = lazy(() => import("@/pages/Login"));
-const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
-const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
-const Signup = lazy(() => import("@/pages/Signup"));
-const AuthCallback = lazy(() => import("@/pages/AuthCallback"));
-const Onboarding = lazy(() => import("@/pages/Onboarding"));
-const MeetYourTwin = lazy(() => import("@/pages/MeetYourTwin"));
-const Invite = lazy(() => import("@/pages/Invite"));
-const PrivacyPolicy = lazy(() => import("@/pages/Legal").then((m) => ({ default: m.PrivacyPolicy })));
-const DeleteAccountInfo = lazy(() => import("@/pages/Legal").then((m) => ({ default: m.DeleteAccountInfo })));
-const Profile = lazy(() => import("@/pages/Profile"));
-const ProfileView = lazy(() => import("@/pages/ProfileView"));
-const Matches = lazy(() => import("@/pages/Matches"));
-const Discover = lazy(() => import("@/pages/Discover"));
-const Interviews = lazy(() => import("@/pages/Interviews"));
-const InterviewChat = lazy(() => import("@/pages/InterviewChat"));
-const Lounge = lazy(() => import("@/pages/Lounge"));
-const Events = lazy(() => import("@/pages/Events"));
-const EventDetail = lazy(() => import("@/pages/EventDetail"));
-const EventPreferences = lazy(() => import("@/pages/EventPreferences"));
-const HostEvent = lazy(() => import("@/pages/HostEvent"));
-const PhotoManager = lazy(() => import("@/pages/PhotoManager"));
-const ProfilePreview = lazy(() => import("@/pages/ProfilePreview"));
-const ProfilePreviewFrame = lazy(() => import("@/pages/ProfilePreviewFrame"));
-const DirectChat = lazy(() => import("@/pages/DirectChat"));
-const TwinChat = lazy(() => import("@/pages/TwinChat"));
-const TwinDisclosure = lazy(() => import("@/pages/TwinDisclosure"));
-const Essentials = lazy(() => import("@/pages/Essentials"));
-const Plans = lazy(() => import("@/pages/Plans"));
-const PlansPay = lazy(() => import("@/pages/PlansPay"));
-const GroupChatPage = lazy(() => import("@/pages/GroupChat"));
-const GameRoomLobby = lazy(() => import("@/pages/GameRoomLobby"));
-const GameRoomScreen = lazy(() => import("@/pages/GameRoomScreen"));
-const GroupInfoPage = lazy(() => import("@/pages/GroupInfo"));
-const GroupSettings = lazy(() => import("@/pages/GroupSettings"));
-const JoinGroup = lazy(() => import("@/pages/JoinGroup"));
-const Settings = lazy(() => import("@/pages/Settings"));
-const PublicEvent = lazy(() => import("@/pages/PublicEvent"));
+// lazy(), plus a way to fetch the screen's code ahead of time. Once fetched,
+// the screen renders straight away instead of flashing the full-page loading
+// logo while its code arrives (seconds on a slow connection, the first time
+// each screen is opened). Decided once per mount, so a screen already showing
+// never swaps component underneath itself.
+type Screen = ComponentType<any> & { preload: () => Promise<unknown> };
+function screen(load: () => Promise<{ default: ComponentType<any> }>): Screen {
+  let loaded: ComponentType<any> | undefined;
+  let pending: Promise<unknown> | undefined;
+  const Lazy = lazy(() => load().then((m) => { loaded = m.default; return m; }));
+  const Screen = ((props: any) => {
+    const [Ready] = useState(() => loaded);
+    return createElement(Ready ?? Lazy, props);
+  }) as Screen;
+  Screen.preload = () => (pending ??= load().then((m) => { loaded = m.default; }).catch(() => { pending = undefined; }));
+  return Screen;
+}
+
+const Login = screen(() => import("@/pages/Login"));
+const ForgotPassword = screen(() => import("@/pages/ForgotPassword"));
+const ResetPassword = screen(() => import("@/pages/ResetPassword"));
+const Signup = screen(() => import("@/pages/Signup"));
+const AuthCallback = screen(() => import("@/pages/AuthCallback"));
+const Onboarding = screen(() => import("@/pages/Onboarding"));
+const MeetYourTwin = screen(() => import("@/pages/MeetYourTwin"));
+const Invite = screen(() => import("@/pages/Invite"));
+const PrivacyPolicy = screen(() => import("@/pages/Legal").then((m) => ({ default: m.PrivacyPolicy })));
+const DeleteAccountInfo = screen(() => import("@/pages/Legal").then((m) => ({ default: m.DeleteAccountInfo })));
+const Profile = screen(() => import("@/pages/Profile"));
+const ProfileView = screen(() => import("@/pages/ProfileView"));
+const Matches = screen(() => import("@/pages/Matches"));
+const Discover = screen(() => import("@/pages/Discover"));
+const Interviews = screen(() => import("@/pages/Interviews"));
+const InterviewChat = screen(() => import("@/pages/InterviewChat"));
+const Lounge = screen(() => import("@/pages/Lounge"));
+const Events = screen(() => import("@/pages/Events"));
+const EventDetail = screen(() => import("@/pages/EventDetail"));
+const EventPreferences = screen(() => import("@/pages/EventPreferences"));
+const HostEvent = screen(() => import("@/pages/HostEvent"));
+const PhotoManager = screen(() => import("@/pages/PhotoManager"));
+const ProfilePreview = screen(() => import("@/pages/ProfilePreview"));
+const ProfilePreviewFrame = screen(() => import("@/pages/ProfilePreviewFrame"));
+const DirectChat = screen(() => import("@/pages/DirectChat"));
+const TwinChat = screen(() => import("@/pages/TwinChat"));
+const TwinDisclosure = screen(() => import("@/pages/TwinDisclosure"));
+const Essentials = screen(() => import("@/pages/Essentials"));
+const Plans = screen(() => import("@/pages/Plans"));
+const PlansPay = screen(() => import("@/pages/PlansPay"));
+const GroupChatPage = screen(() => import("@/pages/GroupChat"));
+const GameRoomLobby = screen(() => import("@/pages/GameRoomLobby"));
+const GameRoomScreen = screen(() => import("@/pages/GameRoomScreen"));
+const GroupInfoPage = screen(() => import("@/pages/GroupInfo"));
+const GroupSettings = screen(() => import("@/pages/GroupSettings"));
+const JoinGroup = screen(() => import("@/pages/JoinGroup"));
+const Settings = screen(() => import("@/pages/Settings"));
+const PublicEvent = screen(() => import("@/pages/PublicEvent"));
+
+// The screens people move between all the time, fetched quietly once someone
+// is signed in and the app has had a moment to settle, so tapping a tab or a
+// chat opens it at once. Heaviest-used first.
+const EVERYDAY_SCREENS = [
+  Discover, Matches, Lounge, Events, Profile, DirectChat, GroupChatPage,
+  EventDetail, ProfileView, Settings, TwinChat, Interviews, Plans, HostEvent,
+];
+function usePreloadScreens(signedIn: boolean) {
+  useEffect(() => {
+    if (!signedIn) return;
+    let cancelled = false;
+    const idle = (fn: () => void) =>
+      "requestIdleCallback" in window ? (window as any).requestIdleCallback(fn, { timeout: 3000 }) : setTimeout(fn, 1500);
+    idle(async () => {
+      // One at a time, so it never competes with what's on screen.
+      for (const s of EVERYDAY_SCREENS) {
+        if (cancelled) return;
+        await s.preload();
+      }
+    });
+    return () => { cancelled = true; };
+  }, [signedIn]);
+}
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
   const { user, isLoading } = useAuth();
@@ -170,6 +212,7 @@ function AuthenticatedHome() {
 function Router() {
   const { user, isLoading } = useAuth();
   const [location] = useLocation();
+  usePreloadScreens(!!user);
 
   // In the app: whenever someone signs in (email or Google), link this
   // phone's notifications to them.

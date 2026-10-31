@@ -224,7 +224,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
             const link = parseDestiraLink(msg.content);
             const bubble = (
               <div
-                className={`max-w-[80%] px-4 py-2.5 text-sm leading-relaxed break-words ${isMe ? "" : "cursor-pointer"} ${
+                className={`max-w-[80%] px-4 py-2.5 text-sm leading-relaxed break-words ${isMe ? "" : "cursor-pointer"} ${msg.pending ? "opacity-70" : ""} ${
                   isMe
                     ? "rounded-[18px] rounded-br-[6px] bg-vf-ember text-vf-ink font-medium"
                     : "rounded-[18px] rounded-bl-[6px] border border-vf-line bg-vf-surface text-vf-text"

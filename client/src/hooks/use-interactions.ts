@@ -112,6 +112,20 @@ export function useRespondToMatch() {
       if (!res.ok) throw new Error("Failed to respond to match");
       return res.json();
     },
+    // A pass leaves the list at once; it comes back if the server refuses.
+    onMutate: async ({ matchId, action }) => {
+      if (action !== "reject") return;
+      const key = ["/api/likes/incoming"];
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData(key);
+      queryClient.setQueryData(key, (old: any) =>
+        old && Array.isArray(old.likes) ? { ...old, likes: old.likes.filter((l: any) => l.matchId !== matchId) } : old,
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context) queryClient.setQueryData(["/api/likes/incoming"], context.previous);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/matches"] });
       queryClient.invalidateQueries({ queryKey: ["/api/likes/incoming"] });
@@ -394,6 +408,50 @@ export function useMarkThreadRead() {
   });
 }
 
+// The member's own message, on screen the moment they tap send rather than
+// after the server answers and the list reloads (a second or more on a slow
+// connection). Marked pending until the real one replaces it; undo() takes it
+// back out if the send fails (the chat then restores the draft or queues it).
+function showPendingMessage(
+  queryClient: ReturnType<typeof useQueryClient>,
+  key: readonly unknown[],
+  fields: (me: string | undefined) => Record<string, unknown>,
+) {
+  const id = -Date.now();
+  const me = (queryClient.getQueryData(["/api/auth/user"]) as { id?: string } | undefined)?.id;
+  void queryClient.cancelQueries({ queryKey: key });
+  queryClient.setQueryData(key, (old: unknown) =>
+    Array.isArray(old) ? [...old, { id, createdAt: new Date().toISOString(), pending: true, ...fields(me) }] : old,
+  );
+  const swap = (to: (m: any) => any[]) =>
+    queryClient.setQueryData(key, (old: unknown) => (Array.isArray(old) ? old.flatMap((m: any) => (m.id === id ? to(m) : [m])) : old));
+  return {
+    undo: () => swap(() => []),
+    replace: (real: any) => swap((m) => (real && typeof real.id === "number" ? [{ ...m, ...real, pending: false }] : [m])),
+  };
+}
+
+// Changes one group message in the open chat straight away (a reaction, a
+// star) and hands back a function that puts it back if the server says no.
+function patchGroupMessage(
+  queryClient: ReturnType<typeof useQueryClient>,
+  groupId: number,
+  messageId: number,
+  patch: (m: any) => any,
+) {
+  const key = ["/api/groups", groupId, "messages-enriched"];
+  void queryClient.cancelQueries({ queryKey: key });
+  const previous = queryClient.getQueryData(key);
+  queryClient.setQueryData(key, (old: unknown) =>
+    Array.isArray(old) ? old.map((m: any) => (m.id === messageId ? patch(m) : m)) : old,
+  );
+  return { undo: () => queryClient.setQueryData(key, previous) };
+}
+
+function myUserId(queryClient: ReturnType<typeof useQueryClient>) {
+  return (queryClient.getQueryData(["/api/auth/user"]) as { id?: string } | undefined)?.id;
+}
+
 export function useSendDirectMessage(matchId: number) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -407,7 +465,11 @@ export function useSendDirectMessage(matchId: number) {
       if (!res.ok) throw new Error("Failed to send message");
       return res.json();
     },
-    onSuccess: () => {
+    onMutate: (content: string) =>
+      showPendingMessage(queryClient, ["/api/messages", matchId], (me) => ({ senderId: me, content })),
+    onError: (_err, _content, context) => context?.undo(),
+    onSuccess: (msg, _content, context) => {
+      context?.replace(msg);
       queryClient.invalidateQueries({ queryKey: ["/api/messages", matchId] });
       queryClient.invalidateQueries({ queryKey: ["/api/chat/threads"] });
     },
@@ -561,7 +623,24 @@ export function useSendGroupMessage(groupId: number) {
       }
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages"] }),
+    onMutate: (data) => {
+      const body = typeof data === "string" ? { content: data } : data;
+      return showPendingMessage(queryClient, ["/api/groups", groupId, "messages-enriched"], (me) => ({
+        userId: me,
+        contentType: "text",
+        reactions: [],
+        isStarred: false,
+        ...body,
+      }));
+    },
+    onError: (_err, _data, context) => context?.undo(),
+    onSuccess: (msg, _data, context) => {
+      context?.replace(msg);
+      // The chat screen shows messages-enriched; refreshing only "messages"
+      // left a sent message missing until the next 5-second poll.
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages"] });
+    },
   });
 }
 
@@ -1211,7 +1290,15 @@ export function useAddReaction(groupId: number) {
       if (!res.ok) throw new Error("Failed to add reaction");
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] }),
+    onMutate: ({ messageId, reaction }) => {
+      const me = myUserId(queryClient);
+      return patchGroupMessage(queryClient, groupId, messageId, (m) => ({
+        ...m,
+        reactions: [...(m.reactions ?? []).filter((r: any) => !(r.userId === me && r.reaction === reaction)), { messageId, userId: me, reaction }],
+      }));
+    },
+    onError: (_err, _vars, context) => context?.undo(),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] }),
   });
 }
 
@@ -1293,7 +1380,9 @@ export function useStarMessage(groupId: number) {
       if (!res.ok) throw new Error("Failed to star");
       return res.json();
     },
-    onSuccess: () => {
+    onMutate: ({ messageId }) => patchGroupMessage(queryClient, groupId, messageId, (m) => ({ ...m, isStarred: true })),
+    onError: (_err, _vars, context) => context?.undo(),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "starred"] });
       queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] });
     },
@@ -1311,7 +1400,9 @@ export function useUnstarMessage(groupId: number) {
       if (!res.ok) throw new Error("Failed to unstar");
       return res.json();
     },
-    onSuccess: () => {
+    onMutate: ({ messageId }) => patchGroupMessage(queryClient, groupId, messageId, (m) => ({ ...m, isStarred: false })),
+    onError: (_err, _vars, context) => context?.undo(),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "starred"] });
       queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] });
     },

@@ -405,7 +405,8 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   // shown the latest message — mirrors the read-marking-on-real-view
   // reasoning already used for stories, just for "message info" read counts
   // instead of a view counter.
-  const latestMessageId = messages && messages.length > 0 ? messages[messages.length - 1].id : null;
+  // Not a message still on its way (those have a temporary negative id).
+  const latestMessageId = messages?.filter((m: any) => m.id > 0).slice(-1)[0]?.id ?? null;
   useEffect(() => {
     if (isMember && latestMessageId !== null) markSeen.mutate(latestMessageId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -474,11 +475,10 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
     }
   };
 
-  const handleReact = async (messageId: number, reaction: string) => {
-    try {
-      await addReaction.mutateAsync({ messageId, reaction });
-    } catch {}
+  // Shows on the message straight away; undone if the server refuses.
+  const handleReact = (messageId: number, reaction: string) => {
     setActiveMessageId(null);
+    addReaction.mutate({ messageId, reaction });
   };
 
   const handleDeleteOwn = async (messageId: number) => {
@@ -667,7 +667,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                     <Popover
                       open={activeMessageId === msg.id && !isDeleted}
                       onOpenChange={(open) => {
-                        if (!isDeleted) setActiveMessageId(open ? msg.id : null);
+                        if (!isDeleted && !msg.pending) setActiveMessageId(open ? msg.id : null);
                       }}
                     >
                       <PopoverTrigger asChild>
@@ -675,6 +675,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                           className={`px-4 py-2.5 text-sm leading-relaxed break-words ${isDeleted ? "" : "cursor-pointer"}`}
                           style={{
                             borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                            opacity: msg.pending ? 0.7 : 1,
                             ...(isDeleted
                               ? { background: ELEVATED, color: MUTED, fontStyle: "italic" }
                               : isMe
@@ -690,7 +691,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (!isDeleted) setActiveMessageId(activeMessageId === msg.id ? null : msg.id);
+                            if (!isDeleted && !msg.pending) setActiveMessageId(activeMessageId === msg.id ? null : msg.id);
                           }}
                         >
                           {repliedMsg && !isDeleted && (
@@ -761,6 +762,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                                 icon: <Star className={`w-4 h-4 mr-2 ${msg.isStarred ? "fill-yellow-400 text-yellow-400" : ""}`} />,
                                 label: msg.isStarred ? "Unstar" : "Star",
                                 onClick: async () => {
+                                  setActiveMessageId(null);
                                   try {
                                     if (msg.isStarred) {
                                       await unstarMessage.mutateAsync({ messageId: msg.id });
@@ -770,7 +772,6 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                                       toast({ title: "Message starred" });
                                     }
                                   } catch {}
-                                  setActiveMessageId(null);
                                 },
                                 testId: `action-star-${msg.id}`,
                               },
