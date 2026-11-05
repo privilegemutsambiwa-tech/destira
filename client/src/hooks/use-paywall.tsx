@@ -21,6 +21,9 @@ async function readGate(qc: ReturnType<typeof useQueryClient>, feature: Feature)
       return res.json();
     },
     staleTime: 60_000,
+    // Offline this must fail, not pause: guard() fails open, and a paused
+    // check would leave the button waiting for a connection.
+    networkMode: "always",
   });
 }
 

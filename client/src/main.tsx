@@ -8,6 +8,7 @@ import { initNative, isNativeApp } from "./lib/native";
 import { installAppApi } from "./lib/app-api";
 import { initAppUpdates } from "./lib/app-update";
 import { initOutbox } from "./lib/outbox";
+import { initDiscoverDecisions } from "./lib/discover-decisions";
 import { initCrashReporting } from "./lib/crash-report";
 
 // In the Android/iOS app: send /api requests to the server with the member's
@@ -21,6 +22,7 @@ if (!window.location.pathname.startsWith("/console")) captureAttribution();
 initNative();
 initAppUpdates();
 initOutbox();
+initDiscoverDecisions();
 initCrashReporting();
 
 // The website's service worker (web push, install). The app has its own push

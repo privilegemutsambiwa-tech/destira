@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { requestPushNudge } from "@/lib/engagement-prompts";
+import { likeDelivered, likeRefused, likeSending, likeWaiting, worthRetrying } from "@/lib/discover-decisions";
 
 export function useIncomingLikes() {
   return useQuery({
@@ -61,34 +62,50 @@ export function useMatches() {
 // Discover for this viewer. No cache invalidation needed: Discover removes
 // the card from its own local state the instant the tap lands, well before
 // this request resolves.
-export function useDiscoverPass() {
-  return useMutation({
-    mutationFn: async (targetId: string) => {
-      await fetch("/api/discover/pass", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetId }),
-        credentials: "include",
-      });
-    },
-  });
+/** The like didn't reach the server yet. It's saved on the device and goes
+ *  out by itself (lib/discover-decisions), so it isn't a failure to retry. */
+export class LikeWaitingError extends Error {
+  constructor() {
+    super("Your like will go through when you're back online.");
+    this.name = "LikeWaitingError";
+  }
 }
 
 export function useCreateMatch() {
   const queryClient = useQueryClient();
   return useMutation({
+    // Run even with no connection: offline it should be saved for later, not
+    // paused with the tap left hanging.
+    networkMode: "always",
     mutationFn: async (targetId: string) => {
-      const res = await fetch("/api/matches", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetId }),
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Failed to request match");
+      likeSending(targetId);
+      let res: Response;
+      try {
+        res = await fetch("/api/matches", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ targetId }),
+          credentials: "include",
+        });
+      } catch {
+        likeWaiting(targetId);
+        throw new LikeWaitingError();
       }
-      return res.json();
+      if (res.ok) {
+        likeDelivered(targetId);
+        return res.json();
+      }
+      if (worthRetrying(res.status)) {
+        likeWaiting(targetId);
+        throw new LikeWaitingError();
+      }
+      const data = await res.json().catch(() => null);
+      if (res.status === 409) likeDelivered(targetId);
+      else likeRefused(targetId);
+      if (res.status === 403 && data?.upgradeRequired) {
+        throw new UpgradeRequiredError(data.message || "Upgrade required", data.requiredTier);
+      }
+      throw new Error(data?.message || "Failed to request match");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/matches"] });

@@ -9,7 +9,7 @@ import { requestPushNudge } from "@/lib/engagement-prompts";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2 } from "lucide-react";
-import { useDiscoverProfiles, useDiscoverExpandOptions, useStartInterview, useCreateMatch, useDiscoverPass, useFeedStories, useProfileCompletion, UpgradeRequiredError } from "@/hooks/use-interactions";
+import { useDiscoverProfiles, useDiscoverExpandOptions, useStartInterview, useCreateMatch, useFeedStories, useProfileCompletion, UpgradeRequiredError, LikeWaitingError } from "@/hooks/use-interactions";
 import { useTwinReadiness, useDismissReminder } from "@/hooks/use-onboarding";
 import { LIMITS, gateCopy } from "@shared/entitlements";
 import { usePaywall } from "@/hooks/use-paywall";
@@ -26,6 +26,7 @@ import { withFrom } from "@/lib/from-route";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
+import { recordPass, sendWaitingDecisions, undoPass as takeBackPass, useDecidedIds } from "@/lib/discover-decisions";
 import type { User } from "@shared/models/auth";
 
 function formatDistance(km: number): string {
@@ -599,12 +600,18 @@ function ExpandSearchOptions({ userLat, userLng }: { userLat: number | null; use
 }
 
 export default function Discover() {
-  // Profiles liked or passed THIS session get pulled out of the deck the
-  // instant you act on them — no waiting on a refetch to stop seeing someone
-  // you already decided about. The exclusion is also persisted server-side
-  // (a `matches` row for a like, `discover_passes` for a pass) so it holds
-  // across reloads and future sessions too, not just this one.
-  const [evaluatedIds, setEvaluatedIds] = useState<Set<string>>(() => new Set());
+  // Anyone liked or passed leaves the deck the instant you act, and stays out:
+  // the device remembers the decision (lib/discover-decisions) until the
+  // server has it, and the server excludes them for good after that (a
+  // `matches` row for a like, `discover_passes` for a pass). dismissedIds
+  // holds what only needs to last while the deck is open, such as a block.
+  const { user: me } = useAuth();
+  const decidedIds = useDecidedIds(me?.id);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => new Set());
+  const evaluatedIds = useMemo(() => new Set([...decidedIds, ...dismissedIds]), [decidedIds, dismissedIds]);
+  useEffect(() => {
+    if (me?.id) void sendWaitingDecisions();
+  }, [me?.id]);
   const [filter, setFilterState] = useState<FilterChip>(getInitialFilter);
   // Mirrors the scope into the URL (replace, not push), so coming back from a
   // full profile — which links back with ?from= — lands on the same deck.
@@ -669,7 +676,6 @@ export default function Discover() {
   const { data: feedStories } = useFeedStories();
   const startInterview = useStartInterview();
   const createMatch = useCreateMatch();
-  const discoverPass = useDiscoverPass();
   // Set when a like lands on someone who'd already liked you — the server
   // turns it straight into a match (see POST /api/matches).
   const [celebrating, setCelebrating] = useState<{ matchId: number; otherUserId: string; name: string; photoUrl: string | null } | null>(null);
@@ -916,7 +922,7 @@ export default function Discover() {
   // The only way a card leaves the deck: mark it evaluated so the `profiles`
   // memo drops it and [0] becomes whoever's next. No index to advance.
   const handleNext = (evaluatedUserId: string) => {
-    setEvaluatedIds((prev) => new Set(prev).add(evaluatedUserId));
+    setDismissedIds((prev) => new Set(prev).add(evaluatedUserId));
   };
 
   const handleInterview = async () => {
@@ -951,7 +957,7 @@ export default function Discover() {
     setExitDir("left");
     navigator.vibrate?.(8);
     handleNext(passedProfile.userId);
-    discoverPass.mutate(passedProfile.userId);
+    recordPass(passedProfile.userId);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setUndoPass({ userId: passedProfile.userId, name: passedProfile.displayName || "them" });
     undoTimerRef.current = setTimeout(() => setUndoPass(null), 6000);
@@ -964,10 +970,10 @@ export default function Discover() {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setUndoPass(null);
     setExitDir(null);
-    setEvaluatedIds((prev) => { const next = new Set(prev); next.delete(userId); return next; });
+    setDismissedIds((prev) => { const next = new Set(prev); next.delete(userId); return next; });
     // Back to the front of the deck, not the end of the line.
     setDeckOrder((prev) => [userId, ...prev.filter((id) => id !== userId)]);
-    fetch(`/api/discover/pass/${encodeURIComponent(userId)}`, { method: "DELETE", credentials: "include" }).catch(() => {});
+    takeBackPass(userId);
   };
 
   const doBlock = async () => {
@@ -1050,17 +1056,23 @@ export default function Discover() {
         description: `${targetProfile.displayName} will be notified.`,
       });
     } catch (err) {
-      if (err instanceof Error && err.message?.includes("already exists")) {
+      if (err instanceof LikeWaitingError) {
+        // Saved on the device and sent when the connection is back, so the
+        // card stays gone: the like counts, it just hasn't arrived yet.
+        toast({ title: "Like saved", description: err.message });
+      } else if (err instanceof Error && err.message?.includes("already exists")) {
         toast({ title: "Already Connected", description: "You already have a match request with this person." });
-      } else if (err instanceof Error && err.message?.includes("upgradeRequired")) {
+      } else if (err instanceof UpgradeRequiredError) {
         // The like didn't actually happen — bring the card back rather than
-        // leaving it removed from the deck until the next reload.
-        setEvaluatedIds((prev) => { const next = new Set(prev); next.delete(targetProfile.userId); return next; });
+        // leaving it removed from the deck until the next reload. The gate is
+        // re-read first: the cached copy is what let this tap through.
+        setDismissedIds((prev) => { const next = new Set(prev); next.delete(targetProfile.userId); return next; });
+        await qc.invalidateQueries({ queryKey: ["/api/gate", "daily_likes"] });
         paywall.guard("daily_likes", () => {});
       } else {
-        // Same reasoning — a failed like shouldn't silently vanish the
-        // profile from the deck for the rest of the session.
-        setEvaluatedIds((prev) => { const next = new Set(prev); next.delete(targetProfile.userId); return next; });
+        // Same reasoning — a like the server refused shouldn't silently vanish
+        // the profile from the deck for the rest of the session.
+        setDismissedIds((prev) => { const next = new Set(prev); next.delete(targetProfile.userId); return next; });
         toast({ title: "Could not like", description: "Something went wrong. Please try again.", variant: "destructive" });
       }
     }

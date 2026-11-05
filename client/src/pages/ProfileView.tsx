@@ -19,6 +19,7 @@ import {
   useUnmatch,
   useTwinTalkSummary,
   UpgradeRequiredError,
+  LikeWaitingError,
 } from "@/hooks/use-interactions";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
@@ -240,8 +241,10 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
           else toast({ title: "Liked!", description: `${name} will be notified.` });
         },
         onError: (err: any) => {
-          if (err?.message?.includes("upgradeRequired")) paywall.guard("daily_likes", () => {});
-          else toast({ title: "Could not like", description: "Something went wrong. Please try again.", variant: "destructive" });
+          if (err instanceof LikeWaitingError) toast({ title: "Like saved", description: err.message });
+          else if (err instanceof UpgradeRequiredError) {
+            void queryClient.invalidateQueries({ queryKey: ["/api/gate", "daily_likes"] }).then(() => paywall.guard("daily_likes", () => {}));
+          } else toast({ title: "Could not like", description: "Something went wrong. Please try again.", variant: "destructive" });
         },
       }),
     );

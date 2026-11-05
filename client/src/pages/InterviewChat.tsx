@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCreateMatch } from "@/hooks/use-interactions";
+import { useCreateMatch, LikeWaitingError } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
 import { Button } from "@/components/ui/button";
@@ -297,7 +297,9 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
         description: `${targetName} will be notified of your interest.`,
       });
     } catch (error: any) {
-      if (error.message?.includes("already exists")) {
+      if (error instanceof LikeWaitingError) {
+        toast({ title: "Saved", description: error.message });
+      } else if (error.message?.includes("already exists")) {
         toast({ title: "Already Connected", description: "You already have a connection with this person." });
       } else {
         toast({ title: "Error", description: "Could not send match request.", variant: "destructive" });
