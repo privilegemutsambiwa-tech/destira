@@ -1,88 +1,83 @@
-import { useState } from "react";
-import { X } from "lucide-react";
+// Location, asked at the moment it's needed (docs/destira-upgrade-prompt.md
+// §8.2), not the moment someone arrives.
+//
+// LocationPermissionModal stays mounted in the shell, but it no longer asks
+// anything: it only keeps foreground reporting running for members who
+// already said yes (useGeolocation does the watching). The ask itself is
+// LocationAskSheet, opened by whatever needs a location: "Within 20 km" on
+// Discover today. It used to ask for notifications in the same breath too;
+// those are asked after a first like now (lib/engagement-prompts).
 import { useGeolocation } from "@/hooks/use-geolocation";
-import { usePushSubscribe } from "@/hooks/use-push";
+import { VfButton, VfSheet } from "@/components/ui-vf";
 
 const STORAGE_KEY = "location_permission_asked";
 
+export function hasLocationConsent(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === "asked";
+  } catch {
+    return false;
+  }
+}
+
 export function LocationPermissionModal() {
-  const [visible, setVisible] = useState(() => {
-    try {
-      return !localStorage.getItem(STORAGE_KEY);
-    } catch {
-      return false;
-    }
-  });
-  const decline = () => {
+  useGeolocation();
+  return null;
+}
+
+export function LocationAskSheet({
+  open,
+  onOpenChange,
+  onEnabled,
+  reason = "to show you people within 20 km",
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onEnabled: () => void;
+  reason?: string;
+}) {
+  const { enable } = useGeolocation();
+  const later = () => {
     try {
       localStorage.setItem(STORAGE_KEY, "declined");
     } catch {
-      /* storage unavailable: it may ask again next visit */
+      /* storage unavailable: it may ask again next time */
     }
+    onOpenChange(false);
   };
-  const { enable } = useGeolocation();
-  const { subscribe } = usePushSubscribe();
-
-  if (!visible) return null;
-
-  const handleEnable = () => {
-    enable();
-    subscribe().catch(() => {});
-    setVisible(false); // enable() records the answer ("asked")
-  };
-
-  const handleDismiss = () => {
-    decline();
-    setVisible(false);
-  };
-
   return (
-    <div
-      // Above the phone tab bar (also z-50), clear of the system nav bar.
-      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom) + 1rem))" }}
-    >
-      <div className="w-full max-w-sm rounded-2xl p-6 relative bg-vf-surface2 border border-vf-line shadow-[0_16px_48px_rgba(0,0,0,0.55)]">
-        <button
-          onClick={handleDismiss}
-          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-vf-faint hover:text-vf-text transition-colors"
-          data-testid="button-location-dismiss"
-        >
-          <X className="w-4 h-4" />
-        </button>
-
-        <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-mint mb-3 flex items-center gap-2">
-          <span
-            className="w-2 h-2 rounded-full bg-vf-mint animate-[vf-pulse_2.6s_ease-in-out_infinite] motion-reduce:animate-none"
-            style={{ boxShadow: "0 0 10px var(--vf-mint-vivid)" }}
-          />
-          your twin
+    <VfSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      tone="twin"
+      eyebrow="Your location"
+      title="Use your location?"
+      description={`Destira needs it ${reason}.`}
+      data-testid="sheet-location"
+      footer={
+        <div className="flex flex-col gap-2">
+          <VfButton
+            fullWidth
+            onClick={() => {
+              enable();
+              onOpenChange(false);
+              onEnabled();
+            }}
+            data-testid="button-location-enable"
+          >
+            Use my location
+          </VfButton>
+          <VfButton variant="quiet" size="sm" fullWidth onClick={later} data-testid="button-location-later">
+            Not now
+          </VfButton>
         </div>
-
-        <h3 className="font-serif text-[22px] leading-tight text-vf-text mb-2">
-          Let your twin notice when someone worth knowing is at the same place
-        </h3>
-        <p className="text-[13.5px] text-vf-muted mb-5 leading-relaxed">
-          Only while the app is open, and only for named places — a campus, a mall, an office park.
-          Never a map, never a direction, never a trail. You can pause it or go invisible anywhere,
-          any time.
-        </p>
-
-        <button
-          onClick={handleEnable}
-          className="w-full h-11 rounded-xl font-medium text-vf-ink bg-vf-ember mb-2.5 text-[14px]"
-          data-testid="button-location-enable"
-        >
-          Turn it on
-        </button>
-        <button
-          onClick={handleDismiss}
-          className="w-full text-[13px] font-medium text-vf-faint hover:text-vf-text transition-colors"
-          data-testid="button-location-later"
-        >
-          Not now
-        </button>
-      </div>
-    </div>
+      }
+    >
+      <ul className="flex flex-col gap-2.5 vf-small text-vf-soft">
+        <li>Only while the app is open.</li>
+        <li>Others see a distance, or a named place like a campus or a mall. Never a map, a direction or a trail.</li>
+        <li>You can hide your distance or go invisible any time in Settings.</li>
+      </ul>
+    </VfSheet>
   );
 }

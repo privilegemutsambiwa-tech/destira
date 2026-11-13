@@ -2,10 +2,10 @@ import type React from "react";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Loader2, Pencil } from "lucide-react";
+import { ChevronLeft, Flag, Heart, Loader2, Pencil } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
-import { ResonanceDial } from "@/components/resonance-dial";
-import { ResonanceAxes } from "@/components/resonance-axes";
+import { WhyYouMightClick, useClickReasons } from "@/components/why-click";
+import { ResonanceGlyph, TwinGlyph, VfButton } from "@/components/ui-vf";
 import { RefineWithAI } from "@/components/refine-with-ai";
 import { useProfile, usePhotos, usePublicAnswers, useProfileGroups, useUpdateProfile } from "@/hooks/use-profiles";
 import { useTwinReadiness, useSaveOnboardingAnswer } from "@/hooks/use-onboarding";
@@ -23,7 +23,7 @@ import {
 } from "@/hooks/use-interactions";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { resonanceRead, vouches, overlap, distanceKm } from "@/lib/profile-derived";
+import { vouches, overlap, distanceKm } from "@/lib/profile-derived";
 import { PhotoLightbox } from "@/components/photo-lightbox";
 import { withFrom, getFromRoute } from "@/lib/from-route";
 import { MatchCelebration } from "@/components/match-celebration";
@@ -123,6 +123,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const { data: myReadiness } = useTwinReadiness();
   const { data: transcriptGate } = useGate("read_transcript");
   const { data: twinTalk } = useTwinTalkSummary(userId);
+  const { data: reasonsData } = useClickReasons(userId, !preview);
   const paywall = usePaywall();
   const createMatch = useCreateMatch();
   const [celebrating, setCelebrating] = useState<{ matchId: number } | null>(null);
@@ -164,7 +165,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
         <div className="py-20 text-center">
           <p className="font-serif text-vf-text mb-2" style={{ fontSize: "22px" }}>That profile isn't here.</p>
           <button onClick={() => setLocation("/matches")} className="text-sm font-medium text-vf-ember">
-            Back to Interest
+            Back to Likes
           </button>
         </div>
       </ViewShell>
@@ -205,7 +206,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     .filter(Boolean)
     .join(" · ");
 
-  const read = resonanceRead(profile);
+  const reasons = reasonsData?.reasons ?? [];
   const transcript = twinTalk?.exists && twinTalk.lines?.length ? { lines: twinTalk.lines, total: twinTalk.total ?? twinTalk.lines.length } : null;
   const vouchList = vouches(userId);
   const overlapChips = overlap(mine, profile, groups.filter((g: any) => g.viewerIsMember));
@@ -252,7 +253,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const withdraw = () => {
     if (!match) return;
     unmatch.mutate(match.matchId, {
-      onSuccess: () => { toast({ title: "Ask withdrawn" }); setLocation("/matches"); },
+      onSuccess: () => { toast({ title: "Like taken back" }); setLocation("/matches"); },
       onError: () => toast({ title: "Couldn't withdraw", variant: "destructive" }),
     });
   };
@@ -410,42 +411,13 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
               {meta}
             </div>
           )}
-          <h1 className="font-serif font-normal leading-none tracking-[-0.02em] text-[clamp(30px,6vw,44px)] text-vf-text">
+          <h1 className="font-display font-normal leading-[1.02] tracking-[-0.01em] text-[clamp(36px,8vw,60px)] text-vf-text" data-testid="text-profile-view-name">
             {name}
             {profile.age ? <span>, {profile.age}</span> : null}
           </h1>
-          {preview ? (
+          {preview && (
             <div className="mt-3.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
               What a visitor would do from here — chat with your twin, report, block
-            </div>
-          ) : (
-            <div className="mt-3.5 flex items-center justify-center lg:justify-start gap-4 flex-wrap">
-              {(!match || match.role === "incoming") && (
-                <button
-                  onClick={like}
-                  disabled={createMatch.isPending}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink text-[14px] font-semibold px-6 min-h-[44px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-50"
-                  data-testid="button-like-profile"
-                >
-                  {createMatch.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {match?.role === "incoming" ? "Like back" : "Like"}
-                </button>
-              )}
-              <button
-                onClick={openTwin}
-                disabled={startInterview.isPending}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-vf-mint/35 bg-vf-mint/10 text-vf-mint text-[14px] font-medium px-5 min-h-[44px] btn-press vf-btn-primary transition-colors hover:bg-vf-mint/15 disabled:opacity-50"
-                data-testid="button-chat-twin"
-              >
-                {startInterview.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                Chat with {her ? "her" : "their"} twin
-              </button>
-              <button onClick={() => setConfirm("report")} className="text-[13px] text-vf-muted hover:text-vf-text transition-colors" data-testid="link-report">
-                Report
-              </button>
-              <button onClick={() => setConfirm("block")} className="text-[13px] text-vf-muted hover:text-vf-text transition-colors" data-testid="link-block">
-                Block
-              </button>
             </div>
           )}
         </div>
@@ -472,7 +444,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
       return (
         <div className="rounded-[16px] bg-vf-surface p-4 vf-card" data-testid="status-strip">
           <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">She passed</div>
-          <p className="text-[13.5px] text-vf-muted mt-0.5">It happens. Your next read lands at 18:00.</p>
+          <p className="text-[13.5px] text-vf-muted mt-0.5">It happens. There are more people on Discover, and three new ones every evening at 19:00.</p>
         </div>
       );
     }
@@ -480,9 +452,9 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
       return (
         <div className="rounded-[16px] bg-vf-surface p-4 flex items-start justify-between gap-3 vf-card" data-testid="status-strip">
           <div>
-            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-ember">You asked to meet</div>
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-ember">You liked {her ? "her" : "them"}</div>
             <p className="text-[13.5px] text-vf-muted mt-0.5">
-              {relAge(match.createdAt)}. {her ? "She hasn't" : "They haven't"} answered yet — you'll see it in Interest first.
+              {relAge(match.createdAt)}. {her ? "She hasn't" : "They haven't"} answered yet. You'll see it in Likes first.
             </p>
           </div>
           <button
@@ -491,7 +463,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
             className="text-[13px] text-vf-muted hover:text-vf-text shrink-0 disabled:opacity-50"
             data-testid="link-withdraw"
           >
-            Withdraw the ask
+            Take it back
           </button>
         </div>
       );
@@ -500,9 +472,9 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     return (
       <div className="rounded-[16px] bg-vf-surface p-4 vf-card" data-testid="status-strip">
         <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-ember">
-          {her ? "She asked" : "They asked"} to meet you
+          {her ? "She likes" : "They like"} you
         </div>
-        <p className="text-[13.5px] text-vf-muted mt-0.5">It's waiting for you in Interest.</p>
+        <p className="text-[13.5px] text-vf-muted mt-0.5">Like back below and it's a match.</p>
       </div>
     );
   })();
@@ -746,25 +718,22 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     </section>
   ) : null;
 
-  const ResonanceCard = (
-    <div className="bg-vf-surface2 rounded-[20px] vf-card" style={{ padding: "22px" }}>
-      <div className="flex items-center gap-4" style={preview ? { opacity: 0.5 } : undefined}>
-        <ResonanceDial score={read.score} size={92} />
-        <div>
-          <div className={EYEBROW}>Resonance read</div>
-          <p className="text-[14px] text-vf-soft mt-1.5" style={{ lineHeight: 1.5 }}>{read.summary}</p>
-        </div>
+  // No score (docs/destira-upgrade-prompt.md §5.3). The old card showed a
+  // number made up from the member's id; this shows only what's true.
+  const ResonanceCard = preview ? (
+    <div className="bg-vf-surface2 rounded-[20px] p-[22px]" data-testid="section-why-preview">
+      <div className="vf-label text-vf-mint flex items-center gap-1.5">
+        <ResonanceGlyph size={16} /> Why you might click
       </div>
-      <div className="mt-5" style={preview ? { opacity: 0.5 } : undefined}>
-        <ResonanceAxes axes={read.axes} />
-      </div>
-      {preview && (
-        <p className="mt-4 pt-4 border-t border-vf-line text-[12.5px] text-vf-faint leading-[1.5]">
-          This read is specific to whoever's looking — there's no truthful version of it to preview for yourself. Shown blurred.
-        </p>
-      )}
+      <p className="vf-small text-vf-muted mt-2">
+        Each visitor sees what's true between the two of you: interests you share, the same city, wanting the same thing. There's no score.
+      </p>
     </div>
-  );
+  ) : reasons.length ? (
+    <div className="bg-vf-surface2 rounded-[20px] p-[22px]" data-testid="section-why-click">
+      <WhyYouMightClick name={name} reasons={reasons} onAsk={openTwin} />
+    </div>
+  ) : null;
 
   const TranscriptCard = transcript ? (
     <div className="rounded-[20px] p-[22px] vf-card" style={{ border: "1px solid rgba(143,227,199,.24)", background: "rgba(143,227,199,.045)" }}>
@@ -773,7 +742,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
           className="block w-[11px] h-[11px] rounded-full shrink-0 animate-[vf-breathe_4.5s_ease-in-out_infinite] motion-reduce:animate-none"
           style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint-vivid), #2E7F6B)" }}
         />
-        <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint">When your twins talked</span>
+        <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint">When you asked {her ? "her" : "their"} twin</span>
       </div>
       {(() => {
         const full = transcriptGate?.ok === true;
@@ -783,7 +752,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
             <div className="mt-4 flex flex-col gap-3.5">
               {shown.map((l, i) => (
                 <div key={i}>
-                  <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">{l.who === "viewer" ? "You" : name}</div>
+                  <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">{l.who === "viewer" ? "You" : `${name}'s twin`}</div>
                   <p className="text-[14px] text-vf-soft" style={{ lineHeight: 1.55 }}>{l.text}</p>
                 </div>
               ))}
@@ -840,6 +809,55 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     </div>
   ) : null;
 
+  // Always in reach (docs/destira-upgrade-prompt.md §7.5): the same sticky
+  // bar Discover has, so a long profile never means scrolling back up to act.
+  const isMatched = match?.role === "asked" && match.status === "matched";
+  const ActionBar = preview ? null : (
+    <div
+      className="sticky z-40 bottom-[calc(76px+env(safe-area-inset-bottom,0px))] lg:bottom-6 flex justify-center pointer-events-none"
+      data-testid="profile-action-bar"
+    >
+      <div className="pointer-events-auto w-full max-w-[460px] flex items-center gap-2 rounded-full border border-vf-line bg-vf-surface/90 backdrop-blur-md p-2 vf-e3">
+        <VfButton
+          variant="twin"
+          className="flex-1 min-w-0"
+          loading={startInterview.isPending}
+          leading={<TwinGlyph size={18} />}
+          onClick={openTwin}
+          data-testid="button-chat-twin"
+        >
+          Ask {her ? "her" : "their"} twin
+        </VfButton>
+        {isMatched ? (
+          <VfButton className="flex-1 min-w-0" onClick={() => setLocation(`/chat/${match!.matchId}?from=/u/${userId}`)} data-testid="button-open-chat">
+            Open chat
+          </VfButton>
+        ) : !match || match.role === "incoming" ? (
+          <VfButton
+            className="flex-1 min-w-0"
+            loading={createMatch.isPending}
+            leading={<Heart className="w-4 h-4" fill="currentColor" strokeWidth={0} />}
+            onClick={like}
+            data-testid="button-like-profile"
+          >
+            {match?.role === "incoming" ? "Like back" : "Like"}
+          </VfButton>
+        ) : null}
+      </div>
+    </div>
+  );
+  const SafetyRow = preview ? null : (
+    <div className="flex items-center justify-center gap-2 pt-2">
+      <button onClick={() => setConfirm("report")} className="inline-flex items-center gap-1 min-h-[40px] px-3 vf-small text-vf-faint hover:text-vf-text transition-colors" data-testid="link-report">
+        <Flag className="w-3 h-3" /> Report {name}
+      </button>
+      <span className="text-vf-faint" aria-hidden="true">·</span>
+      <button onClick={() => setConfirm("block")} className="min-h-[40px] px-3 vf-small text-vf-faint hover:text-vf-text transition-colors" data-testid="link-block">
+        Block
+      </button>
+    </div>
+  );
+
   return (
     <ViewShell preview={preview}>
       <div className="flex flex-col gap-8">
@@ -874,6 +892,8 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
           {OverlapChips}
           {RoomsCard}
         </div>
+        {SafetyRow}
+        {ActionBar}
       </div>
       {paywall.sheet}
       {lightboxIndex !== null && lightboxPhotos.length > 0 && (

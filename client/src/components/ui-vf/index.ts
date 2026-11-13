@@ -5,3 +5,4 @@ export { SegmentedControl, UnderlineTabs, type ChoiceOption } from "./choice";
 export { SearchField, EmptyState, RingsIllustration, VfSkeleton, VfAvatar, PageHeader } from "./basics";
 export { ScreenNotes, Note, NOTE_PRIORITY, type NoteSpec, type NoteKind, type NoteTone } from "./note";
 export { TwinGlyph, ResonanceGlyph, TonightGlyph, SeatGlyph, LoungeGlyph } from "./glyphs";
+export { VfSheet, type VfSheetProps } from "./sheet";

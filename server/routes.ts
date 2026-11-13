@@ -30,6 +30,7 @@ import * as officialEvents from "./official-events";
 import { runOfficialAutopilot } from "./official-autopilot";
 import { registerGrowthRoutes } from "./growth-routes";
 import { getDailyPicks } from "./daily-picks";
+import { withClickReasons } from "./click-reasons";
 import * as eventsFeed from "./events-feed";
 import * as twinEventAlerts from "./services/twin-event-alerts";
 import * as groupGames from "./group-games";
@@ -59,6 +60,7 @@ import { runNightlyRollup, backfillRecentMetrics } from "./admin/metrics-rollup"
 import { sendDailyDigest, sendWeeklyDigest } from "./email/digest";
 import { REPORT_CATEGORIES, FEEDBACK_CATEGORIES } from "@shared/admin";
 import { reports as reportsTable, feedback as feedbackTable } from "@shared/schema";
+import { interviews as interviewsTable } from "@shared/schema";
 import { ageFromDob, MIN_AGE } from "@shared/essentials";
 import {
   normalizeDisclosure,
@@ -248,7 +250,7 @@ export async function registerRoutes(
       const seed = typeof req.query.seed === "string" ? req.query.seed.slice(0, 100) : undefined;
       const { profiles: discoverable, nextCursor } = await storage.getDiscoverableProfiles(userId, filter, userLat, userLng, cursor, limit, seed);
       const nextCursorEncoded = nextCursor ? Buffer.from(JSON.stringify(nextCursor), "utf8").toString("base64url") : null;
-      res.json({ profiles: discoverable, nextCursor: nextCursorEncoded });
+      res.json({ profiles: await withClickReasons(userId, discoverable as any[]), nextCursor: nextCursorEncoded });
     } catch (e) {
       console.error("Discover error:", e);
       res.status(500).json({ message: "Failed to fetch profiles" });
@@ -707,6 +709,28 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const profile = await storage.getProfileWithUser(req.params.userId, viewerId);
     if (!profile) return res.status(404).json({ message: "Profile not found" });
     res.json(profile);
+  });
+
+  // "Why you might click" for one person, for the full profile: the same
+  // honest reasons a Discover card carries (server/click-reasons.ts). Uses
+  // the same visibility check as the profile itself.
+  app.get("/api/profiles/:userId/reasons", async (req, res) => {
+    const viewerId = getUserId(req);
+    if (!viewerId) return res.sendStatus(401);
+    const targetId = req.params.userId;
+    if (targetId === viewerId) return res.json({ reasons: [] });
+    try {
+      const profile = await storage.getProfileWithUser(targetId, viewerId);
+      if (!profile) return res.status(404).json({ message: "Profile not found" });
+      const interests = (await storage.getInterestsForUsers([targetId])).get(targetId) ?? [];
+      const [withReasons] = await withClickReasons(viewerId, [
+        { userId: targetId, location: (profile as any).location ?? null, interests, createdAt: (profile as any).createdAt ?? null },
+      ]);
+      res.json({ reasons: withReasons?.reasons ?? [] });
+    } catch (e) {
+      console.error("Profile reasons error:", e);
+      res.status(500).json({ message: "Failed to load" });
+    }
   });
 
   // Public, non-empty text answers from another user's soul-mapping — used on
@@ -2535,6 +2559,51 @@ Only include structured_updates fields if the conversation clearly reveals them.
       res.json({ ok: true });
     } catch {
       res.status(500).json({ message: "Failed to save timezone" });
+    }
+  });
+
+  // The twin orb's sheet on Discover (docs/destira-upgrade-prompt.md §5.1):
+  // only what the twin really did. Counts, not names: who asked a twin
+  // about someone has never been shown to the person they asked about, and
+  // this doesn't start now. Notices are the twin's own real notifications.
+  app.get("/api/twin/today", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const [recent, weekRows, notices, readiness] = await Promise.all([
+        db.select({ requesterId: interviewsTable.requesterId, transcript: interviewsTable.transcript })
+          .from(interviewsTable)
+          .where(and(eq(interviewsTable.targetId, userId), gte(interviewsTable.updatedAt, dayAgo))),
+        db.selectDistinct({ requesterId: interviewsTable.requesterId })
+          .from(interviewsTable)
+          .where(and(eq(interviewsTable.targetId, userId), gte(interviewsTable.updatedAt, weekAgo))),
+        db.select({ id: twinNotifications.id, title: twinNotifications.title, body: twinNotifications.body, createdAt: twinNotifications.createdAt })
+          .from(twinNotifications)
+          .where(and(eq(twinNotifications.userId, userId), gte(twinNotifications.createdAt, weekAgo)))
+          .orderBy(desc(twinNotifications.createdAt))
+          .limit(3),
+        onboarding.getTwinReadiness(userId),
+      ]);
+      let answered = 0;
+      for (const row of recent) {
+        try {
+          const turns = JSON.parse(row.transcript || "[]");
+          if (Array.isArray(turns)) answered += turns.filter((t: any) => t?.role === "assistant").length;
+        } catch {}
+      }
+      res.json({
+        askedToday: new Set(recent.map((r) => r.requesterId)).size,
+        answeredInThoseChats: answered,
+        askedThisWeek: weekRows.length,
+        notices,
+        readinessPct: readiness.pct,
+        answeredCount: readiness.answeredCount,
+      });
+    } catch (e) {
+      console.error("Twin today error:", e);
+      res.status(500).json({ message: "Failed to load" });
     }
   });
 

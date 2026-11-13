@@ -1,17 +1,18 @@
 ﻿import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { LayoutShell } from "@/components/layout-shell";
-import { FirstDayCard } from "@/components/first-day-card";
+import { FirstDayChip } from "@/components/first-day-card";
 import { MatchCelebration } from "@/components/match-celebration";
 import { DecisionDock } from "@/components/decision-dock";
 import { TonightsThree } from "@/components/tonights-three";
 import { InstallCard } from "@/components/install-card";
 import { requestPushNudge } from "@/lib/engagement-prompts";
-import { ResonanceDial } from "@/components/resonance-dial";
-import { ResonanceAxes } from "@/components/resonance-axes";
+import { TwinOrbButton } from "@/components/twin-orb";
+import { WhyYouMightClick, type ClickReason } from "@/components/why-click";
+import { LocationAskSheet, hasLocationConsent } from "@/components/location-permission-modal";
 import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2 } from "lucide-react";
 import { useDiscoverProfiles, useDiscoverExpandOptions, useStartInterview, useCreateMatch, useFeedStories, useProfileCompletion, UpgradeRequiredError, LikeWaitingError } from "@/hooks/use-interactions";
 import { useTwinReadiness } from "@/hooks/use-onboarding";
-import { ScreenNotes, NOTE_PRIORITY, type NoteSpec } from "@/components/ui-vf";
+import { ScreenNotes, NOTE_PRIORITY, type NoteSpec, EmptyState, VfButton } from "@/components/ui-vf";
 import { haptic } from "@/lib/haptics";
 import { LIMITS, gateCopy } from "@shared/entitlements";
 import { usePaywall } from "@/hooks/use-paywall";
@@ -37,23 +38,18 @@ function formatDistance(km: number): string {
   return `${km.toFixed(1)}km away`;
 }
 
-// Demo-seeded profiles carry real Big-Five trait scores (openness,
-// conscientiousness, ...); profiles onboarded through the app carry free-text
-// soul-mapping answers instead (see Onboarding.tsx). There's no backend
-// compatibility scoring yet (docs/redesign-handoff.md §4.2 is deferred), so
-// the resonance dial only renders when a profile actually has numeric trait
-// data — no invented numbers for the common case.
-function getResonance(personalityProfile: unknown): { score: number; axes: { label: string; value: number }[] } | null {
-  if (!personalityProfile || typeof personalityProfile !== "object") return null;
-  const numeric = Object.entries(personalityProfile as Record<string, unknown>).filter(
-    (entry): entry is [string, number] => typeof entry[1] === "number"
-  );
-  if (numeric.length === 0) return null;
-  const score = Math.round(numeric.reduce((sum, [, v]) => sum + v, 0) / numeric.length);
-  const axes = numeric
-    .slice(0, 4)
-    .map(([label, value]) => ({ label: label.charAt(0).toUpperCase() + label.slice(1), value }));
-  return { score, axes };
+// There is no resonance score. The old dial averaged a profile's own trait
+// numbers (only demo profiles had any) and called it compatibility; that's a
+// guess dressed as a fact. The card says why two people might click instead,
+// from things that are true (server/click-reasons.ts).
+
+/** "Good evening", by the member's own clock. */
+function greetingFor(d: Date): string {
+  const h = d.getHours();
+  if (h < 5) return "Up late";
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
 }
 
 type GalleryPhoto = {
@@ -256,9 +252,20 @@ function StoriesCarousel() {
 
   const STORY_SIZE = 72;
 
+  // Only when there's something new to watch (docs/destira-upgrade-prompt.md
+  // §7.4): a row of rings you've already seen just pushes the person down.
+  // Adding your own story lives on Profile too. Stays up while a story is
+  // open, so watching the last new one doesn't pull the viewer out from
+  // under you.
+  const anyUnseen = grouped.some((g) => g.stories.some((s: any) => !s.viewedByMe));
+  const busy = !!viewingUserId || showOwnStoryViewer || showStoryCreator;
+  const [shownOnce, setShownOnce] = useState(false);
+  useEffect(() => { if (anyUnseen) setShownOnce(true); }, [anyUnseen]);
+  if (!anyUnseen && !busy && !shownOnce) return null;
+
   return (
     <>
-      <div className="flex gap-4 overflow-x-auto pb-3 mb-5 scrollbar-hide" data-testid="stories-carousel">
+      <div className="flex gap-4 overflow-x-auto pb-1 scrollbar-hide" data-testid="stories-carousel">
         {hasMyStories ? (
           <button
             onClick={() => setShowOwnStoryViewer(true)}
@@ -408,15 +415,42 @@ function ScopePill({ active, onToggle }: { active: boolean; onToggle: () => void
     <button
       onClick={onToggle}
       aria-pressed={active}
-      className={`text-sm font-medium px-4 py-1.5 rounded-full border transition-colors ${
+      className={`vf-press inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full border text-[13px] font-medium transition-colors ${
         active
-          ? "bg-vf-ember border-transparent text-vf-ink"
-          : "border-vf-line text-vf-soft hover:border-vf-text/25"
+          ? "bg-vf-text border-transparent text-vf-ink"
+          : "border-vf-line bg-vf-surface text-vf-text hover:border-vf-text/25"
       }`}
       data-testid="chip-nearby"
     >
-      Within 20km
+      <MapPin className="w-3.5 h-3.5" /> Within 20 km
     </button>
+  );
+}
+
+/** Discover's slim top bar (docs/destira-upgrade-prompt.md §7.4): the date,
+ *  a greeting, the twin orb; then the scope and the first-day chip;
+ *  Tonight's three as one row or one line; stories only when new. */
+function DiscoverTopBar({ filter, onScope, name }: { filter: FilterChip; onScope: () => void; name: string | null }) {
+  const now = new Date();
+  const date = now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  return (
+    <header className="mb-5 flex flex-col gap-3" data-testid="discover-top-bar">
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="vf-label text-vf-faint" data-testid="text-discover-date">{date}</div>
+          <h1 className="vf-h1 text-vf-text mt-1 truncate" data-testid="text-discover-greeting">
+            {greetingFor(now)}{name ? `, ${name}` : ""}
+          </h1>
+        </div>
+        <TwinOrbButton />
+      </div>
+      <div className="flex flex-wrap items-center gap-2" data-testid="filter-chips">
+        <ScopePill active={filter === "nearby"} onToggle={onScope} />
+        <FirstDayChip />
+      </div>
+      <TonightsThree />
+      <StoriesCarousel />
+    </header>
   );
 }
 
@@ -560,6 +594,22 @@ export default function Discover() {
   }, []);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
+  const [askLocation, setAskLocation] = useState(false);
+  const locate = useCallback(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); },
+      () => {},
+      { timeout: 5000, maximumAge: 5 * 60 * 1000 },
+    );
+  }, []);
+  // Location is asked here, when "Within 20 km" needs it (§8.2), never on
+  // arrival.
+  const toggleScope = useCallback(() => {
+    if (filter === "nearby") return setFilter("all");
+    if (!hasLocationConsent()) return setAskLocation(true);
+    setFilter("nearby");
+  }, [filter, setFilter]);
   // Stable bits only (name/photo don't change from a like/comment/view) — the
   // actual `stories` array is derived live from storiesByUserId below, so an
   // invalidated feed query reaches this viewer while it's still open.
@@ -642,14 +692,8 @@ export default function Discover() {
   }, [woLocation]);
 
   useEffect(() => {
-    if (navigator.geolocation && localStorage.getItem("location_permission_asked") === "asked") {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); },
-        () => {},
-        { timeout: 5000, maximumAge: 5 * 60 * 1000 }
-      );
-    }
-  }, []);
+    if (hasLocationConsent()) locate();
+  }, [locate]);
 
   const storiesByUserId = useMemo(() => {
     const map: Record<string, any[]> = {};
@@ -750,7 +794,15 @@ export default function Discover() {
     );
   }
 
-  const weekday = new Date().toLocaleDateString(undefined, { weekday: "long" });
+  const myFirstName = ((ownProfile as any)?.displayName || (me as any)?.firstName || "").trim().split(/\s+/)[0] || null;
+  const topBar = <DiscoverTopBar filter={filter} onScope={toggleScope} name={myFirstName} />;
+  const locationSheet = (
+    <LocationAskSheet
+      open={askLocation}
+      onOpenChange={setAskLocation}
+      onEnabled={() => { locate(); setFilter("nearby"); }}
+    />
+  );
 
   // Likes are the metric, not passes — free tier gets 30/day (80 Spark, 200
   // Flame, unlimited Ember). The moment that's used up, the deck itself
@@ -776,25 +828,32 @@ export default function Discover() {
     });
     return (
       <LayoutShell>
-        <div className="max-w-lg mx-auto text-center py-20 px-6 rounded-[22px] border border-vf-line bg-vf-surface" data-testid="discover-likes-exhausted">
-          <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 bg-vf-ember/10">
-            <Heart className="w-10 h-10 text-vf-ember" />
+        <div className="max-w-[640px] mx-auto">
+          {topBar}
+          <div className="rounded-[24px] border border-vf-line bg-vf-surface" data-testid="discover-likes-exhausted">
+            <EmptyState
+              title={`That's today's ${likesGate.limit != null ? `${likesGate.limit} ` : ""}likes.`}
+              body={
+                <>
+                  <span className="block">{likesGate.line || copy.line}</span>
+                  <span className="block mt-2" data-testid="text-discover-paused">
+                    New people {resetLabel(likesGate.resetAt) === "at midnight" || !likesGate.resetAt ? "tomorrow" : resetLabel(likesGate.resetAt)}. Or move up a plan to keep going now.
+                  </span>
+                </>
+              }
+              action={
+                <VfButton
+                  variant="premium"
+                  onClick={() => setLocation(withFrom(`/plans?feature=daily_likes`, "/discover"))}
+                  data-testid="button-discover-likes-upgrade"
+                >
+                  {likesGate.requiredTierName || copy.requiredTierName ? `See ${likesGate.requiredTierName || copy.requiredTierName}` : "See plans"}
+                </VfButton>
+              }
+            />
           </div>
-          <h3 className="font-serif text-xl mb-2 text-vf-text">
-            You've used today's {likesGate.limit != null ? `${likesGate.limit} ` : ""}likes
-          </h3>
-          <p className="text-sm text-vf-muted">{likesGate.line || copy.line}</p>
-          <p className="text-sm text-vf-muted mt-3" data-testid="text-discover-paused">
-            Discover is paused until then — you'll see new people {resetLabel(likesGate.resetAt) === "at midnight" || !likesGate.resetAt ? "tomorrow" : resetLabel(likesGate.resetAt)}. Or move up a plan to keep going now.
-          </p>
-          <button
-            onClick={() => setLocation(withFrom(`/plans?feature=daily_likes`, "/discover"))}
-            className="mt-5 h-11 px-6 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
-            data-testid="button-discover-likes-upgrade"
-          >
-            {likesGate.requiredTierName || copy.requiredTierName ? `See ${likesGate.requiredTierName || copy.requiredTierName}` : "See plans"}
-          </button>
         </div>
+        {locationSheet}
         {celebration}
       </LayoutShell>
     );
@@ -803,47 +862,36 @@ export default function Discover() {
   if (!profiles || profiles.length === 0) {
     return (
       <LayoutShell>
-        <div className="max-w-lg mx-auto">
-          <div className="mb-6">
-            {filter === "nearby" && <BackToEveryone onBack={() => setFilter("all")} />}
-            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2">
-              {weekday} · no read yet
-            </div>
-            <h1 className="font-serif font-normal text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-[-0.02em] text-vf-text">
-              Discover
-            </h1>
-          </div>
-          <div className="flex gap-2 mb-5" data-testid="filter-chips">
-            <ScopePill active={filter === "nearby"} onToggle={() => setFilter(filter === "nearby" ? "all" : "nearby")} />
-          </div>
-          <FirstDayCard />
-          <TonightsThree />
-          <StoriesCarousel />
-          <div className="text-center py-20 px-6 rounded-[22px] border border-vf-line bg-vf-surface">
-            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 bg-vf-mint/10">
-              <Brain className="w-10 h-10 text-vf-mint" />
-            </div>
-            <h3 className="font-serif text-xl mb-2 text-vf-text">
-              {filter === "nearby" ? "Nobody within 20km right now" : evaluatedIds.size > 0 ? "That's everyone for now" : "No one to discover yet"}
-            </h3>
-            <p className="text-sm text-vf-muted">
-              {filter === "nearby"
-                ? "Widen the scope to see everyone, or check back when people are near you."
-                : evaluatedIds.size > 0
-                  ? "You've seen everyone available right now — check back as more people join or answer."
-                  : "Complete your onboarding first, then check back as more people join Destira."}
-            </p>
-            {filter !== "all" && (
-              <button
-                onClick={() => setFilter("all")}
-                className="mt-4 text-sm font-medium text-vf-ember"
-              >
-                Show everyone
-              </button>
+        <div className="max-w-[640px] mx-auto">
+          {filter === "nearby" && <BackToEveryone onBack={() => setFilter("all")} />}
+          {topBar}
+          <div className="rounded-[24px] border border-vf-line bg-vf-surface" data-testid="discover-empty">
+            <EmptyState
+              title={filter === "nearby" ? "Nobody within 20 km right now." : evaluatedIds.size > 0 ? "That's everyone for now." : "No one here yet."}
+              body={
+                filter === "nearby"
+                  ? "See everyone instead, or look again later when people are around."
+                  : evaluatedIds.size > 0
+                    ? "You've seen everyone who fits right now. New people join every day."
+                    : "New people join every day. Finish your profile so they find you too."
+              }
+              action={
+                filter !== "all" ? (
+                  <VfButton variant="secondary" onClick={() => setFilter("all")}>See everyone</VfButton>
+                ) : undefined
+              }
+            />
+            {filter === "all" && (
+              <div className="px-6 pb-8 -mt-4">
+                <ExpandSearchOptions userLat={userLat} userLng={userLng} />
+              </div>
             )}
-            {filter === "all" && <ExpandSearchOptions userLat={userLat} userLng={userLng} />}
+          </div>
+          <div className="mt-8 space-y-4">
+            <DiscoverNotes />
           </div>
         </div>
+        {locationSheet}
         {celebration}
       </LayoutShell>
     );
@@ -854,7 +902,7 @@ export default function Discover() {
   const isVeryClose = distanceKm !== null && distanceKm < 1;
   const cardStories = storiesByUserId[currentProfile.userId] || [];
   const hasCardStories = cardStories.length > 0;
-  const resonance = getResonance(currentProfile.personalityProfile);
+  const reasons: ClickReason[] = Array.isArray(currentProfile.reasons) ? currentProfile.reasons : [];
 
   // The only way a card leaves the deck: mark it evaluated so the `profiles`
   // memo drops it and [0] becomes whoever's next. No index to advance.
@@ -1028,35 +1076,14 @@ export default function Discover() {
   const interests: string[] = Array.isArray(currentProfile.interests) ? currentProfile.interests.slice(0, 6) : [];
   const aboutText: string = currentProfile.aboutMe || currentProfile.bio || "";
 
-  const upcoming = profiles.slice(1, 3);
+  const upcoming = profiles.slice(1, 4);
   keyActionsRef.current = { pass: handlePass, like: handleLike, interview: handleInterview, undo: handleUndoPass };
 
   return (
     <LayoutShell>
-      {/* Grid/showcase surface, not a reading column — grows with the
-          viewport instead of staying pinned at 768px regardless of screen
-          size (that was the actual cause of the hero card looking squeezed
-          on anything wider than a tablet, not the shell's own cap). */}
-      <div className="max-w-3xl lg:max-w-5xl xl:max-w-6xl mx-auto">
-        <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
-          <div>
-            {filter === "nearby" && <BackToEveryone onBack={() => setFilter("all")} />}
-            <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2">
-              {weekday} · {filter === "nearby" ? "within 20km" : "one read ready"}
-            </div>
-            <h1 className="font-serif font-normal text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-[-0.02em] text-vf-text">
-              Discover
-            </h1>
-          </div>
-          <div className="flex gap-2 flex-wrap" data-testid="filter-chips">
-            <ScopePill active={filter === "nearby"} onToggle={() => setFilter(filter === "nearby" ? "all" : "nearby")} />
-          </div>
-        </div>
-
-        <FirstDayCard />
-        <TonightsThree />
-
-        <StoriesCarousel />
+      <div className="max-w-[640px] md:max-w-3xl lg:max-w-5xl mx-auto">
+        {filter === "nearby" && <BackToEveryone onBack={() => setFilter("all")} />}
+        {topBar}
 
         {/* The card and its action bar share a box, so the bar only rides the
             bottom of the screen while the card is on it. */}
@@ -1078,36 +1105,31 @@ export default function Discover() {
             animate="show"
             exit="leave"
             transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
-            className="relative rounded-[26px] border border-vf-line bg-vf-surface grid grid-cols-1 md:grid-cols-2 mb-4"
+            className="relative rounded-[26px] border border-vf-line bg-vf-surface vf-e2 grid grid-cols-1 md:grid-cols-2 mb-4 overflow-hidden"
             data-testid="card-profile"
           >
-            {/* Photo pane — clips its own corners (top on mobile where it
-                stacks above the read pane, left on desktop where it sits
-                beside it) rather than the card clipping both, so the
-                resonance medallion below can sit right on the seam between
-                them without being cut off by either pane's own overflow. */}
-            <div className="relative min-h-[320px] md:min-h-[440px] rounded-t-[26px] md:rounded-t-none md:rounded-l-[26px] overflow-hidden">
+            {/* The person first: on a phone the photo fills most of the
+                screen before anything else (§7.4). */}
+            <div className="relative h-[clamp(380px,calc(100svh-330px),620px)] md:h-auto md:min-h-[min(74vh,660px)] overflow-hidden">
               <CardGallery photos={galleryPhotos} initial={currentProfile.displayName?.[0] || "?"} seed={currentProfile.userId} />
 
               <div
                 className="absolute inset-x-0 bottom-0 pointer-events-none bg-gradient-to-t from-vf-scrim to-transparent"
-                style={{ height: "52%" }}
+                style={{ height: "62%" }}
               />
 
+              {/* Badges sit on the photo, so their colours stay the fixed
+                  dark-mode shades whatever the theme. */}
               {nearby && (
                 <div
-                  className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md border border-[#22C55E]/40"
-                  style={{ background: "rgba(0,0,0,0.5)" }}
+                  className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md"
+                  style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(185,216,110,0.4)" }}
                   data-testid="badge-nearby-now"
                 >
-                  <div className="w-2 h-2 rounded-full" style={{ background: "#22C55E", boxShadow: "0 0 6px #22C55E" }} />
-                  <span className="text-[11px] font-semibold" style={{ color: "#22C55E" }}>Nearby now</span>
+                  <div className="w-2 h-2 rounded-full" style={{ background: "#B9D86E", boxShadow: "0 0 6px #B9D86E" }} />
+                  <span className="text-[11px] font-semibold" style={{ color: "#B9D86E" }}>Nearby now</span>
                 </div>
               )}
-
-              {/* Sits on the photo itself (fixed rgba(0,0,0,.5) chip), not the
-                  page — mint stays the fixed dark-mode shade here rather than
-                  the theme-aware vf-mint, same reasoning as the scrim above. */}
               {isVeryClose && !nearby && (
                 <div
                   className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md"
@@ -1115,14 +1137,14 @@ export default function Discover() {
                   data-testid="badge-very-close"
                 >
                   <MapPin className="w-3 h-3" style={{ color: "#8FE3C7" }} />
-                  <span className="text-[11px] font-semibold" style={{ color: "#8FE3C7" }}>Under 1km</span>
+                  <span className="text-[11px] font-semibold" style={{ color: "#8FE3C7" }}>Under 1 km</span>
                 </div>
               )}
 
               {hasCardStories && (
                 <button
                   onClick={() => handleViewCardStory(currentProfile)}
-                  className="absolute top-3 left-3 w-11 h-11 rounded-full p-[2px] btn-press"
+                  className="absolute top-3 left-3 w-11 h-11 rounded-full p-[2px] vf-press"
                   style={{ background: "hsl(var(--vf-ember))" }}
                   data-testid="card-story-ring"
                   aria-label={`View ${currentProfile.displayName || "their"} story`}
@@ -1143,9 +1165,15 @@ export default function Discover() {
                 </button>
               )}
 
-              <div className="absolute left-6 right-6 bottom-5 pointer-events-none">
-                <h2 className="font-serif font-normal text-white leading-none mb-1.5 flex items-center gap-2" style={{ fontSize: "34px" }} data-testid="text-profile-name">
-                  <span>{currentProfile.displayName}{currentProfile.age ? `, ${currentProfile.age}` : ""}</span>
+              {/* On a phone the decision bar floats over the bottom of the
+                  photo, so the name sits above it rather than under it. */}
+              <div className="absolute left-5 right-5 bottom-[100px] md:bottom-6 md:left-6 md:right-6 pointer-events-none">
+                <h2
+                  className="font-display font-normal leading-[1.02] tracking-[-0.01em] mb-1.5 flex items-center gap-2 text-[clamp(32px,9vw,42px)]"
+                  style={{ color: "#F5F0EA" }}
+                  data-testid="text-profile-name"
+                >
+                  <span className="truncate">{currentProfile.displayName}{currentProfile.age ? `, ${currentProfile.age}` : ""}</span>
                   {currentProfile.isVerified && (
                     <span
                       title="Verified"
@@ -1159,9 +1187,9 @@ export default function Discover() {
                 </h2>
 
                 {(currentProfile.locationName || currentProfile.location) && (
-                  <div className="flex items-center gap-1.5 text-[13.5px] text-[#CFC7DA] mb-1">
+                  <div className="flex items-center gap-1.5 text-[14px] text-[#CFC7DA]">
                     <MapPin className="w-3.5 h-3.5 shrink-0" />
-                    <span data-testid="text-profile-location">
+                    <span className="truncate" data-testid="text-profile-location">
                       {currentProfile.locationName || currentProfile.location}
                       {currentProfile.showDistance !== false && distanceKm !== null ? ` · ${formatDistance(distanceKm)}` : ""}
                     </span>
@@ -1170,31 +1198,13 @@ export default function Discover() {
               </div>
             </div>
 
-            {/* Read pane — the twin's read AND their own voice, not one or
-                the other. Top padding is taller than the sides/bottom: the
-                resonance medallion overlaps down into this pane from the
-                seam (see below), and the extra clearance keeps its ring
-                from colliding with the first line of text. */}
-            <div className="relative px-6 pb-6 pt-14 md:px-8 md:pb-8 md:pt-32 rounded-b-[26px] md:rounded-b-none md:rounded-r-[26px] overflow-hidden flex flex-col gap-5 min-w-0">
-              {resonance && (
-                <>
-                  <div className="min-w-0">
-                    <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted">
-                      resonance read
-                    </div>
-                    {aboutText && (
-                      <p className="text-[15px] leading-relaxed text-vf-text mt-1.5 max-w-[330px]">{aboutText}</p>
-                    )}
-                  </div>
-                  <ResonanceAxes axes={resonance.axes} />
-                </>
-              )}
+            {/* The read: why you might click, then their own words. */}
+            <div className="relative px-5 py-6 md:px-8 md:py-8 flex flex-col gap-6 min-w-0">
+              <WhyYouMightClick name={currentProfile.displayName || ""} reasons={reasons} onAsk={handleInterview} />
 
               {answers.length > 0 ? (
                 <div>
-                  <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted mb-2.5">
-                    in their words
-                  </div>
+                  <div className="vf-label text-vf-faint mb-1">In their words</div>
                   <div className="flex flex-col">
                     {answers.map((a, i) => (
                       <div
@@ -1202,29 +1212,25 @@ export default function Discover() {
                         className={`py-3.5 ${i > 0 ? "border-t border-vf-line" : ""}`}
                         data-testid={`profile-answer-${i}`}
                       >
-                        <div className="text-[12.5px] font-mono uppercase tracking-[0.08em] text-vf-faint mb-1.5">{a.question}</div>
-                        <p className="font-serif italic text-[21px] leading-[1.4] text-vf-text">"{a.answer}"</p>
+                        <div className="vf-small text-vf-muted mb-1.5">{a.question}</div>
+                        <p className="font-display italic text-[22px] leading-[1.35] text-vf-text">"{a.answer}"</p>
                       </div>
                     ))}
                   </div>
                 </div>
               ) : (
-                !resonance && (
-                  <div>
-                    <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-muted mb-2.5">
-                      in their words
-                    </div>
-                    {aboutText ? (
-                      <p className="font-serif italic text-[21px] leading-[1.4] text-vf-text">"{aboutText}"</p>
-                    ) : (
-                      <p className="text-[15px] leading-relaxed text-vf-muted">Nothing shared yet.</p>
-                    )}
-                  </div>
-                )
+                <div>
+                  <div className="vf-label text-vf-faint mb-2">In their words</div>
+                  {aboutText ? (
+                    <p className="font-display italic text-[22px] leading-[1.35] text-vf-text">"{aboutText}"</p>
+                  ) : (
+                    <p className="vf-body text-vf-muted">Nothing shared yet. Their twin can tell you more.</p>
+                  )}
+                </div>
               )}
 
-              {resonance && answers.length > 0 && aboutText && (
-                <p className="text-[15px] leading-relaxed text-vf-muted">{aboutText}</p>
+              {answers.length > 0 && aboutText && (
+                <p className="vf-body text-vf-soft">{aboutText}</p>
               )}
 
               {interests.length > 0 && (
@@ -1232,7 +1238,7 @@ export default function Discover() {
                   {interests.map((tag) => (
                     <span
                       key={tag}
-                      className="border border-vf-line rounded-full px-[15px] py-2 text-[13px] text-vf-muted"
+                      className="border border-vf-line rounded-full px-3.5 py-1.5 text-[13.5px] text-vf-soft"
                     >
                       {tag}
                     </span>
@@ -1242,38 +1248,12 @@ export default function Discover() {
 
               <button
                 onClick={() => setLocation(withFrom(`/u/${currentProfile.userId}`, filter === "nearby" ? "/discover?filter=nearby" : "/discover"))}
-                className="self-start inline-flex items-center gap-1.5 text-[13px] text-vf-text hover:text-vf-ember transition-colors"
+                className="self-start inline-flex items-center gap-1.5 min-h-[44px] text-[14px] font-medium text-vf-text hover:text-vf-ember transition-colors"
                 data-testid="link-full-profile"
               >
-                Full profile <ArrowRight className="w-3.5 h-3.5" />
+                Full profile <ArrowRight className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Resonance medallion — a wax seal pinned to the seam between
-                the two panes, not tucked inside either one. It lives here,
-                a sibling of both panes inside the (non-clipping) card
-                shell, specifically so it can overlap both without being
-                cut off by either pane's own overflow-hidden. The seam
-                itself changes axis with the layout: on mobile the panes
-                stack, so the seam is the horizontal line where the photo
-                ends; at md+ they sit side by side, so the seam becomes the
-                vertical line between them — the medallion's position
-                switches with it via the md: variants below, rather than
-                trying to make one placement work for both. */}
-            {resonance && (
-              <div
-                className="absolute z-30 left-6 top-[270px] md:left-1/2 md:top-5 md:-translate-x-1/2"
-                style={{ filter: "drop-shadow(0 10px 22px rgba(12,9,16,.35))" }}
-                data-testid="resonance-medallion"
-              >
-                <div
-                  className="rounded-full"
-                  style={{ padding: 4, background: "var(--vf-surface)" }}
-                >
-                  <ResonanceDial score={resonance.score} size={92} />
-                </div>
-              </div>
-            )}
           </motion.div>
         </AnimatePresence>
 
@@ -1289,21 +1269,21 @@ export default function Discover() {
         />
         </div>
 
-        <div className="flex items-center justify-between px-1 mb-8">
-          <p className="text-xs text-vf-faint">
-            {eligibleForFilter.length - profiles.length + 1} of {eligibleForFilter.length} profiles
+        <div className="flex items-center justify-between px-1 mt-2 mb-8">
+          <p className="vf-small text-vf-faint">
+            {eligibleForFilter.length - profiles.length + 1} of {eligibleForFilter.length}
           </p>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setConfirm("block")}
-              className="text-xs text-vf-faint hover:text-vf-text transition-colors"
+              className="vf-small text-vf-faint hover:text-vf-text transition-colors min-h-[36px] px-2"
               data-testid="button-block-user"
             >
               Block
             </button>
             <button
               onClick={() => setConfirm("report")}
-              className="text-xs text-vf-faint hover:text-vf-text transition-colors inline-flex items-center gap-1"
+              className="vf-small text-vf-faint hover:text-vf-text transition-colors inline-flex items-center gap-1 min-h-[36px] px-2"
               data-testid="button-report-user"
             >
               <Flag className="w-3 h-3" /> Report
@@ -1311,117 +1291,52 @@ export default function Discover() {
           </div>
         </div>
 
+        {/* A peek at who's next, not a second feed. Tapping one brings them
+            to the front; whoever was there goes to the back of the line, so
+            the same two people never just trade places. */}
         {upcoming.length > 0 && (
-          <div>
-            <div className="flex items-baseline justify-between gap-4 mb-4">
-              <h2 className="font-serif font-normal text-[22px] text-vf-text">Next up</h2>
-            </div>
-            <div className="flex flex-wrap items-start gap-5 mb-10">
-              {/* A loosely fanned hand of cards, not a grid — this is a
-                  queue you're being teased with one glimpse at a time, so it
-                  should look like a stack you could riffle through, not a
-                  list you scan. The first (next) card sits upright and on
-                  top; each one behind it tilts a little further and steps
-                  right, the way a hand of cards actually overlaps. */}
-              <div
-                className="relative shrink-0"
-                style={{ width: 132 + (upcoming.length - 1) * 34, height: 196 }}
-                data-testid="fan-upcoming"
-              >
-                {upcoming.map((p: any, i: number) => {
-                  const r = getResonance(p.personalityProfile);
-                  const rotateDeg = [0, -6, 5][i % 3];
-                  const topOffset = [0, 12, 4][i % 3];
-                  const CARD_WIDTH = 132;
-                  const STEP = 34;
-                  // Each card after the first is mostly covered by the one
-                  // in front of it (higher z-index, same width, offset by
-                  // only STEP px) — so its real on-screen clickable area is
-                  // just the STEP-px sliver poking out on the right, not
-                  // its full width. A button sized to the full card here
-                  // used to eat clicks meant for whichever card is actually
-                  // on top there, so tapping "the second card" mostly just
-                  // re-selected the first one — which is exactly what made
-                  // the deck look stuck between two or three people.
-                  const hitLeft = i === 0 ? 0 : i * STEP + (CARD_WIDTH - STEP);
-                  const hitWidth = i === 0 ? CARD_WIDTH : STEP;
-                  const handlePin = () => {
-                    if (isActingRef.current) return;
-                    const pinnedId = p.userId;
-                    setDeckOrder((prev) => {
-                      const idx = prev.indexOf(pinnedId);
-                      if (idx <= 0) return prev;
-                      const rest = prev.slice();
-                      const [pinned] = rest.splice(idx, 1);
-                      // The old front card doesn't just fall back to slot
-                      // one (right back into "Next up") — it goes to the
-                      // end of the line, so the viewer actually works
-                      // through everyone else before it's up again, instead
-                      // of two or three people trading the front spot
-                      // forever.
-                      const [oldFront] = rest.splice(0, 1);
-                      return oldFront ? [pinned, ...rest, oldFront] : [pinned, ...rest];
-                    });
-                  };
-                  return (
-                    <div
-                      key={p.userId}
-                      className="absolute rounded-[18px] border border-vf-line bg-vf-surface2 overflow-hidden pointer-events-none"
-                      style={{
-                        left: i * STEP,
-                        top: topOffset,
-                        width: CARD_WIDTH,
-                        height: 168,
-                        transform: `rotate(${rotateDeg}deg)`,
-                        zIndex: upcoming.length - i,
-                        boxShadow: "0 10px 24px rgba(12,9,16,.22), 0 0 0 3px var(--vf-surface)",
-                      }}
-                      data-testid={`card-upcoming-${p.userId}`}
-                    >
-                      {p.coverPhotoUrl ? (
-                        <img src={p.coverPhotoUrl} alt={p.displayName} className="absolute inset-0 w-full h-full object-cover" />
-                      ) : (
-                        <div className="absolute inset-0 flex items-center justify-center" style={{ background: avatarColor(p.userId) }}>
-                          <span className="font-serif text-white/90 text-5xl">{p.displayName?.[0] || "?"}</span>
-                        </div>
-                      )}
-                      <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-vf-scrim to-transparent pointer-events-none" />
-                      <div className="absolute left-3 right-3 bottom-2.5">
-                        <div className="font-serif text-[17px] leading-none" style={{ color: "#F5F0EA" }}>
-                          {p.displayName}{p.age ? `, ${p.age}` : ""}
-                        </div>
-                        {r && (
-                          <div className="font-mono text-[10.5px] mt-1.5" style={{ color: "#8FE3C7" }}>resonance {r.score}</div>
-                        )}
+          <section className="mb-10" data-testid="next-up">
+            <div className="vf-label text-vf-faint mb-3">Next up</div>
+            <div className="flex gap-3">
+              {upcoming.map((p: any) => {
+                const handlePin = () => {
+                  if (isActingRef.current) return;
+                  const pinnedId = p.userId;
+                  setDeckOrder((prev) => {
+                    const idx = prev.indexOf(pinnedId);
+                    if (idx <= 0) return prev;
+                    const rest = prev.slice();
+                    const [pinned] = rest.splice(idx, 1);
+                    const [oldFront] = rest.splice(0, 1);
+                    return oldFront ? [pinned, ...rest, oldFront] : [pinned, ...rest];
+                  });
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                };
+                return (
+                  <button
+                    key={p.userId}
+                    type="button"
+                    onClick={handlePin}
+                    className="vf-press relative w-[104px] h-[138px] rounded-[16px] overflow-hidden border border-vf-line bg-vf-surface2 shrink-0 text-left"
+                    aria-label={`Show ${p.displayName || "this person"} now`}
+                    data-testid={`card-upcoming-${p.userId}`}
+                  >
+                    {p.coverPhotoUrl ? (
+                      <img src={p.coverPhotoUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center" style={{ background: avatarColor(p.userId) }}>
+                        <span className="font-display text-white/90 text-4xl">{p.displayName?.[0] || "?"}</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handlePin}
-                        className="absolute btn-press cursor-pointer pointer-events-auto"
-                        style={{ left: hitLeft - i * STEP, top: 0, width: hitWidth, height: 168 }}
-                        aria-label={`Bring ${p.displayName || "this person"} to the front`}
-                      />
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-vf-scrim to-transparent pointer-events-none" />
+                    <div className="absolute left-2.5 right-2.5 bottom-2 font-display text-[16px] leading-none truncate" style={{ color: "#F5F0EA" }}>
+                      {(p.displayName || "").split(/\s+/)[0]}{p.age ? `, ${p.age}` : ""}
                     </div>
-                  );
-                })}
-              </div>
-
-              <button
-                onClick={() => setLocation(withFrom("/plans", "/discover"))}
-                className="text-left rounded-[20px] border border-dashed border-vf-gold/35 bg-vf-gold/5 p-4 flex flex-col justify-center gap-2 hover:bg-vf-gold/[0.08] transition-colors flex-1 min-w-[220px]"
-                data-testid="card-upgrade-teaser"
-                style={{ height: 196 }}
-              >
-                <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold">plans</div>
-                <div className="text-[14px] leading-relaxed text-vf-text">
-                  Free gives you {LIMITS.free.dailyLikes} reads a day. A paid step means more room, and you can see who asked to meet you.
-                </div>
-                <span className="inline-flex items-center gap-1.5 text-[13px] text-vf-gold mt-0.5">
-                  See plans <ArrowRight className="w-3.5 h-3.5" />
-                </span>
-              </button>
+                  </button>
+                );
+              })}
             </div>
-          </div>
+          </section>
         )}
       </div>
 
@@ -1431,6 +1346,8 @@ export default function Discover() {
         <DiscoverNotes />
         <InstallCard />
       </div>
+
+      {locationSheet}
 
       {viewingCardMeta && viewingCardStories && viewingCardStories.length > 0 && (
         <StoryViewer

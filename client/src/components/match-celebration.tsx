@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { haptic } from "@/lib/haptics";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import { duration, ease } from "@/lib/motion";
+import { VfButton } from "@/components/ui-vf";
 import { Users } from "lucide-react";
 import { useProfile, useSuggestedLounges } from "@/hooks/use-profiles";
 
@@ -18,7 +20,7 @@ export function Portrait({ name, photoUrl, size = 56 }: { name: string; photoUrl
       {photoUrl ? (
         <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
       ) : (
-        <span className="font-serif text-vf-text/25" style={{ fontSize: size * 0.42 }}>{name[0]?.toUpperCase() || "?"}</span>
+        <span className="font-display text-vf-text/25" style={{ fontSize: size * 0.42 }}>{name[0]?.toUpperCase() || "?"}</span>
       )}
     </div>
   );
@@ -49,6 +51,14 @@ export function MatchCelebration({
   useEffect(() => {
     haptic.match();
   }, []);
+  const reduce = useReducedMotion();
+  const firstName = otherName.trim().split(/\s+/)[0] || otherName;
+  // Escape closes it, like any other dialog.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const top = lounges[0];
   const rest = lounges.slice(1);
 
@@ -61,38 +71,76 @@ export function MatchCelebration({
     setLocation(`/lounge/group/${id}`);
   };
 
+  // The match moment (docs/destira-upgrade-prompt.md §5.5): the two of you
+  // arrive from either side and meet in the middle, a ring goes out, then
+  // the words, then what to do. Under a second, felt as well as seen, and
+  // just a fade for anyone who's asked for less motion.
+  const calm = !!reduce;
+  const fromSide = (dir: -1 | 1) =>
+    calm ? { opacity: 0 } : { opacity: 0, x: dir * 70, rotate: dir * 8, scale: 0.9 };
+  const rise = (delay: number) => ({
+    initial: calm ? { opacity: 0 } : { opacity: 0, y: 12 },
+    animate: { opacity: 1, y: 0 },
+    transition: { delay: calm ? 0 : delay, duration: duration.small, ease: ease.standard },
+  });
+
   return (
     <div
       className="fixed inset-0 z-[130] flex items-center justify-center p-6"
-      // Theme ground, not a fixed near-black — the text below uses theme
+      // Theme ground, not a fixed near-black: the text below uses theme
       // tokens, so a fixed dark scrim made the heading unreadable in light mode.
-      style={{ background: "hsl(var(--vf-ink) / .92)", backdropFilter: "blur(14px)" }}
-      onClick={goToChat}
+      style={{ background: "hsl(var(--vf-ink) / .94)", backdropFilter: "blur(16px)" }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="match-title"
       data-testid="modal-match-celebration"
     >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.25 }}
-        className="w-full max-w-[400px] text-center"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-center -space-x-5 mb-6">
-          <Portrait name={myProfile?.displayName || "You"} photoUrl={(myProfile as any)?.coverPhotoUrl} size={92} />
-          <Portrait name={otherName} photoUrl={otherPhotoUrl} size={92} />
+      <div className="w-full max-w-[400px] text-center" onClick={(e) => e.stopPropagation()}>
+        <div className="relative flex items-center justify-center mb-8 h-[132px]">
+          {!calm && (
+            <motion.span
+              aria-hidden="true"
+              className="absolute w-[150px] h-[150px] rounded-full border-2 border-vf-ember"
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: [0, 0.7, 0], scale: [0.5, 1, 1.9] }}
+              transition={{ delay: 0.36, duration: 0.9, ease: ease.standard }}
+            />
+          )}
+          <motion.div
+            className="relative z-[1] -mr-4"
+            initial={fromSide(-1)}
+            animate={{ opacity: 1, x: 0, rotate: -6, scale: 1 }}
+            transition={calm ? { duration: duration.small } : { type: "spring", stiffness: 260, damping: 20 }}
+          >
+            <div className="rounded-[19px] p-[3px] bg-vf-ink vf-e2"><Portrait name={myProfile?.displayName || "You"} photoUrl={(myProfile as any)?.coverPhotoUrl} size={112} /></div>
+          </motion.div>
+          <motion.div
+            className="relative z-[2] -ml-4"
+            initial={fromSide(1)}
+            animate={{ opacity: 1, x: 0, rotate: 6, scale: 1 }}
+            transition={calm ? { duration: duration.small } : { type: "spring", stiffness: 260, damping: 20, delay: 0.06 }}
+          >
+            <div className="rounded-[19px] p-[3px] bg-vf-ink vf-e2"><Portrait name={otherName} photoUrl={otherPhotoUrl} size={112} /></div>
+          </motion.div>
         </div>
-        <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint mb-2">Mutual</div>
-        <h1 className="font-serif font-normal text-[32px] text-vf-text mb-2">It's a match!</h1>
-        <p className="text-[14px] text-vf-muted mb-6">You and {otherName} both want to meet.</p>
+
+        <motion.div {...rise(0.42)}>
+          <div className="vf-label text-vf-ember mb-2">It's mutual</div>
+          <h1 id="match-title" className="vf-display text-vf-text mb-2">
+            You and {firstName}.
+          </h1>
+          <p className="vf-body text-vf-muted mb-7">You both said yes. The first message is the hardest part, so keep it simple.</p>
+        </motion.div>
 
         {top && (
-          <div className="rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3 mb-4 text-left flex items-start gap-2.5">
+          <motion.div {...rise(0.56)} className="rounded-[16px] border border-vf-line bg-vf-surface px-4 py-3 mb-5 text-left flex items-start gap-2.5">
             <Users className="w-4 h-4 text-vf-faint shrink-0 mt-0.5" />
-            <p className="text-[13px] text-vf-muted leading-[1.5]">
+            <p className="vf-small text-vf-muted">
               {top.reason === "mutual" ? (
-                <>You're both in <span className="text-vf-text">{top.name}</span> — a lower-pressure place to start.</>
+                <>You're both in <span className="text-vf-text">{top.name}</span>, a lower-pressure place to start.</>
               ) : top.reason === "their-interest" ? (
-                <>{otherName} is in <span className="text-vf-text">{top.name}</span> — looks like your kind of thing. Join to interact with them there.</>
+                <>{firstName} is in <span className="text-vf-text">{top.name}</span>. Looks like your kind of thing too.</>
               ) : (
                 <><span className="text-vf-text">{top.name}</span> could be a good place to meet in a group first.</>
               )}
@@ -115,26 +163,23 @@ export function MatchCelebration({
                 </>
               )}
             </p>
-          </div>
+          </motion.div>
         )}
 
-        <button
-          onClick={goToChat}
-          className="vf-btn-primary w-full h-12 rounded-full bg-vf-ember text-vf-ink font-bold text-[14px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors mb-2.5"
-          data-testid="button-celebration-chat"
-        >
-          Say hello
-        </button>
-        {top && (
-          <button
-            onClick={() => goToLounge(top.id)}
-            className="w-full h-11 rounded-full border border-vf-line text-vf-text text-[13.5px] font-medium hover:bg-vf-elevated transition-colors"
-            data-testid="button-celebration-lounge"
-          >
-            Meet in {top.name} first
-          </button>
-        )}
-      </motion.div>
+        <motion.div {...rise(0.64)} className="flex flex-col gap-2">
+          <VfButton size="lg" fullWidth onClick={goToChat} data-testid="button-celebration-chat">
+            Say hello to {firstName}
+          </VfButton>
+          {top && (
+            <VfButton variant="secondary" fullWidth onClick={() => goToLounge(top.id)} data-testid="button-celebration-lounge">
+              Meet in {top.name} first
+            </VfButton>
+          )}
+          <VfButton variant="quiet" size="sm" fullWidth onClick={onClose} data-testid="button-celebration-later">
+            Keep looking
+          </VfButton>
+        </motion.div>
+      </div>
     </div>
   );
 }
