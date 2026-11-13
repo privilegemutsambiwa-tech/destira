@@ -10,7 +10,8 @@ import {
 } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { AvatarStack } from "@/components/avatar-stack";
-import { RichCard, CardHeader, StatusPill, GAME_ICON_LABEL, GameRoomBody } from "@/components/game-room";
+import { StatusPill, GAME_ICON_LABEL, GameRoomBody, CountdownRing } from "@/components/game-room";
+import { IconButton } from "@/components/ui-vf";
 
 const INK = "hsl(var(--vf-ink))";
 const SURFACE2 = "var(--vf-surface2)";
@@ -76,14 +77,9 @@ export default function GameRoomScreen({ params }: { params?: { groupId?: string
         className="px-4 py-3 flex items-center gap-3 sticky top-0 z-50"
         style={{ background: SURFACE2, borderBottom: `1px solid ${LINE}` }}
       >
-        <button
-          onClick={() => setLocation(`/lounge/group/${groupId}/games`)}
-          className="w-9 h-9 flex items-center justify-center btn-press rounded-full transition-colors"
-          style={{ color: EMBER, background: "transparent" }}
-          data-testid="button-back-lobby"
-        >
+        <IconButton label="Back to the games" onClick={() => setLocation(`/lounge/group/${groupId}/games`)} className="-ml-2" data-testid="button-back-lobby">
           <ArrowLeft className="w-5 h-5" />
-        </button>
+        </IconButton>
         <span className="w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0" style={{ background: "hsl(var(--vf-ember) / 0.14)" }}>
           {GAME_ICON_LABEL[state.kind] || "🎮"}
         </span>
@@ -94,16 +90,25 @@ export default function GameRoomScreen({ params }: { params?: { groupId?: string
             <span className="text-xs" style={{ color: MUTED }}>{state.participants.length} here</span>
           </div>
         </div>
-        <StatusPill tone={state.status === "revealed" ? "mint" : "muted"}>
-          {state.status === "revealed" ? "✓ Revealed" : "Live"}
-        </StatusPill>
+        {state.status !== "revealed" && state.revealAt ? (
+          <CountdownRing revealAt={state.revealAt} createdAt={state.createdAt} />
+        ) : (
+          <StatusPill tone={state.status === "revealed" ? "mint" : "muted"}>
+            {state.status === "revealed" ? "✓ Revealed" : "Live"}
+          </StatusPill>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <RichCard>
-          <CardHeader icon={GAME_ICON_LABEL[state.kind] || "🎮"} title={state.label} status={undefined} />
+        <section className="max-w-[640px] mx-auto rounded-[22px] border border-vf-line bg-vf-surface2 p-5" data-testid="game-surface">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <span className="vf-label text-vf-faint">
+              {state.status === "revealed" ? "Results" : `${state.responseCount} of ${state.eligibleCount} answered`}
+            </span>
+            <span className="vf-label text-vf-faint truncate">Started by {state.startedByNickname}</span>
+          </div>
           <GameRoomBody state={state} groupId={groupId} />
-        </RichCard>
+        </section>
 
         {messages.length > 0 && (
           <div className="space-y-2">
@@ -115,8 +120,9 @@ export default function GameRoomScreen({ params }: { params?: { groupId?: string
                     className="max-w-[80%] px-3.5 py-2 text-sm"
                     style={{
                       borderRadius: isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                      background: isMe ? EMBER : ELEVATED,
-                      color: isMe ? INK : TEXT,
+                      background: isMe ? "hsl(var(--vf-ember) / 0.16)" : ELEVATED,
+                      border: isMe ? "1px solid hsl(var(--vf-ember) / 0.25)" : "1px solid transparent",
+                      color: TEXT,
                     }}
                   >
                     {!isMe && <div className="text-xs font-medium mb-0.5" style={{ color: EMBER }}>{m.nickname}</div>}

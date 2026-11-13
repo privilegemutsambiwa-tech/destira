@@ -4,8 +4,11 @@
 // the actual play surface). Kept in one place so a room and its chat
 // announcement always look like the same product, and so a per-kind bug
 // only needs fixing once.
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { VfAvatar } from "@/components/ui-vf";
+import { haptic } from "@/lib/haptics";
 import { Input } from "@/components/ui/input";
 import { useSubmitGameResponse, useRevealGame } from "@/hooks/use-interactions";
 
@@ -83,7 +86,7 @@ export function ChoiceRound({ state, choices, onPick, resultsFor, correctKey }: 
 }) {
   const revealed = state.status === "revealed";
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       {choices.map((c) => {
         const isMine = state.myResponse && Object.values(state.myResponse)[0] === c.key;
         const res = revealed ? resultsFor?.(c.key) : null;
@@ -92,11 +95,11 @@ export function ChoiceRound({ state, choices, onPick, resultsFor, correctKey }: 
         return (
           <button
             key={c.key}
-            onClick={() => !state.myResponse && !revealed && onPick(c.key)}
+            onClick={() => { if (!state.myResponse && !revealed) { haptic.tick(); onPick(c.key); } }}
             disabled={!!state.myResponse || revealed}
-            className="w-full text-left p-2.5 text-[13px] relative overflow-hidden transition-colors hover:brightness-110"
+            className="vf-press w-full text-left px-4 py-3 min-h-[52px] text-[15px] relative overflow-hidden transition-colors hover:brightness-110"
             style={{
-              borderRadius: "10px",
+              borderRadius: "14px",
               border: `1px solid ${accent ?? LINE}`,
               background: isCorrect ? "hsl(var(--vf-mint) / 0.14)" : isMine ? "hsl(var(--vf-ember) / 0.14)" : "rgba(255,255,255,0.03)",
             }}
@@ -125,7 +128,7 @@ export function ChoiceRound({ state, choices, onPick, resultsFor, correctKey }: 
 // every kind but the roulette-style ones needs. Explicit TEXT (not MUTED):
 // this is the actual content of the round, not metadata.
 export function GamePrompt({ children }: { children: React.ReactNode }) {
-  return <p className="text-[13px] mb-2.5" style={{ color: TEXT }}>{children}</p>;
+  return <p className="font-display text-[24px] leading-[1.2] mb-4" style={{ color: TEXT }}>{children}</p>;
 }
 
 const inputCardCls = "text-[13px] h-9 border-0";
@@ -277,8 +280,9 @@ export function GameRoomBody({ state, groupId }: { state: any; groupId: number }
             const picked = hasResponded ? state.myResponse?.answers?.[i] : draftAnswers[i];
             return (
               <div key={i} className="space-y-1.5">
-                <p className="text-[13px] font-medium" style={{ color: TEXT }}>{i + 1}. {q.question}</p>
-                <div className="space-y-1">
+                <p className="font-mono text-[11px] tracking-[0.14em]" style={{ color: FAINT }}>QUESTION {i + 1} OF {state.config.questions.length}</p>
+                <p className="font-display text-[22px] leading-[1.2] pb-1" style={{ color: TEXT }}>{q.question}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {q.options.map((opt, oi) => {
                     const isCorrect = revealed && state.results.correctIndexes[i] === oi;
                     const isPicked = picked === oi;
@@ -287,10 +291,10 @@ export function GameRoomBody({ state, groupId }: { state: any; groupId: number }
                       <button
                         key={oi}
                         disabled={hasResponded}
-                        onClick={() => setDraftAnswers((cur) => ({ ...cur, [i]: oi }))}
-                        className="w-full text-left p-2 text-[12.5px] transition-colors hover:brightness-110"
+                        onClick={() => { haptic.tick(); setDraftAnswers((cur) => ({ ...cur, [i]: oi })); }}
+                        className="vf-press w-full text-left px-4 py-3 min-h-[52px] text-[15px] transition-colors hover:brightness-110"
                         style={{
-                          borderRadius: 8,
+                          borderRadius: 14,
                           border: `1px solid ${accent ?? LINE}`,
                           background: isCorrect ? "hsl(var(--vf-mint) / 0.14)" : isPicked ? "hsl(var(--vf-ember) / 0.14)" : "rgba(255,255,255,0.03)",
                           color: TEXT,
@@ -318,12 +322,8 @@ export function GameRoomBody({ state, groupId }: { state: any; groupId: number }
             </Button>
           )}
           {revealed && (
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {state.results.scores.map((s: any) => (
-                <span key={s.userId} className="text-[11px] font-mono px-2 py-1 rounded-full" style={{ color: TEXT, background: "rgba(255,255,255,0.05)" }}>
-                  {s.nickname}: {s.score}/{state.config.questions.length}
-                </span>
-              ))}
+            <div className="pt-2">
+              <Scoreboard rows={state.results.scores.map((s: any) => ({ id: s.userId, name: s.nickname, score: s.score }))} outOf={state.config.questions.length} />
             </div>
           )}
         </div>
@@ -402,5 +402,73 @@ export function GameRoomBody({ state, groupId }: { state: any; groupId: number }
         </div>
       )}
     </>
+  );
+}
+
+/** The results, ranked, with places that settle into order (§7.13). */
+export function Scoreboard({ rows, outOf }: { rows: { id: string; name: string; score: number }[]; outOf?: number }) {
+  const reduce = useReducedMotion();
+  const [ordered, setOrdered] = useState(rows);
+  // Arrive in the order people answered, then settle into rank: the moment
+  // the scores land is the moment the board moves.
+  useEffect(() => {
+    setOrdered(rows);
+    if (reduce) {
+      setOrdered([...rows].sort((a, b) => b.score - a.score));
+      return;
+    }
+    const t = window.setTimeout(() => setOrdered([...rows].sort((a, b) => b.score - a.score)), 450);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(rows)]);
+  const top = Math.max(...rows.map((r) => r.score), 0);
+  return (
+    <div className="rounded-[16px] border border-vf-line overflow-hidden" data-testid="game-scoreboard">
+      {ordered.map((r, i) => (
+        <motion.div
+          key={r.id}
+          layout={!reduce}
+          transition={{ type: "spring", stiffness: 380, damping: 32 }}
+          className="flex items-center gap-3 px-3.5 py-2.5 border-t border-vf-line first:border-t-0 bg-vf-surface2"
+        >
+          <span className="font-mono text-[12px] w-5 text-center" style={{ color: r.score === top && top > 0 ? EMBER : FAINT }}>{i + 1}</span>
+          <VfAvatar size={28} name={r.name} seed={r.id} />
+          <span className="flex-1 min-w-0 truncate text-[15px]" style={{ color: TEXT }}>{r.name}</span>
+          <span className="font-mono text-[13px]" style={{ color: r.score === top && top > 0 ? EMBER : MUTED }}>
+            {r.score}{outOf != null ? `/${outOf}` : ""}
+          </span>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+/** Time left on a timed round, as a ring with the minutes in mono. */
+export function CountdownRing({ revealAt, createdAt, size = 44 }: { revealAt: string | null | undefined; createdAt?: string | null; size?: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!revealAt) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [revealAt]);
+  if (!revealAt) return null;
+  const end = new Date(revealAt).getTime();
+  const start = createdAt ? new Date(createdAt).getTime() : end - 5 * 60 * 1000;
+  const left = Math.max(0, end - now);
+  const frac = Math.min(1, Math.max(0, left / Math.max(1, end - start)));
+  const r = size / 2 - 3;
+  const c = 2 * Math.PI * r;
+  const mins = Math.floor(left / 60000);
+  const secs = Math.floor((left % 60000) / 1000);
+  return (
+    <span className="relative inline-flex items-center justify-center shrink-0" style={{ width: size, height: size }} role="timer" aria-label={`${mins} minutes ${secs} seconds left`} data-testid="game-countdown">
+      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--vf-line)" strokeWidth={3} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={EMBER} strokeWidth={3} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - frac)} style={{ transition: "stroke-dashoffset 1s linear" }} />
+      </svg>
+      <span className="absolute font-mono text-[10.5px]" style={{ color: TEXT }}>
+        {mins}:{String(secs).padStart(2, "0")}
+      </span>
+    </span>
   );
 }

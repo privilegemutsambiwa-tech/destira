@@ -16,7 +16,6 @@ import {
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import { eq, and, ne, or, ilike, inArray, asc, desc, gte, lte, count, isNull } from "drizzle-orm";
-import { computeResonance } from "./resonance";
 import { storage } from "./storage";
 
 export class EventNotFoundError extends Error {
@@ -134,11 +133,16 @@ interface NotableAttendee {
   id: string;
   name: string;
   avatarUrl: string | null;
-  score: number;
 }
 interface ResonanceBlock {
   goingCount: number;
+  /** Always 0. It counted attendees whose own self-averaged trait score was
+   *  80+, which says nothing about how they'd get on with the viewer
+   *  (docs/destira-upgrade-prompt.md: no fake scores). Kept so older
+   *  bundles that read it don't break. */
   highReadCount: number;
+  /** Up to five visible, public attendees (people with photos first), for
+   *  the avatar stack. Not ranked by any score. */
   notableAttendees: NotableAttendee[];
 }
 
@@ -169,7 +173,6 @@ export async function buildResonanceBlocks(
       displayName: profiles.displayName,
       coverPhotoUrl: profiles.coverPhotoUrl,
       isPublic: profiles.isPublic,
-      personalityProfile: profiles.personalityProfile,
     }).from(profiles).where(inArray(profiles.userId, attendeeUserIds)),
     db.select({ blockedId: blockedUsers.blockedId }).from(blockedUsers).where(eq(blockedUsers.blockerId, viewerId)),
     db.select({ blockerId: blockedUsers.blockerId }).from(blockedUsers).where(eq(blockedUsers.blockedId, viewerId)),
@@ -194,19 +197,18 @@ export async function buildResonanceBlocks(
       .map((uid) => profileById.get(uid))
       .filter((p): p is NonNullable<typeof p> => !!p && p.isPublic === true);
 
-    const scored = visible
-      .map((p) => ({ profile: p, resonance: computeResonance(p.personalityProfile) }))
-      .filter((r): r is { profile: typeof r.profile; resonance: NonNullable<typeof r.resonance> } => r.resonance != null)
-      .sort((a, b) => b.resonance.score - a.resonance.score);
+    const withPhotoFirst = visible
+      .map((p, i) => ({ p, i }))
+      .sort((a, b) => Number(!!b.p.coverPhotoUrl) - Number(!!a.p.coverPhotoUrl) || a.i - b.i)
+      .map((x) => x.p);
 
     blocks.set(eventId, {
       goingCount: userIds.length,
-      highReadCount: scored.filter((r) => r.resonance.score >= 80).length,
-      notableAttendees: scored.slice(0, 3).map((r) => ({
-        id: r.profile.userId,
-        name: r.profile.displayName || "Someone",
-        avatarUrl: r.profile.coverPhotoUrl,
-        score: r.resonance.score,
+      highReadCount: 0,
+      notableAttendees: withPhotoFirst.slice(0, 5).map((p) => ({
+        id: p.userId,
+        name: p.displayName || "Someone",
+        avatarUrl: p.coverPhotoUrl,
       })),
     });
   });
@@ -253,6 +255,53 @@ export async function listEvents(
       ...serializeEvent(event, { isHost: event.hostUserId === viewerId, myStatus, goingCount: resonance.goingCount }),
       resonance,
       myStatus,
+      leadName: event.leadUserId ? leadNames.get(event.leadUserId) ?? null : null,
+    };
+  });
+}
+
+// "My seats" (docs/destira-upgrade-prompt.md §5.7): every upcoming event the
+// member holds a seat at (or is waitlisted / has asked for), soonest first,
+// each with a real seat number: the order seats were saved in among
+// everyone going.
+export async function listMySeats(viewerId: string) {
+  const since = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  const mine = await db
+    .select({ event: events, status: eventAttendees.status, savedAt: eventAttendees.createdAt })
+    .from(eventAttendees)
+    .innerJoin(events, eq(events.id, eventAttendees.eventId))
+    .where(and(
+      eq(eventAttendees.userId, viewerId),
+      inArray(eventAttendees.status, ["going", "waitlisted", "requested"]),
+      inArray(events.status, ["published", "cancelled"]),
+      gte(events.startsAt, since),
+    ))
+    .orderBy(asc(events.startsAt));
+  if (mine.length === 0) return [];
+  const eventIds = mine.map((m) => m.event.id);
+  const [blocks, going] = await Promise.all([
+    buildResonanceBlocks(eventIds, viewerId),
+    db.select({ eventId: eventAttendees.eventId, userId: eventAttendees.userId, createdAt: eventAttendees.createdAt, id: eventAttendees.id })
+      .from(eventAttendees)
+      .where(and(inArray(eventAttendees.eventId, eventIds), eq(eventAttendees.status, "going"))),
+  ]);
+  const leadNames = await leadNamesFor(mine.map((m) => m.event.leadUserId));
+  return mine.map(({ event, status }) => {
+    const resonance = blocks.get(event.id) || { goingCount: 0, highReadCount: 0, notableAttendees: [] };
+    const myStatus = status as AttendeeStatus;
+    let seatNumber: number | null = null;
+    if (myStatus === "going") {
+      const order = going
+        .filter((g) => g.eventId === event.id)
+        .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0) || a.id - b.id);
+      const idx = order.findIndex((g) => g.userId === viewerId);
+      seatNumber = idx >= 0 ? idx + 1 : null;
+    }
+    return {
+      ...serializeEvent(event, { isHost: event.hostUserId === viewerId, myStatus, goingCount: resonance.goingCount }),
+      resonance,
+      myStatus,
+      seatNumber,
       leadName: event.leadUserId ? leadNames.get(event.leadUserId) ?? null : null,
     };
   });

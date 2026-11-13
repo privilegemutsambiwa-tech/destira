@@ -9,7 +9,8 @@ export type EventGenderPolicy = "mixed" | "men_only" | "women_only" | "quota";
 export interface EventResonance {
   goingCount: number;
   highReadCount: number;
-  notableAttendees: { id: string; name: string; avatarUrl: string | null; score: number }[];
+  /** Up to five visible attendees for the avatar stack. Not ranked by any score. */
+  notableAttendees: { id: string; name: string; avatarUrl: string | null }[];
 }
 
 export interface EventItem {
@@ -460,6 +461,25 @@ export function useEventAttendees(eventId: number | undefined) {
       return res.json();
     },
     enabled: eventId != null && !Number.isNaN(eventId),
+  });
+}
+
+/** An event the member holds a seat at (§5.7). seatNumber is real: the
+ *  order seats were saved in among everyone going; null unless "going". */
+export type MySeat = EventItem & { seatNumber: number | null };
+
+// Keyed under "/api/events" so every attend/cancel invalidation (which
+// targets that prefix) refreshes the tickets too.
+export function useMySeats(enabled = true) {
+  return useQuery<MySeat[]>({
+    queryKey: ["/api/events", "my-seats"],
+    queryFn: async () => {
+      const res = await fetch("/api/events/my-seats", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled,
+    staleTime: 60 * 1000,
   });
 }
 

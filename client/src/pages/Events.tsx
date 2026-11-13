@@ -1,13 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useSearch } from "wouter";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+// Events home (docs/destira-upgrade-prompt.md §7.14): the promise in one
+// line, your tickets first (§5.7), then this week as large cards and later
+// weeks as a compact list. Search and preferences live in the top bar; host
+// is a quiet secondary action.
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useSearch } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { LayoutShell } from "@/components/layout-shell";
-import { EventRow, FeaturedEventRow } from "@/components/event-row";
+import { EventCard, EventRow } from "@/components/event-row";
+import { SeatTicket } from "@/components/seat-ticket";
 import {
   useEventsFeed,
   useEventSearch,
   useAttendEvent,
   useCancelAttendance,
+  useMySeats,
   searchParamsToQuery,
   type EventSearchParams,
   type EventItem,
@@ -17,12 +23,21 @@ import { useAuth } from "@/hooks/use-auth";
 import { useGate } from "@/hooks/use-gate";
 import { usePaywall } from "@/hooks/use-paywall";
 import { EVENT_KINDS, EVENT_PLACE_TYPES } from "@shared/event-taxonomy";
-import { Loader2, Search, X } from "lucide-react";
-import { NOTE_PRIORITY, ScreenNotes } from "@/components/ui-vf";
+import { Plus, Search, SlidersHorizontal } from "lucide-react";
+import {
+  EmptyState,
+  IconButton,
+  NOTE_PRIORITY,
+  ScreenNotes,
+  SearchField,
+  VfButton,
+  VfSheet,
+  VfSkeleton,
+} from "@/components/ui-vf";
 
 const DISTANCES = [5, 10, 25, 50] as const;
 const WHENS: { value: NonNullable<EventSearchParams["when"]>; label: string }[] = [
-  { value: "any", label: "Any" },
+  { value: "any", label: "Any time" },
   { value: "week", label: "This week" },
   { value: "weekend", label: "This weekend" },
   { value: "month", label: "Next 30 days" },
@@ -43,9 +58,9 @@ function weekLabel(eventDate: Date, now: Date): string {
   const weekAfterStart = new Date(nextWeekStart);
   weekAfterStart.setDate(weekAfterStart.getDate() + 7);
 
-  if (eventDate < nextWeekStart) return "This Week";
-  if (eventDate < weekAfterStart) return "Next Week";
-  return `Week of ${startOfWeek(eventDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  if (eventDate < nextWeekStart) return "This week";
+  if (eventDate < weekAfterStart) return "Next week";
+  return `Week of ${startOfWeek(eventDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
 }
 
 function parseParams(search: string): EventSearchParams {
@@ -87,23 +102,15 @@ function searchSignal(e: EventItem): string {
     .join(" · ");
 }
 
-function Chip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
+function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-full border px-3.5 h-8 text-[12.5px] capitalize transition-colors duration-150 ${
+      className={`vf-press rounded-full border px-3.5 min-h-[36px] text-[13px] capitalize transition-colors duration-150 ${
         active
-          ? "border-vf-mint/50 bg-vf-mint/10 text-vf-text shadow-[var(--shadow-card)]"
+          ? "border-vf-ember/50 bg-vf-ember/10 text-vf-text"
           : "border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20"
       }`}
     >
@@ -112,21 +119,36 @@ function Chip({
   );
 }
 
-function EmptyState({
-  line,
-  ctaHref,
-  ctaLabel,
-}: {
-  line: string;
-  ctaHref: string;
-  ctaLabel: string;
-}) {
+function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="py-12" data-testid="events-empty-state">
-      <p className="font-serif text-xl text-vf-text mb-2">{line}</p>
-      <Link href={ctaHref} asChild>
-        <a className="text-sm text-vf-mint hover:text-vf-text underline">{ctaLabel}</a>
-      </Link>
+    <div>
+      <div className="vf-label text-vf-faint mb-2.5">{label}</div>
+      <div className="flex flex-wrap gap-2">{children}</div>
+    </div>
+  );
+}
+
+function SectionLabel({ children, sub, tone = "faint" }: { children: React.ReactNode; sub?: string; tone?: "faint" | "text" }) {
+  return (
+    <div className="mb-3">
+      <div className={`vf-label ${tone === "text" ? "text-vf-text" : "text-vf-faint"}`}>{children}</div>
+      {sub && <p className="vf-small text-vf-muted mt-1">{sub}</p>}
+    </div>
+  );
+}
+
+function CardSkeletons() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" aria-busy="true">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="rounded-[24px] border border-vf-line overflow-hidden">
+          <VfSkeleton className="h-[188px] rounded-none" />
+          <div className="p-4 flex flex-col gap-2">
+            <VfSkeleton className="h-6 w-3/4" />
+            <VfSkeleton className="h-4 w-1/2" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -140,13 +162,12 @@ export default function Events() {
   const paywall = usePaywall();
   const attend = useAttendEvent();
   const cancel = useCancelAttendance();
+  const seats = useMySeats();
 
   const params = useMemo(() => parseParams(search), [search]);
   const count = activeCount(params);
   const searching = count > 0;
-
-  const [panelOpen, setPanelOpen] = useState(() => activeCount(parseParams(window.location.search)) > 0);
-  const searchBtnRef = useRef<HTMLButtonElement>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   // debounce what actually hits the search endpoint; URL updates immediately
   const [debounced, setDebounced] = useState(params);
@@ -154,18 +175,6 @@ export default function Events() {
     const t = window.setTimeout(() => setDebounced(parseParams(search)), 300);
     return () => window.clearTimeout(t);
   }, [search]);
-
-  useEffect(() => {
-    if (!panelOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setPanelOpen(false);
-        searchBtnRef.current?.focus();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [panelOpen]);
 
   const feed = useEventsFeed();
   const results = useEventSearch(debounced, activeCount(debounced) > 0);
@@ -187,7 +196,9 @@ export default function Events() {
   );
 
   const grouped = useMemo(() => {
-    const list = (feed.data?.events ?? []).filter((e) => !e.isOfficial);
+    const list = (feed.data?.events ?? [])
+      .filter((e) => !e.isOfficial)
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
     const now = new Date();
     const sections = new Map<string, EventItem[]>();
     for (const event of list) {
@@ -217,10 +228,7 @@ export default function Events() {
     const arr = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
     applyParams({ ...params, [key]: arr.length ? arr : undefined });
   };
-  const backToFeed = () => {
-    applyParams({});
-    setPanelOpen(false);
-  };
+  const backToFeed = () => applyParams({});
 
   const commonRowProps = (event: EventItem) => {
     const isHost = event.hostUserId === user?.id;
@@ -239,24 +247,37 @@ export default function Events() {
     };
   };
 
-  const rowHandlers = (event: EventItem) => (
-    <EventRow {...commonRowProps(event)} signalOverride={searching ? searchSignal(event) || undefined : undefined} />
-  );
-
-  // The single most-imminent event across the whole feed gets the featured
-  // hero treatment; everything else (including the rest of its own "This
-  // Week" group) renders as the compact list, same as before.
-  const featuredEvent = !searching ? grouped[0]?.[1]?.[0] : undefined;
+  const host = () => paywall.guard("host_event", () => setLocation("/events/host"));
+  const hostLocked = hostGate?.ok === false;
+  const mySeats = seats.data ?? [];
+  const resultCount = results.data?.events.length ?? 0;
 
   return (
     <LayoutShell>
-      <div className="max-w-3xl mx-auto">
-        <h1 className="font-serif font-normal text-[clamp(30px,3.6vw,44px)] leading-[1.05] tracking-[-0.02em] text-vf-text mb-2">
-          The point is the meeting.
-        </h1>
-        <p className="text-[15px] text-vf-muted max-w-[560px] mb-5">
-          Small, hosted, in real rooms. Your twin flags who's going that you'd get on with.
-        </p>
+      <div className="max-w-5xl mx-auto">
+        <header className="flex items-start gap-3 mb-5" data-testid="events-header">
+          <div className="flex-1 min-w-0">
+            <h1 className="vf-display text-vf-text text-[clamp(30px,3.6vw,44px)] leading-[1.05]">The point is the meeting.</h1>
+            <p className="vf-body text-vf-muted mt-2 max-w-[52ch]">
+              Small, hosted, in real rooms. Your twin flags who's going that you'd get on with.
+            </p>
+          </div>
+          <div className="flex items-center gap-1 shrink-0 -mr-2">
+            <span className="relative">
+              <IconButton label="Search events" onClick={() => setSheetOpen(true)} data-testid="button-toggle-search">
+                <Search className="w-5 h-5" />
+              </IconButton>
+              {count > 0 && (
+                <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-vf-ember text-vf-ink font-mono text-[10px] leading-4 text-center pointer-events-none">
+                  {count}
+                </span>
+              )}
+            </span>
+            <IconButton label="Event preferences" onClick={() => setLocation("/settings/events?from=/events")} data-testid="button-event-preferences">
+              <SlidersHorizontal className="w-5 h-5" />
+            </IconButton>
+          </div>
+        </header>
 
         <ScreenNotes
           className="mb-6"
@@ -271,223 +292,185 @@ export default function Events() {
           ]}
         />
 
-        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:justify-end sm:items-center mb-6">
-          <button
-            ref={searchBtnRef}
-            onClick={() => {
-              if (panelOpen) backToFeed();
-              else setPanelOpen(true);
-            }}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20 hover:bg-[var(--vf-elevated)] h-9 px-4 text-[13px] transition-colors duration-150"
-            data-testid="button-toggle-search"
-          >
-            {panelOpen ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
-            {panelOpen ? "Close search" : "Search events"}
-            {!panelOpen && count > 0 && (
-              <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-vf-mint/15 text-vf-mint font-mono text-[10px]">
-                {count}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setLocation("/settings/events?from=/events")}
-            className="inline-flex items-center justify-center rounded-full border border-vf-line text-vf-muted hover:text-vf-text hover:border-vf-text/20 hover:bg-[var(--vf-elevated)] h-9 px-4 text-[13px] transition-colors duration-150"
-            data-testid="button-event-preferences"
-          >
-            Preferences
-          </button>
-          <button
-            onClick={() => paywall.guard("host_event", () => setLocation("/events/host"))}
-            className="vf-btn-primary inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
-            data-testid="button-host-event"
-          >
-            {hostGate?.ok === false ? `Host an event · ${hostGate.requiredTierName || "Flame"}` : "Host an event"}
-          </button>
-        </div>
-
-        {panelOpen && (
-          <div
-            className="vf-card rounded-[20px] border border-vf-line bg-vf-surface2 p-5 mb-8 flex flex-col gap-5 overflow-hidden motion-safe:animate-[vf-rise_0.24s_ease-out_both]"
-            data-testid="search-panel"
-          >
-            <input
-              autoFocus
-              value={params.q ?? ""}
-              onChange={(e) => applyParams({ ...params, q: e.target.value || undefined })}
-              placeholder="Search by name, place, or word in the description"
-              className="w-full bg-transparent border-b border-vf-line focus:border-vf-mint/50 outline-none text-[15px] text-vf-text placeholder:text-vf-faint pb-2 transition-colors"
-              data-testid="input-search"
-            />
-
-            <div>
-              <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2.5">Kind</div>
-              <div className="flex flex-wrap gap-2">
-                {EVENT_KINDS.map((k) => (
-                  <Chip key={k} label={k} active={(params.kind ?? []).includes(k)} onClick={() => toggleArr("kind", k)} />
-                ))}
-              </div>
+        {mySeats.length > 0 && !searching && (
+          <section className="mb-8" data-testid="section-my-seats">
+            <SectionLabel tone="text">My seats</SectionLabel>
+            <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory -mx-4 px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {mySeats.map((s) => (
+                <SeatTicket key={s.id} seat={s} compact />
+              ))}
             </div>
-
-            <div>
-              <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2.5">Distance</div>
-              <div className="flex flex-wrap gap-2">
-                {DISTANCES.map((d) => (
-                  <Chip
-                    key={d}
-                    label={`${d}km`}
-                    active={params.distanceKm === d}
-                    onClick={() => applyParams({ ...params, distanceKm: params.distanceKm === d ? undefined : d })}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2.5">When</div>
-              <div className="flex flex-wrap gap-2">
-                {WHENS.map((w) => (
-                  <Chip
-                    key={w.value}
-                    label={w.label}
-                    active={w.value === "any" ? !params.when : params.when === w.value}
-                    onClick={() =>
-                      applyParams({ ...params, when: w.value === "any" || params.when === w.value ? undefined : w.value })
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-2.5">Place</div>
-              <div className="flex flex-wrap gap-2">
-                {EVENT_PLACE_TYPES.map((p) => (
-                  <Chip
-                    key={p}
-                    label={p}
-                    active={(params.placeType ?? []).includes(p)}
-                    onClick={() => toggleArr("placeType", p)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Chip label="Sober" active={!!params.sober} onClick={() => applyParams({ ...params, sober: params.sober ? undefined : true })} />
-              <Chip
-                label="Step-free"
-                active={!!params.stepFree}
-                onClick={() => applyParams({ ...params, stepFree: params.stepFree ? undefined : true })}
-              />
-            </div>
-
-            {count > 0 && (
-              <button
-                onClick={() => applyParams({})}
-                className="self-start text-[12.5px] text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors"
-                data-testid="button-clear-filters"
-              >
-                Clear all
-              </button>
-            )}
-          </div>
+          </section>
         )}
 
-        {searching ? (
-          <>
-            <div className="flex items-center justify-between mb-4">
-              <div className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-faint">
-                {results.isLoading
-                  ? "SEARCHING…"
-                  : `${results.data?.events.length ?? 0} EVENT${(results.data?.events.length ?? 0) === 1 ? "" : "S"} · SORTED BY DATE`}
-              </div>
-              <button
-                onClick={backToFeed}
-                className="text-[13px] text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors"
-                data-testid="button-back-to-feed"
-              >
+        <div className="flex items-center justify-between gap-3 mb-6">
+          {searching ? (
+            <div className="vf-label text-vf-faint" data-testid="text-result-count">
+              {results.isLoading ? "Searching…" : `${resultCount} event${resultCount === 1 ? "" : "s"} · by date`}
+            </div>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-2">
+            {searching && (
+              <VfButton variant="quiet" size="sm" onClick={backToFeed} data-testid="button-back-to-feed">
                 Back to your feed
-              </button>
-            </div>
-
-            {results.isLoading ? (
-              <div className="py-16 flex justify-center">
-                <Loader2 className="w-7 h-7 animate-spin text-vf-mint" />
-              </div>
-            ) : (results.data?.events.length ?? 0) === 0 ? (
-              <EmptyState line="Nothing matching that yet." ctaHref="/events/host" ctaLabel="Host something yourself" />
-            ) : (
-              <div className="flex flex-col gap-3.5">
-                {results.data!.events.map((event) => (
-                  <div key={event.id}>{rowHandlers(event)}</div>
-                ))}
-              </div>
+              </VfButton>
             )}
-          </>
-        ) : feed.isLoading ? (
-          <div className="h-[50vh] flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-vf-mint" />
+            <VfButton
+              variant="secondary"
+              size="sm"
+              leading={<Plus className="w-4 h-4" />}
+              onClick={host}
+              data-testid="button-host-event"
+            >
+              Host an event
+              {hostLocked && (
+                <span className="ml-1.5 font-mono text-[10px] uppercase tracking-[0.12em] rounded-full px-1.5 py-0.5 bg-vf-gold/15 text-vf-gold">
+                  {hostGate?.requiredTierName || "Flame"}
+                </span>
+              )}
+            </VfButton>
           </div>
-        ) : feedEmpty ? (
-          wideCount.isLoading ? (
-            <div className="py-16 flex justify-center">
-              <Loader2 className="w-7 h-7 animate-spin text-vf-mint" />
-            </div>
-          ) : (wideCount.data?.count ?? 0) > 0 ? (
+        </div>
+
+        {searching ? (
+          results.isLoading ? (
+            <CardSkeletons />
+          ) : resultCount === 0 ? (
             <EmptyState
-              line="Your preferences are narrower than Harare right now."
-              ctaHref="/settings/events?from=/events"
-              ctaLabel="Loosen your event preferences"
+              testId="events-empty-state"
+              title="Nothing matching that yet."
+              body="Try fewer filters, or host the thing you'd want to go to."
+              action={<VfButton variant="secondary" onClick={() => setSheetOpen(true)}>Change filters</VfButton>}
             />
           ) : (
-            <EmptyState line="Quiet week." ctaHref="/events/host" ctaLabel="Host the thing you'd want to go to" />
+            <div className="flex flex-col gap-3">
+              {results.data!.events.map((event) => (
+                <EventRow key={event.id} {...commonRowProps(event)} signalOverride={searchSignal(event) || undefined} />
+              ))}
+            </div>
+          )
+        ) : feed.isLoading ? (
+          <CardSkeletons />
+        ) : feedEmpty ? (
+          wideCount.isLoading ? (
+            <CardSkeletons />
+          ) : (wideCount.data?.count ?? 0) > 0 ? (
+            <EmptyState
+              testId="events-empty-state"
+              title="Your preferences are narrower than Harare right now."
+              body="There are events further out. Loosen your preferences to see them."
+              action={<VfButton variant="secondary" onClick={() => setLocation("/settings/events?from=/events")}>Event preferences</VfButton>}
+            />
+          ) : (
+            <EmptyState
+              testId="events-empty-state"
+              title="Quiet week."
+              body="Host the thing you'd want to go to. Small is fine."
+              action={<VfButton onClick={host}>Host an event</VfButton>}
+            />
           )
         ) : (
-          <div className="flex flex-col gap-8">
+          <div className="flex flex-col gap-10">
             {officialEvents.length > 0 && (
-              <div data-testid="section-official-events">
-                <div className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-ember mb-1">Destira Official</div>
-                <p className="text-[13px] text-vf-muted mb-3">
-                  Run by Destira. Join one, and if you'd like to run it, offer to lead.
-                </p>
-                <div className="flex flex-col gap-3.5">
-                  {officialEvents.map((event) => (
-                    <div key={event.id} className="motion-safe:animate-[vf-rise_0.4s_ease_both]">
-                      {rowHandlers(event)}
-                    </div>
+              <section data-testid="section-official-events">
+                <SectionLabel sub="Run by Destira. Join one, and if you'd like to run it, offer to lead.">Destira Official</SectionLabel>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {officialEvents.map((event, i) => (
+                    <EventCard key={event.id} index={i} {...commonRowProps(event)} />
                   ))}
                 </div>
-              </div>
+              </section>
             )}
-            {featuredEvent && (
-              <div className="motion-safe:animate-[vf-rise_0.4s_ease_both]">
-                <FeaturedEventRow {...commonRowProps(featuredEvent)} />
-              </div>
-            )}
-            {grouped.map(([label, items]) => {
-              const rest = items.filter((e) => e.id !== featuredEvent?.id);
-              if (rest.length === 0) return null;
-              return (
-                <div key={label}>
-                  <div className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-faint mb-3">{label}</div>
-                  <div className="flex flex-col gap-3.5 motion-reduce:[&>*]:!animate-none">
-                    {rest.map((event) => (
-                      <div key={event.id} className="motion-safe:animate-[vf-rise_0.4s_ease_both]">
-                        {rowHandlers(event)}
-                      </div>
+            {grouped.map(([label, items], gi) => (
+              <section key={label} data-testid={`section-week-${gi}`}>
+                <SectionLabel>{label}</SectionLabel>
+                {gi === 0 && label === "This week" ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {items.map((event, i) => (
+                      <EventCard key={event.id} index={i} {...commonRowProps(event)} />
                     ))}
                   </div>
-                </div>
-              );
-            })}
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {items.map((event) => (
+                      <EventRow key={event.id} {...commonRowProps(event)} />
+                    ))}
+                  </div>
+                )}
+              </section>
+            ))}
             {feed.data?.moreThanShown && (
-              <p className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-                Showing the 30 that fit best · narrow it in Preferences
-              </p>
+              <p className="vf-label text-vf-faint">Showing the 30 that fit best · narrow it in Preferences</p>
             )}
           </div>
         )}
       </div>
+
+      <VfSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        eyebrow="Events"
+        title="Find something"
+        data-testid="search-panel"
+        footer={
+          <div className="flex items-center gap-2">
+            {count > 0 && (
+              <VfButton variant="quiet" onClick={() => applyParams({})} data-testid="button-clear-filters">
+                Clear all
+              </VfButton>
+            )}
+            <VfButton fullWidth onClick={() => setSheetOpen(false)} data-testid="button-show-results">
+              {count === 0 ? "Done" : results.isLoading || activeCount(debounced) !== count ? "Show events" : `Show ${resultCount} event${resultCount === 1 ? "" : "s"}`}
+            </VfButton>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-5">
+          <SearchField
+            label="Search events"
+            placeholder="Name, place, or a word in the description"
+            value={params.q ?? ""}
+            onChange={(v) => applyParams({ ...params, q: v || undefined })}
+            data-testid="input-search"
+          />
+          <FilterGroup label="When">
+            {WHENS.map((w) => (
+              <Chip
+                key={w.value}
+                label={w.label}
+                active={w.value === "any" ? !params.when : params.when === w.value}
+                onClick={() => applyParams({ ...params, when: w.value === "any" || params.when === w.value ? undefined : w.value })}
+              />
+            ))}
+          </FilterGroup>
+          <FilterGroup label="Kind">
+            {EVENT_KINDS.map((k) => (
+              <Chip key={k} label={k} active={(params.kind ?? []).includes(k)} onClick={() => toggleArr("kind", k)} />
+            ))}
+          </FilterGroup>
+          <FilterGroup label="Distance">
+            {DISTANCES.map((d) => (
+              <Chip
+                key={d}
+                label={`${d} km`}
+                active={params.distanceKm === d}
+                onClick={() => applyParams({ ...params, distanceKm: params.distanceKm === d ? undefined : d })}
+              />
+            ))}
+          </FilterGroup>
+          <FilterGroup label="Place">
+            {EVENT_PLACE_TYPES.map((p) => (
+              <Chip key={p} label={p} active={(params.placeType ?? []).includes(p)} onClick={() => toggleArr("placeType", p)} />
+            ))}
+          </FilterGroup>
+          <FilterGroup label="Needs">
+            <Chip label="Sober" active={!!params.sober} onClick={() => applyParams({ ...params, sober: params.sober ? undefined : true })} />
+            <Chip label="Step-free" active={!!params.stepFree} onClick={() => applyParams({ ...params, stepFree: params.stepFree ? undefined : true })} />
+          </FilterGroup>
+        </div>
+      </VfSheet>
       {paywall.sheet}
     </LayoutShell>
   );

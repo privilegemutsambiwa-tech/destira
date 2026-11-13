@@ -162,7 +162,7 @@ export default function JoinGroup({ params }: { params?: { token?: string } }) {
             className="mt-6 inline-flex items-center rounded-full border border-vf-line text-vf-text px-5 h-11 text-[14px] btn-press hover:border-vf-text/25 transition-colors"
             data-testid="button-browse-groups"
           >
-            Browse groups instead
+            Browse rooms instead
           </button>
         </div>
       </Shell>
@@ -220,7 +220,7 @@ export default function JoinGroup({ params }: { params?: { token?: string } }) {
         <div className="rounded-[22px] border border-vf-line bg-vf-surface p-8 text-center">
           <Users className="w-11 h-11 mx-auto mb-4 text-vf-faint" />
           <h1 className="font-serif font-normal text-2xl text-vf-text mb-1.5">
-            {preview.name ? <>{preview.name} is full.</> : "This group is full."}
+            {preview.name ? <>{preview.name} is full.</> : "This room is full."}
           </h1>
           <p className="text-[14px] text-vf-muted leading-[1.5]">
             It's hit its member limit. Whoever sent this can let you know if a spot opens up.
@@ -230,7 +230,7 @@ export default function JoinGroup({ params }: { params?: { token?: string } }) {
             className="mt-6 w-full h-12 rounded-full border border-vf-line text-vf-text font-medium text-[14.5px] btn-press hover:border-vf-text/25 transition-colors"
             data-testid="button-browse-other-groups"
           >
-            Browse other groups
+            Browse other rooms
           </button>
         </div>
       </Shell>
@@ -265,9 +265,23 @@ export default function JoinGroup({ params }: { params?: { token?: string } }) {
         {preview.name}
       </h1>
 
-      <div className="mt-2 flex items-baseline gap-1.5">
-        <span className="font-serif text-[22px] leading-none text-vf-text">{memberCount}</span>
-        <span className={EYEBROW}>member{memberCount === 1 ? "" : "s"}</span>
+      <div className="mt-3 flex items-center gap-3" data-testid="join-group-members">
+        {memberCount > 0 && (
+          // Who's in it, without saying who: faces stay blurred until you join.
+          <span className="flex -space-x-2.5" aria-hidden="true">
+            {Array.from({ length: Math.min(5, memberCount) }).map((_, i) => (
+              <span
+                key={i}
+                className="w-8 h-8 rounded-full border-2 border-vf-ink"
+                style={{ background: ["#B8735F", "#7F8FA6", "#C9A27A", "#8A6F8E", "#6F8E7F"][i], filter: "blur(1.5px)" }}
+              />
+            ))}
+          </span>
+        )}
+        <span className="flex items-baseline gap-1.5">
+          <span className="font-serif text-[22px] leading-none text-vf-text">{memberCount}</span>
+          <span className={EYEBROW}>member{memberCount === 1 ? "" : "s"}</span>
+        </span>
       </div>
 
       <p className="mt-5 text-[16px] leading-[1.6] text-vf-text whitespace-pre-line" data-testid="text-group-description">
@@ -339,7 +353,7 @@ export default function JoinGroup({ params }: { params?: { token?: string } }) {
       </div>
 
       <p className="mt-10 text-[13px] leading-[1.55] text-vf-faint text-center">
-        Destira is a place to actually meet people — your AI twin does the first awkward part, groups and events do
+        Destira is a place to actually meet people. Your AI twin does the first awkward part; rooms and events do
         the rest.
       </p>
     </Shell>

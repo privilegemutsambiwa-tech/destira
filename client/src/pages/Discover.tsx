@@ -4,6 +4,8 @@ import { FirstDayChip } from "@/components/first-day-card";
 import { MatchCelebration } from "@/components/match-celebration";
 import { DecisionDock } from "@/components/decision-dock";
 import { TonightsThree } from "@/components/tonights-three";
+import { TonightSeatStrip } from "@/components/seat-ticket";
+import { useMySeats } from "@/hooks/use-events";
 import { InstallCard } from "@/components/install-card";
 import { requestPushNudge } from "@/lib/engagement-prompts";
 import { TwinOrbButton } from "@/components/twin-orb";
@@ -433,6 +435,7 @@ function ScopePill({ active, onToggle }: { active: boolean; onToggle: () => void
 function DiscoverTopBar({ filter, onScope, name }: { filter: FilterChip; onScope: () => void; name: string | null }) {
   const now = new Date();
   const date = now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  const { data: seats } = useMySeats();
   return (
     <header className="mb-5 flex flex-col gap-3" data-testid="discover-top-bar">
       <div className="flex items-start gap-3">
@@ -448,6 +451,7 @@ function DiscoverTopBar({ filter, onScope, name }: { filter: FilterChip; onScope
         <ScopePill active={filter === "nearby"} onToggle={onScope} />
         <FirstDayChip />
       </div>
+      <TonightSeatStrip seats={seats} />
       <TonightsThree />
       <StoriesCarousel />
     </header>

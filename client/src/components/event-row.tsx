@@ -1,5 +1,7 @@
 import { Loader2 } from "lucide-react";
+import { useReducedMotion, motion } from "framer-motion";
 import type { EventItem } from "@/hooks/use-events";
+import { VfAvatar } from "@/components/ui-vf";
 
 function formatDay(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
@@ -61,8 +63,7 @@ export function officialStatusLine(event: EventItem): { text: string; color: "mi
 export function OfficialBadge({ sponsorName }: { sponsorName?: string | null }) {
   return (
     <span
-      className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.14em] rounded-full px-2 py-0.5 align-middle"
-      style={{ color: "hsl(var(--vf-ember))", background: "hsl(var(--vf-ember) / 0.12)", border: "1px solid hsl(var(--vf-ember) / 0.35)" }}
+      className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.14em] rounded-full px-2 py-0.5 align-middle text-vf-text bg-vf-text/[0.07] border border-vf-text/20"
       data-testid="badge-official-event"
     >
       Destira Official{sponsorName ? ` · ${sponsorName}` : ""}
@@ -77,9 +78,6 @@ export function eventResonanceSignal(event: EventItem): { text: string; color: "
   if (resonance.notableAttendees.length > 0) {
     return { text: `${resonance.notableAttendees[0].name.split(" ")[0]} is going`, color: "mint" };
   }
-  if (resonance.highReadCount > 0) {
-    return { text: `${resonance.highReadCount} read${resonance.highReadCount === 1 ? "" : "s"} above 80 going`, color: "mint" };
-  }
   if (event.emberFirstPick) return { text: "Ember members get first pick", color: "gold" };
   // A brand-new event with nobody going yet used to show no signal line at
   // all here, which read as "nothing happening" right when a host most needs
@@ -87,6 +85,33 @@ export function eventResonanceSignal(event: EventItem): { text: string; color: "
   // there's real social proof to show instead.
   if (resonance.goingCount === 0 && event.myStatus == null) return { text: "Be the first to RSVP", color: "gold" };
   return null;
+}
+
+/** "6 going · 4 more to confirm": the honest headcount line on a card. */
+export function goingLine(event: EventItem): string {
+  const going = event.resonance.goingCount;
+  if (event.isOfficial) {
+    const gap = Math.max(0, (event.minGoing ?? 5) - going);
+    if (gap > 0) return `${going} going · ${gap} more to confirm`;
+    return `${going} going · confirmed`;
+  }
+  if (event.seatModel === "capped" && event.seatCount) {
+    const left = Math.max(0, event.seatCount - going);
+    return left === 0 ? `${going} going · full` : `${going} going · ${left} seat${left === 1 ? "" : "s"} left`;
+  }
+  if (going === 0) return "Nobody yet · be the first";
+  return `${going} going`;
+}
+
+export function AvatarStack({ people, size = 26 }: { people: EventItem["resonance"]["notableAttendees"]; size?: number }) {
+  if (people.length === 0) return null;
+  return (
+    <span className="flex -space-x-2 shrink-0" aria-hidden="true">
+      {people.slice(0, 4).map((p) => (
+        <VfAvatar key={p.id} size={size} name={p.name} seed={p.id} src={p.avatarUrl ?? undefined} className="ring-2 ring-[var(--vf-surface2)]" />
+      ))}
+    </span>
+  );
 }
 
 interface EventRowProps {
@@ -285,5 +310,100 @@ export function FeaturedEventRow({ event, groupName, isHost, pending, onOpen, on
         </button>
       </div>
     </div>
+  );
+}
+
+/** "This week" as large cards (docs/destira-upgrade-prompt.md §7.14): cover,
+ *  the day in big serif numerals, title, place, who's going and one action. */
+export function EventCard({ event, groupName, isHost, pending, onOpen, onAttend, onCancel, onManage, index = 0 }: EventRowProps & { index?: number }) {
+  const reduce = useReducedMotion();
+  const state = eventActionState(event, isHost);
+  const onClick =
+    state.kind === "attend" ? onAttend :
+    state.kind === "cancel" ? onCancel :
+    state.kind === "manage" ? onManage :
+    undefined;
+  const d = new Date(event.startsAt);
+  const weekday = d.toLocaleDateString("en-GB", { weekday: "short" }).toUpperCase();
+  const where = [event.venueName, event.suburb].filter(Boolean).join(", ") || event.city;
+  const cover = event.coverImageUrl;
+  const firstGoing = event.resonance.notableAttendees[0]?.name?.split(" ")[0];
+
+  return (
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(index, 6) * 0.05, duration: 0.28 }}
+      onClick={onOpen}
+      className="group rounded-[24px] border border-vf-line bg-vf-surface2 overflow-hidden cursor-pointer transition-colors duration-150 hover:border-vf-text/20 flex flex-col"
+      data-testid={`event-card-${event.id}`}
+    >
+      <div className="relative h-[188px]">
+        {cover ? (
+          <img src={cover} alt="" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" loading="lazy" />
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{ background: "radial-gradient(120% 120% at 20% 0%, hsl(var(--vf-ember) / .28), transparent 60%), radial-gradient(90% 90% at 100% 100%, hsl(var(--vf-mint) / .18), transparent 60%), var(--vf-elevated)" }}
+          />
+        )}
+        <div className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-[rgba(12,9,16,.88)] to-transparent pointer-events-none" />
+        <div className="absolute left-4 bottom-3 flex items-end gap-3" style={{ color: "#F5F0EA" }}>
+          <span className="font-display text-[54px] leading-[0.85]" data-testid={`event-card-day-${event.id}`}>{d.getDate()}</span>
+          <span className="font-mono text-[11px] tracking-[0.14em] pb-1 opacity-90">
+            {weekday} · {d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
+          </span>
+        </div>
+        {event.twinFlagged && (
+          <span
+            className="absolute top-3 right-3 font-mono text-[10px] uppercase tracking-[0.14em] rounded-full px-2.5 py-1"
+            style={{ background: "rgba(12,9,16,.55)", color: "#8FE3C7", backdropFilter: "blur(6px)" }}
+          >
+            Your twin flagged this
+          </span>
+        )}
+        {event.isOfficial && (
+          <span
+            className="absolute top-3 left-3 font-mono text-[10px] uppercase tracking-[0.14em] rounded-full px-2.5 py-1"
+            style={{ background: "rgba(245,240,234,.92)", color: "#14101C" }}
+            data-testid="badge-official-event"
+          >
+            Destira Official{event.sponsorName ? ` · ${event.sponsorName}` : ""}
+          </span>
+        )}
+      </div>
+
+      <div className="p-4 pt-3.5 flex flex-col gap-3 flex-1">
+        <div className="min-w-0">
+          <div className="font-display text-[22px] leading-[1.15] text-vf-text line-clamp-2">{event.title}</div>
+          <div className="vf-small text-vf-muted mt-1 truncate">
+            {[where, groupName ? `hosted by ${groupName}` : null].filter(Boolean).join(" · ")}
+          </div>
+          {event.costModel === "contribute" && event.contributionAmount != null && (
+            <div className="font-mono text-[10px] mt-1.5 uppercase tracking-[0.12em] text-vf-faint truncate">
+              Contribution ${event.contributionAmount} · paid in person
+            </div>
+          )}
+        </div>
+        <div className="mt-auto flex items-center gap-3">
+          <AvatarStack people={event.resonance.notableAttendees} />
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] text-vf-text truncate" data-testid={`event-going-${event.id}`}>{goingLine(event)}</div>
+            {firstGoing && !event.isOfficial && <div className="text-[12px] text-vf-muted truncate">{firstGoing} is going</div>}
+            {event.isOfficial && !event.leadUserId && <div className="text-[12px] text-vf-gold truncate">Needs a lead</div>}
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+            disabled={pending || !onClick}
+            className={`vf-press shrink-0 whitespace-nowrap px-4 rounded-full text-[14px] font-semibold transition-colors disabled:opacity-50 flex items-center gap-2 ${BUTTON_CLASSES[state.variant]}`}
+            style={{ minHeight: 44 }}
+            data-testid={`event-action-${event.id}`}
+          >
+            {pending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {state.label}
+          </button>
+        </div>
+      </div>
+    </motion.div>
   );
 }

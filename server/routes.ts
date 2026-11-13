@@ -31,6 +31,7 @@ import { runOfficialAutopilot } from "./official-autopilot";
 import { registerGrowthRoutes } from "./growth-routes";
 import { getDailyPicks } from "./daily-picks";
 import { withClickReasons } from "./click-reasons";
+import { withRoomExtras } from "./lounge-extras";
 import * as eventsFeed from "./events-feed";
 import * as twinEventAlerts from "./services/twin-event-alerts";
 import * as groupGames from "./group-games";
@@ -4623,7 +4624,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       }
 
       allGroups.sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime());
-      res.json(allGroups);
+      res.json(await withRoomExtras(userId, allGroups));
     } catch (e) {
       console.error("Lounge groups error:", e);
       res.status(500).json({ message: "Failed to fetch lounge groups" });
@@ -5531,6 +5532,17 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   });
 
   // Events the caller hosts or created — any status. Registered before /:id.
+  app.get("/api/events/my-seats", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    try {
+      res.json(await eventsService.listMySeats(userId));
+    } catch (e) {
+      console.error("List my seats error:", e);
+      res.status(500).json({ message: "Failed to load your seats" });
+    }
+  });
+
   app.get("/api/events/mine", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);

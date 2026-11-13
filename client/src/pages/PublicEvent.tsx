@@ -145,7 +145,7 @@ export default function PublicEvent({ eventId }: { eventId: string }) {
           {data.isOfficial && (
             <span
               className="inline-block font-mono text-[10px] uppercase tracking-[0.14em] rounded-full px-2.5 py-1 mb-2"
-              style={{ background: "rgba(255,107,74,.2)", color: "#FFB4A1", border: "1px solid rgba(255,107,74,.45)" }}
+              style={{ background: "rgba(245,240,234,.92)", color: "#14101C" }}
             >
               Destira Official{data.sponsorName ? ` · ${data.sponsorName}` : ""}
             </span>

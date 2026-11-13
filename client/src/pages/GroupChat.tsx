@@ -22,8 +22,10 @@ import {
   useAddReaction, useRemoveReaction, useDeleteOwnMessage,
   useDeleteGroupMessage, useJoinGroup, useLeaveGroup,
   useStarMessage, useUnstarMessage, useCreateChatRequest,
-  useMarkGroupSeen, useGroupMessageReadInfo
+  useMarkGroupSeen, useGroupMessageReadInfo, useGroups
 } from "@/hooks/use-interactions";
+import { gameName } from "@/lib/game-names";
+import { IconButton } from "@/components/ui-vf";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
@@ -91,6 +93,18 @@ function genderLabel(gender: string | null | undefined): string | null {
   if (gender === "man") return "Man";
   if (gender === "woman") return "Woman";
   return null;
+}
+
+/** "@Farai" in a room message shows in ember (docs/destira-upgrade-prompt.md §7.13). */
+function withMentions(text: string): React.ReactNode {
+  if (!text || !text.includes("@")) return text;
+  return text.split(/(@[\p{L}\p{N}_.-]+)/u).map((part, i) =>
+    part.startsWith("@") && part.length > 1 ? (
+      <span key={i} className="font-semibold text-vf-ember">{part}</span>
+    ) : (
+      part
+    ),
+  );
 }
 
 function formatTime(dateStr: string) {
@@ -386,6 +400,13 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   const [showPhotoSource, setShowPhotoSource] = useState(false);
 
   const isMember = group?.isMember || hasJoined;
+  // A live game shows as a banner under the header (§7.13). The rooms list
+  // already carries it, and is usually cached from the Lounge.
+  const { data: rooms } = useGroups(undefined, "all");
+  const liveGame = (rooms as any[] | undefined)?.find((r) => r.id === groupId)?.liveGame as
+    | { id: number; kind: string; playing: number }
+    | null
+    | undefined;
   const isAdmin = group?.myRole === "owner" || group?.myRole === "admin";
 
   useEffect(() => {
@@ -539,24 +560,19 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
           borderBottom: `1px solid ${LINE}`,
         }}
       >
-        <button
-          onClick={() => setLocation("/lounge")}
-          className="w-9 h-9 flex items-center justify-center btn-press rounded-full transition-colors"
-          style={{ color: EMBER, background: "transparent" }}
-          data-testid="button-back-lounge"
-        >
+        <IconButton label="Back to the Lounge" onClick={() => setLocation("/lounge")} className="-ml-2" data-testid="button-back-lounge">
           <ArrowLeft className="w-5 h-5" />
-        </button>
+        </IconButton>
         <button
           onClick={() => setLocation(`/lounge/group/${groupId}/info`)}
-          className="w-9 h-9 rounded-full overflow-hidden shrink-0 flex items-center justify-center"
-          style={{ background: SURFACE2, border: `1px solid ${LINE}` }}
+          className="w-10 h-10 rounded-[12px] overflow-hidden shrink-0 flex items-center justify-center"
+          style={{ background: group ? `linear-gradient(135deg, ${avatarColor(String(groupId))}, ${avatarColor(group.name || "")})` : SURFACE2, border: `1px solid ${LINE}` }}
           data-testid="img-group-avatar"
         >
-          {group?.iconUrl ? (
-            <img src={group.iconUrl} alt="" className="w-full h-full object-cover" />
+          {group?.iconUrl || group?.groupPhotoUrl ? (
+            <img src={group.iconUrl || group.groupPhotoUrl} alt="" className="w-full h-full object-cover" />
           ) : (
-            <span style={{ ...SERIF, color: TEXT, fontSize: "15px" }}>{(group?.name || "G")[0].toUpperCase()}</span>
+            <span style={{ ...SERIF, color: "#FFFFFF", fontSize: "17px" }}>{(group?.name || "G")[0].toUpperCase()}</span>
           )}
         </button>
         <button
@@ -564,22 +580,34 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
           className="flex-1 min-w-0 text-left"
           data-testid="button-open-group-header"
         >
-          <h2 className="truncate" style={{ ...SERIF, color: TEXT, fontSize: "18px" }} data-testid="text-group-name">
-            {group?.name || "Group"}
+          <h2 className="truncate font-display text-vf-text text-[19px] leading-tight" data-testid="text-group-name">
+            {group?.name || "Room"}
           </h2>
-          <p style={{ ...MONO, color: MUTED, marginTop: "2px" }}>
-            {group?.memberCount || 0} members
+          <p className="vf-label text-vf-faint mt-0.5">
+            {group?.memberCount || 0} member{group?.memberCount === 1 ? "" : "s"}
           </p>
         </button>
-        <button
-          onClick={() => setLocation(`/lounge/group/${groupId}/info`)}
-          className="w-9 h-9 flex items-center justify-center btn-press rounded-full transition-colors"
-          style={{ color: MUTED, background: "transparent" }}
-          data-testid="button-group-info"
-        >
+        <IconButton label="Room info" onClick={() => setLocation(`/lounge/group/${groupId}/info`)} className="-mr-2" data-testid="button-group-info">
           <Info className="w-5 h-5" />
-        </button>
+        </IconButton>
       </div>
+
+      {liveGame && isMember && (
+        <button
+          onClick={() => setLocation(`/lounge/group/${groupId}/games/${liveGame.id}`)}
+          className="vf-press flex items-center gap-3 px-4 py-2.5 text-left border-b border-vf-ember/25 bg-vf-ember/[0.08]"
+          data-testid="banner-live-game"
+        >
+          <span className="relative flex w-2.5 h-2.5 shrink-0">
+            <span className="absolute inset-0 rounded-full bg-vf-ember motion-safe:animate-ping opacity-60" />
+            <span className="relative w-2.5 h-2.5 rounded-full bg-vf-ember" />
+          </span>
+          <span className="flex-1 min-w-0 text-[14px] text-vf-text truncate">
+            {gameName(liveGame.kind)} live{liveGame.playing > 0 ? ` · ${liveGame.playing} playing` : ""}
+          </span>
+          <span className="text-[14px] font-semibold text-vf-ember shrink-0">Join</span>
+        </button>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-1" onClick={() => setActiveMessageId(null)}>
         {msgsLoading ? (
@@ -678,11 +706,11 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                             opacity: msg.pending ? 0.7 : 1,
                             ...(isDeleted
                               ? { background: ELEVATED, color: MUTED, fontStyle: "italic" }
-                              : isMe
+                                : isMe
                                 ? {
-                                    background: EMBER,
-                                    color: "hsl(var(--vf-ink))",
-                                    fontWeight: 500,
+                                    background: "hsl(var(--vf-ember) / 0.16)",
+                                    border: "1px solid hsl(var(--vf-ember) / 0.25)",
+                                    color: TEXT,
                                   }
                                 : {
                                     background: ELEVATED,
@@ -699,15 +727,15 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                               className="mb-1.5 p-1.5"
                               style={{
                                 borderRadius: "6px",
-                                borderLeft: isMe ? "2px solid rgba(255,255,255,0.4)" : "2px solid hsl(var(--vf-ember))",
-                                background: isMe ? "rgba(255,255,255,0.1)" : "hsl(var(--vf-ember) / 0.12)",
+                                borderLeft: "2px solid hsl(var(--vf-ember))",
+                                background: isMe ? "hsl(var(--vf-ember) / 0.10)" : "hsl(var(--vf-ember) / 0.12)",
                                 fontSize: "12px",
                               }}
                             >
-                              <span className="font-medium" style={{ color: isMe ? "rgba(255,255,255,0.9)" : EMBER }}>
+                              <span className="font-medium" style={{ color: EMBER }}>
                                 {repliedMsg.nickname || "Anonymous"}
                               </span>
-                              <p className="truncate" style={{ color: isMe ? "rgba(255,255,255,0.7)" : MUTED }}>
+                              <p className="truncate" style={{ color: MUTED }}>
                                 {repliedMsg.content}
                               </p>
                             </div>
@@ -725,7 +753,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                           ) : parseDestiraLink(msg.content) ? (
                             <LinkPreviewCard content={msg.content} />
                           ) : (
-                            msg.content
+                            withMentions(msg.content)
                           )}
                         </div>
                       </PopoverTrigger>

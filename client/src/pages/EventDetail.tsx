@@ -5,14 +5,16 @@ import {
   eventResonanceSignal,
   OfficialBadge,
 } from "@/components/event-row";
-import { type EventItem, useMyLeadApplication, useApplyToLead, useEvent, useEventAttendees, useAttendEvent, useCancelAttendance, useUpdateEvent, useCancelEvent, useEnsureEventChat, useEventResources, useAddEventResource, useDeleteEventResource } from "@/hooks/use-events";
+import { type EventItem, useMySeats, useMyLeadApplication, useApplyToLead, useEvent, useEventAttendees, useAttendEvent, useCancelAttendance, useUpdateEvent, useCancelEvent, useEnsureEventChat, useEventResources, useAddEventResource, useDeleteEventResource } from "@/hooks/use-events";
 import { useGroups } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { useEffect, useRef, useState } from "react";
 import { peekPendingRsvp, clearPendingRsvp } from "@/lib/pending-rsvp";
 import { useProfile } from "@/hooks/use-profiles";
-import { Loader2, ArrowLeft, Pencil, Flag, X, Share2, ImageIcon } from "lucide-react";
+import { Loader2, ArrowLeft, Pencil, Flag, X, Share2, ImageIcon, CalendarPlus } from "lucide-react";
+import { SeatTicket, addToCalendar } from "@/components/seat-ticket";
+import { AvatarStack, goingLine } from "@/components/event-row";
 import { renderStatusCard, shareStatusBlob, logShare } from "@/lib/status-card";
 import { isNativeApp, nativeShareLink } from "@/lib/native";
 import { publicOrigin } from "@/lib/app-api";
@@ -146,6 +148,8 @@ function OfficialLeadPanel({ event }: { event: EventItem }) {
 export default function EventDetail({ params }: { params: { id: string } }) {
   const eventId = Number(params.id);
   const { data: event, isLoading } = useEvent(eventId);
+  const { data: mySeats } = useMySeats();
+  const mySeat = mySeats?.find((s) => s.id === eventId && s.myStatus === "going");
   const { data: attendees } = useEventAttendees(eventId);
   const { data: resources } = useEventResources(eventId);
   const addResource = useAddEventResource();
@@ -571,13 +575,20 @@ export default function EventDetail({ params }: { params: { id: string } }) {
           </div>
 
           {/* Right: sticky action card */}
-          <div className="md:sticky md:top-6 self-start rounded-[20px] border border-vf-line bg-vf-surface2 p-5 flex flex-col gap-4">
+          <div className="md:sticky md:top-6 self-start flex flex-col gap-4 min-w-0">
+          {mySeat && event.status !== "cancelled" && <SeatTicket seat={mySeat} />}
+          <div className="rounded-[20px] border border-vf-line bg-vf-surface2 p-5 flex flex-col gap-4">
             <div>
               <div className="font-mono text-[11px] tracking-[0.14em] text-vf-ember">
                 {formatFullDate(event.startsAt).toUpperCase()}
               </div>
               <div className="text-[13px] text-vf-muted mt-1">
-                {formatTime(event.startsAt)} · {event.resonance.goingCount} going
+                {formatTime(event.startsAt)}
+                {[event.venueName, event.suburb].filter(Boolean).length > 0 && ` · ${[event.venueName, event.suburb].filter(Boolean).join(", ")}`}
+              </div>
+              <div className="flex items-center gap-2.5 mt-3" data-testid="event-going-line">
+                <AvatarStack people={event.resonance.notableAttendees} size={24} />
+                <span className="text-[13px] text-vf-text">{goingLine(event)}</span>
               </div>
               <div className="text-[12px] text-vf-faint mt-1.5">{SEAT_MODEL_COPY[event.seatModel]}</div>
               {genderPolicyLabel(event) && (
@@ -630,7 +641,16 @@ export default function EventDetail({ params }: { params: { id: string } }) {
               </button>
             )}
             {event.status !== "cancelled" && (
-              <div className="flex items-center gap-4 self-start">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 self-start">
+                {event.myStatus === "going" && (
+                  <button
+                    onClick={() => addToCalendar(event)}
+                    className="inline-flex items-center gap-1.5 text-[12.5px] text-vf-faint hover:text-vf-text transition-colors min-h-[32px]"
+                    data-testid="button-add-calendar"
+                  >
+                    <CalendarPlus className="w-3.5 h-3.5" /> Add to calendar
+                  </button>
+                )}
                 <button
                   onClick={handleShareEvent}
                   className="inline-flex items-center gap-1.5 text-[12.5px] text-vf-faint hover:text-vf-text transition-colors"
@@ -819,7 +839,6 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                           <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-vf-faint"> · {genderLabel(genderByUserId.get(a.id))}</span>
                         )}
                       </span>
-                      <span className="font-mono text-[11.5px] text-vf-mint shrink-0">{a.score}</span>
                     </div>
                   ))}
                   {otherAttendees.map((a) => (
@@ -842,6 +861,7 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                 </div>
               </div>
             )}
+          </div>
           </div>
         </div>
       </div>

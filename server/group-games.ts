@@ -595,6 +595,8 @@ export interface GameStateView {
   // Ended with nobody having answered — typically an abandoned room that
   // timed out, so the room can say so instead of showing an empty result.
   endedEmpty: boolean;
+  revealAt: string | null;
+  createdAt: string | null;
 }
 
 export async function getGameState(gameId: number, viewerId: string): Promise<GameStateView> {
@@ -636,6 +638,9 @@ export async function getGameState(gameId: number, viewerId: string): Promise<Ga
     results: revealed ? game.results : showLive ? { live: responses.map((r) => ({ nickname: r.nickname, response: r.response })) } : null,
     canRevealEarly: def.revealMode === "manual-or-timer" && viewerId === game.startedBy && !revealed,
     endedEmpty: revealed && responses.length === 0,
+    // When a timed round reveals on its own: drives the countdown ring.
+    revealAt: !revealed && game.revealAt ? game.revealAt.toISOString() : null,
+    createdAt: game.createdAt ? game.createdAt.toISOString() : null,
   };
 }
 
