@@ -1296,9 +1296,16 @@ export class DatabaseStorage implements IStorage {
     const result = [];
     for (const interview of userInterviews) {
       const targetProfile = await this.getProfileWithUser(interview.targetId, userId);
+      // When someone else asked the viewer's twin, the viewer needs to know
+      // who: the thread is theirs to read (never to post in).
+      const requesterProfile = interview.requesterId !== userId
+        ? await this.getProfileWithUser(interview.requesterId, userId)
+        : null;
       result.push({
         ...interview,
         targetProfile: targetProfile || null,
+        requesterProfile: requesterProfile || null,
+        viewerRole: interview.requesterId === userId ? "asker" : "asked",
       });
     }
     return result;

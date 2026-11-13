@@ -3,17 +3,22 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCreateMatch, LikeWaitingError } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Send, ArrowLeft, Loader2, Check, CheckCheck } from "lucide-react";
+import { ArrowLeft, Loader2, Check, CheckCheck, ArrowUp, Heart, Eye } from "lucide-react";
+import { useReducedMotion } from "framer-motion";
+import { IconButton, TwinGlyph, VfAvatar, VfButton } from "@/components/ui-vf";
+import { recordPass } from "@/lib/discover-decisions";
+import { haptic } from "@/lib/haptics";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 
+// Questions people actually want answered before a first date, in plain
+// words. Shown as chips until the conversation gets going.
 const SUGGESTED_QUESTIONS = [
-  "What are they looking for?",
-  "How do they handle conflict?",
+  "What are they looking for right now?",
+  "What's a perfect weekend for them?",
+  "How do they handle a disagreement?",
+  "What are they working on these days?",
   "What would they never compromise on?",
 ];
 
@@ -33,7 +38,10 @@ interface InterviewData {
     displayName?: string;
     userId?: string;
     profileImageUrl?: string;
+    coverPhotoUrl?: string;
   };
+  requesterProfile?: { displayName?: string; userId?: string; coverPhotoUrl?: string } | null;
+  viewerRole?: "asker" | "asked";
   targetId?: string;
   transcript?: string;
 }
@@ -57,7 +65,13 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
   const [targetAvatar, setTargetAvatar] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  // "asked": someone else asked the viewer's twin. They can read it, never post.
+  const [viewerRole, setViewerRole] = useState<"asker" | "asked">("asker");
+  const [askerName, setAskerName] = useState<string | null>(null);
+  const [askerPhoto, setAskerPhoto] = useState<string | null>(null);
+  const [decided, setDecided] = useState<"liked" | "passed" | null>(null);
   const createMatch = useCreateMatch();
+  const reduce = useReducedMotion();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -90,10 +104,16 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
         const name = interview.targetProfile?.displayName || "Their";
         setTargetName(name);
         setTargetUserId(interview.targetProfile?.userId || interview.targetId || null);
-        setTargetAvatar(interview.targetProfile?.profileImageUrl || null);
+        setTargetAvatar(interview.targetProfile?.coverPhotoUrl || interview.targetProfile?.profileImageUrl || null);
+        const role = interview.viewerRole === "asked" ? "asked" : "asker";
+        setViewerRole(role);
+        if (role === "asked") {
+          setAskerName(interview.requesterProfile?.displayName || "Someone");
+          setAskerPhoto(interview.requesterProfile?.coverPhotoUrl || null);
+        }
 
         const possessive = name.toLowerCase() === "their" ? "This twin" : `${name}'s twin`;
-        const opener = `${possessive} is here. Ask it what they want in three years, how they argue, or what they won't compromise on — it answers only what they're allowed.`;
+        const opener = `${possessive} here. Ask me anything about ${name.toLowerCase() === "their" ? "them" : name}. I answer from what they've told me, and only what they've let me share.`;
 
         if (interview.transcript) {
           try {
@@ -117,7 +137,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
               status: "delivered",
             }]);
           }
-        } else {
+        } else if (role === "asker") {
           setMessages([{
             id: 1,
             text: opener,
@@ -291,221 +311,266 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
   const handleRequestMatch = async () => {
     if (!targetUserId) return;
     try {
-      await createMatch.mutateAsync(targetUserId);
-      toast({
-        title: "Match Request Sent!",
-        description: `${targetName} will be notified of your interest.`,
-      });
+      const result: any = await createMatch.mutateAsync(targetUserId);
+      setDecided("liked");
+      haptic.like();
+      if (result?.mutual && result?.id) {
+        haptic.match();
+        toast({ title: "It's mutual", description: `You and ${targetName} both said yes.` });
+        setLocation(`/chat/${result.id}?from=/chats`);
+        return;
+      }
+      toast({ title: "Liked", description: `${targetName} will see it in Likes.` });
     } catch (error: any) {
       if (error instanceof LikeWaitingError) {
         toast({ title: "Saved", description: error.message });
       } else if (error.message?.includes("already exists")) {
         toast({ title: "Already Connected", description: "You already have a connection with this person." });
       } else {
-        toast({ title: "Error", description: "Could not send match request.", variant: "destructive" });
+        toast({ title: "Couldn't like", description: "Something went wrong. Please try again.", variant: "destructive" });
       }
     }
   };
 
-  const avatarInitial = targetName?.[0]?.toUpperCase() || "T";
   const twinPossessive = targetName.toLowerCase() === "their" ? "their" : `${targetName}'s`;
   const meetName = targetName.toLowerCase() === "their" ? "them" : targetName;
-  const showSuggestions = messages.length <= 1 && !isStreaming && !isTyping;
+  const first = meetName.split(/\s+/)[0];
+  const readOnly = viewerRole === "asked";
+  const answers = messages.filter((m) => m.sender === "ai").length;
+  const asked = messages.filter((m) => m.sender === "user").length;
+  const showSuggestions = !readOnly && asked < 2 && !isStreaming && !isTyping;
+  // After a real exchange, one clear next step (§7.7).
+  const showDecision = !readOnly && !!targetUserId && asked >= 3 && !isStreaming && !isTyping && decided !== "passed";
+
+  const twinAvatar = (size: number) => (
+    <span className="relative shrink-0" style={{ width: size, height: size }}>
+      <VfAvatar size={size} name={targetName} seed={targetUserId ?? undefined} src={readOnly ? undefined : targetAvatar ?? undefined} />
+      <span className="absolute inset-0 rounded-full ring-2 ring-vf-mint/45" aria-hidden="true" />
+    </span>
+  );
 
   return (
     <div className="h-dvh flex flex-col bg-vf-ink text-vf-text" data-testid="interview-chat-page">
-      {/* Same tinted-header language as TwinChat.tsx (mint wash, a bigger
-          avatar with real presence) — this is still fundamentally "a twin,
-          talking" even though it's someone else's, so it earns the same
-          weight. The "Ask to meet" CTA stays ember (a human action, not a
-          twin one), which is exactly the contrast the header should make
-          legible at a glance: mint frame, ember action. */}
-      <div
-        className="border-b border-vf-mint/[0.16] px-4 py-3.5 flex items-center justify-between gap-2 sticky top-0 z-50"
-        style={{ background: "linear-gradient(180deg, hsl(var(--vf-mint) / 0.07), var(--vf-ink) 130%)" }}
+      {/* A conversation with a twin, not the person: mint frame. The human
+          action (Like) stays ember. */}
+      <header
+        className="border-b border-vf-mint/[0.18] px-2 py-2 flex items-center gap-1 sticky top-0 z-50"
+        style={{ background: "linear-gradient(180deg, hsl(var(--vf-mint) / 0.08), var(--vf-ink) 140%)" }}
       >
-        <div className="flex items-center gap-3 min-w-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setLocation(backRoute)}
-            aria-label="Back"
-            data-testid="button-back"
-          >
-            <ArrowLeft className="w-5 h-5 text-vf-ember" />
-          </Button>
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="relative w-11 h-11 shrink-0">
-              <div
-                className="absolute -inset-1 rounded-full animate-[vf-breathe_5s_ease-in-out_infinite]"
-                style={{ background: "radial-gradient(circle, hsl(var(--vf-mint) / 0.32), transparent 70%)" }}
-                aria-hidden="true"
-              />
-              <Avatar className="relative w-full h-full ring-2 ring-vf-mint/30">
-                {targetAvatar ? (
-                  <AvatarImage src={targetAvatar} alt={targetName} />
-                ) : null}
-                <AvatarFallback className="bg-vf-ink text-vf-text font-serif">
-                  {avatarInitial}
-                </AvatarFallback>
-              </Avatar>
-            </div>
-            <div className="min-w-0">
-              <h2 className="font-serif font-normal text-[17px] leading-tight text-vf-text truncate" data-testid="text-twin-name">
-                {targetName}
-              </h2>
-              <p className="flex items-center gap-1.5 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-vf-mint shrink-0" style={{ boxShadow: "0 0 6px hsl(var(--vf-mint))" }} />
-                <span
-                  className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-mint"
-                  data-testid="text-twin-status"
-                >
-                  {twinPossessive} twin · learning
-                </span>
-              </p>
-            </div>
-          </div>
-        </div>
-        {targetUserId && (
-          <button
+        <IconButton label="Back" onClick={() => setLocation(backRoute)} data-testid="button-back">
+          <ArrowLeft className="w-5 h-5" />
+        </IconButton>
+        <button
+          type="button"
+          onClick={() => {
+            const id = readOnly ? null : targetUserId;
+            if (id) setLocation(`/u/${id}?from=/interviews/${interviewId}/chat`);
+          }}
+          className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-[14px] px-1.5 py-1"
+          data-testid="button-twin-profile"
+        >
+          {readOnly ? (
+            <VfAvatar size={40} name={askerName ?? "Someone"} src={askerPhoto ?? undefined} />
+          ) : (
+            twinAvatar(40)
+          )}
+          <span className="min-w-0">
+            <span className="block font-display text-[20px] leading-tight text-vf-text truncate" data-testid="text-twin-name">
+              {readOnly ? `${askerName ?? "Someone"} asked your twin` : `${targetName}'s twin`}
+            </span>
+            <span className="flex items-center gap-1.5 mt-0.5 vf-label text-vf-mint truncate" data-testid="text-twin-status">
+              <TwinGlyph size={13} /> {readOnly ? "You can read this" : "Answers for them"}
+            </span>
+          </span>
+        </button>
+        {!readOnly && targetUserId && decided !== "liked" && (
+          <VfButton
+            size="sm"
+            className="shrink-0 mr-1"
+            loading={createMatch.isPending}
+            leading={<Heart className="w-4 h-4" fill="currentColor" strokeWidth={0} />}
             onClick={handleRequestMatch}
-            disabled={createMatch.isPending}
-            className="vf-btn-primary shrink-0 rounded-full bg-vf-ember text-vf-ink font-semibold text-sm px-4 h-10 hover:bg-[var(--vf-ember-soft)] disabled:opacity-50 transition-colors btn-press"
             data-testid="button-request-match"
           >
-            Ask to meet {meetName}
-          </button>
+            Like
+          </VfButton>
         )}
-      </div>
+      </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3" data-testid="messages-container">
-        <AnimatePresence initial={false}>
-          {messages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
-              data-testid={`message-${msg.sender}-${msg.id}`}
-            >
-              {msg.sender === "ai" && (
-                <Avatar className="h-8 w-8 mr-2 mt-1 shrink-0 ring-1 ring-vf-mint">
-                  {targetAvatar ? (
-                    <AvatarImage src={targetAvatar} alt={targetName} />
-                  ) : null}
-                  <AvatarFallback className="bg-vf-ink text-vf-text text-xs font-serif">
-                    {avatarInitial}
-                  </AvatarFallback>
-                </Avatar>
-              )}
-              <div className="flex flex-col gap-1 max-w-[75%]">
-                <div
-                  className={`px-4 py-3 text-sm leading-relaxed ${
-                    msg.sender === "user"
-                      ? "rounded-[18px] rounded-br-[6px] bg-vf-ember text-[hsl(var(--vf-ink))] font-medium"
-                      : "rounded-[18px] rounded-bl-[6px] border border-vf-mint/[0.22] bg-vf-mint/[0.09] text-vf-text"
-                  }`}
+      <div className="flex-1 overflow-y-auto px-4 pt-3 pb-2" data-testid="messages-container">
+        <div className="max-w-[720px] mx-auto flex flex-col gap-3">
+          {/* The real rule, said plainly (§7.7). */}
+          <div className="flex items-start gap-2.5 rounded-[16px] border border-vf-mint/20 bg-vf-mint/[0.05] px-4 py-3 vf-small text-vf-muted" data-testid="interview-rule">
+            <Eye className="w-4 h-4 text-vf-mint shrink-0 mt-0.5" />
+            {readOnly ? (
+              <span>
+                Only {askerName ?? "they"} can ask. This is what your twin told them, from what you've shared and what you let it say.
+                {" "}<button onClick={() => setLocation("/twin-disclosure")} className="text-vf-mint underline underline-offset-2">Change what it may say</button>
+              </span>
+            ) : (
+              <span>
+                {first === "them" ? "They're" : `${first} is`} told you're asking, and can read this conversation. The twin answers from what they've shared, and only what they allow.
+              </span>
+            )}
+          </div>
+
+          {readOnly && messages.length === 0 && (
+            <p className="vf-small text-vf-faint text-center py-8">Nothing asked yet.</p>
+          )}
+
+          <AnimatePresence initial={false}>
+            {messages.map((msg) => {
+              const mine = msg.sender === "user";
+              return (
+                <motion.div
+                  key={msg.id}
+                  initial={reduce ? false : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className={`flex ${mine ? "justify-end" : "justify-start"} gap-2`}
+                  data-testid={`message-${msg.sender}-${msg.id}`}
                 >
-                  {msg.text}
-                </div>
-                {msg.sender === "user" && (
-                  <div className="flex items-center justify-end gap-1">
-                    <span className="text-[10px] text-vf-faint">
-                      {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                    <StatusIndicator status={msg.status} />
+                  {!mine && <div className="mt-1">{twinAvatar(28)}</div>}
+                  <div className={`flex flex-col gap-1 max-w-[80%] ${mine ? "items-end" : "items-start"}`}>
+                    <div
+                      className={`px-4 py-2.5 text-[15px] leading-[1.5] whitespace-pre-wrap break-words ${
+                        mine
+                          ? "rounded-[20px] rounded-br-[6px] bg-vf-ember/[0.16] border border-vf-ember/25 text-vf-text"
+                          : "rounded-[20px] rounded-bl-[6px] border border-vf-mint/[0.22] bg-vf-mint/[0.08] text-vf-text"
+                      }`}
+                    >
+                      {msg.text}
+                    </div>
+                    {mine && !readOnly && (
+                      <div className="flex items-center justify-end gap-1 px-1">
+                        <span className="font-mono text-[11px] text-vf-faint">
+                          {msg.timestamp.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                        </span>
+                        <StatusIndicator status={msg.status} />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
 
-        {showSuggestions && (
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-wrap gap-2 pl-10"
-            data-testid="suggested-questions"
-          >
-            {SUGGESTED_QUESTIONS.map((q) => (
-              <button
-                key={q}
-                onClick={() => handleSend(q)}
-                className="rounded-full border border-vf-ember/50 text-vf-ember text-xs px-3 py-1.5 hover:bg-vf-ember/10 transition-colors"
-                data-testid={`chip-suggested-${q.slice(0, 12)}`}
+          <AnimatePresence>
+            {isTyping && (
+              <motion.div
+                key="typing-indicator"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="flex justify-start gap-2"
+                data-testid="typing-indicator"
               >
-                {q}
-              </button>
-            ))}
-          </motion.div>
-        )}
-
-        <AnimatePresence>
-          {isTyping && (
-            <motion.div
-              key="typing-indicator"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
-              transition={{ duration: 0.15 }}
-              className="flex justify-start"
-              data-testid="typing-indicator"
-            >
-              <Avatar className="h-8 w-8 mr-2 mt-1 shrink-0 ring-1 ring-vf-mint">
-                {targetAvatar ? (
-                  <AvatarImage src={targetAvatar} alt={targetName} />
-                ) : null}
-                <AvatarFallback className="bg-vf-ink text-vf-text text-xs font-serif">
-                  {avatarInitial}
-                </AvatarFallback>
-              </Avatar>
-              <div className="rounded-[18px] rounded-bl-[6px] border border-vf-mint/[0.22] bg-vf-mint/[0.09] p-3 flex items-center gap-2">
-                <div className="flex gap-1">
-                  <span className="w-1.5 h-1.5 bg-vf-mint rounded-full animate-bounce" />
-                  <span className="w-1.5 h-1.5 bg-vf-mint rounded-full animate-bounce [animation-delay:100ms]" />
-                  <span className="w-1.5 h-1.5 bg-vf-mint rounded-full animate-bounce [animation-delay:200ms]" />
+                <div className="mt-1">{twinAvatar(28)}</div>
+                <div className="rounded-[20px] rounded-bl-[6px] border border-vf-mint/[0.22] bg-vf-mint/[0.08] px-4 py-3 flex items-center gap-2">
+                  <span className="relative block w-3 h-3" aria-hidden="true">
+                    <span className="absolute inset-0 rounded-full bg-vf-mint motion-safe:animate-[vf-breathe_1.6s_ease-in-out_infinite]" />
+                  </span>
+                  <span className="vf-small text-vf-muted">Thinking…</span>
                 </div>
-                <span className="text-xs text-vf-muted">Responding…</span>
-              </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {showDecision && (
+            <motion.div
+              initial={reduce ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-2 rounded-[20px] border border-vf-line bg-vf-surface p-5 text-center"
+              data-testid="card-ready-to-like"
+            >
+              {decided === "liked" ? (
+                <>
+                  <p className="vf-h3 text-vf-text">You liked {first}.</p>
+                  <p className="vf-small text-vf-muted mt-1">If they like you back, you can talk to them, not just their twin.</p>
+                </>
+              ) : (
+                <>
+                  <p className="vf-h3 text-vf-text">Ready to like {first}?</p>
+                  <p className="vf-small text-vf-muted mt-1">Or keep asking. Their twin isn't going anywhere.</p>
+                  <div className="flex gap-2 mt-4">
+                    <VfButton
+                      variant="secondary"
+                      className="flex-1"
+                      onClick={() => {
+                        if (!targetUserId) return;
+                        recordPass(targetUserId);
+                        haptic.pass();
+                        setDecided("passed");
+                        toast({ title: "Not for you", description: `${first} won't come up in Discover again.` });
+                        setLocation(backRoute);
+                      }}
+                      data-testid="button-not-for-me"
+                    >
+                      Not for me
+                    </VfButton>
+                    <VfButton
+                      className="flex-1"
+                      loading={createMatch.isPending}
+                      leading={<Heart className="w-4 h-4" fill="currentColor" strokeWidth={0} />}
+                      onClick={handleRequestMatch}
+                      data-testid="button-like-from-interview"
+                    >
+                      Like
+                    </VfButton>
+                  </div>
+                </>
+              )}
             </motion.div>
           )}
-        </AnimatePresence>
 
-        <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
-      <div className="p-4 bg-vf-ink border-t border-vf-line">
-        <form
-          className="flex gap-2 max-w-4xl mx-auto items-center"
-          onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-          data-testid="form-send-message"
-        >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={`Ask about ${meetName}…`}
-            className="flex-1 rounded-full bg-vf-text/5 border-vf-line text-vf-text"
-            disabled={isStreaming}
-            data-testid="input-message"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            className="rounded-full bg-vf-mint text-vf-ink hover:bg-[var(--vf-mint-vivid)] disabled:opacity-50"
-            disabled={!input.trim() || isStreaming}
-            data-testid="button-send"
-          >
-            {isStreaming ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
+      {!readOnly && (
+        <div className="border-t border-vf-line bg-vf-ink px-3 pt-2 pb-[max(12px,env(safe-area-inset-bottom))]">
+          <div className="max-w-[720px] mx-auto">
+            {showSuggestions && (
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 -mx-3 px-3" data-testid="suggested-questions">
+                {SUGGESTED_QUESTIONS.map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => handleSend(q)}
+                    className="shrink-0 rounded-full border border-vf-mint/30 bg-vf-mint/[0.06] text-vf-mint text-[13.5px] px-3.5 h-9 hover:bg-vf-mint/10 transition-colors"
+                    data-testid={`chip-suggested-${q.slice(0, 12)}`}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
             )}
-          </Button>
-        </form>
-      </div>
+            <form
+              className="flex gap-2 items-end"
+              onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+              data-testid="form-send-message"
+            >
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={`Ask about ${first}`}
+                className="flex-1 h-11 rounded-full px-4 text-[16px] bg-vf-surface border border-vf-line text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-mint/40"
+                disabled={isStreaming}
+                data-testid="input-message"
+              />
+              <button
+                type="submit"
+                className="vf-press shrink-0 w-11 h-11 rounded-full flex items-center justify-center bg-vf-mint text-vf-ink disabled:opacity-40"
+                disabled={!input.trim() || isStreaming}
+                aria-label="Ask"
+                data-testid="button-send"
+              >
+                {isStreaming ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-5 h-5" strokeWidth={2.25} />}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

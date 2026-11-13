@@ -2079,6 +2079,66 @@ Only include structured_updates fields if the conversation clearly reveals them.
     }
   });
 
+  // "Help me reply" and first-message openers in a direct chat
+  // (docs/destira-upgrade-prompt.md §7.9). Three short drafts in the
+  // member's own voice, from the real conversation, both profiles and, when
+  // there was one, the member's real interview with the other person's
+  // twin. Never sent by the server: the member picks one, edits, sends.
+  app.post("/api/chat/:matchId/suggest", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    if (!checkAIRateLimit(userId)) return res.status(429).json({ message: "Too many requests. Please wait a moment." });
+    const matchId = parseInt(req.params.matchId);
+    try {
+      const match = await storage.getMatch(matchId);
+      if (!match) return res.status(404).json({ message: "Match not found" });
+      if (match.user1Id !== userId && match.user2Id !== userId) return res.sendStatus(403);
+      if (match.status !== "matched") return res.status(400).json({ message: "Not matched yet" });
+      const otherId = match.user1Id === userId ? match.user2Id : match.user1Id;
+      const [me, them, msgs, interview, interestMap] = await Promise.all([
+        storage.getProfile(userId),
+        storage.getProfile(otherId),
+        storage.getDirectMessages(matchId),
+        storage.getInterviewBetween(userId, otherId),
+        storage.getInterestsForUsers([userId, otherId]),
+      ]);
+      const recent = msgs.slice(-12).map((m: any) => ({ from: m.senderId === userId ? "me" : "them", text: String(m.content).slice(0, 500) }));
+      let twinNotes: string[] = [];
+      if (interview?.summary) {
+        try {
+          const lines = JSON.parse(interview.summary)?.lines;
+          if (Array.isArray(lines)) twinNotes = lines.map((l: any) => String(l.text)).slice(0, 5);
+        } catch {}
+      }
+      const context = {
+        me: { name: me?.displayName, about: me?.aboutMe || me?.bio, interests: interestMap.get(userId) ?? [] },
+        them: { name: them?.displayName, about: them?.aboutMe || them?.bio, city: them?.location, interests: interestMap.get(otherId) ?? [] },
+        whatTheirTwinToldMe: twinNotes,
+        conversation: recent,
+      };
+      const opening = recent.length === 0;
+      const completion = await completeText(
+        [
+          {
+            role: "system",
+            content: `You help someone on a dating app write ${opening ? "a first message to a new match" : "their next reply"}. Write exactly three different short options (under 160 characters each) in "me"'s voice: warm, specific, natural, a little playful, no pickup lines, no emojis unless the conversation already uses them. Use only facts in the context; never invent details about either person. ${opening ? "Each should open with something real from their profile, shared interests or what their twin said, and end with an easy question." : "Reply to what they last said."} Return JSON: {"options":["...","...","..."]}.`,
+          },
+          { role: "user", content: JSON.stringify(context) },
+        ],
+        { json: true, maxTokens: 400 },
+      );
+      let options: string[] = [];
+      try {
+        const parsed = JSON.parse(completion.text || "{}");
+        if (Array.isArray(parsed?.options)) options = parsed.options.map((o: any) => String(o).trim()).filter(Boolean).slice(0, 3);
+      } catch {}
+      res.json({ options });
+    } catch (e) {
+      console.error("Chat suggest error:", e);
+      res.status(500).json({ message: "Couldn't think of anything just now" });
+    }
+  });
+
   app.post("/api/twin/chat", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -2563,9 +2623,9 @@ Only include structured_updates fields if the conversation clearly reveals them.
   });
 
   // The twin orb's sheet on Discover (docs/destira-upgrade-prompt.md §5.1):
-  // only what the twin really did. Counts, not names: who asked a twin
-  // about someone has never been shown to the person they asked about, and
-  // this doesn't start now. Notices are the twin's own real notifications.
+  // only what the twin really did. The sheet shows counts; who asked (and
+  // what) is in Chats, where the member is already told and can read each
+  // conversation. Notices are the twin's own real notifications.
   app.get("/api/twin/today", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -4354,14 +4414,20 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
             } catch {}
           }
           const partnerId = iv.requesterId === userId ? iv.targetId : iv.requesterId;
+          // Someone asking YOUR twin shows as them asking it, not as a chat
+          // with "your own name's twin".
+          const asked = iv.requesterId !== userId;
           return {
             id: `interview_${iv.id}`,
             type: "ai_twin_interview",
             interviewId: iv.id,
             partnerId,
-            name: `${iv.targetProfile?.displayName || "Unknown"}'s AI Twin`,
-            avatar: iv.targetProfile?.coverPhotoUrl || null,
-            lastMessage: lastMsg || "Start interview",
+            viewerRole: asked ? "asked" : "asker",
+            name: asked
+              ? `${iv.requesterProfile?.displayName || "Someone"} asked your twin`
+              : `${iv.targetProfile?.displayName || "Unknown"}'s twin`,
+            avatar: asked ? iv.requesterProfile?.coverPhotoUrl || null : iv.targetProfile?.coverPhotoUrl || null,
+            lastMessage: lastMsg || (asked ? "Nothing asked yet" : "Start interview"),
             // updatedAt tracks the transcript's true last-activity time;
             // createdAt is only ever the interview's start time.
             lastMessageAt: iv.updatedAt || iv.createdAt,

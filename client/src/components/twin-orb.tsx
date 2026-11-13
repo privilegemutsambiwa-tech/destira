@@ -2,8 +2,7 @@
 // standing presence on Discover. It breathes; tap it and it says what it
 // actually did for you. Everything in the sheet is real: counts from real
 // interviews of your twin, its real notices, and how much it has to work
-// from. Never who asked (that has never been shown, and isn't now), and
-// never a made-up line.
+// from. Who asked, and what, is in Chats. Never a made-up line.
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -113,7 +112,7 @@ export function TwinOrbButton() {
             </div>
 
             <p className="vf-small text-vf-muted">
-              I don't tell you who asked. If they like you, they'll show up in Likes.
+              You can read each of these conversations in Chats.
             </p>
 
             {data.notices.length > 0 && (

@@ -35,6 +35,18 @@ interface ChatMessage {
   quickReplies?: string[];
 }
 
+// One a day, the same for everyone that day: a gentle way in when the
+// conversation is empty. Tapping one asks it.
+const DAILY_PROMPTS = [
+  "Tell me about a weekend you'd happily repeat.",
+  "What's something you changed your mind about recently?",
+  "Who do you call when something good happens?",
+  "What does a good first date look like to you?",
+  "What are you looking forward to this month?",
+  "What's a small thing that makes a day better for you?",
+  "What would your closest friend say you're like in a relationship?",
+];
+
 function formatRelativeTime(date: Date): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -571,7 +583,7 @@ export default function TwinChat() {
             <p className="flex items-center gap-1.5 mt-0.5">
               <span className="w-1.5 h-1.5 rounded-full bg-vf-mint shrink-0" style={{ boxShadow: "0 0 6px hsl(var(--vf-mint))" }} />
               <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-mint">
-                Self-reflection &amp; growth
+                Private · only you
               </span>
             </p>
           </div>
@@ -611,25 +623,40 @@ export default function TwinChat() {
         <div className="flex-1 flex flex-col min-w-0">
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
             {messages.length === 0 && !isTyping && (
-              <div className="text-center py-16">
-                <div className="w-16 h-16 bg-vf-mint/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Sparkles className="w-8 h-8 text-vf-mint" />
+              <div className="text-center py-12 px-2" data-testid="twin-empty">
+                {/* The most intimate screen (§7.12): calm, nearly bare, the
+                    orb large and breathing. */}
+                <div className="relative w-24 h-24 mx-auto mb-6" aria-hidden="true">
+                  <span
+                    className="absolute -inset-4 rounded-full motion-safe:animate-[vf-breathe_5s_ease-in-out_infinite]"
+                    style={{ background: "radial-gradient(circle, color-mix(in srgb, var(--vf-mint-vivid) 40%, transparent), transparent 70%)" }}
+                  />
+                  <span
+                    className="absolute inset-0 rounded-full"
+                    style={{ background: "radial-gradient(circle at 35% 30%, #D8F6EA, var(--vf-mint-vivid) 38%, #2E7F6B 100%)", boxShadow: "inset 0 -6px 12px rgba(0,0,0,.18)" }}
+                  />
                 </div>
-                <h3 className="font-serif text-lg mb-2 text-vf-text" data-testid="text-empty-title">
-                  Your AI Twin is ready
+                <h3 className="vf-h2 text-vf-text" data-testid="text-empty-title">
+                  I'm here.
                 </h3>
-                <p className="text-sm text-vf-muted max-w-md mx-auto">
-                  Chat with your AI Twin to explore your personality, get insights about
-                  yourself, and grow. Your twin learns from every conversation.
+                <p className="vf-small text-vf-muted max-w-[36ch] mx-auto mt-2">
+                  Talk something through, or tell me more about you. The more I know, the better I answer when people ask about you.
                 </p>
                 {memoryFacts.length > 0 && (
-                  <div className="mt-4 flex items-center justify-center gap-2">
-                    <MessageCircle className="w-4 h-4 text-vf-faint" />
-                    <span className="text-xs text-vf-faint">
-                      {memoryFacts.length} facts remembered from past chats
-                    </span>
-                  </div>
+                  <p className="vf-label text-vf-faint mt-4">
+                    {memoryFacts.length === 1 ? "1 thing" : `${memoryFacts.length} things`} remembered from our chats
+                  </p>
                 )}
+                <div className="mt-7">
+                  <div className="vf-label text-vf-mint mb-2.5">Today's question</div>
+                  <button
+                    onClick={() => handleQuickReply(DAILY_PROMPTS[Math.floor(Date.now() / 86_400_000) % DAILY_PROMPTS.length])}
+                    className="vf-press rounded-[18px] border border-vf-mint/30 bg-vf-mint/[0.06] px-5 py-3.5 font-display text-[19px] leading-snug text-vf-text hover:border-vf-mint/50 transition-colors max-w-[34ch]"
+                    data-testid="button-daily-prompt"
+                  >
+                    {DAILY_PROMPTS[Math.floor(Date.now() / 86_400_000) % DAILY_PROMPTS.length]}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -653,10 +680,10 @@ export default function TwinChat() {
                         </div>
                       )}
                       <div
-                        className={`px-4 py-2.5 text-sm leading-relaxed ${
+                        className={`px-4 py-2.5 text-[15px] leading-[1.5] whitespace-pre-wrap ${
                           isMe
-                            ? "rounded-[18px] rounded-br-[6px] bg-vf-ember text-vf-ink font-medium"
-                            : "rounded-[18px] rounded-bl-[6px] border border-vf-mint/25 bg-vf-mint/10 text-vf-text"
+                            ? "rounded-[20px] rounded-br-[6px] bg-vf-ember/[0.16] border border-vf-ember/25 text-vf-text"
+                            : "rounded-[20px] rounded-bl-[6px] border border-vf-mint/25 bg-vf-mint/[0.08] text-vf-text"
                         }`}
                       >
                         {msg.content}

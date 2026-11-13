@@ -8,15 +8,16 @@ import {
   useChatRequests,
   useRespondChatRequest,
 } from "@/hooks/use-interactions";
-import { Loader2, Users } from "lucide-react";
+import { Heart, Loader2, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { motion } from "framer-motion";
-import { ResonanceDial } from "@/components/resonance-dial";
+import { motion, useReducedMotion } from "framer-motion";
 import { MatchCelebration, Portrait } from "@/components/match-celebration";
 import { useProfile, useSuggestedLounges } from "@/hooks/use-profiles";
 import { withFrom } from "@/lib/from-route";
-import { EmptyState, UnderlineTabs, VfButton, VfSkeleton } from "@/components/ui-vf";
+import { EmptyState, UnderlineTabs, VfAvatar, VfButton, VfSkeleton } from "@/components/ui-vf";
+import { avatarColor } from "@/lib/avatar-color";
+import { haptic } from "@/lib/haptics";
 
 type TabType = "waiting" | "asked";
 
@@ -27,23 +28,11 @@ const TABS: { label: string; value: TabType }[] = [
   { label: "You liked", value: "asked" },
 ];
 
-/** Self-average of a profile's numeric personality traits — same basis as the
- *  server's computeResonance and Discover's getResonance. null when the profile
- *  only carries free-text answers. */
-function resonanceScore(personalityProfile: unknown): number | null {
-  if (!personalityProfile || typeof personalityProfile !== "object") return null;
-  const nums = Object.values(personalityProfile as Record<string, unknown>).filter(
-    (v): v is number => typeof v === "number",
-  );
-  if (nums.length === 0) return null;
-  return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
-}
-
 function InterestRow({
   name,
   age,
   photoUrl,
-  score,
+  sub,
   right,
   onOpen,
   hoverLabel,
@@ -52,7 +41,8 @@ function InterestRow({
   name: string;
   age?: number | null;
   photoUrl?: string | null;
-  score: number | null;
+  /** One honest line under the name (a status, a city). */
+  sub?: string | null;
   right: React.ReactNode;
   /** When set, the avatar + name/score area becomes a target that opens the profile. */
   onOpen?: () => void;
@@ -62,31 +52,20 @@ function InterestRow({
 }) {
   const identity = (
     <>
-      <Portrait name={name} photoUrl={photoUrl} />
-      <div className="flex-1 min-w-0 text-left flex items-center gap-3">
-        {/* The same dial used on Discover / Profile / the Landing page — one
-            visual system for "resonance" everywhere it shows up, instead of
-            this page inventing its own plain-number version of it. The
-            number lives inside the dial; no need to also print it as text. */}
-        {score !== null && <ResonanceDial score={score} size={40} />}
-        <div className="min-w-0">
-          <p className="text-[15.5px] text-vf-text truncate">
-            {name}
-            {age ? <span className="text-vf-muted">, {age}</span> : null}
-          </p>
-          {score !== null && (
-            <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-vf-faint mt-1">
-              resonance
-            </p>
-          )}
-        </div>
+      <VfAvatar size={52} name={name} seed={testId} src={photoUrl ?? undefined} />
+      <div className="flex-1 min-w-0 text-left">
+        <p className="font-display text-[19px] leading-tight text-vf-text truncate">
+          {name}
+          {age ? <span className="text-vf-muted">, {age}</span> : null}
+        </p>
+        {sub && <p className="vf-small text-vf-muted truncate mt-0.5">{sub}</p>}
       </div>
     </>
   );
 
   return (
     <div
-      className={`group vf-card vf-row flex items-center gap-3.5 rounded-[18px] border border-vf-line bg-vf-surface2 px-4 py-3.5 mb-3 last:mb-0 transition-colors duration-150 ${onOpen ? "focus-within:bg-vf-elevated" : ""}`}
+      className={`group flex items-center gap-3.5 rounded-[18px] px-2 py-2.5 transition-colors duration-150 hover:bg-vf-surface ${onOpen ? "focus-within:bg-vf-surface" : ""}`}
       data-testid={testId}
     >
       {onOpen ? (
@@ -105,7 +84,7 @@ function InterestRow({
         {hoverLabel ? (
           <>
             <span className="group-hover:hidden">{right}</span>
-            <span className="hidden group-hover:inline font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-text">
+            <span className="hidden group-hover:inline vf-label text-vf-text">
               {hoverLabel}
             </span>
           </>
@@ -122,10 +101,10 @@ function MeetButton({ onClick, pending }: { onClick: () => void; pending?: boole
     <button
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       disabled={pending}
-      className="vf-btn-primary inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 min-h-[44px] text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-40"
+      className="vf-press inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold px-4 min-h-[44px] text-[14px] transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-40"
       data-testid="button-meet"
     >
-      {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Meet"}
+      {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Accept"}
     </button>
   );
 }
@@ -140,6 +119,112 @@ function PassButton({ onClick, pending }: { onClick: () => void; pending?: boole
     >
       Pass
     </button>
+  );
+}
+
+/** "Liked you" as portraits (§7.11): the person first, two actions. */
+function LikeCard({
+  like,
+  onOpen,
+  onPass,
+  onLike,
+  busy,
+  index,
+}: {
+  like: any;
+  onOpen?: () => void;
+  onPass: () => void;
+  onLike: () => void;
+  busy: boolean;
+  index: number;
+}) {
+  const reduce = useReducedMotion();
+  const name: string = like.profile?.displayName || "Someone";
+  const first = name.split(/\s+/)[0];
+  const photo: string | null = like.profile?.coverPhotoUrl || like.profile?.photoUrl || null;
+  return (
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(index, 8) * 0.04, duration: 0.24 }}
+      className="relative rounded-[20px] overflow-hidden border border-vf-line bg-vf-surface2 aspect-[4/5]"
+      data-testid={`row-like-${like.matchId}`}
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        className="absolute inset-0 w-full h-full text-left"
+        aria-label={`Open ${name}'s profile`}
+        data-testid={`row-like-${like.matchId}-open`}
+      >
+        {photo ? (
+          <img src={photo} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center" style={{ background: avatarColor(like.fromUserId) }}>
+            <span className="font-display text-white/85 text-[56px]">{first[0]?.toUpperCase()}</span>
+          </span>
+        )}
+        <span className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-vf-scrim to-transparent" />
+        <span className="absolute left-3 right-3 bottom-[60px] font-display text-[20px] leading-tight truncate" style={{ color: "#F5F0EA" }}>
+          {first}{like.profile?.age ? `, ${like.profile.age}` : ""}
+        </span>
+      </button>
+      <div className="absolute left-2 right-2 bottom-2 flex gap-2">
+        <button
+          onClick={onPass}
+          disabled={busy}
+          className="vf-press w-11 h-11 shrink-0 rounded-full flex items-center justify-center backdrop-blur-md disabled:opacity-50"
+          style={{ background: "rgba(12,9,16,.55)", color: "#F5F0EA", border: "1px solid rgba(255,255,255,.18)" }}
+          aria-label={`Pass on ${first}`}
+          data-testid="button-pass"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <button
+          onClick={onLike}
+          disabled={busy}
+          className="vf-press flex-1 h-11 rounded-full inline-flex items-center justify-center gap-1.5 bg-vf-ember text-vf-ink font-semibold text-[14px] disabled:opacity-50"
+          aria-label={`Like ${first} back`}
+          data-testid="button-meet"
+        >
+          <Heart className="w-4 h-4" fill="currentColor" strokeWidth={0} /> Like back
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+/** Free members: the count is real, the faces wait (§7.11). */
+function MaskedLikes({ count, onPlans }: { count: number; onPlans: () => void }) {
+  const tiles = Math.min(Math.max(count, 2), 6);
+  return (
+    <div data-testid="masked-asks">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {Array.from({ length: tiles }).map((_, i) => (
+          <div
+            key={i}
+            className="relative rounded-[20px] overflow-hidden border border-vf-line aspect-[4/5]"
+            aria-hidden="true"
+          >
+            <div
+              className="absolute inset-0 scale-125 blur-xl opacity-80"
+              style={{ background: `radial-gradient(circle at ${30 + (i * 17) % 40}% ${35 + (i * 23) % 30}%, hsl(var(--vf-ember) / .55), transparent 60%), radial-gradient(circle at 70% 75%, hsl(var(--vf-mint) / .35), transparent 55%), var(--vf-surface2)` }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mt-5 rounded-[20px] border border-vf-gold/35 bg-vf-gold/[0.06] p-5">
+        <p className="vf-h3 text-vf-text">
+          {count === 1 ? "Someone likes you." : `${count} people like you.`}
+        </p>
+        <p className="vf-small text-vf-muted mt-1.5">
+          They're also mixed into your Discover: like them there and it's a match straight away. Spark shows you exactly who, so you can decide here.
+        </p>
+        <VfButton variant="premium" size="sm" className="mt-4" onClick={onPlans} data-testid="button-see-who-asked">
+          See Spark
+        </VfButton>
+      </div>
+    </div>
   );
 }
 
@@ -290,56 +375,42 @@ export default function Matches() {
         ) : (
           <div data-testid="list-waiting">
             {incoming?.seeWhoAsked === false && likes.some((l: any) => l.masked) ? (
-              <div className="vf-card rounded-[16px] border border-vf-line bg-vf-surface2 p-5 mb-3" data-testid="masked-asks">
-                <p className="text-[15px] text-vf-text">
-                  <span className="font-serif text-[22px] align-baseline">{likes.length}</span>{" "}
-                  {likes.length === 1 ? "person has" : "people have"} asked to meet you.
-                </p>
-                <p className="text-[13px] text-vf-muted mt-1.5 leading-[1.5]">
-                  They're mixed into your Discover — like them back there and it's an instant match.
-                  Spark shows you exactly who, so you can decide here.
-                </p>
-                <button
-                  onClick={() => setLocation(withFrom("/plans?feature=see_who_asked", "/matches"))}
-                  className="vf-btn-primary mt-3 inline-flex items-center justify-center rounded-full bg-vf-ember text-vf-ink font-semibold h-9 px-4 text-[13px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
-                  data-testid="button-see-who-asked"
-                >
-                  See plans
-                </button>
+              <MaskedLikes count={likes.length} onPlans={() => setLocation(withFrom("/plans?feature=see_who_asked", "/matches"))} />
+            ) : likes.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {likes.map((like: any, i: number) => (
+                  <LikeCard
+                    key={`like-${like.matchId}`}
+                    like={like}
+                    index={i}
+                    onOpen={like.fromUserId ? () => setLocation(withFrom(`/u/${like.fromUserId}`, "/matches")) : undefined}
+                    onPass={() => { haptic.pass(); passLike(like.matchId); }}
+                    onLike={() => { haptic.like(); acceptLike(like); }}
+                    busy={respondToMatch.isPending || likeBack.isPending}
+                  />
+                ))}
               </div>
-            ) : (
-              likes.map((like: any) => (
-                <InterestRow
-                  key={`like-${like.matchId}`}
-                  name={like.profile?.displayName || "Someone"}
-                  age={like.profile?.age}
-                  photoUrl={like.profile?.coverPhotoUrl || like.profile?.photoUrl}
-                  score={resonanceScore(like.profile?.personalityProfile)}
-                  onOpen={like.fromUserId ? () => setLocation(`/u/${like.fromUserId}`) : undefined}
-                  testId={`row-like-${like.matchId}`}
-                  right={
-                    <>
-                      <PassButton onClick={() => passLike(like.matchId)} pending={respondToMatch.isPending} />
-                      <MeetButton onClick={() => acceptLike(like)} pending={likeBack.isPending} />
-                    </>
-                  }
-                />
-              ))
+            ) : null}
+            {pendingRequests.length > 0 && (
+              <div className="mt-6">
+                <div className="vf-label text-vf-faint mb-2">Want to chat</div>
+                {pendingRequests.map((req: any) => (
+                  <InterestRow
+                    key={`req-${req.id}`}
+                    name={req.senderNickname || "Someone"}
+                    photoUrl={req.senderAvatarUrl}
+                    sub="Asked to chat from a Lounge"
+                    testId={`row-request-${req.id}`}
+                    right={
+                      <>
+                        <PassButton onClick={() => declineRequest(req.id)} pending={respondChatRequest.isPending} />
+                        <MeetButton onClick={() => acceptRequest(req)} pending={respondChatRequest.isPending} />
+                      </>
+                    }
+                  />
+                ))}
+              </div>
             )}
-            {pendingRequests.map((req: any) => (
-              <InterestRow
-                key={`req-${req.id}`}
-                name={req.senderNickname || "Someone"}
-                score={null}
-                testId={`row-request-${req.id}`}
-                right={
-                  <>
-                    <PassButton onClick={() => declineRequest(req.id)} pending={respondChatRequest.isPending} />
-                    <MeetButton onClick={() => acceptRequest(req)} pending={respondChatRequest.isPending} />
-                  </>
-                }
-              />
-            ))}
           </div>
         )
       )}
@@ -380,23 +451,21 @@ export default function Matches() {
                   name={ask.profile?.displayName || "Someone"}
                   age={ask.profile?.age}
                   photoUrl={ask.profile?.coverPhotoUrl || ask.profile?.photoUrl}
-                  score={resonanceScore(ask.profile?.personalityProfile)}
-                  onOpen={ask.toUserId ? () => setLocation(`/u/${ask.toUserId}`) : undefined}
+                  sub={ask.status === "matched" ? "It's mutual" : ask.status === "pending" ? "Waiting for them" : "Not this time"}
+                  onOpen={ask.toUserId ? () => setLocation(withFrom(`/u/${ask.toUserId}`, "/matches")) : undefined}
                   hoverLabel={status.action ? undefined : her ? "Her profile →" : "Their profile →"}
                   testId={`row-ask-${ask.matchId}`}
                   right={
                     status.action ? (
                       <button
                         onClick={(e) => { e.stopPropagation(); status.action!(); }}
-                        className="text-[13px] font-medium text-vf-mint hover:text-vf-text px-2 min-h-[44px] transition-colors"
+                        className="vf-press text-[14px] font-medium text-vf-ember hover:text-vf-text px-3 min-h-[44px] transition-colors"
                         data-testid="button-open-chat"
                       >
-                        {status.label} →
+                        Chat →
                       </button>
                     ) : (
-                      <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-                        {status.label}
-                      </span>
+                      <span className="vf-label text-vf-faint">{status.label}</span>
                     )
                   }
                 />

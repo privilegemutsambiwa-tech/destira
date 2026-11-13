@@ -2,10 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { useChatThreads, useMarkStoryRepliesRead } from "@/hooks/use-interactions";
 import { useProfile } from "@/hooks/use-profiles";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Link, useLocation, useSearch } from "wouter";
-import { Brain, Shield, ArrowRight } from "lucide-react";
-import { EmptyState as VfEmptyState, PageHeader, SearchField, SegmentedControl, VfButton, VfSkeleton } from "@/components/ui-vf";
+import { ChevronRight } from "lucide-react";
+import { EmptyState as VfEmptyState, PageHeader, SearchField, SegmentedControl, TwinGlyph, VfAvatar, VfButton, VfSkeleton } from "@/components/ui-vf";
 
 function formatRelativeTime(dateStr: string): string {
   const now = Date.now();
@@ -69,56 +68,30 @@ export default function Interviews() {
       {/* Header */}
       <PageHeader title="Chats" subtitle="Everyone you're talking to, and your twin." />
 
-      {/* My Twin featured card — the one card on this page that isn't a
-          conversation with another person, so it earns a genuinely
-          different treatment: the same breathing mint-glow presence as the
-          twin chat screens themselves, not just a tinted rectangle. */}
+      {/* Your twin: one slim row, not a big card (§7.8). It's the only row
+          here that isn't a conversation with another person. */}
       {profile?.onboardingCompleted && (
-        <div
-          className="group mb-6 p-5 cursor-pointer btn-press vf-card rounded-[22px] border border-vf-mint/25 transition-colors hover:border-vf-mint/45"
-          style={{ background: "linear-gradient(155deg, hsl(var(--vf-mint) / 0.1), var(--vf-surface2) 72%)" }}
+        <button
           onClick={() => setLocation("/twin-chat?from=/chats")}
+          className="vf-press group w-full mb-5 flex items-center gap-3.5 rounded-[18px] border border-vf-mint/25 bg-vf-mint/[0.06] px-4 py-3 text-left hover:border-vf-mint/45 transition-colors"
           data-testid="card-my-twin"
         >
-          <div className="flex items-center gap-4">
-            <div className="relative w-16 h-16 shrink-0">
-              <div
-                className="absolute -inset-2 rounded-full animate-[vf-breathe_5s_ease-in-out_infinite]"
-                style={{ background: "radial-gradient(circle, hsl(var(--vf-mint) / 0.35), transparent 70%)" }}
-                aria-hidden="true"
-              />
-              <div
-                className="relative w-full h-full rounded-full flex items-center justify-center"
-                style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint-vivid), #2E7F6B)" }}
-              >
-                <Brain className="w-7 h-7 text-vf-ink" />
-              </div>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <h2 className="font-serif font-normal text-[20px] text-vf-text">Chat with my twin</h2>
-                <span className="font-mono text-[9.5px] uppercase tracking-[0.12em] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 border border-vf-mint/30 text-vf-mint">
-                  <Shield className="w-3 h-3" />
-                  Private
-                </span>
-              </div>
-              <p className="text-[13.5px] mb-2.5 leading-snug text-vf-muted">
-                Train, coach, and reflect with your personal AI Twin
-              </p>
-              <div className="flex items-center gap-3.5">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full" style={{ background: "#22C55E", boxShadow: "0 0 6px #22C55E" }} />
-                  <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-vf-muted">Active</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Brain className="w-3 h-3 text-vf-faint" />
-                  <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-vf-muted">Memory enabled</span>
-                </div>
-              </div>
-            </div>
-            <ArrowRight className="w-5 h-5 shrink-0 text-vf-mint transition-transform duration-150 group-hover:translate-x-1" />
-          </div>
-        </div>
+          <span className="relative w-10 h-10 shrink-0" aria-hidden="true">
+            <span
+              className="absolute -inset-1 rounded-full motion-safe:animate-[vf-breathe_5s_ease-in-out_infinite]"
+              style={{ background: "radial-gradient(circle, color-mix(in srgb, var(--vf-mint-vivid) 40%, transparent), transparent 70%)" }}
+            />
+            <span
+              className="absolute inset-0 rounded-full"
+              style={{ background: "radial-gradient(circle at 35% 30%, #D8F6EA, var(--vf-mint-vivid) 38%, #2E7F6B 100%)" }}
+            />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block font-display text-[19px] leading-tight text-vf-text">Your twin</span>
+            <span className="block vf-small text-vf-muted truncate">Private. Talk it through, or teach it more about you.</span>
+          </span>
+          <ChevronRight className="w-4 h-4 text-vf-mint shrink-0 transition-transform group-hover:translate-x-0.5" />
+        </button>
       )}
 
       {/* Search bar */}
@@ -158,39 +131,45 @@ export default function Interviews() {
           ))}
         </div>
       ) : filteredThreads.length > 0 ? (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col -mx-2">
           {filteredThreads.map((thread: any) => {
             const isTwin = thread.type === "ai_twin_interview";
+            const unread = thread.unreadCount > 0;
             const threadHref = `${thread.href}${thread.href.includes("?") ? "&" : "?"}from=/chats`;
             return (
               <Link key={thread.id} href={threadHref}>
                 <div
-                  className="vf-card vf-row flex items-center gap-3.5 px-4 py-3.5 cursor-pointer rounded-[16px] border border-vf-line bg-vf-surface2 transition-colors duration-150"
+                  className="vf-press flex items-center gap-3.5 px-2 py-3 cursor-pointer rounded-[16px] hover:bg-vf-surface transition-colors duration-150"
                   data-testid={`card-thread-${thread.id}`}
                 >
-                  <Avatar className={`shrink-0 w-12 h-12 rounded-xl ${isTwin ? "ring-1 ring-vf-mint/40" : ""}`}>
-                    <AvatarImage src={thread.avatar} alt={thread.name} />
-                    <AvatarFallback className="rounded-xl bg-vf-surface2 text-vf-muted">
-                      {isTwin ? <Brain className="w-5 h-5 text-vf-mint" /> : thread.name?.[0] || "?"}
-                    </AvatarFallback>
-                  </Avatar>
+                  <span className="relative shrink-0">
+                    <VfAvatar size={52} name={thread.name} seed={thread.partnerId || thread.id} src={thread.avatar ?? undefined} />
+                    {isTwin && (
+                      <span
+                        className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-vf-ink flex items-center justify-center"
+                        aria-label="Twin conversation"
+                      >
+                        <TwinGlyph size={14} className="text-vf-mint" />
+                      </span>
+                    )}
+                  </span>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-vf-text truncate">{thread.name}</span>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className={`font-display text-[18px] leading-tight truncate ${unread ? "text-vf-text" : "text-vf-soft"}`}>{thread.name}</span>
                       {thread.lastMessageAt && (
-                        <span className="text-xs shrink-0 text-vf-faint">
+                        <span className={`font-mono text-[11px] shrink-0 ${unread ? "text-vf-ember" : "text-vf-faint"}`}>
                           {formatRelativeTime(thread.lastMessageAt)}
                         </span>
                       )}
                     </div>
                     <div className="flex items-center justify-between gap-2 mt-0.5">
-                      <p className="text-[13px] truncate text-vf-muted">
+                      <p className={`text-[14px] truncate ${unread ? "text-vf-text font-medium" : "text-vf-muted"}`}>
                         {thread.lastMessage || "No messages yet"}
                       </p>
-                      {thread.unreadCount > 0 && (
+                      {unread && (
                         <span
-                          className="shrink-0 font-mono text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center bg-vf-ember text-vf-ink"
+                          className="shrink-0 font-mono text-[10.5px] rounded-full px-1.5 min-w-[20px] h-5 inline-flex items-center justify-center bg-vf-ember text-vf-ink"
                           data-testid={`badge-unread-${thread.id}`}
                         >
                           {thread.unreadCount}
@@ -215,7 +194,7 @@ function EmptyState() {
   return (
     <VfEmptyState
       title="No chats yet."
-      body="When you match with someone, or ask someone's twin a question, the conversation lands here."
+      body="When you and someone both say yes, you can talk here. Asking someone's twin a question starts a chat too."
       action={
         <VfButton onClick={() => setLocation("/discover")} data-testid="button-go-discover">
           Go to Discover
