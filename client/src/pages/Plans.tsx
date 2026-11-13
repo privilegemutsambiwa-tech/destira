@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
+import { useGate } from "@/hooks/use-gate";
+import { SegmentedControl } from "@/components/ui-vf";
 import { useSubscription } from "@/hooks/use-interactions";
 import { refreshPlanQueries } from "@/hooks/use-payments";
 import { consumePendingInvite, resolvePendingInviteRoute } from "@/lib/pending-invite";
@@ -93,6 +95,21 @@ export default function Plans() {
   const ctx = feature ? gateCopy(feature, {}) : null;
   const unlockRank = ctx ? tierRank(ctx.requiredTier) : -1;
 
+  // Lead with the member's own situation (docs/destira-upgrade-prompt.md §7.17).
+  const { data: likesGate } = useGate("daily_likes");
+  const currentCard = PLAN_CARDS.find((c) => c.tier === currentTier);
+  const until = (sub as any)?.currentPeriodEnd ? new Date((sub as any).currentPeriodEnd) : null;
+  const untilLabel = until && !Number.isNaN(until.getTime())
+    ? until.toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+    : null;
+  const situation: string | null = (sub as any)?.isTrial && currentCard
+    ? `You're trying ${currentCard.name}${(sub as any).daysRemaining != null ? `: ${(sub as any).daysRemaining} day${(sub as any).daysRemaining === 1 ? "" : "s"} left` : ""}.`
+    : currentTier !== "free" && currentCard
+      ? `You're on ${currentCard.name}${untilLabel ? ` until ${untilLabel}` : ""}.`
+      : likesGate?.limit != null && likesGate.used != null
+        ? `You've used ${likesGate.used} of ${likesGate.limit} likes today.`
+        : null;
+
   // The only exit off Free/Continue — never re-enters onboarding. Refreshes
   // profile + subscription state so Discover doesn't render against stale
   // (pre-onboarding, pre-trial) query cache, then honors a WhatsApp group
@@ -127,6 +144,11 @@ export default function Plans() {
         </div>
 
         <div className="mt-10 max-w-[46ch]">
+          {situation && (
+            <p className="inline-flex items-center rounded-full border border-vf-line bg-vf-surface2 px-3.5 py-1.5 text-[13.5px] text-vf-text mb-5" data-testid="text-plan-situation">
+              {situation}
+            </p>
+          )}
           {ctx ? (
             <>
               <div className={EYEBROW}>Plans · {ctx.action}</div>
@@ -166,19 +188,14 @@ export default function Plans() {
           </div>
         )}
 
-        <div className="mt-8 inline-flex rounded-full border border-vf-line p-1 gap-1" role="group" aria-label="Billing period">
-          {BILLING_PERIODS.map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`h-9 px-4 rounded-full text-[12.5px] font-mono uppercase tracking-[0.1em] transition-colors ${
-                period === p ? "bg-vf-ember text-vf-ink" : "text-vf-muted hover:text-vf-text"
-              }`}
-              data-testid={`button-period-${p}`}
-            >
-              {PERIOD_TAB_LABEL[p]}
-            </button>
-          ))}
+        <div className="mt-8 w-full sm:w-[380px]" data-testid="period-selector">
+          <SegmentedControl
+            label="Billing period"
+            fullWidth
+            options={BILLING_PERIODS.map((p) => ({ value: p, label: PERIOD_TAB_LABEL[p] }))}
+            value={period}
+            onChange={(p) => setPeriod(p as BillingPeriod)}
+          />
         </div>
 
         {period === "weekly" && (
@@ -203,17 +220,21 @@ export default function Plans() {
             return (
               <div
                 key={card.tier}
-                className={`rounded-[22px] border p-5 flex flex-col ${
-                  emphasise ? "border-vf-ember/60 bg-vf-ember/[0.06]" : "border-vf-line bg-vf-surface"
+                className={`rounded-[22px] border p-5 flex flex-col transition-transform ${
+                  emphasise
+                    ? "border-vf-ember/70 bg-vf-surface vf-e2 lg:-translate-y-1.5"
+                    : card.tier === "ember"
+                      ? "border-vf-gold/40 bg-vf-surface"
+                      : "border-vf-line bg-vf-surface"
                 }`}
                 data-testid={`plan-${card.tier}`}
               >
                 <div className="flex items-center justify-between min-h-[16px]">
                   <div className="flex items-baseline gap-2">
-                    <div className={card.tier === "ember" ? "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-gold" : EYEBROW}>
+                    <div className={`font-display text-[26px] leading-none ${card.tier === "ember" ? "text-vf-gold" : "text-vf-text"}`}>
                       {card.name}
                     </div>
-                    {isCurrent && <span className="text-[10.5px] text-vf-faint">your plan</span>}
+                    {isCurrent && <span className="vf-label text-vf-faint">your plan</span>}
                   </div>
                   {isCheapestUnlock ? (
                     <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-vf-ember">Opens this up</span>
@@ -222,9 +243,9 @@ export default function Plans() {
                   ) : null}
                 </div>
 
-                <div className="mt-3 flex items-baseline gap-1.5">
-                  <span className="font-serif text-vf-text text-[32px] leading-none">{priceLabel(priceCents)}</span>
-                  {priceCents > 0 && <span className="text-[13px] text-vf-faint">/ {period === "monthly" ? "mo" : PERIOD_LABEL[period]}</span>}
+                <div className="mt-4 flex items-baseline gap-2">
+                  <span className="font-mono text-vf-text text-[34px] leading-none tracking-[-0.02em]" data-testid={`price-${card.tier}`}>{priceLabel(priceCents)}</span>
+                  {priceCents > 0 && <span className="vf-label text-vf-faint">per {period === "monthly" ? "month" : PERIOD_LABEL[period]}</span>}
                 </div>
                 {perMonthCents != null && savingsPct != null && (
                   <p className="text-[11.5px] text-vf-faint mt-1">
@@ -243,9 +264,12 @@ export default function Plans() {
 
                 <p className="text-[13px] text-vf-muted leading-[1.5] mt-3 min-h-[54px]">{card.pitch}</p>
 
-                <ul className="mt-4 flex flex-col gap-2 text-[13px] text-vf-soft">
-                  {card.gets.map((g) => (
-                    <li key={g} className="leading-[1.45]">{g}</li>
+                <ul className="mt-4 flex flex-col gap-2.5 text-[14px] text-vf-text">
+                  {card.gets.slice(0, 5).map((g) => (
+                    <li key={g} className="flex items-start gap-2 leading-[1.4]">
+                      <Check className={`w-4 h-4 mt-0.5 shrink-0 ${card.tier === "ember" ? "text-vf-gold" : "text-vf-ember"}`} strokeWidth={2.5} />
+                      {g}
+                    </li>
                   ))}
                 </ul>
 
@@ -285,8 +309,11 @@ export default function Plans() {
           })}
         </div>
 
-        <div className="mt-12">
-          <div className={EYEBROW}>Compare</div>
+        <details className="mt-12 group" data-testid="plans-compare">
+          <summary className="list-none cursor-pointer inline-flex items-center gap-2 min-h-[44px] text-[15px] text-vf-text [&::-webkit-details-marker]:hidden">
+            Compare every detail
+            <ChevronDown className="w-4 h-4 text-vf-muted transition-transform group-open:rotate-180" />
+          </summary>
 
           {/* ≥640px: a real grid table, no horizontal scroll needed at this width. */}
           <div className="hidden sm:block mt-4 rounded-[16px] border border-vf-line overflow-hidden">
@@ -331,7 +358,7 @@ export default function Plans() {
               </div>
             ))}
           </div>
-        </div>
+        </details>
 
         <p className="text-[12px] text-vf-faint mt-8 leading-[1.5]">
           Cancel any time from Settings — it takes one tap and there's no exit fee.

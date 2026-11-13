@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, X, LogOut, Camera } from "lucide-react";
+import { Loader2, Plus, X, LogOut, Camera, ChevronRight, Eye, Images, MessageSquareQuote, Pencil, Settings as SettingsIcon, Gift, Gem } from "lucide-react";
 import { AddStoryButton, OwnStoryViewer, type OwnStory } from "@/components/story-viewer";
 import { RefineWithAI } from "@/components/refine-with-ai";
 import { useAuth } from "@/hooks/use-auth";
@@ -15,7 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { PLAN_CARDS, priceLabel } from "@shared/entitlements";
-import { NOTE_PRIORITY, ScreenNotes } from "@/components/ui-vf";
+import { NOTE_PRIORITY, ScreenNotes, TwinGlyph, VfButton } from "@/components/ui-vf";
+import { avatarColor } from "@/lib/avatar-color";
 
 // Below this many total photos (cover + portrait + gallery combined), a
 // profile is genuinely light on the one thing that drives reads the most —
@@ -200,6 +201,63 @@ function focalPos(x?: number | null, y?: number | null): string {
   return `${Math.round(fx * 100)}% ${Math.round(fy * 100)}%`;
 }
 
+/** Profile strength as a ring (docs/destira-upgrade-prompt.md §7.15). */
+function StrengthRing({ value, size = 64 }: { value: number; size?: number }) {
+  const r = size / 2 - 4;
+  const c = 2 * Math.PI * r;
+  const v = Math.max(0, Math.min(100, value));
+  return (
+    <span className="relative inline-flex items-center justify-center shrink-0" style={{ width: size, height: size }} role="img" aria-label={`Profile strength ${v}%`}>
+      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--vf-line)" strokeWidth={4} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="hsl(var(--vf-ember))"
+          strokeWidth={4}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - v / 100)}
+          style={{ transition: "stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1)" }}
+        />
+      </svg>
+      <span className="absolute font-mono text-[15px] text-vf-text">{v}</span>
+    </span>
+  );
+}
+
+function ProfileRow({
+  icon,
+  label,
+  sub,
+  onClick,
+  testId,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  sub?: string | null;
+  onClick: () => void;
+  testId?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="vf-press w-full flex items-center gap-3.5 px-4 min-h-[60px] py-2.5 text-left hover:bg-vf-text/[0.03] transition-colors"
+      data-testid={testId}
+    >
+      <span className="w-9 h-9 rounded-full bg-[var(--vf-elevated)] flex items-center justify-center text-vf-muted shrink-0">{icon}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-[15.5px] text-vf-text">{label}</span>
+        {sub && <span className="block vf-small text-vf-muted truncate">{sub}</span>}
+      </span>
+      <ChevronRight className="w-4 h-4 text-vf-faint shrink-0" />
+    </button>
+  );
+}
+
 export default function Profile() {
   const { data: profile, isLoading } = useProfile();
   const { data: subscription } = useSubscription();
@@ -302,8 +360,18 @@ export default function Profile() {
   }
 
   const prompts: ProfilePrompt[] = Array.isArray(profile.prompts) ? profile.prompts : [];
+  const leadPhoto: string | null = portrait?.photoUrl || cover?.photoUrl || profile.coverPhotoUrl || null;
+  const leadFocal = portrait?.photoUrl
+    ? focalPos(portrait.portraitFocalX, portrait.portraitFocalY)
+    : cover?.photoUrl
+      ? focalPos(cover.coverFocalX, cover.coverFocalY)
+      : "50% 30%";
+  // Older profiles keep their lead photo on the profile row, not in the gallery.
+  const photoCount = Math.max(photos?.length ?? 0, leadPhoto ? 1 : 0);
+  const nextTask = (completion?.tasks ?? []).find((t: { completed: boolean }) => !t.completed) as
+    | { key: string; label: string; benefit: string }
+    | undefined;
   const hasStories = (ownStories?.length ?? 0) > 0;
-  const hasCover = !!(cover?.photoUrl || profile.coverPhotoUrl);
   const bio = profile.aboutMe || profile.bio || "";
   const metaLine = [
     profile.age ? String(profile.age) : null,
@@ -312,6 +380,17 @@ export default function Profile() {
   ].filter(Boolean).join(" · ");
 
   const openBio = () => { setBioValue(bio); setBioOpen(true); };
+  const doTask = () => {
+    if (!nextTask) return;
+    if (nextTask.key === "photos") return setLocation("/photos");
+    if (nextTask.key === "bio") {
+      openBio();
+      document.getElementById("profile-bio")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (nextTask.key === "verify") return setLocation("/settings");
+    setLocation("/onboarding");
+  };
   const saveBio = async () => {
     try {
       await updateProfile.mutateAsync({ userId: user!.id, data: { aboutMe: bioValue, bio: bioValue } });
@@ -375,210 +454,124 @@ export default function Profile() {
       <div className="flex flex-col gap-8">
         <ReferralNudge completionScore={completionScore} />
 
-        {/* ── HEADER ────────────────────────────────────────────────── */}
-        <header className="relative">
-          {/* Cover wrapper — its own positioning context for the portrait,
-              separate from the cover box itself (which needs overflow-hidden
-              to clip the photo). That separation is what lets the portrait
-              overlap the cover dramatically without either clipping the
-              portrait or, worse, coupling the *name's* position to the
-              portrait's height (see the note below — that coupling was a
-              real bug, not a hypothetical one). */}
-          <div className="relative">
-            <div className="relative overflow-hidden rounded-[24px] aspect-[16/9] sm:aspect-[21/9] bg-vf-surface2">
-              {cover?.photoUrl ? (
-                <img
-                  src={cover.photoUrl}
-                  alt=""
-                  className="w-full h-full object-cover"
-                  style={{ objectPosition: focalPos(cover.coverFocalX, cover.coverFocalY) }}
-                />
-              ) : profile.coverPhotoUrl ? (
-                <img src={profile.coverPhotoUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                // Real no-cover state: a flat warm surface (no mint — mint is the
-                // twin layer only, never decoration), with a mono label instead of
-                // the scrim-over-nothing "grey wash" this used to render as.
-                <div
-                  className="w-full h-full flex items-end justify-start p-4"
-                  style={{ background: "linear-gradient(160deg, rgba(255,107,74,.10), var(--vf-surface2) 65%)" }}
-                >
-                  <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-                    No cover photo — this is what strangers see first
-                  </span>
-                </div>
-              )}
-              {hasCover && (
-                <div
-                  className="absolute inset-x-0 bottom-0 pointer-events-none"
-                  style={{ height: "55%", background: "linear-gradient(to top, rgba(12,9,16,.9), transparent)" }}
-                />
-              )}
-              {/* On the cover photo, fixed dark chip + fixed light text
-                  regardless of theme, same as the scrim above it; off the
-                  photo, themed like the rest of the (now non-scrimmed) card. */}
+        {/* ── HEADER (§7.15): the lead photo, large ─────────────────── */}
+        <header className="flex flex-col gap-5" data-testid="profile-header">
+          <div className="relative overflow-hidden rounded-[28px] aspect-[4/5] sm:aspect-[16/10] max-h-[620px] w-full bg-vf-surface2" data-testid="portrait-photo">
+            {leadPhoto ? (
+              <img
+                src={leadPhoto}
+                alt={profile.displayName || "You"}
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ objectPosition: leadFocal }}
+              />
+            ) : (
               <div
-                className={
-                  hasCover
-                    ? "absolute top-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em] backdrop-blur px-2.5 py-1 rounded-full border"
-                    : "absolute top-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em] backdrop-blur px-2.5 py-1 rounded-full border border-vf-line text-vf-muted bg-vf-surface/70"
-                }
-                style={
-                  hasCover
-                    ? { color: "rgba(245,240,234,0.9)", background: "rgba(12,9,16,0.45)", borderColor: "rgba(255,255,255,.12)" }
-                    : undefined
-                }
-                data-testid="chip-profile-completeness"
+                className="absolute inset-0 flex flex-col items-center justify-center gap-5"
+                style={{ background: `radial-gradient(120% 90% at 20% 10%, ${avatarColor(user?.id || "me")}, transparent 60%), radial-gradient(100% 90% at 90% 100%, ${avatarColor(profile.displayName || "me")}, transparent 60%), var(--vf-elevated)` }}
               >
-                Profile completeness {completionScore}%
+                <span className="font-display text-white/90 text-[120px] leading-none" aria-hidden="true">
+                  {(profile.displayName || user?.firstName || "?")[0]?.toUpperCase()}
+                </span>
+                <VfButton onClick={() => setLocation("/photos")} leading={<Camera className="w-4 h-4" />} data-testid="button-add-first-photo">
+                  Add your first photo
+                </VfButton>
               </div>
-            </div>
+            )}
+            {leadPhoto && (
+              <div className="absolute inset-x-0 bottom-0 h-1/2 pointer-events-none" style={{ background: "linear-gradient(to top, rgba(12,9,16,.85), transparent)" }} />
+            )}
 
-            {/* Portrait — absolutely positioned against the cover wrapper
-                above, not a flex sibling of the name block. It used to be:
-                both sat in one flex row, bottom-aligned, so the name's
-                position was "portrait's bottom minus the name block's own
-                height" — which put the name back on top of the cover photo
-                at ~640–900px viewports, exactly the range this pane defaults
-                to, once the portrait got big enough to overlap that much.
-                Positioning it independently of the name removes that
-                coupling: the two no longer fight over the same alignment. */}
-            <div
-              className={`absolute rounded-[22px] left-1/2 -translate-x-1/2 sm:left-9 sm:translate-x-0 w-[clamp(148px,18vw,208px)] ${
-                hasCover ? "top-[calc(100%-56px)] sm:top-[calc(100%-80px)]" : "top-[calc(100%+16px)]"
-              }`}
-              data-testid="portrait-wrap"
-            >
-              <div
-                className="relative overflow-hidden rounded-[22px] bg-vf-surface2"
-                style={{ aspectRatio: "4 / 5", border: "5px solid var(--vf-ink)", boxShadow: "0 14px 30px rgba(12,9,16,.28)" }}
-                data-testid="portrait-photo"
+            {/* Your story: the avatar with a ring, and a small + to add one. */}
+            <div className="absolute top-3 left-3 flex items-center">
+              <button
+                onClick={() => (hasStories ? setShowOwnStoryViewer(true) : setShowStoryCreator(true))}
+                className={`vf-press relative w-12 h-12 rounded-full overflow-hidden ${hasStories ? "ring-[2.5px] ring-vf-ember ring-offset-2 ring-offset-black/40" : "ring-2 ring-white/70"}`}
+                style={{ background: avatarColor(user?.id || "me") }}
+                aria-label={hasStories ? "View your story" : "Add to your story"}
+                data-testid="button-view-own-story"
               >
-                {portrait?.photoUrl ? (
-                  <img
-                    src={portrait.photoUrl}
-                    alt={profile.displayName || "Portrait"}
-                    className="w-full h-full object-cover"
-                    style={{ objectPosition: focalPos(portrait.portraitFocalX, portrait.portraitFocalY) }}
-                  />
+                {leadPhoto ? (
+                  <img src={leadPhoto} alt="" className="w-full h-full object-cover" style={{ objectPosition: leadFocal }} />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center" style={{ background: "var(--vf-ember)" }}>
-                    <span
-                      className="font-serif text-4xl leading-none text-vf-ink"
-                      style={{ transform: "translateY(-0.06em)" }}
-                    >
-                      {(profile.displayName || user?.firstName || "?")[0]?.toUpperCase()}
-                    </span>
-                  </div>
+                  <span className="font-display text-white text-[20px]">{(profile.displayName || "?")[0]?.toUpperCase()}</span>
                 )}
-                {hasStories && (
-                  <button
-                    onClick={() => setShowOwnStoryViewer(true)}
-                    className="absolute inset-0 ring-2 ring-inset ring-vf-ember/80 rounded-[18px]"
-                    data-testid="button-view-own-story"
-                    aria-label="View your story"
-                  />
-                )}
-              </div>
-
-              {/* Twin badge, pinned to the portrait's corner — sits outside
-                  the portrait's own overflow-hidden box (this wrapper is the
-                  one with the clip; the badge is a sibling of it, not a
-                  child), so it isn't cut off by the portrait's rounded
-                  corner. Mint because this is the one thing on the page
-                  that's actually about the twin, not decoration. */}
-              <div
-                className="absolute -top-2.5 -right-2.5 w-9 h-9 rounded-full flex items-center justify-center"
-                style={{ background: "var(--vf-ink)", border: "2.5px solid var(--vf-mint)", boxShadow: "0 4px 10px rgba(12,9,16,.25)" }}
-                title="Your twin is learning"
-                data-testid="badge-twin-avatar"
+              </button>
+              <button
+                onClick={() => setShowStoryCreator(true)}
+                className="vf-press -ml-3.5 mt-7 w-6 h-6 rounded-full bg-vf-ember text-vf-ink flex items-center justify-center border-2 border-black/40"
+                aria-label="Add to your story"
+                data-testid="button-add-story-avatar"
               >
-                <TwinOrb size={16} />
-              </div>
+                <Plus className="w-3.5 h-3.5" strokeWidth={3} />
+              </button>
             </div>
+
+            <span
+              className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.12em]"
+              style={{ background: "rgba(12,9,16,.55)", color: "#8FE3C7", backdropFilter: "blur(6px)" }}
+              title="Your twin is learning"
+              data-testid="badge-twin-avatar"
+            >
+              <TwinGlyph size={14} /> Twin {answeredPct}%
+            </span>
+
+            {leadPhoto && (
+              <div className="absolute left-5 right-5 bottom-5" style={{ color: "#F5F0EA" }}>
+                <h1 className="font-display leading-[1.02] text-[clamp(36px,8vw,52px)]" data-testid="text-display-name">
+                  {profile.displayName || user?.firstName}
+                  {profile.age ? <span className="opacity-80">, {profile.age}</span> : null}
+                </h1>
+                <p className="text-[15px] mt-1 opacity-85" data-testid="text-meta-line">{metaLine}{profile.isVerified ? " · verified" : ""}</p>
+              </div>
+            )}
           </div>
 
-          {/* Name block — normal flow, starts safely clear of both the cover
-              and the portrait by construction: its margin-top is computed
-              from the exact same numbers used for the portrait's size and
-              overlap above, not just "enough in practice". On mobile it sits
-              centered below the (also centered) portrait; at sm+ it sits
-              beside the portrait, offset by the portrait's own max width
-              rather than sharing a flex alignment with it. Theme-aware
-              tokens throughout — this text reliably lands on the plain page
-              background now, never the cover's dark scrim, at any width. */}
-          <div
-            className={`text-center sm:text-left min-w-0 ${
-              hasCover
-                ? "mt-[calc(clamp(185px,22.5vw,260px)-40px)] sm:mt-0 sm:pt-[calc(clamp(185px,22.5vw,260px)-64px)]"
-                : "mt-[calc(clamp(185px,22.5vw,260px)+32px)] sm:mt-0 sm:pt-[calc(clamp(185px,22.5vw,260px)+32px)]"
-            } sm:ml-[260px]`}
-          >
-            <div className="sm:pb-2">
-              <h1 className="font-serif font-normal leading-[1.02] tracking-[-0.02em] text-[clamp(32px,4.2vw,48px)] text-vf-text" data-testid="text-display-name">
+          {!leadPhoto && (
+            <div>
+              <h1 className="vf-display text-vf-text text-[clamp(34px,7vw,48px)] leading-[1.02]" data-testid="text-display-name">
                 {profile.displayName || user?.firstName}
+                {profile.age ? <span className="text-vf-muted">, {profile.age}</span> : null}
               </h1>
-              <p className="text-[14px] mt-1 text-vf-muted" data-testid="text-meta-line">
-                {metaLine}{profile.isVerified ? " · verified" : ""}
-              </p>
-              <div className="mt-3 flex items-center gap-4 justify-center sm:justify-start flex-wrap">
-                <button
-                  onClick={() => setShowEditDialog(true)}
-                  className="inline-flex items-center rounded-full bg-vf-ember text-vf-ink font-bold px-5 h-10 text-[13.5px] btn-press vf-btn-primary hover:bg-[var(--vf-ember-soft)] transition-colors"
-                  data-testid="button-edit-profile"
-                >
-                  Edit profile
-                </button>
-                <button
-                  onClick={() => setLocation("/photos")}
-                  className="text-[13px] text-vf-muted hover:text-vf-text transition-colors"
-                  data-testid="button-photos"
-                >
-                  Photos
-                </button>
-                <button
-                  onClick={() => setLocation("/settings")}
-                  className="text-[13px] text-vf-muted hover:text-vf-text transition-colors"
-                  data-testid="button-open-settings"
-                >
-                  Settings
-                </button>
-                <button
-                  onClick={() => setLocation("/profile/preview")}
-                  className="text-[13px] text-vf-muted hover:text-vf-text transition-colors"
-                  data-testid="button-how-others-see-you"
-                >
-                  How others see you
-                </button>
-              </div>
+              <p className="vf-body text-vf-muted mt-1" data-testid="text-meta-line">{metaLine}{profile.isVerified ? " · verified" : ""}</p>
             </div>
+          )}
+
+          {/* Profile strength: a ring and the one next step. */}
+          <div className="flex items-center gap-4 rounded-[20px] border border-vf-line bg-vf-surface2 p-4" data-testid="chip-profile-completeness">
+            <StrengthRing value={completionScore} />
+            <div className="flex-1 min-w-0">
+              <div className="vf-label text-vf-faint">Profile strength</div>
+              {nextTask ? (
+                <>
+                  <div className="text-[15.5px] text-vf-text mt-0.5">{nextTask.label}</div>
+                  <div className="vf-small text-vf-muted">{nextTask.benefit}.</div>
+                </>
+              ) : (
+                <div className="text-[15.5px] text-vf-text mt-0.5">Everything's in. People see the whole of you.</div>
+              )}
+            </div>
+            {nextTask && (
+              <VfButton size="sm" variant="secondary" onClick={doTask} data-testid="button-next-task">
+                Do it
+              </VfButton>
+            )}
           </div>
+
+          {/* Everything about you, as rows. */}
+          <nav className="rounded-[20px] border border-vf-line bg-vf-surface2 overflow-hidden divide-y divide-vf-line" aria-label="Your profile" data-testid="profile-rows">
+            <ProfileRow icon={<Pencil className="w-4 h-4" />} label="Edit profile" sub="Name, words, where you are" onClick={() => setShowEditDialog(true)} testId="button-edit-profile" />
+            <ProfileRow icon={<Images className="w-4 h-4" />} label="Photos" sub={`${photoCount} photo${photoCount === 1 ? "" : "s"}${photoCount < 3 ? " · profiles with 3+ get more likes" : ""}`} onClick={() => setLocation("/photos")} testId="button-photos" />
+            <ProfileRow icon={<MessageSquareQuote className="w-4 h-4" />} label="Prompts" sub={`${prompts.length} of 3 answered`} onClick={() => document.getElementById("profile-prompts")?.scrollIntoView({ behavior: "smooth", block: "start" })} testId="row-prompts" />
+            <ProfileRow icon={<TwinGlyph size={16} />} label="Your twin" sub="What it says about you, and what it won't" onClick={() => setLocation("/twin-disclosure?from=/profile")} testId="row-your-twin" />
+            <ProfileRow icon={<Eye className="w-4 h-4" />} label="How others see you" sub="Your card and profile, exactly as shown" onClick={() => setLocation("/profile/preview")} testId="button-how-others-see-you" />
+            <ProfileRow icon={<Gem className="w-4 h-4" />} label="Plan" sub={myPlan ? `You're on ${myPlan.name}` : "Free"} onClick={() => setLocation("/plans")} testId="row-plan" />
+            <ProfileRow icon={<Gift className="w-4 h-4" />} label="Invite friends" sub="Bring your people" onClick={() => setLocation("/invite")} testId="row-invite" />
+            <ProfileRow icon={<SettingsIcon className="w-4 h-4" />} label="Settings" onClick={() => setLocation("/settings")} testId="button-open-settings" />
+          </nav>
         </header>
 
-        {/* Surfaced here — right where the completeness figure lives — because
-            a thin profile is exactly when "what does this actually look like"
-            is most useful to know. */}
-        {completionScore < 50 && (
-          <div
-            className="rounded-[14px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-center justify-between gap-3 vf-card"
-            data-testid="nudge-preview-thin-profile"
-          >
-            <p className="text-[13.5px] text-vf-muted">Your profile is thin — see what strangers actually get.</p>
-            <button
-              onClick={() => setLocation("/profile/preview")}
-              className="shrink-0 text-[13px] text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors"
-              data-testid="link-nudge-preview"
-            >
-              How others see you
-            </button>
-          </div>
-        )}
-
-        {/* story creator entry (kept compact — stories are a separate feature).
-            No negative margin here: the header above already overlaps its own
-            cover photo via -mt-7/-mt-8, and stacking a second pull-up caused
-            this to clip into (or scroll partly under) the button row above it. */}
-        <div className="mt-2">
+        {/* The story creator opens from the header avatar; its own trigger stays hidden. */}
+        <div className="h-0 [&_[data-testid=add-story-button-wrapper]]:hidden">
           <AddStoryButton
             onStoryAdded={() => { setShowStoryCreator(false); queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] }); }}
             open={showStoryCreator}
@@ -591,7 +584,7 @@ export default function Profile() {
           {/* LEFT — you */}
           <div className="flex flex-col gap-9">
             {/* In your words */}
-            <section>
+            <section id="profile-bio" className="scroll-mt-20">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-serif font-normal text-2xl text-vf-text">In your words</h2>
                 {!bioOpen && (
@@ -648,7 +641,7 @@ export default function Profile() {
             </section>
 
             {/* Prompts */}
-            <section>
+            <section id="profile-prompts" className="scroll-mt-20">
               <SectionLabel>Prompts</SectionLabel>
               {prompts.length === 0 ? (
                 // An empty section shouldn't look like a filled one — plain
@@ -671,7 +664,7 @@ export default function Profile() {
                 <div className="mt-3 flex flex-col gap-3">
                   <button
                     onClick={() => setPromptEditor({ index: 0, q: prompts[0].q, a: prompts[0].a })}
-                    className="w-full text-left rounded-[18px] border border-vf-line bg-vf-surface2 p-5 transition-colors duration-150 hover:bg-vf-elevated vf-card"
+                    className="w-full text-left rounded-[18px] border border-vf-line bg-vf-surface2 p-5 transition-colors duration-150 hover:bg-[var(--vf-elevated)] vf-card"
                     data-testid="prompt-0"
                   >
                     <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-vf-faint">{prompts[0].q}</div>
@@ -683,7 +676,7 @@ export default function Profile() {
                       <button
                         key={i + 1}
                         onClick={() => setPromptEditor({ index: i + 1, q: p.q, a: p.a })}
-                        className="w-full text-left rounded-[16px] border border-vf-line bg-vf-surface2 p-4 transition-colors duration-150 hover:bg-vf-elevated vf-card"
+                        className="w-full text-left rounded-[16px] border border-vf-line bg-vf-surface2 p-4 transition-colors duration-150 hover:bg-[var(--vf-elevated)] vf-card"
                         data-testid={`prompt-${i + 1}`}
                       >
                         <div className="text-[12.5px] text-vf-muted">{p.q}</div>
@@ -693,7 +686,7 @@ export default function Profile() {
                     {prompts.length < 3 && (
                       <button
                         onClick={() => setPromptEditor({ index: prompts.length, q: PROMPT_BANK[0], a: "" })}
-                        className="w-full text-left rounded-[16px] border border-dashed border-vf-line p-4 flex items-center transition-colors duration-150 hover:bg-vf-elevated"
+                        className="w-full text-left rounded-[16px] border border-dashed border-vf-line p-4 flex items-center transition-colors duration-150 hover:bg-[var(--vf-elevated)]"
                         data-testid="prompt-add"
                       >
                         <div className="text-[13.5px] text-vf-muted">Answer one more — your twin quotes these</div>

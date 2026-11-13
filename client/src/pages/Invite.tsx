@@ -4,7 +4,7 @@
 // Settings' invite row both lead here.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, MessageCircle, ImageIcon, Link2 } from "lucide-react";
+import { Loader2, MessageCircle, ImageIcon, Link2, Copy } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { useProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +29,9 @@ export default function Invite() {
   const { data: me } = useProfile();
   const { data, isLoading } = useQuery<ReferralSummary>({ queryKey: ["/api/referrals/me"] });
   const [making, setMaking] = useState(false);
+  // The share card can carry your photo, only if you choose (§7.18).
+  const [withPhoto, setWithPhoto] = useState(false);
+  const myPhoto: string | null = (me as any)?.coverPhotoUrl || (me as any)?.photoUrl || null;
 
   const first = (me?.displayName || "").trim().split(/\s+/)[0];
   const weeks = data ? Math.floor(data.daysEarned / 7) : 0;
@@ -40,6 +43,16 @@ export default function Invite() {
     if (!data) return;
     logShare("invite", "link");
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  };
+
+  const copyCode = async () => {
+    if (!data) return;
+    try {
+      await navigator.clipboard.writeText(data.code);
+      toast({ title: "Code copied" });
+    } catch {
+      toast({ title: "Your code", description: data.code });
+    }
   };
 
   const copy = async () => {
@@ -67,7 +80,7 @@ export default function Invite() {
             `Join with my code and we both get a free week.`,
           ],
           footer: `Code ${data.code}`,
-          imageUrl: null,
+          imageUrl: withPhoto && myPhoto ? myPhoto : null,
         },
         `Join me on Destira, we both get a free week: ${url}`,
         "destira-invite.png",
@@ -104,6 +117,22 @@ export default function Invite() {
           </div>
         ) : (
           <>
+            <div className="rounded-[22px] border border-vf-line bg-vf-surface2 p-5 flex items-center gap-4" data-testid="invite-code-card">
+              <div className="flex-1 min-w-0">
+                <div className={`${EYEBROW} text-vf-faint`}>Your code</div>
+                <div className="font-mono text-[clamp(30px,9vw,40px)] leading-none tracking-[0.12em] text-vf-text mt-2 select-all truncate" data-testid="text-invite-code">
+                  {data.code}
+                </div>
+              </div>
+              <button
+                onClick={copyCode}
+                className="vf-press shrink-0 inline-flex items-center gap-1.5 h-11 px-4 rounded-full border border-vf-line text-[14px] text-vf-text hover:border-vf-text/25 transition-colors"
+                data-testid="button-copy-code"
+              >
+                <Copy className="w-4 h-4" /> Copy
+              </button>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-[18px] border border-vf-line bg-vf-surface2 p-4">
                 <div className="font-serif text-[34px] leading-none text-vf-text" data-testid="text-friends-joined">
@@ -151,12 +180,12 @@ export default function Invite() {
               </button>
             </div>
 
-            <div className="rounded-[14px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-center justify-between gap-3">
-              <span className="text-[13px] text-vf-muted">Your code</span>
-              <span className="font-mono text-[14px] tracking-[0.14em] text-vf-text select-all" data-testid="text-invite-code">
-                {data.code}
-              </span>
-            </div>
+            {myPhoto && (
+              <label className="flex items-center gap-3 -mt-2 text-[14px] text-vf-muted cursor-pointer min-h-[44px]" data-testid="toggle-card-photo">
+                <input type="checkbox" checked={withPhoto} onChange={(e) => setWithPhoto(e.target.checked)} className="w-4 h-4 accent-[hsl(var(--vf-ember))]" />
+                Put my photo on the Status card
+              </label>
+            )}
 
             {data.friends.length > 0 && (
               <div>

@@ -36,6 +36,25 @@ function methodsFor(walletHandledByNardoPay: boolean): { id: PayMethod; label: s
   ];
 }
 
+// Three things to try the moment a plan opens up (§7.17), each one real.
+const TRY_NOW = {
+  spark: [
+    { title: "See who likes you", sub: "Names and faces, not just a count", href: "/matches" },
+    { title: "Interview more twins", sub: "More conversations a week", href: "/discover" },
+    { title: "Join more rooms", sub: "The Lounge has more room for you", href: "/lounge" },
+  ],
+  flame: [
+    { title: "Host an event", sub: "Small, hosted, in a real place", href: "/events/host" },
+    { title: "Read whole interviews", sub: "Every line your twins said", href: "/chats" },
+    { title: "See who likes you", sub: "Names and faces, not just a count", href: "/matches" },
+  ],
+  ember: [
+    { title: "Read whole interviews", sub: "Every line your twins said", href: "/chats" },
+    { title: "Host an event", sub: "Small, hosted, in a real place", href: "/events/host" },
+    { title: "See who likes you", sub: "Names and faces, not just a count", href: "/matches" },
+  ],
+} as const;
+
 export default function PlansPay() {
   const [, setLocation] = useLocation();
   const search = useSearch();
@@ -155,22 +174,31 @@ export default function PlansPay() {
     return (
       <Shell>
         <div className={EYEBROW}>Done</div>
-        <h1 className="font-serif font-normal text-vf-text mt-3 text-[clamp(24px,7vw,30px)] leading-[1.1]">
-          You're on {card.name}.
+        <h1 className="font-serif font-normal text-vf-text mt-3 text-[clamp(28px,8vw,38px)] leading-[1.06]" data-testid="text-paid-title">
+          You're on <span className={tier === "ember" ? "text-vf-gold" : "text-vf-ember"}>{card.name}</span>.
         </h1>
+        <p className="font-serif text-[20px] text-vf-muted mt-1">Here's what just opened up.</p>
         <p className="text-[14px] text-vf-muted mt-3">
           {priceLabel(paidPriceCents)} / {PERIOD_LABEL[paidPeriod]}, in US dollars.{" "}
           {isAutoRenewing
             ? `Renews automatically in about ${renewalWindow} — cancel any time from Settings.`
             : `We'll remind you before it ends in about ${renewalWindow} — pay again to keep it going, cancel any time from Settings.`}
         </p>
-        <div className="mt-5 rounded-[16px] border border-vf-line bg-vf-surface2 p-4">
-          <div className={`${EYEBROW} mb-2`}>Live now</div>
-          <ul className="flex flex-col gap-1.5 text-[13.5px] text-vf-soft">
-            {card.gets.slice(0, 3).map((g) => (
-              <li key={g}>{g}</li>
-            ))}
-          </ul>
+        <div className="mt-6 flex flex-col gap-2" data-testid="paid-try-now">
+          <div className={`${EYEBROW} mb-1`}>Try now</div>
+          {TRY_NOW[tier as keyof typeof TRY_NOW]?.map((t) => (
+            <button
+              key={t.href}
+              onClick={() => setLocation(t.href)}
+              className="flex items-center gap-3 text-left rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3.5 hover:border-vf-text/20 transition-colors"
+            >
+              <span className="flex-1 min-w-0">
+                <span className="block text-[15px] text-vf-text">{t.title}</span>
+                <span className="block text-[13px] text-vf-muted">{t.sub}</span>
+              </span>
+              <span className="text-vf-ember text-[18px]" aria-hidden="true">→</span>
+            </button>
+          ))}
         </div>
         <button
           onClick={() => setLocation(from)}

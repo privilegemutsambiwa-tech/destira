@@ -18,6 +18,7 @@ import { useCancelSubscription } from "@/hooks/use-payments";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { AppLockSetting } from "@/components/app-lock";
+import { SearchField } from "@/components/ui-vf";
 import { PushTestRow } from "@/components/push-test";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
@@ -73,7 +74,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
       onClick={(e) => { e.stopPropagation(); onChange(!value); }}
       style={{
         width: "42px", height: "24px", borderRadius: "100px",
-        background: value ? MINT : "var(--vf-line)",
+        background: value ? EMBER : "var(--vf-line)",
         boxShadow: value ? "inset 0 1px 2px rgba(0,0,0,0.12)" : "inset 0 1px 2px rgba(0,0,0,0.08)",
         transition: "background 0.2s, box-shadow 0.2s", position: "relative", cursor: "pointer", flexShrink: 0,
       }}
@@ -89,14 +90,17 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   );
 }
 
-function ToggleRow({ icon: Icon, label, value, onChange, testId }: {
+function ToggleRow({ icon: Icon, label, sublabel, value, onChange, testId }: {
   icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
-  label: string; value: boolean; onChange: (v: boolean) => void; testId?: string;
+  label: string; sublabel?: string; value: boolean; onChange: (v: boolean) => void; testId?: string;
 }) {
   return (
-    <div className="vf-row" style={ROW_STYLE} onClick={() => onChange(!value)} data-testid={testId}>
-      <Icon className="w-5 h-5 mr-3" style={{ color: MUTED }} />
-      <span className="flex-1 text-sm font-medium text-foreground">{label}</span>
+    <div className="vf-row" style={ROW_STYLE} onClick={() => onChange(!value)} role="switch" aria-checked={value} data-testid={testId}>
+      <Icon className="w-5 h-5 mr-3 shrink-0" style={{ color: MUTED }} />
+      <div className="flex-1 min-w-0 pr-3">
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        {sublabel && <p className="text-xs" style={{ color: MUTED }}>{sublabel}</p>}
+      </div>
       <Toggle value={value} onChange={onChange} />
     </div>
   );
@@ -1146,7 +1150,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
         </DialogHeader>
         <DialogFooter className="gap-2">
           <button
-            className="px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-150 hover:bg-vf-elevated"
+            className="px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-150 hover:bg-[var(--vf-elevated)]"
             style={{ color: MUTED }}
             onClick={() => setShowCancelDialog(false)}
             data-testid="button-cancel-cancel-plan"
@@ -1677,7 +1681,7 @@ function AiSummaryPanel({ onBack, profile }: { onBack: () => void; profile: any 
             <button
               onClick={handleGenerate}
               disabled={generate.isPending}
-              className="w-full py-3 text-sm font-medium rounded-xl transition-colors duration-150 hover:bg-vf-elevated"
+              className="w-full py-3 text-sm font-medium rounded-xl transition-colors duration-150 hover:bg-[var(--vf-elevated)]"
               style={{ color: MUTED, background: "none", border: "none", cursor: "pointer" }}
               data-testid="button-regenerate-ai-summary"
             >
@@ -1735,7 +1739,7 @@ function ClearMemoryPanel({ onBack }: { onBack: () => void }) {
             </button>
             <button
               onClick={() => setConfirmed(false)}
-              className="w-full py-3 text-sm font-medium rounded-xl transition-colors duration-150 hover:bg-vf-elevated"
+              className="w-full py-3 text-sm font-medium rounded-xl transition-colors duration-150 hover:bg-[var(--vf-elevated)]"
               style={{ color: MUTED, background: "none", border: "none", cursor: "pointer" }}
               data-testid="button-cancel-clear"
             >
@@ -1757,6 +1761,7 @@ export default function Settings() {
 
   const [activePanel, setActivePanel] = useState<PanelKey>(null);
   const [activeSection, setActiveSection] = useState("account"); // desktop two-pane nav only
+  const [query, setQuery] = useState("");
   const [showPauseDialog, setShowPauseDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -1851,51 +1856,99 @@ export default function Settings() {
   // is just the card's rows; margin/wrapping is applied by whichever layout
   // is rendering it, not baked in here.
   const cardStyle: React.CSSProperties = { background: CARD, borderRadius: "16px", overflow: "hidden" };
-  const sections: { id: string; label: string; danger?: boolean; content: React.ReactNode }[] = [
+  // Grouped as the brief asks (docs/destira-upgrade-prompt.md §7.16): Account,
+  // Your twin, Privacy & safety, Notifications, Discovery, Plan & billing,
+  // App, Help, Legal, then the things that can't be undone, last.
+  // `keywords` is what "Search settings" matches, besides the label.
+  const sections: { id: string; label: string; keywords: string; danger?: boolean; content: React.ReactNode }[] = [
     {
       id: "account",
       label: "Account",
+      keywords: "edit profile email password verify verification pause hide sign out log out",
       content: (
         <div className="vf-card" style={cardStyle}>
-          <ChevronRow icon={User} label="Edit Profile" onClick={() => setLocation("/profile")} testId="row-edit-profile" />
-          <ChevronRow icon={Mail} label="Change Email" sublabel="Update your email address" onClick={() => setActivePanel("change-email")} testId="row-change-email" />
-          <ChevronRow icon={Lock} label="Change Password" sublabel="Update your password" onClick={() => setActivePanel("change-password")} testId="row-change-password" />
-          <AppLockSetting Row={ToggleRow} />
-        </div>
-      ),
-    },
-    {
-      id: "appearance",
-      label: "Appearance",
-      content: (
-        <div className="vf-card" style={cardStyle}>
-          <AppearanceRow />
+          <ChevronRow icon={User} label="Edit profile" sublabel="Name, photos, your words" onClick={() => setLocation("/profile")} testId="row-edit-profile" />
+          <ChevronRow icon={Mail} label="Change email" sublabel="Where we send sign-in links" onClick={() => setActivePanel("change-email")} testId="row-change-email" />
+          <ChevronRow icon={Lock} label="Change password" onClick={() => setActivePanel("change-password")} testId="row-change-password" />
+          <ChevronRow icon={Check} label="Verify your profile" sublabel={profile?.verificationStatus === "pending" ? "Pending review" : profile?.isVerified ? "Verified" : "One less thing for people to wonder about"} onClick={() => setActivePanel("verify")} testId="row-verify" />
+          <ChevronRow icon={PauseCircle} label="Pause account" sublabel="Hide your profile for a while" onClick={() => setShowPauseDialog(true)} testId="row-pause-account" />
+          <ChevronRow icon={LogOut} label="Sign out" onClick={() => logout()} testId="row-sign-out" />
         </div>
       ),
     },
     {
       id: "twin",
-      label: "Twin Settings",
+      label: "Your twin",
+      keywords: "twin ai talk interview tone style boundaries discuss topics summary",
       content: (
         <div className="vf-card" style={cardStyle}>
-          <ChevronRow icon={Brain} label="Interview AI Twin" onClick={() => setLocation("/twin-chat?from=/settings")} testId="row-twin-chat" />
-          <ChevronRow icon={Volume2} label="Customize Twin Tone" sublabel="Style, verbosity, formality" onClick={() => setActivePanel("twin-tone")} testId="row-twin-tone" />
-          <ChevronRow icon={Shield} label="What your twin may discuss" sublabel="Per-topic: open, vague, or off — plus your own note" onClick={() => setLocation("/twin-disclosure")} testId="row-twin-boundaries" />
+          <ChevronRow icon={Brain} label="Talk to your twin" sublabel="Tell it more, so it answers better" onClick={() => setLocation("/twin-chat?from=/settings")} testId="row-twin-chat" />
+          <ChevronRow icon={Volume2} label="How your twin talks" sublabel="Style, length, formality" onClick={() => setActivePanel("twin-tone")} testId="row-twin-tone" />
+          <ChevronRow icon={Shield} label="What your twin may discuss" sublabel="Per topic: open, vague or off, plus your own note" onClick={() => setLocation("/twin-disclosure")} testId="row-twin-boundaries" />
+          <ChevronRow icon={Wrench} label="Write your summary with AI" sublabel="A starting point you can edit" onClick={() => setActivePanel("ai-summary")} testId="row-ai-summary" />
+        </div>
+      ),
+    },
+    {
+      id: "privacy",
+      label: "Privacy & safety",
+      keywords: "public private profile distance block blocked data export delete app lock fingerprint",
+      content: (
+        <div className="vf-card" style={cardStyle}>
+          <ToggleRow
+            icon={profile?.isPublic ? Eye : EyeOff}
+            label="Public profile"
+            sublabel={profile?.isPublic ? "People can find you in Discover" : "Hidden from Discover; your chats carry on"}
+            value={profile?.isPublic ?? false}
+            onChange={handleTogglePublic}
+            testId="toggle-public-profile"
+          />
+          <ToggleRow icon={MapPin} label="Show distance" sublabel="Others see roughly how far away you are, never where" value={showDistance} onChange={handleToggleShowDistance} testId="toggle-show-distance" />
+          <AppLockSetting Row={ToggleRow} />
+          <ChevronRow icon={Shield} label="Blocked people" sublabel="See and undo blocks" onClick={() => setActivePanel("block-list")} testId="row-block-list" />
+          <ChevronRow icon={FileText} label="Your data" sublabel="Download a copy, or delete it" onClick={() => setActivePanel("data-privacy")} testId="row-data-privacy" />
+        </div>
+      ),
+    },
+    {
+      id: "notifications",
+      label: "Notifications",
+      keywords: "push notifications matches messages stories interviews events email digest tips news test",
+      content: (
+        <div className="flex flex-col gap-4">
+          <div className="vf-card" style={cardStyle}>
+            <ToggleRow icon={Zap} label="New matches" sublabel="When a like becomes mutual" value={notifEnabled("matches")} onChange={(v) => handleToggleNotifPref("matches", v)} testId="toggle-notif-matches" />
+            <ToggleRow icon={MessageSquare} label="Messages" sublabel="New messages in your chats" value={notifEnabled("messages")} onChange={(v) => handleToggleNotifPref("messages", v)} testId="toggle-notif-messages" />
+            <ToggleRow icon={Bell} label="Stories" sublabel="When people you know post a moment" value={notifEnabled("stories")} onChange={(v) => handleToggleNotifPref("stories", v)} testId="toggle-notif-stories" />
+            <ToggleRow icon={Brain} label="Twin interviews" sublabel="When someone asks your twin about you" value={notifEnabled("interviews")} onChange={(v) => handleToggleNotifPref("interviews", v)} testId="toggle-notif-interviews" />
+            <ToggleRow icon={CalendarDays} label="Events near you" sublabel="When something you'd like is on nearby" value={notifEnabled("events")} onChange={(v) => handleToggleNotifPref("events", v)} testId="toggle-notif-events" />
+            <PushTestRow Row={ChevronRow} />
+          </div>
+          <div className="vf-card" style={cardStyle}>
+            <ToggleRow icon={Mail} label="Email from Destira" sublabel="Turn off to get no email except account and safety notes" value={notifEnabled("email_all")} onChange={(v) => handleToggleNotifPref("email_all", v)} testId="toggle-email-all" />
+            {notifEnabled("email_all") && (
+              <>
+                <ToggleRow icon={Heart} label="When someone likes you" sublabel="One email, not one per like" value={notifEnabled("email_likes")} onChange={(v) => handleToggleNotifPref("email_likes", v)} testId="toggle-email-likes" />
+                <ToggleRow icon={CalendarDays} label="Weekly digest" sublabel="What happened while you were away" value={notifEnabled("email_digest")} onChange={(v) => handleToggleNotifPref("email_digest", v)} testId="toggle-email-digest" />
+                <ToggleRow icon={Bell} label="Getting-started tips" sublabel="A few, early on, then they stop" value={notifEnabled("email_tips")} onChange={(v) => handleToggleNotifPref("email_tips", v)} testId="toggle-email-tips" />
+                <ToggleRow icon={Megaphone} label="News and updates" sublabel="New features, now and then" value={notifEnabled("email_news")} onChange={(v) => handleToggleNotifPref("email_news", v)} testId="toggle-email-news" />
+              </>
+            )}
+          </div>
         </div>
       ),
     },
     {
       id: "discovery",
       label: "Discovery",
+      keywords: "location distance km proximity alerts age range who you see gender events preferences",
       content: (
         <div className="vf-card" style={cardStyle}>
-          <ToggleRow icon={MapPin} label="Show Distance" value={showDistance} onChange={handleToggleShowDistance} testId="toggle-show-distance" />
-          <ChevronRow icon={MapPin} label="Location Preferences" sublabel={`Within ${profile?.maxDistanceKm ?? 100} km`} onClick={() => setActivePanel("location")} testId="row-location" />
-          <ChevronRow icon={Zap} label="Proximity Alerts" sublabel="When someone worth knowing is at the same place" onClick={() => setActivePanel("proximity")} testId="row-proximity" />
-          <ChevronRow icon={Sliders} label="Age Range" sublabel={`${profile?.ageMinPreference ?? 18}–${profile?.ageMaxPreference ?? 65} years`} onClick={() => setActivePanel("age-range")} testId="row-age-range" />
+          <ChevronRow icon={MapPin} label="How far to look" sublabel={`Within ${profile?.maxDistanceKm ?? 100} km`} onClick={() => setActivePanel("location")} testId="row-location" />
+          <ChevronRow icon={Sliders} label="Age range" sublabel={`${profile?.ageMinPreference ?? 18}–${profile?.ageMaxPreference ?? 65} years`} onClick={() => setActivePanel("age-range")} testId="row-age-range" />
           <ChevronRow
             icon={Users}
-            label="Who You See"
+            label="Who you see"
             sublabel={
               !profile?.seekingGenders?.length || profile.seekingGenders.includes("everyone")
                 ? "Everyone"
@@ -1906,109 +1959,65 @@ export default function Settings() {
             onClick={() => setActivePanel("seeking-genders")}
             testId="row-seeking-genders"
           />
-          <ChevronRow icon={CalendarDays} label="Event Preferences" sublabel="What shows up in your Events feed" onClick={() => setLocation("/settings/events?from=/settings")} testId="row-event-preferences" />
-        </div>
-      ),
-    },
-    {
-      id: "privacy",
-      label: "Privacy",
-      content: (
-        <div className="vf-card" style={cardStyle}>
-          <ToggleRow
-            icon={profile?.isPublic ? Eye : EyeOff}
-            label="Public Profile"
-            value={profile?.isPublic ?? false}
-            onChange={handleTogglePublic}
-            testId="toggle-public-profile"
-          />
-          <ChevronRow icon={Shield} label="Block List" sublabel="Manage blocked users" onClick={() => setActivePanel("block-list")} testId="row-block-list" />
-          <ChevronRow icon={FileText} label="Data & Privacy" sublabel="Export or delete your data" onClick={() => setActivePanel("data-privacy")} testId="row-data-privacy" />
-        </div>
-      ),
-    },
-    {
-      id: "notifications",
-      label: "Notifications",
-      content: (
-        <div className="vf-card" style={cardStyle}>
-          <ToggleRow icon={Zap} label="New Matches" value={notifEnabled("matches")} onChange={(v) => handleToggleNotifPref("matches", v)} testId="toggle-notif-matches" />
-          <ToggleRow icon={MessageSquare} label="Messages" value={notifEnabled("messages")} onChange={(v) => handleToggleNotifPref("messages", v)} testId="toggle-notif-messages" />
-          <ToggleRow icon={Bell} label="Stories" value={notifEnabled("stories")} onChange={(v) => handleToggleNotifPref("stories", v)} testId="toggle-notif-stories" />
-          <ToggleRow icon={Brain} label="Interview Requests" value={notifEnabled("interviews")} onChange={(v) => handleToggleNotifPref("interviews", v)} testId="toggle-notif-interviews" />
-          <ToggleRow icon={CalendarDays} label="Events Near You" value={notifEnabled("events")} onChange={(v) => handleToggleNotifPref("events", v)} testId="toggle-notif-events" />
-          <PushTestRow Row={ChevronRow} />
-        </div>
-      ),
-    },
-    {
-      id: "email",
-      label: "Email",
-      content: (
-        <div className="vf-card" style={cardStyle}>
-          <ToggleRow icon={Mail} label="Email from Destira" value={notifEnabled("email_all")} onChange={(v) => handleToggleNotifPref("email_all", v)} testId="toggle-email-all" />
-          {notifEnabled("email_all") && (
-            <>
-              <ToggleRow icon={Heart} label="When someone likes you" value={notifEnabled("email_likes")} onChange={(v) => handleToggleNotifPref("email_likes", v)} testId="toggle-email-likes" />
-              <ToggleRow icon={CalendarDays} label="Weekly digest and catch-ups" value={notifEnabled("email_digest")} onChange={(v) => handleToggleNotifPref("email_digest", v)} testId="toggle-email-digest" />
-              <ToggleRow icon={Bell} label="Getting-started tips" value={notifEnabled("email_tips")} onChange={(v) => handleToggleNotifPref("email_tips", v)} testId="toggle-email-tips" />
-              <ToggleRow icon={Megaphone} label="News and updates" value={notifEnabled("email_news")} onChange={(v) => handleToggleNotifPref("email_news", v)} testId="toggle-email-news" />
-            </>
-          )}
-        </div>
-      ),
-    },
-    {
-      id: "profile-tools",
-      label: "Profile Tools",
-      content: (
-        <div className="vf-card" style={cardStyle}>
-          <ChevronRow icon={Wrench} label="Generate AI Summary" onClick={() => setActivePanel("ai-summary")} testId="row-ai-summary" />
-          <ChevronRow icon={Check} label="Verify Profile" sublabel={profile?.verificationStatus === "pending" ? "Pending review" : profile?.isVerified ? "Verified" : "Get the blue checkmark"} onClick={() => setActivePanel("verify")} testId="row-verify" />
-          <ChevronRow icon={Wrench} label="Manage Photos" onClick={() => setLocation("/photos")} testId="row-manage-photos" />
-        </div>
-      ),
-    },
-    {
-      id: "invite",
-      label: "Invite",
-      content: (
-        <div className="vf-card" style={cardStyle}>
-          <InviteRow />
+          <ChevronRow icon={Zap} label="Proximity alerts" sublabel="When someone worth knowing is at the same place" onClick={() => setActivePanel("proximity")} testId="row-proximity" />
+          <ChevronRow icon={CalendarDays} label="Event preferences" sublabel="What shows up in your Events feed" onClick={() => setLocation("/settings/events?from=/settings")} testId="row-event-preferences" />
         </div>
       ),
     },
     {
       id: "subscription",
-      label: "Subscription",
+      label: "Plan & billing",
+      keywords: "plan plans subscription billing cancel upgrade spark flame ember invite friend referral",
       content: (
         <div className="vf-card" style={cardStyle}>
-          <ChevronRow icon={Crown} label="Plans" sublabel="See what each plan gets you" onClick={() => setLocation("/plans")} testId="row-upgrade" />
-          <ChevronRow icon={CreditCard} label="Manage Billing" sublabel="View plan, cancel subscription" onClick={() => setActivePanel("billing")} testId="row-billing" />
+          <ChevronRow icon={Crown} label="Plans" sublabel="What each plan opens up" onClick={() => setLocation("/plans")} testId="row-upgrade" />
+          <ChevronRow icon={CreditCard} label="Billing" sublabel="Your plan, renewals, cancel" onClick={() => setActivePanel("billing")} testId="row-billing" />
+          <InviteRow />
+        </div>
+      ),
+    },
+    {
+      id: "appearance",
+      label: "App",
+      keywords: "appearance theme dark light system photos",
+      content: (
+        <div className="vf-card" style={cardStyle}>
+          <AppearanceRow />
+          <ChevronRow icon={Wrench} label="Photos" sublabel="Order, cover and crops" onClick={() => setLocation("/photos")} testId="row-manage-photos" />
         </div>
       ),
     },
     {
       id: "support",
-      label: "Support",
+      label: "Help",
+      keywords: "help faq contact support feedback bug idea",
       content: (
         <div className="vf-card" style={cardStyle}>
-          <ChevronRow icon={BookOpen} label="Help Center" sublabel="FAQs and guides" onClick={() => setActivePanel("help")} testId="row-help" />
-          <ChevronRow icon={Phone} label="Contact Us" sublabel="Send us a message" onClick={() => setActivePanel("contact")} testId="row-contact" />
-          <ChevronRow icon={Wrench} label="Send Feedback" sublabel="A bug, an idea, or just a note" onClick={() => setActivePanel("feedback")} testId="row-feedback" />
-          <ChevronRow icon={FileText} label="Terms of Service" onClick={() => setActivePanel("terms")} testId="row-terms" />
-          <ChevronRow icon={Shield} label="Privacy Policy" onClick={() => setActivePanel("privacy-policy")} testId="row-privacy-policy" />
+          <ChevronRow icon={BookOpen} label="Help centre" sublabel="Answers to common questions" onClick={() => setActivePanel("help")} testId="row-help" />
+          <ChevronRow icon={Phone} label="Contact us" sublabel="A person reads every message" onClick={() => setActivePanel("contact")} testId="row-contact" />
+          <ChevronRow icon={Wrench} label="Send feedback" sublabel="A bug, an idea, or just a note" onClick={() => setActivePanel("feedback")} testId="row-feedback" />
+        </div>
+      ),
+    },
+    {
+      id: "legal",
+      label: "Legal",
+      keywords: "terms service privacy policy legal",
+      content: (
+        <div className="vf-card" style={cardStyle}>
+          <ChevronRow icon={FileText} label="Terms of service" onClick={() => setActivePanel("terms")} testId="row-terms" />
+          <ChevronRow icon={Shield} label="Privacy policy" onClick={() => setActivePanel("privacy-policy")} testId="row-privacy-policy" />
         </div>
       ),
     },
     {
       id: "irreversible",
-      label: "Irreversible",
+      label: "Can't be undone",
+      keywords: "delete account clear twin memory forget erase",
       danger: true,
       // Its own visually distinct strip, not just another vf-card: a red
       // wash + border and a "think twice" header, so these two rows never
-      // blend into the neutral settings rows around them, on mobile or
-      // desktop, no matter where they land in either layout.
+      // blend into the neutral settings rows around them.
       content: (
         <div
           className="vf-card"
@@ -2020,24 +2029,19 @@ export default function Settings() {
             style={{ padding: "11px 16px", borderBottom: "1px solid rgba(239,68,68,0.18)" }}
           >
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "#EF4444" }} />
-            <span style={{ ...MONO_EYEBROW, color: "#EF4444" }}>Think twice — these can't be undone</span>
+            <span style={{ ...MONO_EYEBROW, color: "#EF4444" }}>Think twice: these can't be undone</span>
           </div>
-          <ChevronRow icon={X} label="Clear Twin Memory" sublabel="Your twin forgets everything it has learned" onClick={() => setActivePanel("clear-memory")} destructive testId="row-clear-memory" />
-          <ChevronRow icon={Trash2} label="Delete Account" sublabel="Permanently remove all data" onClick={() => setShowDeleteDialog(true)} destructive testId="row-delete-account" />
-        </div>
-      ),
-    },
-    {
-      id: "account-actions",
-      label: "Account actions",
-      content: (
-        <div className="vf-card" style={cardStyle}>
-          <ChevronRow icon={PauseCircle} label="Pause Account" sublabel="Hide your profile temporarily" onClick={() => setShowPauseDialog(true)} testId="row-pause-account" />
-          <ChevronRow icon={LogOut} label="Sign Out" onClick={() => logout()} testId="row-sign-out" />
+          <ChevronRow icon={X} label="Clear your twin's memory" sublabel="Your twin forgets everything it has learned" onClick={() => setActivePanel("clear-memory")} destructive testId="row-clear-memory" />
+          <ChevronRow icon={Trash2} label="Delete account" sublabel="Everything, permanently" onClick={() => setShowDeleteDialog(true)} destructive testId="row-delete-account" />
         </div>
       ),
     },
   ];
+
+  const q = query.trim().toLowerCase();
+  const matching = q
+    ? sections.filter((s) => s.label.toLowerCase().includes(q) || s.keywords.includes(q))
+    : sections;
 
   const activeSectionObj = sections.find((s) => s.id === activeSection) ?? sections[0];
 
@@ -2050,6 +2054,28 @@ export default function Settings() {
         </button>
         <h1 style={{ ...SERIF, color: TEXT, fontSize: "20px" }}>Settings</h1>
       </div>
+
+      <div style={{ maxWidth: "1080px", margin: "0 auto" }} className="px-4 pt-4">
+        <div className="lg:max-w-[480px]">
+          <SearchField label="Search settings" value={query} onChange={setQuery} data-testid="input-search-settings" />
+        </div>
+      </div>
+
+      {q ? (
+        <div style={{ maxWidth: "620px", margin: "0 auto", padding: "0 0 40px" }} data-testid="settings-search-results">
+          {matching.length === 0 ? (
+            <p className="px-4 pt-8 text-center text-[14px]" style={{ color: MUTED }}>Nothing called that. Try another word.</p>
+          ) : (
+            matching.map((s) => (
+              <div key={s.id}>
+                <div style={s.danger ? { ...SECTION_HEADER_STYLE, color: "#EF4444" } : SECTION_HEADER_STYLE}>{s.label}</div>
+                <div style={{ margin: "0 16px" }}>{s.content}</div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+      <>
 
       {/* Mobile / tablet — the existing stacked drill-down column, touch
           friendly, unchanged in every way except that "Irreversible" now
@@ -2103,6 +2129,8 @@ export default function Settings() {
           <div style={{ maxWidth: "620px" }}>{activeSectionObj.content}</div>
         </div>
       </div>
+      </>
+      )}
 
       <Dialog open={showPauseDialog} onOpenChange={setShowPauseDialog}>
         <DialogContent style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: "20px" }}>
@@ -2111,7 +2139,7 @@ export default function Settings() {
             <DialogDescription style={{ color: MUTED }}>Your profile will be hidden from discovery. You can reactivate anytime.</DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <button className="px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-150 hover:bg-vf-elevated" style={{ color: MUTED }} onClick={() => setShowPauseDialog(false)} data-testid="button-cancel-pause">Cancel</button>
+            <button className="px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-150 hover:bg-[var(--vf-elevated)]" style={{ color: MUTED }} onClick={() => setShowPauseDialog(false)} data-testid="button-cancel-pause">Cancel</button>
             <button
               className="px-4 py-2 text-sm vf-btn-primary"
               style={{ background: EMBER, color: INK, fontWeight: 600, borderRadius: "10px", border: "none" }}
@@ -2148,7 +2176,7 @@ export default function Settings() {
             />
           </div>
           <DialogFooter className="gap-2">
-            <button className="px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-150 hover:bg-vf-elevated" style={{ color: MUTED }} onClick={() => { setShowDeleteDialog(false); setDeleteConfirmText(""); }} data-testid="button-cancel-delete">Cancel</button>
+            <button className="px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-150 hover:bg-[var(--vf-elevated)]" style={{ color: MUTED }} onClick={() => { setShowDeleteDialog(false); setDeleteConfirmText(""); }} data-testid="button-cancel-delete">Cancel</button>
             <button
               disabled={deleteConfirmText !== "DELETE" || deleteMutation.isPending}
               className="px-4 py-2 text-sm font-semibold text-foreground vf-btn-primary"
