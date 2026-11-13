@@ -37,7 +37,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
 
   const navItems = [
     { href: "/discover", icon: Search, label: "Discover", badge: 0 },
-    { href: "/interviews", icon: MessageCircle, label: "Chat", badge: 0 },
+    { href: "/chats", icon: MessageCircle, label: "Chats", badge: 0 },
     { href: "/matches", icon: Heart, label: "Likes", badge: likesBadge },
     { href: "/lounge", icon: Users, label: "Lounge", badge: 0 },
     { href: "/events", icon: CalendarDays, label: "Events", badge: 0 },

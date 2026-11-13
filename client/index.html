@@ -76,14 +76,11 @@
       {"@context":"https://schema.org","@type":"Organization","name":"Destira","url":"https://destira.date","logo":"https://destira.date/brand/destira-icon-512.png"}
     </script>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <!-- The three fonts actually used (Instrument Serif, DM Sans, DM Mono) load
-         via index.css's own @import — these preconnects just warm the DNS/TLS
-         handshake ahead of that fetch. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- The three fonts (Instrument Serif, DM Sans, DM Mono) are self-hosted:
+         bundled from @fontsource in main.tsx, served from this origin. -->
     <!-- Pre-paint splash styles. Inline and self-contained on purpose — this
-         has to render before index.css (which blocks on a Google Fonts
-         @import) even reaches the network, so it can't depend on any of the
+         has to render before index.css and the app's own scripts even reach
+         the network, so it can't depend on any of the
          app's own stylesheet. Colors and the breathe curve are copied from
          index.css's --vf-ink/--vf-text/--vf-muted tokens and the vf-breathe
          keyframe, not re-derived — keep them in lockstep by hand. -->

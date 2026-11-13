@@ -1556,7 +1556,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         push.sendCategorizedPush(targetId, "interviews", {
           title: "Your twin has a visitor",
           body: `${requesterName} is interviewing your twin.`,
-          url: `/interviews`,
+          url: `/chats`,
           tag: `interview-${interview.id}`,
         }).catch(() => {});
       }
@@ -4836,7 +4836,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         push.sendCategorizedPush(story.userId, "stories", {
           title: `${replierName} replied to your story`,
           body: text.trim().slice(0, 140),
-          url: "/interviews?filter=story_replies",
+          url: "/chats?filter=story_replies",
           tag: `story-reply-${story.id}`,
         }).catch(() => {});
       }

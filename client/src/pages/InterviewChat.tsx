@@ -66,10 +66,10 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
 
   // Entered from the chat list, Discover, a profile, or a proximity alert —
   // each linker passes its own route as ?from so back returns to wherever
-  // the user actually came from instead of always landing on /interviews.
+  // the user actually came from instead of always landing on /chats.
   const backRoute = useMemo(() => {
     const from = new URLSearchParams(window.location.search).get("from");
-    return from && from.startsWith("/") ? from : "/interviews";
+    return from && from.startsWith("/") ? from : "/chats";
   }, []);
 
   // The chat list's preview card is a separate query (/api/chat/threads) —

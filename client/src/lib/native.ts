@@ -20,7 +20,7 @@ import { Filesystem, Directory } from "@capacitor/filesystem";
 const DestiraNative = registerPlugin<{ hasFirebase(): Promise<{ value: boolean }> }>("DestiraNative");
 
 // Leaving the app with Back only from a top-level screen.
-const HOME_PATHS = new Set(["/", "/discover", "/interviews", "/matches", "/lounge", "/events", "/profile"]);
+const HOME_PATHS = new Set(["/", "/discover", "/chats", "/interviews", "/matches", "/lounge", "/events", "/profile"]);
 
 export function isNativeApp(): boolean {
   try {

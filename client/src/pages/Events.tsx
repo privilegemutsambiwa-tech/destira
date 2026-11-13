@@ -18,6 +18,7 @@ import { useGate } from "@/hooks/use-gate";
 import { usePaywall } from "@/hooks/use-paywall";
 import { EVENT_KINDS, EVENT_PLACE_TYPES } from "@shared/event-taxonomy";
 import { Loader2, Search, X } from "lucide-react";
+import { NOTE_PRIORITY, ScreenNotes } from "@/components/ui-vf";
 
 const DISTANCES = [5, 10, 25, 50] as const;
 const WHENS: { value: NonNullable<EventSearchParams["when"]>; label: string }[] = [
@@ -73,39 +74,6 @@ function activeCount(p: EventSearchParams): number {
     (p.when && p.when !== "any" ? 1 : 0) +
     (p.sober ? 1 : 0) +
     (p.stepFree ? 1 : 0)
-  );
-}
-
-// Same orientation-strip pattern as Lounge's intro tip — the events feed is
-// still thin with ~300 users on the platform, so a first-time visitor needs
-// to be told what's even possible here (join / host / find details) rather
-// than left to infer it from an empty-looking list.
-function EventsIntroTip() {
-  const qc = useQueryClient();
-  const { data } = useQuery<{ dismissed: boolean }>({
-    queryKey: ["/api/reminders", "events_intro_tip"],
-    queryFn: async () => {
-      const res = await fetch("/api/reminders/events_intro_tip", { credentials: "include" });
-      if (!res.ok) return { dismissed: true };
-      return res.json();
-    },
-  });
-  if (!data || data.dismissed) return null;
-  const dismiss = async () => {
-    await fetch("/api/reminders/events_intro_tip/dismiss", { method: "POST", credentials: "include" });
-    qc.invalidateQueries({ queryKey: ["/api/reminders", "events_intro_tip"] });
-  };
-  return (
-    <div className="mb-6 rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-start justify-between gap-3" data-testid="strip-events-intro">
-      <p className="text-[13px] text-vf-muted leading-[1.55]">
-        You can join an event someone else is hosting, or create your own. Tap into any event to see its date,
-        time, location and who else is going before you decide. Events marked Destira Official are run by us:
-        join one, or offer to lead it and coordinate everyone in the event chat.
-      </p>
-      <button onClick={dismiss} className="text-vf-faint hover:text-vf-text transition-colors shrink-0 -mr-1 -mt-0.5" aria-label="Dismiss" data-testid="button-dismiss-events-intro">
-        <X className="w-4 h-4" />
-      </button>
-    </div>
   );
 }
 
@@ -290,7 +258,18 @@ export default function Events() {
           Small, hosted, in real rooms. Your twin flags who's going that you'd get on with.
         </p>
 
-        <EventsIntroTip />
+        <ScreenNotes
+          className="mb-6"
+          notes={[
+            {
+              kind: "events_intro_tip",
+              priority: NOTE_PRIORITY.tip,
+              eyebrow: "How events work",
+              body: "Join an event someone else is hosting, or create your own. Tap any event to see when, where and who's going before you decide. Destira Official events are run by us: join one, or offer to lead it.",
+              testId: "strip-events-intro",
+            },
+          ]}
+        />
 
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:justify-end sm:items-center mb-6">
           <button

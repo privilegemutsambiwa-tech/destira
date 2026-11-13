@@ -135,7 +135,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
   // user actually came from instead of a single hardcoded screen.
   const backRoute = useMemo(() => {
     const from = new URLSearchParams(window.location.search).get("from");
-    return from && from.startsWith("/") ? from : "/interviews";
+    return from && from.startsWith("/") ? from : "/chats";
   }, []);
 
   // The chat list's preview card is a separate query (/api/chat/threads) —

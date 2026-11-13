@@ -76,6 +76,8 @@ const DirectChat = screen(() => import("@/pages/DirectChat"));
 const TwinChat = screen(() => import("@/pages/TwinChat"));
 const TwinDisclosure = screen(() => import("@/pages/TwinDisclosure"));
 const Essentials = screen(() => import("@/pages/Essentials"));
+// Design system gallery: development builds only, never shipped.
+const DevGallery = import.meta.env.MODE === "development" ? screen(() => import("@/pages/DevGallery")) : null;
 const Plans = screen(() => import("@/pages/Plans"));
 const PlansPay = screen(() => import("@/pages/PlansPay"));
 const GroupChatPage = screen(() => import("@/pages/GroupChat"));
@@ -238,6 +240,7 @@ function Router() {
       <Route path="/login" component={Login} />
       {/* Public: the store listings and the law link to these. */}
       <Route path="/privacy" component={PrivacyPolicy} />
+      {DevGallery && <Route path="/dev/gallery" component={DevGallery} />}
       <Route path="/delete-account" component={DeleteAccountInfo} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
@@ -277,8 +280,14 @@ function Router() {
       <Route path="/discover">
         <ProtectedRoute component={Discover} />
       </Route>
-      <Route path="/interviews">
+      <Route path="/chats">
         <ProtectedRoute component={Interviews} />
+      </Route>
+      {/* The Chats list used to live at /interviews: old links, pushes and
+          back routes still land there, so keep them working (with their
+          ?filter=). /interviews/:id/chat below is unchanged. */}
+      <Route path="/interviews">
+        {() => <Redirect to={`/chats${window.location.search}`} />}
       </Route>
       <Route path="/interviews/:id/chat">
         {(params) => <ProtectedRoute component={InterviewChat} params={params} />}

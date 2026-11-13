@@ -898,7 +898,7 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
             </button>
             <button
               className="flex items-center gap-1.5 text-white text-sm ml-auto"
-              onClick={() => { onClose(); setLocation("/interviews?filter=story_replies"); }}
+              onClick={() => { onClose(); setLocation("/chats?filter=story_replies"); }}
               data-testid="text-own-story-replies"
             >
               <MessageCircle className="w-4 h-4" />

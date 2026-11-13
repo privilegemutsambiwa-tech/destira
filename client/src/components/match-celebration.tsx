@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { useLocation } from "wouter";
+import { haptic } from "@/lib/haptics";
 import { motion } from "framer-motion";
 import { Users } from "lucide-react";
 import { useProfile, useSuggestedLounges } from "@/hooks/use-profiles";
@@ -43,6 +45,10 @@ export function MatchCelebration({
   const [, setLocation] = useLocation();
   const { data: myProfile } = useProfile();
   const { lounges } = useSuggestedLounges(otherUserId);
+  // The match is felt as well as seen (docs/destira-upgrade-prompt.md §4.6).
+  useEffect(() => {
+    haptic.match();
+  }, []);
   const top = lounges[0];
   const rest = lounges.slice(1);
 

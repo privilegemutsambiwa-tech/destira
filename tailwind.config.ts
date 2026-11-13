@@ -134,14 +134,17 @@ export default {
           // instead would fade the scrim toward the light ground in light
           // mode and take the overlaid light-colored caption text with it.
           scrim: "#0C0910",
+          success: "var(--vf-success)", // seat confirmed, sent — never mint
+          danger: "var(--vf-danger)", // destructive actions only
         },
       },
       fontFamily: {
         sans: ['"DM Sans"', "var(--font-sans)", "system-ui", "sans-serif"],
         serif: ['"Instrument Serif"', "serif"],
         mono: ['"DM Mono"', "monospace"],
-        display: ["Inter", "sans-serif"],
-        body: ["Inter", "sans-serif"],
+        // Old aliases, now pointing at the real families (Inter is gone).
+        display: ['"Instrument Serif"', "serif"],
+        body: ['"DM Sans"', "system-ui", "sans-serif"],
       },
       keyframes: {
         "accordion-down": {

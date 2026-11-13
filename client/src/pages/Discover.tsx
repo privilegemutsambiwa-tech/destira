@@ -10,7 +10,9 @@ import { ResonanceDial } from "@/components/resonance-dial";
 import { ResonanceAxes } from "@/components/resonance-axes";
 import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2 } from "lucide-react";
 import { useDiscoverProfiles, useDiscoverExpandOptions, useStartInterview, useCreateMatch, useFeedStories, useProfileCompletion, UpgradeRequiredError, LikeWaitingError } from "@/hooks/use-interactions";
-import { useTwinReadiness, useDismissReminder } from "@/hooks/use-onboarding";
+import { useTwinReadiness } from "@/hooks/use-onboarding";
+import { ScreenNotes, NOTE_PRIORITY, type NoteSpec } from "@/components/ui-vf";
+import { haptic } from "@/lib/haptics";
 import { LIMITS, gateCopy } from "@shared/entitlements";
 import { usePaywall } from "@/hooks/use-paywall";
 import { useGate, resetLabel } from "@/hooks/use-gate";
@@ -432,117 +434,52 @@ function BackToEveryone({ onBack }: { onBack: () => void }) {
   );
 }
 
-function ReadinessStrip() {
+/** Discover's notes (docs/destira-upgrade-prompt.md §5.4): one at a time,
+ *  below the deck, never above a person. Same server-side dismissals and the
+ *  same conditions the three separate strips used to have. */
+function DiscoverNotes() {
+  const [, navigate] = useLocation();
   const { data: r } = useTwinReadiness();
-  const dismiss = useDismissReminder();
-  const [, navigate] = useLocation();
-  if (!r || r.discoverStripDismissed || r.pct >= 50) return null;
-  return (
-    <div
-      className="mb-5 rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-start justify-between gap-3"
-      data-testid="strip-readiness"
-    >
-      <p className="text-[13px] text-vf-muted leading-[1.55]">
-        Your twin is answering interviews with {r.answeredCount === 1 ? "one answer" : `${r.answeredCount} answers`} to work
-        from.{" "}
-        <button
-          onClick={() => navigate("/onboarding")}
-          className="text-vf-mint hover:text-vf-text underline underline-offset-2 transition-colors"
-          data-testid="link-readiness-strip"
-        >
-          Answer a few more
-        </button>
-        .
-      </p>
-      <button
-        onClick={() => dismiss.mutate("discover_readiness_strip")}
-        className="text-vf-faint hover:text-vf-text transition-colors shrink-0 -mr-1 -mt-0.5"
-        aria-label="Dismiss"
-        data-testid="button-dismiss-readiness"
-      >
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-  );
-}
-
-function DisclosureIntroStrip() {
-  const [, navigate] = useLocation();
-  const qc = useQueryClient();
-  const { data } = useQuery<{ dismissed: boolean }>({
-    queryKey: ["/api/reminders", "twin_disclosure_intro"],
-    queryFn: async () => {
-      const res = await fetch("/api/reminders/twin_disclosure_intro", { credentials: "include" });
-      if (!res.ok) return { dismissed: true };
-      return res.json();
-    },
-  });
-  if (!data || data.dismissed) return null;
-  const dismiss = async () => {
-    await fetch("/api/reminders/twin_disclosure_intro/dismiss", { method: "POST", credentials: "include" });
-    qc.invalidateQueries({ queryKey: ["/api/reminders", "twin_disclosure_intro"] });
-  };
-  return (
-    <div className="mb-5 rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-start justify-between gap-3" data-testid="strip-disclosure-intro">
-      <p className="text-[13px] text-vf-muted leading-[1.55]">
-        Your twin talks to people who are deciding about you. You choose what it may say —{" "}
-        <button
-          onClick={() => { dismiss(); navigate("/twin-disclosure"); }}
-          className="text-vf-ember hover:text-vf-text underline underline-offset-2 transition-colors"
-          data-testid="link-disclosure-intro"
-        >
-          set the boundaries
-        </button>
-        .
-      </p>
-      <button onClick={dismiss} className="text-vf-faint hover:text-vf-text transition-colors shrink-0 -mr-1 -mt-0.5" aria-label="Dismiss" data-testid="button-dismiss-disclosure-intro">
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-  );
-}
-
-/** Same completion score and per-task benefit copy Profile.tsx's own
- *  completeness chip already computes (server/storage.ts's
- *  getProfileCompletion) — surfaced here too, where people actually spend
- *  their time, instead of only on a page they may rarely open. */
-function ProfileCompletionStrip() {
-  const [, navigate] = useLocation();
-  const qc = useQueryClient();
   const { data: completion } = useProfileCompletion();
-  const { data } = useQuery<{ dismissed: boolean }>({
-    queryKey: ["/api/reminders", "profile_completion_nudge"],
-    queryFn: async () => {
-      const res = await fetch("/api/reminders/profile_completion_nudge", { credentials: "include" });
-      if (!res.ok) return { dismissed: true };
-      return res.json();
+  const nextTask = completion?.tasks.find((t: { completed: boolean }) => !t.completed);
+  const notes: NoteSpec[] = [
+    {
+      kind: "twin_disclosure_intro",
+      priority: NOTE_PRIORITY.safety,
+      tone: "twin",
+      eyebrow: "Your twin",
+      body: "Your twin talks to people who are deciding about you. You choose what it may say.",
+      action: { label: "Set the boundaries", onClick: () => navigate("/twin-disclosure"), testId: "link-disclosure-intro" },
+      testId: "strip-disclosure-intro",
     },
-  });
-  if (!data || data.dismissed || !completion || completion.score >= 80) return null;
-  const nextTask = completion.tasks.find((t: { completed: boolean }) => !t.completed);
-  const dismiss = async () => {
-    await fetch("/api/reminders/profile_completion_nudge/dismiss", { method: "POST", credentials: "include" });
-    qc.invalidateQueries({ queryKey: ["/api/reminders", "profile_completion_nudge"] });
-  };
-  return (
-    <div className="mb-5 rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3 flex items-start justify-between gap-3" data-testid="strip-profile-completion">
-      <p className="text-[13px] text-vf-muted leading-[1.55]">
-        A complete profile gets more likes and shows up more. You're at {completion.score}%
-        {nextTask ? <> — {nextTask.benefit.toLowerCase()}.</> : "."}{" "}
-        <button
-          onClick={() => { dismiss(); navigate("/profile"); }}
-          className="text-vf-ember hover:text-vf-text underline underline-offset-2 transition-colors"
-          data-testid="link-profile-completion"
-        >
-          Finish your profile
-        </button>
-        .
-      </p>
-      <button onClick={dismiss} className="text-vf-faint hover:text-vf-text transition-colors shrink-0 -mr-1 -mt-0.5" aria-label="Dismiss" data-testid="button-dismiss-profile-completion">
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-  );
+    {
+      kind: "discover_readiness_strip",
+      priority: NOTE_PRIORITY.setup,
+      when: !!r && !r.discoverStripDismissed && r.pct < 50,
+      tone: "twin",
+      eyebrow: "Your twin",
+      body: r
+        ? `I'm answering interviews with ${r.answeredCount === 1 ? "one answer" : `${r.answeredCount} answers`} to work from. A few more and I can speak for you properly.`
+        : null,
+      action: { label: "Answer a few more", onClick: () => navigate("/onboarding"), testId: "link-readiness-strip" },
+      testId: "strip-readiness",
+    },
+    {
+      kind: "profile_completion_nudge",
+      priority: NOTE_PRIORITY.tip,
+      when: !!completion && completion.score < 80,
+      eyebrow: `Profile ${completion?.score ?? 0}%`,
+      body: (
+        <>
+          A complete profile gets more likes and shows up more
+          {nextTask ? <>: {nextTask.benefit.toLowerCase()}.</> : "."}
+        </>
+      ),
+      action: { label: "Finish your profile", onClick: () => navigate("/profile"), testId: "link-profile-completion" },
+      testId: "strip-profile-completion",
+    },
+  ];
+  return <ScreenNotes notes={notes} />;
 }
 
 // Shown once someone's evaluated everyone their current distance/age
@@ -955,7 +892,7 @@ export default function Discover() {
     setIsActing(true);
     const passedProfile = currentProfile;
     setExitDir("left");
-    navigator.vibrate?.(8);
+    haptic.pass();
     handleNext(passedProfile.userId);
     recordPass(passedProfile.userId);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -1020,7 +957,7 @@ export default function Discover() {
       // Optimistic: the card leaves the deck the instant the tap lands, like a
       // swipe — the actual like request finishes in the background.
       setExitDir("right");
-      navigator.vibrate?.(12);
+      haptic.like();
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
       setUndoPass(null);
       handleNext(likedProfile.userId);
@@ -1118,10 +1055,6 @@ export default function Discover() {
 
         <FirstDayCard />
         <TonightsThree />
-        <InstallCard />
-        <ReadinessStrip />
-        <DisclosureIntroStrip />
-        <ProfileCompletionStrip />
 
         <StoriesCarousel />
 
@@ -1490,6 +1423,13 @@ export default function Discover() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Below the deck, never above a person: at most one note, then the
+          website's install card. */}
+      <div className="mt-10 space-y-4 max-w-[640px]">
+        <DiscoverNotes />
+        <InstallCard />
       </div>
 
       {viewingCardMeta && viewingCardStories && viewingCardStories.length > 0 && (

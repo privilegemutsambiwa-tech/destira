@@ -16,12 +16,15 @@ import { ResonanceDial } from "@/components/resonance-dial";
 import { MatchCelebration, Portrait } from "@/components/match-celebration";
 import { useProfile, useSuggestedLounges } from "@/hooks/use-profiles";
 import { withFrom } from "@/lib/from-route";
+import { EmptyState, UnderlineTabs, VfButton, VfSkeleton } from "@/components/ui-vf";
 
 type TabType = "waiting" | "asked";
 
+// One name per thing (docs/destira-upgrade-prompt.md §6.2): the tab bar says
+// Likes, so the page and its tabs say it too.
 const TABS: { label: string; value: TabType }[] = [
-  { label: "Waiting on you", value: "waiting" },
-  { label: "You asked", value: "asked" },
+  { label: "Liked you", value: "waiting" },
+  { label: "You liked", value: "asked" },
 ];
 
 /** Self-average of a profile's numeric personality traits — same basis as the
@@ -152,20 +155,18 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function EmptyState({ title, body }: { title: string; body: string }) {
+function LikesEmpty({ title, body }: { title: string; body: string }) {
   const [, setLocation] = useLocation();
   return (
-    <div className="text-center py-20 px-6">
-      <p className="font-serif text-vf-text mb-2" style={{ fontSize: "22px" }}>{title}</p>
-      <p className="text-sm text-vf-muted max-w-xs mx-auto">{body}</p>
-      <button
-        onClick={() => setLocation("/discover")}
-        className="mt-4 text-sm font-medium text-vf-ember"
-        data-testid="link-discover"
-      >
-        Go to your read
-      </button>
-    </div>
+    <EmptyState
+      title={title}
+      body={body}
+      action={
+        <VfButton variant="secondary" onClick={() => setLocation("/discover")} data-testid="link-discover">
+          Go to Discover
+        </VfButton>
+      }
+    />
   );
 }
 
@@ -249,52 +250,42 @@ export default function Matches() {
   return (
     <LayoutShell>
       <div className="mb-5">
-        <h1 className="font-serif font-normal text-vf-text" style={{ fontSize: "28px", letterSpacing: "-0.5px" }} data-testid="text-interest-title">
-          Interest
+        <h1 className="vf-h1 text-vf-text" data-testid="text-interest-title">
+          Likes
         </h1>
       </div>
 
-      <div className="flex items-center gap-6 mb-6 border-b border-vf-line">
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.value;
-          const count = tab.value === "waiting" ? waitingCount : asks.length;
-          return (
-            <button
-              key={tab.value}
-              onClick={() => setActiveTab(tab.value)}
-              className="relative pb-3 pt-1 text-sm font-medium transition-colors"
-              style={{ color: isActive ? "hsl(var(--vf-text))" : "var(--vf-muted)" }}
-              data-testid={`tab-${tab.value}`}
-            >
-              {tab.label}
-              {count > 0 && (
-                <span className="ml-1.5 font-mono text-[11px] text-vf-faint">{count}</span>
-              )}
-              {/* A layoutId'd indicator slides between tabs instead of just
-                  appearing under whichever one is active — small, but this
-                  is exactly the kind of tap that should feel like something
-                  moved, not like the page re-rendered. */}
-              {isActive && (
-                <motion.div
-                  layoutId="interest-tab-indicator"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-vf-ember rounded-full"
-                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                />
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <UnderlineTabs
+        label="Likes"
+        className="mb-6"
+        value={activeTab}
+        onChange={setActiveTab}
+        options={TABS.map((tab) => ({
+          ...tab,
+          count: tab.value === "waiting" ? waitingCount : asks.length,
+          testId: `tab-${tab.value}`,
+        }))}
+      />
 
       {activeTab === "waiting" && (
         waitingLoading ? (
-          <div className="flex justify-center p-12"><Loader2 className="w-6 h-6 animate-spin text-vf-muted" /></div>
+          <div className="space-y-3 py-2" aria-busy="true" aria-label="Loading">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-center gap-3 py-2">
+                <VfSkeleton className="w-14 h-14 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <VfSkeleton className="h-4 w-1/3" />
+                  <VfSkeleton className="h-3 w-2/3" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : incomingError ? (
           <ErrorState onRetry={() => refetchIncoming()} />
         ) : waitingCount === 0 ? (
-          <EmptyState
-            title="Nobody is waiting on you yet."
-            body="Your twin is talking to people tonight. Check back tomorrow at 18:00."
+          <LikesEmpty
+            title="Nobody's waiting on you yet."
+            body="Your twin is talking to people tonight. When someone likes you, they show up here."
           />
         ) : (
           <div data-testid="list-waiting">
@@ -355,13 +346,23 @@ export default function Matches() {
 
       {activeTab === "asked" && (
         outgoingLoading ? (
-          <div className="flex justify-center p-12"><Loader2 className="w-6 h-6 animate-spin text-vf-muted" /></div>
+          <div className="space-y-3 py-2" aria-busy="true" aria-label="Loading">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-center gap-3 py-2">
+                <VfSkeleton className="w-14 h-14 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <VfSkeleton className="h-4 w-1/3" />
+                  <VfSkeleton className="h-3 w-2/3" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : outgoingError ? (
           <ErrorState onRetry={() => refetchOutgoing()} />
         ) : asks.length === 0 ? (
-          <EmptyState
-            title="You haven't asked anyone yet."
-            body="When a read lands, ask to meet — it shows up here with where it stands."
+          <LikesEmpty
+            title="You haven't liked anyone yet."
+            body="When you like someone, they show up here with where it stands."
           />
         ) : (
           <div data-testid="list-asked">

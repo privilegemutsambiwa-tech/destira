@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePaywall } from "@/hooks/use-paywall";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { avatarColor } from "@/lib/avatar-color";
+import { NOTE_PRIORITY, ScreenNotes, SearchField, VfButton } from "@/components/ui-vf";
 
 const PRIVACY_LABELS: Record<string, { icon: any; label: string }> = {
   "open": { icon: Globe, label: "Open" },
@@ -30,35 +31,6 @@ const FILTER_OPTIONS = [
   { value: "new", label: "New" },
 ];
 
-// One-time (dismissible, reappears after a week if closed) line explaining
-// what Lounge is: most visitors have never used group-based chat for dating.
-function LoungeIntroTip() {
-  const qc = useQueryClient();
-  const { data } = useQuery<{ dismissed: boolean }>({
-    queryKey: ["/api/reminders", "lounge_intro_tip"],
-    queryFn: async () => {
-      const res = await fetch("/api/reminders/lounge_intro_tip", { credentials: "include" });
-      if (!res.ok) return { dismissed: true };
-      return res.json();
-    },
-  });
-  if (!data || data.dismissed) return null;
-  const dismiss = async () => {
-    await fetch("/api/reminders/lounge_intro_tip/dismiss", { method: "POST", credentials: "include" });
-    qc.invalidateQueries({ queryKey: ["/api/reminders", "lounge_intro_tip"] });
-  };
-  return (
-    <div className="mb-4 rounded-[14px] bg-vf-mint/10 px-3.5 py-2.5 flex items-center justify-between gap-3" data-testid="strip-lounge-intro">
-      <p className="text-[13px] text-vf-text leading-[1.45]">
-        Join a group to chat and play games with people who like what you like. The easy way to meet people.
-      </p>
-      <button onClick={dismiss} className="text-vf-muted hover:text-vf-text shrink-0 p-1 -m-1" aria-label="Dismiss" data-testid="button-dismiss-lounge-intro">
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-  );
-}
-
 export default function Lounge() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -71,38 +43,42 @@ export default function Lounge() {
       {/* Header: the title, with the one action beside it */}
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="font-serif font-normal text-[clamp(28px,7vw,34px)] leading-[1.05] tracking-[-0.02em] text-vf-text" data-testid="text-lounge-title">
+          <h1 className="vf-h1 text-vf-text" data-testid="text-lounge-title">
             Lounge
           </h1>
           <p className="mt-1 text-[14px] text-vf-muted">Groups for the things you're into.</p>
         </div>
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
-            <button
-              className="vf-btn-primary flex items-center gap-1.5 font-semibold pl-3 pr-4 h-10 rounded-full btn-press shrink-0 bg-vf-ember text-white hover:bg-[var(--vf-ember-soft)] transition-colors text-[14px] mt-1"
-              data-testid="button-create-group"
-            >
-              <Plus className="w-4 h-4" />
+            <VfButton size="sm" className="mt-1 shrink-0" leading={<Plus className="w-4 h-4" />} data-testid="button-create-group">
               New group
-            </button>
+            </VfButton>
           </DialogTrigger>
           <CreateGroupDialog onClose={() => setShowCreateDialog(false)} />
         </Dialog>
       </div>
 
-      <LoungeIntroTip />
+      <ScreenNotes
+        className="mb-4"
+        notes={[
+          {
+            kind: "lounge_intro_tip",
+            priority: NOTE_PRIORITY.tip,
+            eyebrow: "The Lounge",
+            body: "Join a group to chat and play games with people who like what you like. The easy way to meet people.",
+            testId: "strip-lounge-intro",
+          },
+        ]}
+      />
 
       {/* Search */}
-      <div className="relative mb-3">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-vf-faint" />
-        <input
-          placeholder="Search groups"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full h-11 pl-10 pr-4 text-[15px] rounded-full bg-vf-surface border border-vf-line text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/40"
-          data-testid="input-search-groups"
-        />
-      </div>
+      <SearchField
+        className="mb-3"
+        label="Search groups"
+        value={searchQuery}
+        onChange={setSearchQuery}
+        data-testid="input-search-groups"
+      />
 
       {/* Filters: one row that scrolls sideways on a phone, never wraps */}
       <div className="-mx-4 px-4 sm:mx-0 sm:px-0 mb-5 flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

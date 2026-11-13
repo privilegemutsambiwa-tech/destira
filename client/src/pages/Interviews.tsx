@@ -4,7 +4,8 @@ import { useChatThreads, useMarkStoryRepliesRead } from "@/hooks/use-interaction
 import { useProfile } from "@/hooks/use-profiles";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Link, useLocation, useSearch } from "wouter";
-import { Loader2, Search, Brain, Shield, MessageCircle, ArrowRight } from "lucide-react";
+import { Brain, Shield, ArrowRight } from "lucide-react";
+import { EmptyState as VfEmptyState, PageHeader, SearchField, SegmentedControl, VfButton, VfSkeleton } from "@/components/ui-vf";
 
 function formatRelativeTime(dateStr: string): string {
   const now = Date.now();
@@ -59,19 +60,14 @@ export default function Interviews() {
   const filters: { label: string; value: FilterType }[] = [
     { label: "All", value: "all" },
     { label: "Matches", value: "matches" },
-    { label: "AI Twin", value: "ai_twin" },
+    { label: "Twin", value: "ai_twin" },
     { label: "Story replies", value: "story_replies" },
   ];
 
   return (
     <LayoutShell>
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="font-serif font-normal text-[clamp(26px,6vw,32px)] text-vf-text" data-testid="text-chat-title">
-          Chat
-        </h1>
-        <p className="mt-1 text-sm text-vf-muted">All your conversations in one place</p>
-      </div>
+      <PageHeader title="Chats" subtitle="Everyone you're talking to, and your twin." />
 
       {/* My Twin featured card — the one card on this page that isn't a
           conversation with another person, so it earns a genuinely
@@ -81,7 +77,7 @@ export default function Interviews() {
         <div
           className="group mb-6 p-5 cursor-pointer btn-press vf-card rounded-[22px] border border-vf-mint/25 transition-colors hover:border-vf-mint/45"
           style={{ background: "linear-gradient(155deg, hsl(var(--vf-mint) / 0.1), var(--vf-surface2) 72%)" }}
-          onClick={() => setLocation("/twin-chat?from=/interviews")}
+          onClick={() => setLocation("/twin-chat?from=/chats")}
           data-testid="card-my-twin"
         >
           <div className="flex items-center gap-4">
@@ -126,55 +122,46 @@ export default function Interviews() {
       )}
 
       {/* Search bar */}
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-vf-faint" />
-        <input
-          placeholder="Search conversations..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full h-11 pl-9 pr-4 text-sm rounded-xl bg-vf-surface border border-vf-line text-vf-text placeholder:text-vf-faint outline-none transition-shadow duration-150 focus:ring-2 focus:ring-vf-mint/40"
-          data-testid="input-search-chats"
-        />
-      </div>
+      <SearchField
+        className="mb-4"
+        label="Search chats"
+        value={searchQuery}
+        onChange={setSearchQuery}
+        data-testid="input-search-chats"
+      />
 
       {/* Filter tabs */}
-      <div className="flex items-center gap-2 mb-5">
-        {filters.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setActiveFilter(f.value)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-full border transition-colors btn-press ${
-              activeFilter === f.value
-                ? "bg-vf-ember border-transparent text-vf-ink"
-                : "border-vf-line text-vf-soft hover:border-vf-text/25"
-            }`}
-            data-testid={`filter-${f.value}`}
-          >
-            {f.label}
-            {f.value === "story_replies" && repliesUnreadCount > 0 && (
-              <span
-                className={`ml-1.5 font-mono text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] inline-block text-center ${
-                  activeFilter === f.value ? "bg-vf-ink text-vf-ember" : "bg-vf-ember text-vf-ink"
-                }`}
-                data-testid="badge-story-replies-unread"
-              >
-                {repliesUnreadCount}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        className="mb-5"
+        label="Show"
+        value={activeFilter}
+        onChange={setActiveFilter}
+        options={filters.map((f) => ({
+          value: f.value,
+          label: f.label,
+          count: f.value === "story_replies" ? repliesUnreadCount : undefined,
+          testId: `filter-${f.value}`,
+        }))}
+      />
 
       {/* Thread list */}
       {isLoading ? (
-        <div className="flex justify-center p-12">
-          <Loader2 className="w-8 h-8 animate-spin text-vf-mint" />
+        <div className="flex flex-col gap-2.5" aria-busy="true" aria-label="Loading chats">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-3 p-3">
+              <VfSkeleton className="w-12 h-12 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <VfSkeleton className="h-4 w-1/3" />
+                <VfSkeleton className="h-3 w-3/4" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : filteredThreads.length > 0 ? (
         <div className="flex flex-col gap-2.5">
           {filteredThreads.map((thread: any) => {
             const isTwin = thread.type === "ai_twin_interview";
-            const threadHref = `${thread.href}${thread.href.includes("?") ? "&" : "?"}from=/interviews`;
+            const threadHref = `${thread.href}${thread.href.includes("?") ? "&" : "?"}from=/chats`;
             return (
               <Link key={thread.id} href={threadHref}>
                 <div
@@ -226,23 +213,14 @@ export default function Interviews() {
 function EmptyState() {
   const [, setLocation] = useLocation();
   return (
-    <div className="text-center py-16 px-6">
-      <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-vf-mint/10">
-        <MessageCircle className="w-8 h-8 text-vf-mint" />
-      </div>
-      <h3 className="font-serif text-xl mb-2 text-vf-text">
-        No conversations yet
-      </h3>
-      <p className="max-w-xs mx-auto mb-6 text-sm text-vf-muted">
-        Go to Discover to start meeting people.
-      </p>
-      <button
-        onClick={() => setLocation("/discover")}
-        className="font-semibold btn-press px-8 h-12 rounded-full bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors"
-        data-testid="button-go-discover"
-      >
-        Discover People
-      </button>
-    </div>
+    <VfEmptyState
+      title="No chats yet."
+      body="When you match with someone, or ask someone's twin a question, the conversation lands here."
+      action={
+        <VfButton onClick={() => setLocation("/discover")} data-testid="button-go-discover">
+          Go to Discover
+        </VfButton>
+      }
+    />
   );
 }

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tansta
 import { useMemo, useState } from "react";
 import { requestPushNudge } from "@/lib/engagement-prompts";
 import { likeDelivered, likeRefused, likeSending, likeWaiting, worthRetrying } from "@/lib/discover-decisions";
+import { haptic } from "@/lib/haptics";
 
 export function useIncomingLikes() {
   return useQuery({
@@ -482,8 +483,10 @@ export function useSendDirectMessage(matchId: number) {
       if (!res.ok) throw new Error("Failed to send message");
       return res.json();
     },
-    onMutate: (content: string) =>
-      showPendingMessage(queryClient, ["/api/messages", matchId], (me) => ({ senderId: me, content })),
+    onMutate: (content: string) => {
+      haptic.send();
+      return showPendingMessage(queryClient, ["/api/messages", matchId], (me) => ({ senderId: me, content }));
+    },
     onError: (_err, _content, context) => context?.undo(),
     onSuccess: (msg, _content, context) => {
       context?.replace(msg);
@@ -641,6 +644,7 @@ export function useSendGroupMessage(groupId: number) {
       return res.json();
     },
     onMutate: (data) => {
+      haptic.send();
       const body = typeof data === "string" ? { content: data } : data;
       return showPendingMessage(queryClient, ["/api/groups", groupId, "messages-enriched"], (me) => ({
         userId: me,

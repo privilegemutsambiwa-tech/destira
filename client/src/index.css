@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@400;500&display=swap');
+/* Fonts are self-hosted (imported in main.tsx from @fontsource), so first
+   paint never waits on Google and the app has them offline. */
 
 @tailwind base;
 @tailwind components;
@@ -250,6 +251,113 @@
   --shadow-card: 0 2px 12px rgba(28, 20, 24, 0.06), 0 1px 3px rgba(28, 20, 24, 0.08);
   --shadow-hover: 0 8px 28px rgba(28, 20, 24, 0.10), 0 2px 6px rgba(28, 20, 24, 0.08);
 }
+
+/* ---- Design system v2 (docs/destira-upgrade-prompt.md §4) ----
+   Elevation, state colours, focus and the photo scrim. Same three-way theme
+   structure as above: dark on bare :root, light under the OS preference
+   unless the member forced dark, and light again when they forced it. */
+:root,
+:root[data-theme="dark"] {
+  --vf-e1: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --vf-e2: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 32px rgba(0, 0, 0, 0.35);
+  --vf-e3: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 64px rgba(0, 0, 0, 0.5);
+  --vf-success: #B9D86E;   /* warm green, deliberately not mint */
+  --vf-danger: #F2787A;    /* destructive only */
+  --vf-focus: hsl(var(--vf-ember) / 0.6);
+  --vf-scrim-photo: linear-gradient(to top, rgba(12, 9, 16, 0.82) 0%, rgba(12, 9, 16, 0.55) 22%, rgba(12, 9, 16, 0) 45%);
+  --vf-shimmer: rgba(255, 255, 255, 0.05);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --vf-e1: 0 1px 2px rgba(28, 20, 24, 0.06), 0 8px 24px rgba(28, 20, 24, 0.06);
+    --vf-e2: 0 2px 4px rgba(28, 20, 24, 0.06), 0 16px 40px rgba(28, 20, 24, 0.10);
+    --vf-e3: 0 4px 8px rgba(28, 20, 24, 0.08), 0 28px 64px rgba(28, 20, 24, 0.16);
+    --vf-success: #4F6B1F;
+    --vf-danger: #B3262E;
+    --vf-shimmer: rgba(28, 20, 24, 0.05);
+  }
+}
+:root[data-theme="light"] {
+  --vf-e1: 0 1px 2px rgba(28, 20, 24, 0.06), 0 8px 24px rgba(28, 20, 24, 0.06);
+  --vf-e2: 0 2px 4px rgba(28, 20, 24, 0.06), 0 16px 40px rgba(28, 20, 24, 0.10);
+  --vf-e3: 0 4px 8px rgba(28, 20, 24, 0.08), 0 28px 64px rgba(28, 20, 24, 0.16);
+  --vf-success: #4F6B1F;
+  --vf-danger: #B3262E;
+  --vf-shimmer: rgba(28, 20, 24, 0.05);
+}
+
+@layer base {
+  /* One focus ring for everything that has none of its own. :where keeps it
+     at zero specificity, so any component's own focus style still wins. */
+  :where(a, button, [role="button"], [role="tab"], input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--vf-focus);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: hsl(var(--vf-ember) / 0.25);
+  }
+}
+
+/* Icons: one set, 1.5 px stroke. Only Lucide's default stroke (2) is
+   touched, so the few icons drawn deliberately bolder keep their weight.
+   Outside @layer on purpose: Tailwind drops layered rules whose class never
+   appears in our own files, and "lucide" only exists inside lucide-react. */
+svg.lucide[stroke-width="2"] {
+  stroke-width: 1.5;
+}
+
+@layer components {
+  /* Type scale (§4.2). Names are serif, numbers are mono and tabular. */
+  .vf-display { font-family: var(--font-serif); font-weight: 400; font-size: 44px; line-height: 46px; letter-spacing: -0.02em; }
+  .vf-h1      { font-family: var(--font-serif); font-weight: 400; font-size: 32px; line-height: 36px; letter-spacing: -0.02em; }
+  .vf-h2      { font-family: var(--font-serif); font-weight: 400; font-size: 24px; line-height: 28px; letter-spacing: -0.015em; }
+  .vf-h3      { font-family: var(--font-sans); font-weight: 600; font-size: 17px; line-height: 24px; letter-spacing: -0.005em; }
+  .vf-body    { font-family: var(--font-sans); font-size: 16px; line-height: 24px; }
+  .vf-small   { font-family: var(--font-sans); font-size: 14px; line-height: 20px; }
+  .vf-label   { font-family: var(--font-mono); font-weight: 500; font-size: 11px; line-height: 14px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .vf-figure  { font-family: var(--font-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+  @media (min-width: 1024px) {
+    .vf-display { font-size: 64px; line-height: 66px; }
+    .vf-h1      { font-size: 40px; line-height: 44px; }
+    .vf-h2      { font-size: 28px; line-height: 32px; }
+  }
+
+  /* Elevation (§4.1) */
+  .vf-e1 { box-shadow: var(--vf-e1); }
+  .vf-e2 { box-shadow: var(--vf-e2); }
+  .vf-e3 { box-shadow: var(--vf-e3); }
+
+  /* Text on photos: always this scrim, never an ad-hoc gradient. */
+  .vf-scrim { background: var(--vf-scrim-photo); }
+
+  /* Every tappable thing answers the finger (§4.5). */
+  .vf-press { transition: transform 120ms cubic-bezier(.2, .8, .2, 1); -webkit-tap-highlight-color: transparent; }
+  .vf-press:active:not(:disabled) { transform: scale(0.97); }
+
+  /* Skeletons: slow, low-contrast, shaped like the content. */
+  .vf-skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--vf-elevated);
+  }
+  .vf-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, var(--vf-shimmer), transparent);
+    animation: vf-sweep 1.6s ease-in-out infinite;
+  }
+
+  /* One note at a time (§5.4) */
+  .vf-note-enter { animation: vf-rise 220ms cubic-bezier(.2, .8, .2, 1) both; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-press:active:not(:disabled) { transform: none; }
+  .vf-skeleton::after { animation: none; }
+  .vf-note-enter { animation: vf-fade 120ms ease both; }
+}
+@keyframes vf-fade { from { opacity: 0; } to { opacity: 1; } }
 
 @layer base {
   * {
