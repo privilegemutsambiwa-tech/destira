@@ -296,6 +296,31 @@
   ::selection {
     background: hsl(var(--vf-ember) / 0.25);
   }
+
+  /* Thin, themed scrollbars (brief section 9). Phones hide theirs anyway. */
+  html, .vf-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--vf-line) transparent;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--vf-line);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--vf-faint); }
+}
+
+/* Cards lift a little under a mouse: translateY -2px and the e2 shadow.
+   Only on devices that really hover, so a tap never leaves a card raised. */
+@media (hover: hover) and (pointer: fine) {
+  .vf-lift { transition: transform 180ms ease-out, box-shadow 180ms ease-out, border-color 150ms ease-out; }
+  .vf-lift:hover { transform: translateY(-2px); box-shadow: var(--vf-e2); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vf-lift:hover { transform: none; }
 }
 
 /* Icons: one set, 1.5 px stroke. Only Lucide's default stroke (2) is

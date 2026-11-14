@@ -1761,7 +1761,8 @@ export default function Settings() {
 
   const [activePanel, setActivePanel] = useState<PanelKey>(null);
   const [activeSection, setActiveSection] = useState("account"); // desktop two-pane nav only
-  const [query, setQuery] = useState("");
+  // ?q= opens Settings already filtered (the command palette links here).
+  const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "");
   const [showPauseDialog, setShowPauseDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");

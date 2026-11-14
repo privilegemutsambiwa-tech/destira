@@ -30,6 +30,7 @@ import Landing from "@/pages/Landing";
 import { OfflineBanner } from "@/components/offline-banner";
 import { AppUpdatePrompt } from "@/components/app-update-prompt";
 import { AppLockGate } from "@/components/app-lock";
+import { CommandPalette } from "@/components/command-palette";
 // lazy(), plus a way to fetch the screen's code ahead of time. Once fetched,
 // the screen renders straight away instead of flashing the full-page loading
 // logo while its code arrives (seconds on a slow connection, the first time
@@ -399,6 +400,7 @@ function App() {
           <Router />
         </ErrorBoundary>
         <AppLockGate />
+        <CommandPalette />
         <AppUpdatePrompt />
       </TooltipProvider>
     </AppQueryProvider>

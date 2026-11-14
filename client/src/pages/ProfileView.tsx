@@ -814,7 +814,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const isMatched = match?.role === "asked" && match.status === "matched";
   const ActionBar = preview ? null : (
     <div
-      className="sticky z-40 bottom-[calc(76px+env(safe-area-inset-bottom,0px))] lg:bottom-6 flex justify-center pointer-events-none"
+      className="sticky z-40 bottom-[calc(76px+env(safe-area-inset-bottom,0px))] md:bottom-6 flex justify-center pointer-events-none"
       data-testid="profile-action-bar"
     >
       <div className="pointer-events-auto w-full max-w-[460px] flex items-center gap-2 rounded-full border border-vf-line bg-vf-surface/90 backdrop-blur-md p-2 vf-e3">

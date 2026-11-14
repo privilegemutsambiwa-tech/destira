@@ -240,11 +240,40 @@ export async function withEventMeta(url: string, req: Request, page: string): Pr
       `<meta name="twitter:title" content="${escapeHtml(title)}" />`,
       `<meta name="twitter:description" content="${escapeHtml(description)}" />`,
       `<meta name="twitter:image" content="${escapeHtml(imageUrl)}" />`,
+      `<meta name="description" content="${escapeHtml(description)}" />`,
     ].join("\n    ");
+    // Structured data so search engines can show it as an event (brief
+    // section 9). Private homes have no venue name, so the place is the
+    // suburb and city only, same as the page itself.
+    const ld = {
+      "@context": "https://schema.org",
+      "@type": "Event",
+      name: t.title,
+      startDate: t.startsAt,
+      ...(t.endsAt ? { endDate: t.endsAt } : {}),
+      eventStatus: t.status === "cancelled" ? "https://schema.org/EventCancelled" : "https://schema.org/EventScheduled",
+      eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+      location: {
+        "@type": "Place",
+        name: t.venueName || where || "Zimbabwe",
+        address: {
+          "@type": "PostalAddress",
+          ...(t.suburb ? { streetAddress: t.suburb } : {}),
+          ...(t.city ? { addressLocality: t.city } : {}),
+          addressCountry: "ZW",
+        },
+      },
+      image: [imageUrl],
+      ...(t.description ? { description: t.description } : {}),
+      organizer: { "@type": "Organization", name: t.isOfficial ? "Destira" : t.hostLabel, url: origin },
+      url: `${origin}/events/${t.id}`,
+    };
+    // "<" escaped so nothing in a title or description can close the tag.
+    const ldTag = `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>`;
     return page
       .replace(/<title>.*?<\/title>/, `<title>${escapeHtml(title)}</title>`)
       .replace(/\s*<meta[^>]*data-og-default[^>]*>/g, "")
-      .replace("</head>", `    ${tags}\n  </head>`);
+      .replace("</head>", `    ${tags}\n    ${ldTag}\n  </head>`);
   } catch (e) {
     console.error("Event OG render error:", e);
     return page;

@@ -252,7 +252,7 @@ function RoomCard({ room, onOpen, index }: { room: any; onOpen: () => void; inde
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(e) => e.key === "Enter" && onOpen()}
-      className="group rounded-[22px] overflow-hidden border border-vf-line bg-vf-surface2 cursor-pointer hover:border-vf-text/20 transition-colors flex flex-col"
+      className="group vf-lift rounded-[22px] overflow-hidden border border-vf-line bg-vf-surface2 cursor-pointer hover:border-vf-text/20 flex flex-col"
       data-testid={`card-group-${room.id}`}
     >
       <div className="relative aspect-[16/9]">

@@ -63,7 +63,7 @@ export function PushNudge() {
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-[120] p-3 sm:p-4 flex justify-center pointer-events-none" data-testid="push-nudge">
-      <div className="pointer-events-auto w-full max-w-md rounded-[20px] border border-vf-line bg-vf-surface2 p-5 shadow-[0_16px_48px_rgba(0,0,0,0.35)] mb-[calc(env(safe-area-inset-bottom)+64px)] lg:mb-0">
+      <div className="pointer-events-auto w-full max-w-md rounded-[20px] border border-vf-line bg-vf-surface2 p-5 shadow-[0_16px_48px_rgba(0,0,0,0.35)] mb-[calc(env(safe-area-inset-bottom)+64px)] md:mb-0">
         <div className="flex items-start gap-3">
           <span className="w-9 h-9 rounded-full bg-vf-ember/10 text-vf-ember flex items-center justify-center shrink-0">
             {iosNeedsInstall ? <Share className="w-4 h-4" /> : <Bell className="w-4 h-4" />}

@@ -335,7 +335,7 @@ export function EventCard({ event, groupName, isHost, pending, onOpen, onAttend,
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index, 6) * 0.05, duration: 0.28 }}
       onClick={onOpen}
-      className="group rounded-[24px] border border-vf-line bg-vf-surface2 overflow-hidden cursor-pointer transition-colors duration-150 hover:border-vf-text/20 flex flex-col"
+      className="group vf-lift rounded-[24px] border border-vf-line bg-vf-surface2 overflow-hidden cursor-pointer hover:border-vf-text/20 flex flex-col"
       data-testid={`event-card-${event.id}`}
     >
       <div className="relative h-[188px]">

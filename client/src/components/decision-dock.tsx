@@ -24,7 +24,7 @@ export function DecisionDock({ name, onPass, onLike, onInterview, busy, likePend
   const first = name.trim().split(/\s+/)[0] || "them";
   return (
     <div
-      className="sticky z-40 flex flex-col items-center gap-2 pointer-events-none bottom-[calc(76px+env(safe-area-inset-bottom,0px))] lg:bottom-6"
+      className="sticky z-40 flex flex-col items-center gap-2 pointer-events-none bottom-[calc(76px+env(safe-area-inset-bottom,0px))] md:bottom-6"
       data-testid="decision-dock"
     >
       <AnimatePresence>

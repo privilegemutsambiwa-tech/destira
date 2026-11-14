@@ -19,6 +19,11 @@ interface TwinToday {
   answeredCount: number;
 }
 
+/** The orb on its own, for places that show the twin without its sheet (the desktop rail). */
+export function TwinOrbMini({ size = 28 }: { size?: number }) {
+  return <Orb size={size} lively={false} />;
+}
+
 function Orb({ size, lively }: { size: number; lively: boolean }) {
   return (
     <span className="relative block shrink-0" style={{ width: size, height: size }} aria-hidden="true">
