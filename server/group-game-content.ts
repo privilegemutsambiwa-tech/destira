@@ -111,6 +111,16 @@ export const TRIVIA_BANK: { question: string; options: [string, string, string, 
   { question: "What's the main language spoken across most of Zimbabwe?", options: ["Zulu", "Shona", "Swahili", "Xhosa"], correctIndex: 1 },
   { question: "Which instrument has 88 keys?", options: ["Organ", "Piano", "Accordion", "Xylophone"], correctIndex: 1 },
   { question: "What do bees collect from flowers?", options: ["Pollen", "Nectar", "Both", "Neither"], correctIndex: 2 },
+  { question: "Which lake was created by the Kariba Dam?", options: ["Lake Chivero", "Lake Kariba", "Lake Mutirikwi", "Lake Malawi"], correctIndex: 1 },
+  { question: "The Great Zimbabwe ruins are near which town?", options: ["Masvingo", "Gweru", "Kwekwe", "Chinhoyi"], correctIndex: 0 },
+  { question: "Which river forms Zimbabwe's border with Zambia?", options: ["Limpopo", "Save", "Zambezi", "Runde"], correctIndex: 2 },
+  { question: "What is Zimbabwe's highest mountain?", options: ["Mount Nyangani", "Domboshava", "Mount Binga", "Ngomakurira"], correctIndex: 0 },
+  { question: "How many minutes are in a day?", options: ["1,240", "1,440", "1,640", "1,840"], correctIndex: 1 },
+  { question: "Which is the largest planet in our solar system?", options: ["Saturn", "Neptune", "Jupiter", "Earth"], correctIndex: 2 },
+  { question: "Which country hosted the 2010 FIFA World Cup?", options: ["Brazil", "South Africa", "Germany", "Nigeria"], correctIndex: 1 },
+  { question: "Which country has the most people today?", options: ["China", "India", "USA", "Nigeria"], correctIndex: 1 },
+  { question: "How many sides does a hexagon have?", options: ["5", "6", "7", "8"], correctIndex: 1 },
+  { question: "What colour do you get mixing blue and yellow?", options: ["Purple", "Orange", "Green", "Brown"], correctIndex: 2 },
 ];
 
 export const CATEGORY_SPRINT_BANK: string[] = [
@@ -147,6 +157,36 @@ export const EMOJI_CHARADES_BANK: { answer: string; emoji: string }[] = [
   { answer: "Avatar", emoji: "🔵🌳🪶" },
   { answer: "Money Heist", emoji: "💰🎭🏦" },
   { answer: "Game of Thrones", emoji: "🐉👑⚔️" },
+];
+
+// Hot Take: one opinion, everyone slides from "no way" to "facts". Light,
+// arguable, never about anyone in the room.
+export const HOT_TAKE_BANK: string[] = [
+  "Splitting the bill on a first date is completely fine.",
+  "If they don't text back within a day, they're not interested.",
+  "You should meet the family within the first three months.",
+  "A good first date is a walk, not a dinner.",
+  "Staying friends with your ex is a red flag.",
+  "Sunday lunch at home beats any restaurant.",
+  "Voice notes are better than long texts.",
+  "Matching couple outfits are cute, actually.",
+  "You can tell everything about someone by how they treat a waiter.",
+  "Love at first sight is real.",
+  "Whoever asks for the date should pay.",
+  "Posting your partner online too early is bad luck.",
+  "Being late is fine if you text ahead.",
+  "Pineapple belongs on pizza.",
+  "Sadza tastes better eaten with your hands.",
+  "Opposites attract, but similar people last.",
+  "Morning dates are underrated.",
+  "Your friends' opinion of your partner matters a lot.",
+  "Phones should stay off the table at dinner.",
+  "Double-texting is completely fine.",
+  "Long-distance relationships can work.",
+  "Cooking for someone is the most romantic thing you can do.",
+  "Sending memes counts as flirting.",
+  "A first date should be under two hours.",
+  "Amapiano is the best thing to happen to a party.",
 ];
 
 export const ICEBREAKER_BANK: string[] = [

@@ -316,6 +316,7 @@ export const pollVotes = pgTable("poll_votes", {
 export const GROUP_GAME_KINDS = [
   "two_truths_one_lie", "would_you_rather", "this_or_that", "never_have_i_ever",
   "most_likely_to", "trivia_round", "category_sprint", "emoji_charades", "icebreaker_roulette",
+  "hot_take",
 ] as const;
 export const groupGameKindEnum = z.enum(GROUP_GAME_KINDS);
 export type GroupGameKind = (typeof GROUP_GAME_KINDS)[number];

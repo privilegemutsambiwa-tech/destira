@@ -1173,7 +1173,13 @@ export function useCreateGame(groupId: number) {
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || "Failed to start game");
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] }),
+    onSuccess: (state) => {
+      // The response is the new room's full state: seed it so the room opens
+      // without a loading step.
+      if (state?.id != null) queryClient.setQueryData(["/api/games", state.id], state);
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "games", "active"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] });
+    },
   });
 }
 
@@ -1201,9 +1207,11 @@ export function useSubmitGameResponse(groupId: number) {
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || "Failed to respond");
       return res.json();
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (state, variables) => {
       if (variables.messageId != null) queryClient.invalidateQueries({ queryKey: ["/api/messages", variables.messageId, "game"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/games", variables.gameId] });
+      // The response is the round's new state (often the reveal itself).
+      if (state?.id === variables.gameId) queryClient.setQueryData(["/api/games", variables.gameId], state);
+      else queryClient.invalidateQueries({ queryKey: ["/api/games", variables.gameId] });
       queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "messages-enriched"] });
     },
   });
@@ -1249,7 +1257,10 @@ export function useGameById(gameId: number | undefined) {
       return res.json();
     },
     enabled: gameId != null,
-    refetchInterval: 5000,
+    // Live rounds feel live: who locked in and the reveal land within a
+    // second or two. A finished round only needs to notice the next one.
+    refetchInterval: (query) => ((query.state.data as any)?.status === "revealed" ? 15000 : 1500),
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -1277,7 +1288,8 @@ export function useGameMessages(gameId: number | undefined) {
       return res.json();
     },
     enabled: gameId != null,
-    refetchInterval: 5000,
+    refetchInterval: 2500,
+    refetchIntervalInBackground: false,
   });
 }
 

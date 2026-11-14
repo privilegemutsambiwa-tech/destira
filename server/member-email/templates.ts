@@ -31,7 +31,15 @@ const C = {
   line: "#EDE6E0",
   ember: "#B34B34",
   emberSoft: "#FBEDE8",
+  mint: "#0E7F62",
+  mintSoft: "#E8F5F0",
 };
+
+// Tonight's three (server/daily-picks.ts): released at 19:00 Harare time.
+const TONIGHT_LINE =
+  "Every evening at 19:00, your twin brings you <strong>Tonight's three</strong>: people it picked for you, each with the reason it thinks you'd click.";
+const TONIGHT_TEXT =
+  "Every evening at 19:00, your twin brings you Tonight's three: people it picked for you, each with the reason it thinks you'd click.";
 
 /** ", Tariro" when we know their name, "" when we don't. */
 function comma(ctx: LayoutCtx): string {
@@ -53,6 +61,19 @@ export function button(href: string, label: string): string {
 
 export function para(html: string): string {
   return `<p style="margin:0 0 14px;font:400 15.5px/1.6 Helvetica,Arial,sans-serif;color:${C.ink}">${html}</p>`;
+}
+
+/** A tinted aside, for the one idea an email is built around. */
+export function note(label: string, html: string): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 18px"><tr><td style="background:${C.mintSoft};border-radius:16px;padding:16px 18px">
+<div style="font:600 11px/1.4 Helvetica,Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:${C.mint}">${esc(label)}</div>
+<div style="margin-top:6px;font:400 15px/1.55 Helvetica,Arial,sans-serif;color:${C.ink}">${html}</div>
+</td></tr></table>`;
+}
+
+/** A quiet line under the main button. */
+export function small(html: string): string {
+  return `<p style="margin:14px 0 0;font:400 13px/1.55 Helvetica,Arial,sans-serif;color:${C.muted}">${html}</p>`;
 }
 
 export function heading(text: string): string {
@@ -102,19 +123,21 @@ export function textFooter(ctx: LayoutCtx): string {
 
 export function welcomeEmail(ctx: LayoutCtx, d: { nextStepHref: string; nextStepLabel: string; eventsThisWeek: number; city: string | null }): EmailContent {
   const subject = `Welcome to Destira${comma(ctx)}`;
-  const preheader = "Your twin does the awkward first part. Here's how to get the most out of it.";
+  const preheader = "Your twin does the awkward first part. Every evening at 19:00, three people picked for you.";
   const where = d.city ? ` in ${d.city}` : "";
   const eventsLine = d.eventsThisWeek > 0
     ? `There ${d.eventsThisWeek === 1 ? "is" : "are"} <strong>${d.eventsThisWeek} event${d.eventsThisWeek === 1 ? "" : "s"}${esc(where)}</strong> this week you can join.`
     : `Lounges and events are where people actually meet. Have a look around.`;
   const body = [
     heading(`You're in${comma(ctx)}.`),
-    para("Destira is built around meeting people, not endless swiping. Your AI twin learns what you're like from a few questions, then helps spot who you'd actually get on with."),
+    para("Here's how Destira works. Your AI twin learns what you're like from a few questions, then has the first chat with other members' twins. You hear about the people you'd actually get on with, and why. No endless swiping, no cold openers."),
+    note("Every evening", TONIGHT_LINE),
     para(eventsLine),
-    para("The single thing that helps most right now:"),
+    para("The one thing that helps most right now:"),
     button(d.nextStepHref, d.nextStepLabel),
+    small(`On an Android phone? <a href="${esc(ctx.origin)}/download/android" style="color:${C.muted}">Get the app</a> so replies and Tonight's three reach you.`),
   ].join("");
-  const text = `You're in${comma(ctx)}.\n\nDestira is built around meeting people, not endless swiping. Your AI twin learns what you're like from a few questions, then helps spot who you'd actually get on with.\n\n${d.nextStepLabel}: ${d.nextStepHref}`;
+  const text = `You're in${comma(ctx)}.\n\nYour AI twin learns what you're like from a few questions, then has the first chat with other members' twins. You hear about the people you'd actually get on with, and why.\n\n${TONIGHT_TEXT}\n\n${d.nextStepLabel}: ${d.nextStepHref}\n\nAndroid app: ${ctx.origin}/download/android`;
   return { subject, preheader, html: layout(ctx, preheader, body), text: text + textFooter(ctx) };
 }
 
@@ -192,6 +215,7 @@ export function winBackEmail(
     heading("Here's what changed while you were away."),
     lines.length ? para(lines.join(" · ")) : "",
     d.nextEvent ? para("Coming up near you:") + itemList([d.nextEvent]) : "",
+    note("Every evening", TONIGHT_LINE),
     button(d.href, "Open Destira"),
   ].join("");
   const text = [
@@ -199,6 +223,7 @@ export function winBackEmail(
     d.likesWaiting > 0 ? `${d.likesWaiting} likes you haven't seen yet.` : "",
     d.newPeople > 0 ? `${d.newPeople} new people near you.` : "",
     d.nextEvent ? `Coming up: ${d.nextEvent.title} (${d.nextEvent.detail}) ${d.nextEvent.href}` : "",
+    TONIGHT_TEXT,
     d.href,
   ].filter(Boolean).join("\n");
   return { subject, preheader, html: layout(ctx, preheader, body), text: text + textFooter(ctx) };

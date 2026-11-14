@@ -15,7 +15,7 @@ import { storage } from "./storage";
 import {
   WOULD_YOU_RATHER_BANK, THIS_OR_THAT_BANK, NEVER_HAVE_I_EVER_BANK,
   MOST_LIKELY_TO_BANK, TRIVIA_BANK, CATEGORY_SPRINT_BANK,
-  EMOJI_CHARADES_BANK, ICEBREAKER_BANK,
+  EMOJI_CHARADES_BANK, ICEBREAKER_BANK, HOT_TAKE_BANK,
 } from "./group-game-content";
 
 export class GameNotFoundError extends Error {
@@ -45,6 +45,9 @@ function pickMany<T>(arr: readonly T[], n: number): T[] {
   }
   return out;
 }
+/** Trivia: how long each question is open before it counts as unanswered. */
+export const TRIVIA_QUESTION_MS = 15_000;
+
 function norm(s: string): string {
   return s.trim().toLowerCase();
 }
@@ -135,12 +138,23 @@ const DEFINITIONS: Record<GroupGameKind, GameDefinition> = {
     },
     sanitizeConfig(config) { return config; },
     computeResults(config, responses) {
-      const pairs = config.pairs as { a: string; b: string }[];
-      return pairs.map((p, i) => {
+      const pairs = (config.pairs as { a: string; b: string }[]).map((p, i) => {
         const aCount = responses.filter((r) => r.response?.choices?.[i] === "a").length;
         const bCount = responses.filter((r) => r.response?.choices?.[i] === "b").length;
         return { ...p, aCount, bCount };
       });
+      // How often each player sided with the room (ties count for both).
+      const matches = responses
+        .map((r) => ({
+          userId: r.userId,
+          nickname: r.nickname,
+          score: pairs.filter((p, i) => {
+            const c = r.response?.choices?.[i];
+            return (c === "a" && p.aCount >= p.bCount) || (c === "b" && p.bCount >= p.aCount);
+          }).length,
+        }))
+        .sort((a, b) => b.score - a.score);
+      return { pairs, matches };
     },
   },
 
@@ -174,7 +188,7 @@ const DEFINITIONS: Record<GroupGameKind, GameDefinition> = {
     starterParticipates: true,
     revealMode: "all-responded",
     buildConfig(setup, ctx) {
-      const idx = setup?.promptIndex;
+      const idx = setup?.random ? Math.floor(Math.random() * MOST_LIKELY_TO_BANK.length) : setup?.promptIndex;
       // Deliberately ignores any client-supplied prompt TEXT — this kind
       // only ever uses the curated bank, never a free-text prompt, so a
       // player can't turn it into something unkind (see plan's guardrail).
@@ -199,8 +213,8 @@ const DEFINITIONS: Record<GroupGameKind, GameDefinition> = {
   },
 
   trivia_round: {
-    label: "Trivia Round",
-    blurb: "5 quick multiple-choice questions, scored.",
+    label: "Trivia Blitz",
+    blurb: "5 questions, 15 seconds each. Fast answers score more.",
     needsSetup: false,
     starterKnowsSecret: false, // nobody in the group authored these — hidden from everyone, including the starter
     hasSecret: true,
@@ -214,14 +228,25 @@ const DEFINITIONS: Record<GroupGameKind, GameDefinition> = {
       if (revealed) return config;
       return { questions: config.questions.map((q: any) => ({ question: q.question, options: q.options })) };
     },
+    // 100 points a right answer, plus up to 50 for answering it fast (the
+    // client sends how long each question took; anything odd counts as slow).
     computeResults(config, responses) {
       const correctIndexes = config.questions.map((q: any) => q.correctIndex);
       const scores = responses.map((r) => {
         const answers: number[] = Array.isArray(r.response?.answers) ? r.response.answers : [];
-        const score = correctIndexes.filter((ci: number, i: number) => answers[i] === ci).length;
-        return { userId: r.userId, nickname: r.nickname, score };
+        const times: unknown[] = Array.isArray(r.response?.times) ? r.response.times : [];
+        let score = 0;
+        let points = 0;
+        correctIndexes.forEach((ci: number, i: number) => {
+          if (answers[i] !== ci) return;
+          score += 1;
+          const t = Number(times[i]);
+          const ms = Number.isFinite(t) ? Math.min(TRIVIA_QUESTION_MS, Math.max(0, t)) : TRIVIA_QUESTION_MS;
+          points += 100 + Math.round(50 * (1 - ms / TRIVIA_QUESTION_MS));
+        });
+        return { userId: r.userId, nickname: r.nickname, score, points };
       });
-      scores.sort((a, b) => b.score - a.score);
+      scores.sort((a, b) => b.points - a.points || b.score - a.score);
       return { correctIndexes, scores };
     },
   },
@@ -289,6 +314,36 @@ const DEFINITIONS: Record<GroupGameKind, GameDefinition> = {
         correctGuessers: correct.map((r) => r.nickname),
         allGuesses: responses.map((r) => ({ nickname: r.nickname, guess: r.response?.guess })),
       };
+    },
+  },
+
+  hot_take: {
+    label: "Hot Take",
+    blurb: "One spicy opinion. Slide from no way to facts, and see where the room lands.",
+    needsSetup: false,
+    starterKnowsSecret: false,
+    hasSecret: false,
+    starterParticipates: true,
+    revealMode: "timer",
+    timerMs: 5 * 60 * 1000,
+    buildConfig(setup) {
+      if (typeof setup?.take === "string" && setup.take.trim()) return { take: setup.take.trim().slice(0, 160) };
+      return { take: pick(HOT_TAKE_BANK) };
+    },
+    sanitizeConfig(config) { return config; },
+    computeResults(_config, responses) {
+      const values = responses
+        .map((r) => ({ userId: r.userId, nickname: r.nickname, value: Math.round(Number(r.response?.value)) }))
+        .filter((v) => Number.isFinite(v.value) && v.value >= 0 && v.value <= 100);
+      const avg = values.length ? Math.round(values.reduce((s, v) => s + v.value, 0) / values.length) : 50;
+      const spread = values.length
+        ? Math.round(Math.sqrt(values.reduce((s, v) => s + (v.value - avg) ** 2, 0) / values.length))
+        : 0;
+      // The person furthest from the room's average: the round's hottest take.
+      const outlier = values.length > 1
+        ? [...values].sort((a, b) => Math.abs(b.value - avg) - Math.abs(a.value - avg))[0]
+        : null;
+      return { values, avg, spread, outlier };
     },
   },
 
@@ -589,6 +644,8 @@ export interface GameStateView {
   responseCount: number;
   eligibleCount: number;
   participants: MemberRef[];
+  /** Who has locked in an answer so far (never what they answered). */
+  answered: MemberRef[];
   isParticipant: boolean;
   results: any | null;
   canRevealEarly: boolean;
@@ -634,6 +691,7 @@ export async function getGameState(gameId: number, viewerId: string): Promise<Ga
     responseCount: responses.length,
     eligibleCount: participants.length,
     participants,
+    answered: responses.map((r) => ({ userId: r.userId, nickname: r.nickname })),
     isParticipant: participants.some((p) => p.userId === viewerId),
     results: revealed ? game.results : showLive ? { live: responses.map((r) => ({ nickname: r.nickname, response: r.response })) } : null,
     canRevealEarly: def.revealMode === "manual-or-timer" && viewerId === game.startedBy && !revealed,

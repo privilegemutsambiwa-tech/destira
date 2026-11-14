@@ -2,7 +2,7 @@
 // Pulled out of GroupChat.tsx when games moved from inline chat cards to
 // opt-in rooms, so this dialog is reachable from the lobby instead of the
 // composer directly.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { Loader2 } from "lucide-react";
 import { useGameKinds, useGameBank, useCreateGame } from "@/hooks/use-interactions";
 import { useToast } from "@/hooks/use-toast";
 import { GAME_ICON_LABEL } from "@/components/game-room";
+import { themeFor } from "@/components/games/game-theme";
 
 const INK = "hsl(var(--vf-ink))";
 const LINE = "var(--vf-line)";
@@ -19,11 +20,13 @@ const MUTED = "var(--vf-muted)";
 const TEXT = "hsl(var(--vf-text))";
 const EMBER = "hsl(var(--vf-ember))";
 
-export function GameComposerDialog({ groupId, open, onClose, onCreated }: {
+export function GameComposerDialog({ groupId, open, onClose, onCreated, initialKind = null }: {
   groupId: number;
   open: boolean;
   onClose: () => void;
   onCreated?: (gameId: number) => void;
+  /** Open straight on this game's setup (Game Night's shelf). */
+  initialKind?: string | null;
 }) {
   const { data: kindsData } = useGameKinds();
   const [selectedKind, setSelectedKind] = useState<string | null>(null);
@@ -41,6 +44,11 @@ export function GameComposerDialog({ groupId, open, onClose, onCreated }: {
   const [charadesFromBank, setCharadesFromBank] = useState(true);
   const [charadesAnswer, setCharadesAnswer] = useState("");
   const [charadesEmoji, setCharadesEmoji] = useState("");
+  const [customTake, setCustomTake] = useState("");
+
+  useEffect(() => {
+    if (open) setSelectedKind(initialKind ?? null);
+  }, [open, initialKind]);
 
   const reset = () => {
     setSelectedKind(null);
@@ -49,6 +57,7 @@ export function GameComposerDialog({ groupId, open, onClose, onCreated }: {
     setPromptIndex(null);
     setCustomA(""); setCustomB(""); setCustomStatement("");
     setCharadesFromBank(true); setCharadesAnswer(""); setCharadesEmoji("");
+    setCustomTake("");
   };
 
   const buildSetup = (): any => {
@@ -56,6 +65,7 @@ export function GameComposerDialog({ groupId, open, onClose, onCreated }: {
       case "two_truths_one_lie": return { statements, lieIndex };
       case "would_you_rather": return customA.trim() && customB.trim() ? { a: customA.trim(), b: customB.trim() } : {};
       case "never_have_i_ever": return customStatement.trim() ? { statement: customStatement.trim() } : {};
+      case "hot_take": return customTake.trim() ? { take: customTake.trim() } : {};
       case "most_likely_to": return { promptIndex };
       case "emoji_charades": return charadesFromBank ? { fromBank: true } : { answer: charadesAnswer, emoji: charadesEmoji };
       default: return {};
@@ -106,7 +116,7 @@ export function GameComposerDialog({ groupId, open, onClose, onCreated }: {
                     {GAME_ICON_LABEL[k.kind] || "🎮"}
                   </span>
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold" style={{ color: TEXT }}>{k.label}</div>
+                    <div className="text-sm font-semibold" style={{ color: TEXT }}>{themeFor(k.kind).name}</div>
                     <div className="text-xs mt-0.5" style={{ color: MUTED }}>{k.blurb}</div>
                   </div>
                 </button>
@@ -122,7 +132,7 @@ export function GameComposerDialog({ groupId, open, onClose, onCreated }: {
                   {GAME_ICON_LABEL[selectedKind] || "🎮"}
                 </span>
                 <span className="text-sm font-semibold" style={{ color: TEXT }}>
-                  {kindsData?.kinds.find((k) => k.kind === selectedKind)?.label}
+                  {themeFor(selectedKind).name}
                 </span>
               </div>
 
@@ -156,6 +166,13 @@ export function GameComposerDialog({ groupId, open, onClose, onCreated }: {
                 <div className="space-y-2">
                   <p className="text-xs" style={{ color: MUTED }}>Leave blank to get a random one from the bank.</p>
                   <Input value={customStatement} onChange={(e) => setCustomStatement(e.target.value)} placeholder="Never have I ever... (optional)" data-testid="input-nhie" />
+                </div>
+              )}
+
+              {selectedKind === "hot_take" && (
+                <div className="space-y-2">
+                  <p className="text-xs" style={{ color: MUTED }}>Leave blank for a random one. Keep it about ideas, not about anyone in the room.</p>
+                  <Input value={customTake} onChange={(e) => setCustomTake(e.target.value)} maxLength={160} placeholder="Your hot take (optional)" data-testid="input-hot-take" />
                 </div>
               )}
 

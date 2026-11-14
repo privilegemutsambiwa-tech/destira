@@ -31,6 +31,7 @@ import { initDiscoverDecisions } from "./lib/discover-decisions";
 import { initCrashReporting } from "./lib/crash-report";
 import { initEveningLight } from "./lib/ambient";
 import { initDataSaver } from "./lib/data-saver";
+import { initKeyboardOverlay } from "./lib/keyboard-overlay";
 
 // In the Android/iOS app: send /api requests to the server with the member's
 // token (the screens themselves are packaged in the app). No-op on the web.
@@ -47,6 +48,7 @@ initDiscoverDecisions();
 initCrashReporting();
 initEveningLight();
 initDataSaver();
+initKeyboardOverlay();
 
 // The website's service worker (web push, install). The app has its own push
 // and packaged screens, so it doesn't register one.

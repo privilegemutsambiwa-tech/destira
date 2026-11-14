@@ -599,3 +599,10 @@ html.vf-offline .fixed.top-0:not([data-testid="offline-banner"]) { top: var(--vf
 @media (prefers-reduced-motion: reduce) {
   .vf-wall-up, .vf-wall-down { animation: none; }
 }
+
+/* Android app builds whose web view doesn't shrink for the keyboard
+   (lib/keyboard-overlay.ts): lift full-height screens, such as chats with
+   their composer at the bottom, clear of it, and let scrolling pages scroll
+   a field above it. */
+html.vf-kb-overlay .h-dvh { height: calc(100dvh - var(--vf-kb, 0px)) !important; }
+html.vf-kb-overlay body { padding-bottom: var(--vf-kb, 0px); }
