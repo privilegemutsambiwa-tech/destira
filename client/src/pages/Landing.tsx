@@ -1,18 +1,18 @@
 import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { AlertTriangle, ArrowRight, CalendarHeart, ChevronDown, Download, Flag, Lock, MessageCircle, ShieldCheck, SlidersHorizontal, Smartphone, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarHeart, ChevronDown, Download, Flag, Lock, MapPin, MessageCircle, RotateCcw, ShieldCheck, SlidersHorizontal, Smartphone, Sparkles, Users } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { DestiraLockup } from "@/components/brand/logo";
 import { ResonanceDial } from "@/components/resonance-dial";
 import { photos as BUNDLED_PHOTOS, type Photo } from "@/lib/photos";
 import { isNativeApp } from "@/lib/native";
+import { useDataSaver } from "@/lib/data-saver";
 import { pendingReferralCode } from "@/lib/attribution";
 import { GoogleSignInCancelled, startGoogleSignIn } from "@/lib/google-signin";
 import { consumePendingInvite, resolvePendingInviteRoute } from "@/lib/pending-invite";
 import { trackCustom, trackEvent, trackPageView } from "@/lib/pixel";
 import { LANDING_QUIZ, saveQuizAnswers, twinNote, type QuizAnswers } from "@/lib/landing-quiz";
-import { PLAN_CARDS, priceLabel } from "@shared/entitlements";
 
 // The app doesn't carry the website's photo library (hundreds of MB); its
 // welcome screen loads these from destira.date and shows the blurred
@@ -30,17 +30,23 @@ const HERO_PHOTOS: Photo[] = PHOTO_ORIGIN
  *  the twin demo) before asking again.
  *
  *    1  Nav
- *    2  Hero          — headline matched to the ad (?v=), Google + email
- *    3  Quiz          — three real onboarding questions → the twin's note
- *    4  How it works  — three steps
- *    5  Ask a twin    — tap a question, see how a twin answers (and refuses)
- *    6  Happening soon — real upcoming public events (/api/public/landing)
- *    7  Why switch    — the difference from swiping, side by side
- *    8  Safety        — the twin never speaks as you; you set its limits
- *    9  FAQ
- *   10  Closing CTA, footer, and a sticky sign-up bar on phones
+ *    2  Hero          — a living wall of local couples; the headline matched
+ *                       to the ad (?v=); Google + email; twins whispering
+ *    3  Tonight's three — the real 19:00 Harare release, counted down live,
+ *                       with three locked example cards
+ *    4  Twins talking — an example conversation that plays as you scroll
+ *    5  Quiz          — three real onboarding questions → the twin's note
+ *    6  Ask a twin    — tap a question, see how a twin answers (and refuses)
+ *    7  How it works  — three steps
+ *    8  Made in Harare — local photos, places, and real upcoming events
+ *    9  Why switch    — the difference from swiping, side by side
+ *   10  Safety        — the twin never speaks as you; you set its limits
+ *   11  FAQ
+ *   12  Closing CTA over the wall, footer, sticky sign-up bar on phones
  *
- *  Every number shown is real or absent: no invented member counts.
+ *  Every number shown is real or absent: no invented member counts. Demo
+ *  people and conversations are labelled as examples. No prices here: the
+ *  first visit is about what Destira is; plans live inside the app.
  * ------------------------------------------------------------------ */
 
 function isInIframe() {
@@ -114,188 +120,170 @@ function Reveal({
   );
 }
 
-// New arrivals (hero-81+, the curated couples batch) show up roughly twice as
-// often as the older set — each priority photo is duplicated in the cycle,
-// spaced a full lap apart so it never repeats back-to-back.
-const NEW_HERO_START = 81;
-const isPriorityPhoto = (name: string) => {
-  const m = /^hero-(\d+)$/.exec(name);
-  return !!m && Number(m[1]) >= NEW_HERO_START;
-};
+// ── Photos ───────────────────────────────────────────────────────────
+// Destira launches in Zimbabwe, so the landing shows Black couples only:
+// a hand-picked set from client/public/photos (hero-81+ repeat 26–80, so
+// only the originals are listed). Order is for variety along each column.
+const LOCAL_ORDER = [39, 64, 26, 46, 59, 41, 43, 62, 66, 36, 38, 28, 70, 30, 42, 44, 45, 52, 56, 61, 65, 67, 68, 71, 75, 37];
+const PHOTO_BY_NAME = new Map(HERO_PHOTOS.map((p) => [p.name, p]));
+const LOCAL: Photo[] = LOCAL_ORDER.map((n) => PHOTO_BY_NAME.get(`hero-${n}`)).filter((p): p is Photo => !!p);
+const pick = (...ns: number[]) => ns.map((n) => PHOTO_BY_NAME.get(`hero-${n}`)).filter((p): p is Photo => !!p);
 
-function buildWeightedHeroSet(all: Photo[]): Photo[] {
-  const priority = all.filter((p) => isPriorityPhoto(p.name));
-  const rest = all.filter((p) => !isPriorityPhoto(p.name));
-  const priorityTwice = [...priority, ...priority];
-  const merged: Photo[] = [];
-  const len = Math.max(priorityTwice.length, rest.length);
-  for (let i = 0; i < len; i++) {
-    if (i < priorityTwice.length) merged.push(priorityTwice[i]);
-    if (i < rest.length) merged.push(rest[i]);
-  }
-  return merged;
-}
+/** Wall tiles are small, so their srcset stops at 960w. */
+const tileSet = (p: Photo, ext: "webp" | "jpg") =>
+  p.variants
+    .filter((v) => v.width <= 960)
+    .map((v) => `${v[ext]} ${v.width}w`)
+    .join(", ");
 
-// The hero cycles through every photo in the generated manifest, weighted
-// toward the newest batch. A 404 self-heals out of the rotation.
-const HERO_SET: Photo[] = buildWeightedHeroSet(HERO_PHOTOS);
-
-/** Picks a starting index a fraction of the way through HERO_SET so multiple
- *  rotating sections on the same page desync instead of mirroring each other. */
-const heroOffset = (fraction: number) => Math.floor(HERO_SET.length * fraction);
-
-const HERO_SIZES = "(min-width: 1024px) 45vw, 100vw";
-
-/** Cycles through a list of manifest photos, swapping the image directly (no
- *  fade) on an interval. Static (first item) under prefers-reduced-motion.
- *  Never renders empty — a 404'd photo drops itself out of the rotation. */
-function RotatingPhoto({
-  slots,
-  ratio,
-  priority = false,
+function PhotoTile({
+  p,
+  eager = false,
+  sizes = "(min-width: 1024px) 18vw, 46vw",
+  ratio = "3/4",
   className = "",
   style,
-  intervalMs = 4600,
-  startIndex = 0,
-  caption,
+  position = "center 35%",
 }: {
-  slots: Photo[];
-  ratio: string;
-  priority?: boolean;
+  p: Photo;
+  eager?: boolean;
+  sizes?: string;
+  ratio?: string;
   className?: string;
   style?: React.CSSProperties;
-  intervalMs?: number;
-  startIndex?: number;
-  caption?: string;
+  position?: string;
 }) {
-  const reduce = usePrefersReducedMotion();
-  const [live, setLive] = useState<Photo[]>(slots);
-  const [i, setI] = useState(() => (slots.length ? startIndex % slots.length : 0));
-
-  useEffect(() => {
-    if (reduce || live.length < 2) return;
-    const id = window.setInterval(() => {
-      setI((n) => (n + 1) % live.length);
-    }, intervalMs);
-    return () => window.clearInterval(id);
-  }, [reduce, live.length, intervalMs]);
-
-  const dropPhoto = (name: string) =>
-    setLive((cur) => {
-      const next = cur.filter((p) => p.name !== name);
-      return next.length ? next : cur; // never empty
-    });
-
-  const idx = Math.min(i, live.length - 1);
-  const p = live[idx];
-
   return (
-    <figure
-      className={`relative overflow-hidden ${className}`}
-      style={{ aspectRatio: ratio, borderRadius: "20px", ...style }}
-      data-photo-slot={p?.name}
-    >
-      {p && (
-        <picture>
-          <source type="image/webp" srcSet={p.webpSrcSet} sizes={HERO_SIZES} />
-          <img
-            src={p.src}
-            srcSet={p.srcSet}
-            sizes={HERO_SIZES}
-            alt=""
-            loading={priority ? "eager" : "lazy"}
-            decoding="async"
-            onError={() => dropPhoto(p.name)}
-            className="absolute inset-0 h-full w-full object-cover"
-            style={{
-              filter: "saturate(1.05)",
-              backgroundImage: `url("${p.lqip}")`,
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-            }}
-          />
-        </picture>
-      )}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{ background: "#FF6B4A", opacity: 0.07, mixBlendMode: "soft-light" }}
-      />
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{ borderRadius: "20px", boxShadow: "inset 0 0 0 1px rgba(255,255,255,.09)" }}
-      />
-      {caption && (
-        <>
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-vf-scrim/85 to-transparent"
-            style={{ height: "45%" }}
-          />
-          <figcaption
-            className="absolute bottom-4 left-4 right-4 font-mono text-[10.5px] uppercase tracking-[0.16em]"
-            style={{ color: "rgba(245,240,234,0.9)" }}
-          >
-            {caption}
-          </figcaption>
-        </>
-      )}
-    </figure>
+    <div className={`relative w-full overflow-hidden ${className}`} style={{ aspectRatio: ratio, ...style }}>
+      <picture>
+        <source type="image/webp" srcSet={tileSet(p, "webp")} sizes={sizes} />
+        <img
+          src={p.variants[0]?.jpg ?? p.src}
+          srcSet={tileSet(p, "jpg")}
+          sizes={sizes}
+          alt=""
+          loading={eager ? "eager" : "lazy"}
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{ objectPosition: position, backgroundImage: `url("${p.lqip}")`, backgroundSize: "cover" }}
+        />
+      </picture>
+    </div>
   );
 }
 
-/** Full-bleed rotating backdrop (the Closing section). Same no-fade swap as
- *  RotatingPhoto, but a bare absolute-fill <img> — the section around it
- *  supplies its own scrim/gradient overlays. */
-function RotatingBackdrop({
-  slots,
-  startIndex = 0,
-  intervalMs = 5200,
-  objectPosition = "center 40%",
+/** The living wall: columns of couples drifting past each other, slowly, in
+ *  opposite directions. Each column holds its photos twice and scrolls by
+ *  exactly one copy, so the loop is seamless. Still under reduced motion,
+ *  and only a few photos when the visitor is saving data. */
+function PhotoWall({
+  photos,
+  columns = 3,
+  eager = false,
+  className = "",
+  style,
 }: {
-  slots: Photo[];
-  startIndex?: number;
-  intervalMs?: number;
-  objectPosition?: string;
+  photos: Photo[];
+  columns?: number;
+  eager?: boolean;
+  className?: string;
+  style?: React.CSSProperties;
 }) {
   const reduce = usePrefersReducedMotion();
-  const [live, setLive] = useState<Photo[]>(slots);
-  const [i, setI] = useState(() => (slots.length ? startIndex % slots.length : 0));
-
-  useEffect(() => {
-    if (reduce || live.length < 2) return;
-    const id = window.setInterval(() => {
-      setI((n) => (n + 1) % live.length);
-    }, intervalMs);
-    return () => window.clearInterval(id);
-  }, [reduce, live.length, intervalMs]);
-
-  const dropPhoto = (name: string) =>
-    setLive((cur) => {
-      const next = cur.filter((p) => p.name !== name);
-      return next.length ? next : cur;
-    });
-
-  const idx = Math.min(i, live.length - 1);
-  const p = live[idx];
-  if (!p) return null;
-
+  const { on: saving } = useDataSaver();
+  const perCol = saving ? 2 : 5;
+  const cols = Array.from({ length: columns }, (_, c) => photos.slice(c * perCol, c * perCol + perCol));
+  const moving = !reduce && !saving;
   return (
-    <picture>
-      <source type="image/webp" srcSet={p.webpSrcSet} sizes="100vw" />
-      <img
-        src={p.src}
-        srcSet={p.srcSet}
-        sizes="100vw"
-        alt=""
-        loading="lazy"
-        decoding="async"
-        onError={() => dropPhoto(p.name)}
-        className="absolute inset-0 h-full w-full object-cover"
-        style={{ objectPosition }}
-      />
-    </picture>
+    <div className={`flex gap-3 ${className}`} style={style} aria-hidden="true">
+      {cols.map((col, c) => (
+        <div key={c} className={`flex-1 min-w-0 ${c >= 2 ? "hidden lg:block" : ""}`} style={{ marginTop: c % 2 ? "-22%" : 0 }}>
+          <div
+            className={moving ? (c % 2 ? "vf-wall-down" : "vf-wall-up") : ""}
+            style={moving ? { animationDuration: `${84 + c * 14}s` } : undefined}
+          >
+            {(moving ? [...col, ...col] : col).map((p, i) => (
+              <div key={i} className="pb-3">
+                <PhotoTile p={p} eager={eager && i < 2 && c < 2} className="rounded-[20px] bg-white/5" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Tonight's three: the 19:00 Harare release (server/daily-picks.ts) ──
+const HARARE_OFFSET = 2 * 3600e3; // UTC+2, no daylight saving
+
+function useTonight() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const h = new Date(now + HARARE_OFFSET); // read the UTC fields as Harare time
+  const out = h.getUTCHours() >= 19;
+  const next =
+    Date.UTC(h.getUTCFullYear(), h.getUTCMonth(), h.getUTCDate(), 19) - HARARE_OFFSET + (out ? 86400e3 : 0);
+  const left = Math.max(0, next - now);
+  const hh = Math.floor(left / 3600e3);
+  const mm = Math.floor((left % 3600e3) / 60e3);
+  const ss = Math.floor((left % 60e3) / 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return { out, clock: `${pad(hh)}:${pad(mm)}:${pad(ss)}`, short: hh > 0 ? `${hh}h ${pad(mm)}m` : `${mm}m ${pad(ss)}s` };
+}
+
+/** The little live chip on the hero. */
+function TonightChip() {
+  const t = useTonight();
+  return (
+    <div
+      className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12.5px] font-medium backdrop-blur-md"
+      style={{ background: "rgba(12,9,16,0.55)", color: "#F5F0EA", border: "1px solid rgba(245,240,234,0.16)" }}
+      data-testid="hero-tonight-chip"
+    >
+      <span className="relative flex w-2 h-2" aria-hidden="true">
+        <span className="absolute inset-0 rounded-full bg-vf-mint animate-ping opacity-70" />
+        <span className="relative w-2 h-2 rounded-full bg-vf-mint" />
+      </span>
+      {t.out ? "Tonight's three are out" : <>Tonight's three in <span className="font-mono tabular-nums">{t.short}</span></>}
+    </div>
+  );
+}
+
+/** Example lines that drift over the hero wall, one at a time. */
+const WHISPERS = [
+  { who: "Rufaro's twin", line: "She's at the Avondale market before nine most Saturdays." },
+  { who: "Tendai's twin", line: "He'd come, if there's coffee. He's up at six anyway." },
+  { who: "Nyasha's twin", line: "Sunday lunch at her gogo's is not negotiable." },
+  { who: "Farai's twin", line: "Same for him. He's the one who carves the chicken." },
+  { who: "Rudo's twin", line: "She'll say yes to Domboshava, as long as you leave early." },
+];
+
+function TwinWhisper({ className = "" }: { className?: string }) {
+  const reduce = usePrefersReducedMotion();
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (reduce) return;
+    const id = window.setInterval(() => setI((n) => (n + 1) % WHISPERS.length), 4200);
+    return () => window.clearInterval(id);
+  }, [reduce]);
+  const w = WHISPERS[i];
+  return (
+    <div className={className} aria-hidden="true">
+      <div
+        key={i}
+        className="rounded-[18px] rounded-bl-[6px] px-4 py-3 shadow-[0_18px_50px_-20px_rgba(0,0,0,0.6)] animate-in fade-in slide-in-from-bottom-3 duration-700 backdrop-blur-md"
+        style={{ background: "rgba(245,240,234,0.92)", color: "#16121B", maxWidth: 290 }}
+      >
+        <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: "#0E8F6E" }}>
+          <Sparkles className="w-3 h-3" /> {w.who} · example
+        </div>
+        <p className="mt-1 text-[14px] leading-[1.4]">{w.line}</p>
+      </div>
+    </div>
   );
 }
 
@@ -738,6 +726,227 @@ function EventCard({ e }: { e: LandingEvent }) {
   );
 }
 
+// ── 3 · Tonight's three ──────────────────────────────────────────────
+// Three locked example cards. The colour behind each is only the photo's
+// tiny blur-up placeholder, so this section costs no image bytes.
+
+const TEASER = [
+  { n: 59, reason: "You'd both rather talk it out than go quiet.", rot: -8, y: 18 },
+  { n: 39, reason: "Family comes first for both of you.", rot: 0, y: 0 },
+  { n: 64, reason: "One of you plans the date. Both of you let it wander.", rot: 8, y: 18 },
+];
+
+function TonightsThreeTeaser() {
+  const t = useTonight();
+  const [, setLocation] = useLocation();
+  const cards = TEASER.map((c) => ({ ...c, p: PHOTO_BY_NAME.get(`hero-${c.n}`) }));
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-12 lg:gap-16 items-center">
+      <div>
+        <Reveal>
+          <Eyebrow tone="ember">Every evening · 19:00</Eyebrow>
+          <SectionHeading id="tonight-heading">
+            Three people. Every evening. <em className="italic text-vf-ember">Chosen, not swiped.</em>
+          </SectionHeading>
+          <p className="mt-4 text-[16px] md:text-[17px] leading-[1.6] text-vf-muted max-w-[46ch]">
+            At seven, your twin brings you three people it has already talked to, each with the reason it thinks
+            you'd click. No endless feed. Just three good reasons to say hello.
+          </p>
+        </Reveal>
+        <Reveal delay={100}>
+          <div className="mt-8 rounded-[24px] border border-vf-line bg-vf-surface px-5 py-4 inline-flex flex-col" data-testid="tonight-countdown">
+            {t.out ? (
+              <>
+                <span className="font-display text-[34px] sm:text-[40px] leading-none text-vf-text">Out now</span>
+                <span className="mt-2 text-[13.5px] text-vf-muted">Tonight's three have arrived. The next three come tomorrow at 19:00.</span>
+              </>
+            ) : (
+              <>
+                <span className="font-mono tabular-nums text-vf-text leading-none" style={{ fontSize: "clamp(38px, 7vw, 56px)", letterSpacing: "-0.02em" }}>
+                  {t.clock}
+                </span>
+                <span className="mt-2 text-[13.5px] text-vf-muted">until tonight's three · 19:00 Harare time</span>
+              </>
+            )}
+          </div>
+          <div className="mt-6">
+            <button
+              onClick={() => setLocation("/signup")}
+              className="inline-flex items-center gap-2 rounded-full bg-vf-ember text-white font-semibold h-[52px] px-7 text-[15.5px] btn-press hover:bg-[var(--vf-ember-soft)] transition-colors"
+              data-testid="button-tonight-join"
+            >
+              Get your three <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </Reveal>
+      </div>
+
+      <Reveal delay={120}>
+        <div className="relative flex justify-center items-start pt-2 pb-10" aria-hidden="true">
+          {cards.map((c, i) => (
+            <div
+              key={c.n}
+              className={`relative shrink-0 ${i === 1 ? "z-10 w-[36%] -mx-1 sm:-mx-2 max-w-[240px]" : "z-0 w-[32%] max-w-[220px]"}`}
+              style={{ transform: `translateY(${c.y}px) rotate(${c.rot}deg)` }}
+            >
+              <div className="relative overflow-hidden rounded-[22px] shadow-[0_30px_60px_-28px_rgba(0,0,0,0.55)]" style={{ aspectRatio: "3/4", background: "#2a1f24" }}>
+                {c.p && (
+                  <div
+                    className="absolute inset-0"
+                    style={{ backgroundImage: `url("${c.p.lqip}")`, backgroundSize: "cover", backgroundPosition: "center", filter: "blur(10px) saturate(1.25)", transform: "scale(1.35)" }}
+                  />
+                )}
+                <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(12,9,16,0.05) 30%, rgba(12,9,16,0.82) 100%)" }} />
+                <div className={`absolute inset-0 items-center justify-center ${i === 1 ? "flex" : "hidden sm:flex"}`}>
+                  <span className="w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-md" style={{ background: "rgba(245,240,234,0.18)", border: "1px solid rgba(245,240,234,0.35)" }}>
+                    <Lock className="w-[18px] h-[18px]" style={{ color: "#F5F0EA" }} />
+                  </span>
+                </div>
+                {i === 1 && (
+                  <span className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full px-2.5 py-1 font-mono text-[9.5px] uppercase tracking-[0.14em]" style={{ background: "rgba(12,9,16,0.6)", color: "#F5F0EA" }}>
+                    Example
+                  </span>
+                )}
+                <p className={`absolute bottom-2.5 sm:bottom-3 text-[11.5px] sm:text-[13px] leading-[1.35] ${i === 0 ? "left-2.5 right-4 sm:left-3 sm:right-6" : i === 2 ? "left-4 right-2.5 sm:left-6 sm:right-3" : "left-2.5 right-2.5 sm:left-3 sm:right-3"}`} style={{ color: "#F5F0EA" }}>
+                  {c.reason}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Reveal>
+    </div>
+  );
+}
+
+// ── 4 · Twins talking ────────────────────────────────────────────────
+// An example conversation between two members' twins. It plays once when it
+// scrolls into view (all at once under reduced motion) and can be replayed.
+
+const TALK: { from: "r" | "t"; text: string }[] = [
+  { from: "r", text: "Rufaro's at the Avondale market before nine most Saturdays. Is Tendai a morning person?" },
+  { from: "t", text: "He'd tell you no. He's at the gym by six, though, and he'd go anywhere for good coffee." },
+  { from: "r", text: "What does he do when something's bothering him?" },
+  { from: "t", text: "Says it the same day. He hates going quiet on people." },
+  { from: "r", text: "So does she. I think these two should meet." },
+];
+
+function TwinsTalking() {
+  const reduce = usePrefersReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
+  const [run, setRun] = useState(0); // bumps to (re)start playback
+  const [shown, setShown] = useState(0);
+  const [typing, setTyping] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (reduce || typeof IntersectionObserver === "undefined") {
+      setShown(TALK.length);
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) {
+          io.disconnect();
+          setRun(1);
+        }
+      },
+      { threshold: 0.35 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [reduce]);
+
+  useEffect(() => {
+    if (!run) return;
+    setShown(0);
+    const timers: number[] = [];
+    let at = 300;
+    TALK.forEach((m, i) => {
+      timers.push(window.setTimeout(() => setTyping(true), at));
+      at += Math.min(1500, 500 + m.text.length * 12);
+      timers.push(
+        window.setTimeout(() => {
+          setTyping(false);
+          setShown(i + 1);
+        }, at),
+      );
+      at += 650;
+    });
+    return () => timers.forEach((id) => window.clearTimeout(id));
+  }, [run]);
+
+  const done = shown >= TALK.length;
+  const next = TALK[shown];
+
+  return (
+    <div ref={ref} className="rounded-[28px] border border-vf-line bg-vf-surface p-4 sm:p-6 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.35)]" data-testid="twins-talking">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex -space-x-2.5" aria-hidden="true">
+            <span className="w-10 h-10 rounded-full flex items-center justify-center font-serif text-[18px] text-white ring-2 ring-vf-surface" style={{ background: "linear-gradient(135deg, var(--vf-mint-vivid), hsl(var(--vf-mint)))" }}>
+              R
+            </span>
+            <span className="w-10 h-10 rounded-full flex items-center justify-center font-serif text-[18px] text-white ring-2 ring-vf-surface" style={{ background: "linear-gradient(135deg, hsl(var(--vf-ember)), var(--vf-warn))" }}>
+              T
+            </span>
+          </div>
+          <div>
+            <div className="text-[14.5px] font-semibold text-vf-text">Rufaro's twin and Tendai's twin</div>
+            <div className="text-[12px] text-vf-muted">An example conversation</div>
+          </div>
+        </div>
+        {done && !reduce && (
+          <button onClick={() => setRun((n) => n + 1)} className="shrink-0 w-9 h-9 rounded-full border border-vf-line flex items-center justify-center text-vf-muted hover:text-vf-text btn-press" aria-label="Play the conversation again">
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      <div className="mt-5 space-y-3 min-h-[300px]" aria-live="polite">
+        {TALK.slice(0, shown).map((m, i) => (
+          <div key={`${run}-${i}`} className={`flex ${m.from === "t" ? "justify-end" : ""} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+            <div
+              className={`max-w-[86%] rounded-[18px] px-3.5 py-2.5 text-[14.5px] leading-[1.45] text-vf-text ${
+                m.from === "t" ? "rounded-br-[6px] bg-vf-ember/[0.12]" : "rounded-bl-[6px] bg-vf-mint/[0.14]"
+              }`}
+            >
+              {m.text}
+            </div>
+          </div>
+        ))}
+        {typing && next && (
+          <div className={`flex ${next.from === "t" ? "justify-end" : ""}`} aria-hidden="true">
+            <span className={`inline-flex gap-1 rounded-full px-3.5 py-3 ${next.from === "t" ? "bg-vf-ember/[0.12]" : "bg-vf-mint/[0.14]"}`}>
+              {[0, 1, 2].map((d) => (
+                <span key={d} className="w-1.5 h-1.5 rounded-full bg-vf-muted animate-bounce" style={{ animationDelay: `${d * 140}ms` }} />
+              ))}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div
+        className={`mt-4 rounded-[20px] border border-vf-line bg-vf-surface2 p-3.5 flex items-center gap-3.5 transition-all duration-500 ${
+          done ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
+        }`}
+        data-testid="twins-result"
+      >
+        <ResonanceDial score={87} size={56} />
+        <div className="min-w-0">
+          <div className="text-[14.5px] font-semibold text-vf-text">Introduced to both of them</div>
+          <div className="text-[13px] leading-[1.45] text-vf-muted">Both say what's wrong straight away. Both love an early Saturday.</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 8 · Made in Harare ───────────────────────────────────────────────
+
+const PLACES = ["Harare", "Bulawayo", "Mutare", "Gweru", "Masvingo", "Victoria Falls", "Zimbabweans abroad"];
+
 // ── 9 · FAQ ──────────────────────────────────────────────────────────
 
 const FAQ: { q: string; a: React.ReactNode }[] = [
@@ -931,59 +1140,73 @@ export default function Landing() {
       </nav>
 
       {/* ============ 2 · HERO ============ */}
-      <section className="relative px-5 sm:px-6 pt-6 sm:pt-10 lg:pt-14 pb-16 lg:pb-24" aria-labelledby="hero-heading" data-testid="section-hero">
+      <section className="px-2 sm:px-3" aria-labelledby="hero-heading" data-testid="section-hero">
         <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-[520px] -z-0"
-          style={{ background: "radial-gradient(60% 60% at 80% 10%, hsl(var(--vf-ember) / 0.12), transparent 70%), radial-gradient(50% 50% at 0% 30%, hsl(var(--vf-mint) / 0.12), transparent 70%)" }}
-        />
-        <div className="relative max-w-[1180px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] items-center gap-10 lg:gap-16">
-          <div>
-            {inviter && (
-              <div
-                className="mb-5 inline-flex items-center gap-2 rounded-full border border-vf-ember/40 bg-vf-ember/10 px-4 py-2 text-[13.5px] text-vf-text"
-                data-testid="banner-invited-by"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-vf-ember" aria-hidden="true" />
-                {inviter.firstName} invited you. Join and you both get a free week.
-              </div>
-            )}
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-vf-line bg-vf-surface/70 px-3.5 py-1.5 text-[12.5px] font-medium text-vf-muted">
-                <span className="relative flex w-2 h-2" aria-hidden="true">
-                  <span className="absolute inset-0 rounded-full bg-vf-mint animate-ping opacity-60" />
-                  <span className="relative w-2 h-2 rounded-full bg-vf-mint" />
-                </span>
-                Dating with an AI twin · Free to join
-              </div>
-            </div>
-            <div>
+          className="relative overflow-hidden rounded-[28px] sm:rounded-[36px] flex min-h-[calc(100svh-72px)] lg:min-h-[min(880px,calc(100vh-76px))]"
+          style={{ background: "#0C0910" }}
+        >
+          <div className="absolute inset-0 lg:left-[38%] overflow-hidden">
+            <PhotoWall
+              photos={LOCAL}
+              columns={3}
+              eager
+              className="absolute -top-[6%] inset-x-0 px-3 lg:-top-[24%] lg:-right-[6%] lg:left-[2%] lg:[transform:rotate(-6deg)_scale(1.08)]"
+            />
+          </div>
+          <div
+            className="absolute inset-0 lg:hidden"
+            aria-hidden="true"
+            style={{ background: "linear-gradient(180deg, rgba(12,9,16,0.10) 0%, rgba(12,9,16,0.30) 28%, rgba(12,9,16,0.90) 50%, #0C0910 66%)" }}
+          />
+          <div
+            className="absolute inset-0 hidden lg:block"
+            aria-hidden="true"
+            style={{ background: "linear-gradient(90deg, #0C0910 36%, rgba(12,9,16,0.80) 46%, rgba(12,9,16,0.12) 68%, rgba(12,9,16,0.20) 100%)" }}
+          />
+          <div
+            className="absolute inset-x-0 bottom-0 h-40 hidden lg:block"
+            aria-hidden="true"
+            style={{ background: "linear-gradient(0deg, rgba(12,9,16,0.85), transparent)" }}
+          />
+          <TwinWhisper className="absolute z-10 right-4 top-[11%] lg:right-[7%] lg:top-[20%]" />
+
+          <div className="relative z-10 w-full max-w-[1180px] mx-auto px-5 sm:px-8 lg:px-12 flex flex-col justify-end lg:justify-center pt-[40vh] sm:pt-[42vh] lg:pt-16 pb-8 lg:pb-16">
+            <div className="max-w-[580px]">
+              {inviter && (
+                <div
+                  className="mb-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13.5px]"
+                  style={{ background: "hsl(var(--vf-ember) / 0.22)", border: "1px solid hsl(var(--vf-ember) / 0.5)", color: "#F5F0EA" }}
+                  data-testid="banner-invited-by"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-vf-ember" aria-hidden="true" />
+                  {inviter.firstName} invited you. Join and you both get a free week.
+                </div>
+              )}
+              <TonightChip />
               <h1
                 id="hero-heading"
-                className="font-serif font-normal text-vf-text mt-5"
-                style={{ fontSize: "clamp(40px, 7vw, 80px)", lineHeight: 1.0, letterSpacing: "-0.03em" }}
+                className="font-serif font-normal mt-5"
+                style={{ color: "#F5F0EA", fontSize: "clamp(42px, 6.6vw, 86px)", lineHeight: 0.98, letterSpacing: "-0.03em" }}
               >
                 {headline.lead}
                 <br />
-                <em className="italic text-vf-ember">{headline.accent}</em>
+                <em className="italic" style={{ color: "#FF8A6B" }}>{headline.accent}</em>
               </h1>
-            </div>
-            <div>
-              <p className="mt-5 text-[16.5px] md:text-[18px] leading-[1.6] text-vf-muted max-w-[52ch]">{headline.sub}</p>
-            </div>
-            <div>
+              <p className="mt-5 text-[16px] md:text-[18px] leading-[1.6] max-w-[48ch]" style={{ color: "rgba(245,240,234,0.78)" }}>
+                {headline.sub}
+              </p>
               <div ref={heroCtaRef} className="mt-7">
                 <SignupButtons />
                 <GetTheApp className="mt-3" />
-                <p className="mt-3.5 text-[13px] text-vf-muted">
+                <p className="mt-3.5 text-[13px]" style={{ color: "rgba(245,240,234,0.66)" }}>
                   Free · 18+ · About 2 minutes{" "}
                   <span aria-hidden="true">·</span>{" "}
-                  <button onClick={() => setLocation("/login")} className="underline underline-offset-2 hover:text-vf-text" data-testid="hero-log-in">
+                  <button onClick={() => setLocation("/login")} className="underline underline-offset-2 hover:text-white" data-testid="hero-log-in">
                     I have an account
                   </button>
                 </p>
                 {members > 0 && (
-                  <p className="mt-4 inline-flex items-center gap-2 text-[13.5px] text-vf-text">
+                  <p className="mt-4 inline-flex items-center gap-2 text-[13.5px]" style={{ color: "#F5F0EA" }}>
                     <Users className="w-4 h-4 text-vf-mint" />
                     Join {members.toLocaleString()}+ people already on Destira
                   </p>
@@ -991,30 +1214,34 @@ export default function Landing() {
               </div>
             </div>
           </div>
-
-          {/* The product in one glance: a person, a resonance score, and the reason. */}
-          <div>
-            <div className="relative max-w-[440px] mx-auto lg:mx-0 lg:ml-auto">
-              <RotatingPhoto slots={HERO_SET} ratio="4/5" priority className="shadow-[0_30px_80px_-30px_rgba(0,0,0,0.45)]" />
-              <div className="absolute -left-3 sm:-left-8 top-6 rounded-[16px] bg-vf-surface/95 backdrop-blur border border-vf-line px-3.5 py-2.5 shadow-lg max-w-[230px] animate-in fade-in slide-in-from-left-4 duration-700">
-                <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-vf-mint">
-                  <Sparkles className="w-3 h-3" /> Twins talking
-                </div>
-                <p className="text-[13px] leading-[1.4] text-vf-text mt-1">“You both say what's bothering you straight away.”</p>
-              </div>
-              <div className="absolute -right-2 sm:-right-6 -bottom-6 rounded-[20px] bg-vf-surface border border-vf-line p-3.5 pr-5 shadow-xl flex items-center gap-3.5 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <ResonanceDial score={87} size={60} />
-                <div>
-                  <div className="text-[14px] font-semibold text-vf-text">87% resonance</div>
-                  <div className="text-[12.5px] text-vf-muted">Strong on values · see why</div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
-      {/* ============ 3 · QUIZ ============ */}
+      {/* ============ 3 · TONIGHT'S THREE ============ */}
+      <section className="px-5 sm:px-6 py-20 sm:py-28 overflow-hidden" aria-labelledby="tonight-heading" data-testid="section-tonight">
+        <div className="max-w-[1180px] mx-auto">
+          <TonightsThreeTeaser />
+        </div>
+      </section>
+
+      {/* ============ 4 · TWINS TALKING ============ */}
+      <section className="px-5 sm:px-6 py-20 sm:py-28 bg-vf-surface2/60" aria-labelledby="talk-heading" data-testid="section-talk">
+        <div className="max-w-[1080px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-10 lg:gap-14 items-center">
+          <Reveal>
+            <Eyebrow tone="mint">While you get on with your day</Eyebrow>
+            <SectionHeading id="talk-heading">Before you say hello, your twins already have.</SectionHeading>
+            <p className="mt-4 text-[16px] md:text-[17px] leading-[1.6] text-vf-muted max-w-[46ch]">
+              Your twin has the getting-to-know-you chat with other members' twins: the small talk, the deal-breakers,
+              the Saturday plans. You only hear about the people worth meeting, and why.
+            </p>
+          </Reveal>
+          <Reveal delay={100}>
+            <TwinsTalking />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ============ 5 · QUIZ ============ */}
       <section id="try" className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="quiz-heading" data-testid="section-quiz">
         <div className="max-w-[1080px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-8 lg:gap-14 items-center">
           <div>
@@ -1033,8 +1260,25 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 4 · HOW IT WORKS ============ */}
-      <section id="how-it-works" className="px-5 sm:px-6 py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="how-heading" data-testid="section-how">
+      {/* ============ 6 · ASK A TWIN ============ */}
+      <section className="px-5 sm:px-6 py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="ask-heading" data-testid="section-ask">
+        <div className="max-w-[1080px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14 items-center">
+          <Reveal>
+            <Eyebrow tone="ember">No more cold openers</Eyebrow>
+            <SectionHeading id="ask-heading">Curious about someone? Ask their twin.</SectionHeading>
+            <p className="mt-4 text-[16px] md:text-[17px] leading-[1.6] text-vf-muted max-w-[48ch]">
+              Instead of “hey” and a long wait, ask what you actually want to know. Their twin answers honestly, and
+              politely declines anything they've kept private.
+            </p>
+          </Reveal>
+          <Reveal delay={100}>
+            <AskATwin />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ============ 7 · HOW IT WORKS ============ */}
+      <section id="how-it-works" className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="how-heading" data-testid="section-how">
         <div className="max-w-[1180px] mx-auto">
           <Reveal>
             <Eyebrow>How it works</Eyebrow>
@@ -1075,46 +1319,65 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 5 · ASK A TWIN ============ */}
-      <section className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="ask-heading" data-testid="section-ask">
-        <div className="max-w-[1080px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14 items-center">
+      {/* ============ 8 · MADE IN HARARE (+ real events) ============ */}
+      <section className="py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="local-heading" data-testid="section-local">
+        <div className="max-w-[1180px] mx-auto px-5 sm:px-6 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-10 lg:gap-16 items-center">
           <Reveal>
-            <Eyebrow tone="ember">No more cold openers</Eyebrow>
-            <SectionHeading id="ask-heading">Curious about someone? Ask their twin.</SectionHeading>
-            <p className="mt-4 text-[16px] md:text-[17px] leading-[1.6] text-vf-muted max-w-[48ch]">
-              Instead of “hey” and a long wait, ask what you actually want to know. Their twin answers honestly, and
-              politely declines anything they've kept private.
+            <Eyebrow tone="ember">Made in Harare</Eyebrow>
+            <SectionHeading id="local-heading">Dating that feels like home.</SectionHeading>
+            <p className="mt-4 text-[16px] md:text-[17px] leading-[1.6] text-vf-muted max-w-[46ch]">
+              Destira started in Harare, for the way people date here. Your twin knows that family comes into it,
+              that faith might too, and that a great first date can be tea in Borrowdale or an early climb at
+              Domboshava.
             </p>
-          </Reveal>
-          <Reveal delay={100}>
-            <AskATwin />
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ============ 6 · HAPPENING SOON ============ */}
-      {live.events.length > 0 && (
-        <section className="py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="events-heading" data-testid="section-events">
-          <div className="max-w-[1180px] mx-auto px-5 sm:px-6">
-            <Reveal>
-              <Eyebrow>Happening soon</Eyebrow>
-              <SectionHeading id="events-heading">Meet people in real life, too.</SectionHeading>
-              <p className="mt-4 text-[16px] leading-[1.6] text-vf-muted max-w-[52ch]">
-                Small gatherings hosted by Destira and its members. Tap one to see the details.
-              </p>
-            </Reveal>
-          </div>
-          <div className="mt-8 max-w-[1180px] mx-auto">
-            <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory px-5 sm:px-6 pb-2 [scrollbar-width:none]">
-              {live.events.map((e) => (
-                <EventCard key={e.id} e={e} />
+            <div className="mt-6 flex flex-wrap gap-2" data-testid="local-places">
+              {PLACES.map((p) => (
+                <span key={p} className="inline-flex items-center gap-1.5 rounded-full border border-vf-line bg-vf-surface px-3.5 py-1.5 text-[13.5px] text-vf-text">
+                  <MapPin className="w-3.5 h-3.5 text-vf-ember" aria-hidden="true" />
+                  {p}
+                </span>
               ))}
             </div>
-          </div>
-        </section>
-      )}
+          </Reveal>
+          <Reveal delay={100}>
+            <div className="grid grid-cols-3 gap-3" aria-hidden="true">
+              {pick(26).map((p) => (
+                <PhotoTile key={p.name} p={p} ratio="4/5" sizes="(min-width: 1024px) 34vw, 64vw" className="col-span-2 rounded-[24px]" />
+              ))}
+              <div className="grid grid-rows-2 gap-3">
+                {pick(46, 70).map((p) => (
+                  <PhotoTile key={p.name} p={p} ratio="auto" sizes="(min-width: 1024px) 17vw, 32vw" className="h-full rounded-[20px]" />
+                ))}
+              </div>
+            </div>
+          </Reveal>
+        </div>
 
-      {/* ============ 7 · WHY SWITCH ============ */}
+        {live.events.length > 0 && (
+          <div className="mt-16" data-testid="section-events">
+            <div className="max-w-[1180px] mx-auto px-5 sm:px-6">
+              <Reveal>
+                <Eyebrow>Happening soon</Eyebrow>
+                <h3 id="events-heading" className="font-serif font-normal text-vf-text mt-3" style={{ fontSize: "clamp(26px, 3.4vw, 38px)", lineHeight: 1.1, letterSpacing: "-0.02em" }}>
+                  Meet people in real life, too.
+                </h3>
+                <p className="mt-3 text-[16px] leading-[1.6] text-vf-muted max-w-[52ch]">
+                  Small gatherings hosted by Destira and its members. Tap one to see the details.
+                </p>
+              </Reveal>
+            </div>
+            <div className="mt-8 max-w-[1180px] mx-auto">
+              <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory px-5 sm:px-6 pb-2 [scrollbar-width:none]">
+                {live.events.map((e) => (
+                  <EventCard key={e.id} e={e} />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* ============ 9 · WHY SWITCH ============ */}
       <section className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="why-heading" data-testid="section-why">
         <div className="max-w-[880px] mx-auto">
           <Reveal>
@@ -1145,7 +1408,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 8 · SAFETY ============ */}
+      {/* ============ 10 · SAFETY ============ */}
       <section className="px-5 sm:px-6 py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="safety-heading" data-testid="section-safety">
         <div className="max-w-[1180px] mx-auto">
           <Reveal>
@@ -1170,49 +1433,14 @@ export default function Landing() {
           </div>
           <Reveal>
             <p className="mt-8 text-[15px] leading-[1.6] text-vf-muted max-w-[60ch]" data-testid="text-no-placement">
-              <span className="text-vf-text">Nothing here buys you placement.</span> Paid plans add tools, never a better spot in
+              <span className="text-vf-text">Nobody can pay to be seen first.</span> Nothing on Destira buys a better spot in
               anyone's Discover. And nobody sees you on a map: at most a rough distance or a named place.
             </p>
           </Reveal>
         </div>
       </section>
 
-      {/* ============ 8b · PLANS PREVIEW ============ */}
-      <section className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="plans-heading" data-testid="section-plans">
-        <div className="max-w-[1180px] mx-auto">
-          <Reveal>
-            <Eyebrow>Plans</Eyebrow>
-            <SectionHeading id="plans-heading">Free is the real thing.</SectionHeading>
-            <p className="mt-3 text-[16px] leading-[1.6] text-vf-muted max-w-[52ch]">
-              Your twin, Discover, matches, chat, the Lounge and events, all free. Paid plans add room and a few extras, paid upfront and never renewing on their own.
-            </p>
-          </Reveal>
-          <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {PLAN_CARDS.map((card) => {
-              const free = card.tier === "free";
-              return (
-                <div
-                  key={card.tier}
-                  className={`h-full rounded-[22px] border p-5 flex flex-col ${free ? "border-vf-ember/60 bg-vf-surface" : "border-vf-line bg-vf-surface/60"}`}
-                  data-testid={`landing-plan-${card.tier}`}
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className={`font-display text-[26px] leading-none ${card.tier === "ember" ? "text-vf-gold" : "text-vf-text"}`}>{card.name}</span>
-                    {free && <span className="vf-label text-vf-ember">Start here</span>}
-                  </div>
-                  <div className="mt-3 font-mono text-[22px] text-vf-text">
-                    {free ? "$0" : priceLabel(card.priceCents)}
-                    <span className="ml-1.5 vf-label text-vf-faint">{free ? "always" : "a month"}</span>
-                  </div>
-                  <p className="mt-3 text-[14.5px] leading-[1.55] text-vf-muted flex-1">{card.pitch}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ============ 9 · FAQ ============ */}
+      {/* ============ 11 · FAQ ============ */}
       <section id="faq" className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="faq-heading" data-testid="section-faq">
         <div className="max-w-[760px] mx-auto">
           <Reveal>
@@ -1227,35 +1455,36 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 10 · CLOSING CTA ============ */}
-      <section
-        ref={closingRef}
-        className="relative px-5 sm:px-6 py-24 sm:py-32 flex items-center justify-center overflow-hidden"
-        aria-labelledby="closing-heading"
-        data-testid="section-closing"
-      >
-        <div className="absolute inset-0" aria-hidden="true">
-          <RotatingBackdrop slots={HERO_SET} startIndex={heroOffset(11 / 12)} />
-          <div className="absolute inset-0" style={{ background: "linear-gradient(rgba(12,9,16,0.70), rgba(12,9,16,0.86))" }} />
-        </div>
-        <div className="relative max-w-[720px] mx-auto text-center flex flex-col items-center">
-          <Reveal>
-            <h2
-              id="closing-heading"
-              className="font-serif font-normal"
-              style={{ color: "#F5F0EA", fontSize: "clamp(40px, 7vw, 84px)", lineHeight: 1.02, letterSpacing: "-0.025em" }}
-            >
-              Your person might already be here.
-            </h2>
-          </Reveal>
-          <Reveal delay={100}>
-            <p className="mt-5 text-[16.5px] leading-[1.6] max-w-[46ch] mx-auto" style={{ color: "rgba(245,240,234,0.78)" }}>
-              Join free in about two minutes. Your twin gets to work as soon as you've answered a few questions.
-            </p>
-          </Reveal>
-          <Reveal delay={180} className="w-full flex justify-center">
-            <SignupButtons className="mt-8" testId="closing" />
-          </Reveal>
+      {/* ============ 12 · CLOSING CTA ============ */}
+      <section ref={closingRef} className="px-2 sm:px-3 pb-3" aria-labelledby="closing-heading" data-testid="section-closing">
+        <div
+          className="relative overflow-hidden rounded-[28px] sm:rounded-[36px] px-5 sm:px-6 py-24 sm:py-32 flex items-center justify-center"
+          style={{ background: "#0C0910" }}
+        >
+          <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
+            <PhotoWall photos={[...LOCAL.slice(11), ...LOCAL.slice(0, 11)]} columns={3} className="absolute -top-[10%] inset-x-0 px-3" />
+            <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 70% 60% at 50% 50%, rgba(12,9,16,0.90) 30%, rgba(12,9,16,0.62) 100%)" }} />
+          </div>
+          <div className="relative max-w-[720px] mx-auto text-center flex flex-col items-center">
+            <Reveal>
+              <h2
+                id="closing-heading"
+                className="font-serif font-normal"
+                style={{ color: "#F5F0EA", fontSize: "clamp(40px, 7vw, 84px)", lineHeight: 1.02, letterSpacing: "-0.025em" }}
+              >
+                Your person might <em className="italic" style={{ color: "#FF8A6B" }}>already be here.</em>
+              </h2>
+            </Reveal>
+            <Reveal delay={100}>
+              <p className="mt-5 text-[16.5px] leading-[1.6] max-w-[46ch] mx-auto" style={{ color: "rgba(245,240,234,0.8)" }}>
+                Join free in about two minutes. Your twin gets to work as soon as you've answered a few questions, and
+                every evening at 19:00 there are three new people to meet.
+              </p>
+            </Reveal>
+            <Reveal delay={180} className="w-full flex justify-center">
+              <SignupButtons className="mt-8" testId="closing" />
+            </Reveal>
+          </div>
         </div>
       </section>
 

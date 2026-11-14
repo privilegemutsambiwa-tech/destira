@@ -24,7 +24,7 @@ const QUOTES = [
 ];
 
 const PHOTO_ORIGIN = isNativeApp() ? "https://www.destira.date" : "";
-const SIDE_PHOTO = photos.find((p) => p.name === "hero-1") ?? photos[0];
+const SIDE_PHOTO = photos.find((p) => p.name === "hero-39") ?? photos[0];
 
 function SidePanel() {
   const [i, setI] = useState(0);

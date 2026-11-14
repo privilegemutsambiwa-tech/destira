@@ -589,3 +589,13 @@ html.vf-offline .h-dvh { height: calc(100dvh - var(--vf-offline-bar, 0px)); }
 html.vf-offline .h-screen { height: calc(100vh - var(--vf-offline-bar, 0px)); }
 html.vf-offline .sticky.top-0 { top: var(--vf-offline-bar, 0px); }
 html.vf-offline .fixed.top-0:not([data-testid="offline-banner"]) { top: var(--vf-offline-bar, 0px); }
+
+/* Landing: the living photo wall. Each column holds its photos twice and
+   moves by exactly one copy, so the loop is seamless. */
+@keyframes vf-wall-up { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, -50%, 0); } }
+@keyframes vf-wall-down { from { transform: translate3d(0, -50%, 0); } to { transform: translate3d(0, 0, 0); } }
+.vf-wall-up, .vf-wall-down { animation: vf-wall-up 90s linear infinite; will-change: transform; }
+.vf-wall-down { animation-name: vf-wall-down; }
+@media (prefers-reduced-motion: reduce) {
+  .vf-wall-up, .vf-wall-down { animation: none; }
+}
