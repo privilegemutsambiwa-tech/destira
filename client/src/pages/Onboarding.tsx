@@ -14,6 +14,8 @@ import {
 } from "@/hooks/use-onboarding";
 import { useToast } from "@/hooks/use-toast";
 import { takeQuizAnswers } from "@/lib/landing-quiz";
+import { DestiraLoadingScreen } from "@/components/brand/logo";
+import { TwinOrbGrowing } from "@/components/twin-orb";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 const INPUT =
@@ -135,11 +137,7 @@ export default function Onboarding() {
   };
 
   if (isLoading || !data) {
-    return (
-      <div className="min-h-dvh bg-vf-ink flex items-center justify-center">
-        <Loader2 className="w-7 h-7 animate-spin text-vf-ember" />
-      </div>
-    );
+    return <DestiraLoadingScreen message="Getting your questions" />;
   }
 
   // ── NICKNAME ─────────────────────────────────────────────────────────
@@ -231,21 +229,21 @@ export default function Onboarding() {
 
   return (
     <Shell>
-      <div className="mb-6 flex items-center justify-between">
-        <div className={EYEBROW}>
-          Question {idx + 1} of {questions.length}
-        </div>
+      <div className="flex justify-end">
         <button
           onClick={finishAndLeave}
           disabled={busy}
-          className="text-[12.5px] text-vf-muted hover:text-vf-text transition-colors disabled:opacity-50"
+          className="min-h-[44px] text-[13px] text-vf-muted hover:text-vf-text transition-colors disabled:opacity-50"
           data-testid="button-finish-later"
         >
           Finish later
         </button>
       </div>
-      <div className="h-1 rounded-full bg-vf-text/10 overflow-hidden mb-8">
-        <div className="h-full bg-vf-ember transition-[width] duration-500" style={{ width: `${pct}%` }} />
+      <div className="flex flex-col items-center mb-6" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="Your twin, taking shape">
+        <TwinOrbGrowing progress={pct / 100} />
+        <div className="mt-1 font-mono text-[12px] tracking-[0.14em] text-vf-faint" data-testid="text-question-count">
+          {idx + 1} of {questions.length}
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
@@ -258,8 +256,7 @@ export default function Onboarding() {
           className="rounded-[24px] border border-vf-line bg-vf-surface p-7 sm:p-9"
         >
           <h1
-            className="font-serif font-normal text-vf-text"
-            style={{ fontSize: "24px", lineHeight: 1.25, letterSpacing: "-0.01em" }}
+            className="font-display text-vf-text text-[28px] sm:text-[32px] leading-[1.15] tracking-[-0.01em]"
             data-testid="text-question"
           >
             {q.text}

@@ -12,6 +12,7 @@ import { GoogleSignInCancelled, startGoogleSignIn } from "@/lib/google-signin";
 import { consumePendingInvite, resolvePendingInviteRoute } from "@/lib/pending-invite";
 import { trackCustom, trackEvent, trackPageView } from "@/lib/pixel";
 import { LANDING_QUIZ, saveQuizAnswers, twinNote, type QuizAnswers } from "@/lib/landing-quiz";
+import { PLAN_CARDS, priceLabel } from "@shared/entitlements";
 
 // The app doesn't carry the website's photo library (hundreds of MB); its
 // welcome screen loads these from destira.date and shows the blurred
@@ -76,15 +77,15 @@ function Reveal({
 }) {
   const reduce = usePrefersReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(false);
+  // Visible by default. Only content that starts below the fold is hidden,
+  // and only once we know the observer is there to bring it back.
+  const [shown, setShown] = useState(true);
 
   useEffect(() => {
-    if (reduce) {
-      setShown(true);
-      return;
-    }
     const el = ref.current;
-    if (!el) return;
+    if (reduce || !el || typeof IntersectionObserver === "undefined") return;
+    if (el.getBoundingClientRect().top < window.innerHeight) return; // already on screen
+    setShown(false);
     const io = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -1166,6 +1167,47 @@ export default function Landing() {
                 </div>
               </Reveal>
             ))}
+          </div>
+          <Reveal>
+            <p className="mt-8 text-[15px] leading-[1.6] text-vf-muted max-w-[60ch]" data-testid="text-no-placement">
+              <span className="text-vf-text">Nothing here buys you placement.</span> Paid plans add tools, never a better spot in
+              anyone's Discover. And nobody sees you on a map: at most a rough distance or a named place.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ============ 8b · PLANS PREVIEW ============ */}
+      <section className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="plans-heading" data-testid="section-plans">
+        <div className="max-w-[1180px] mx-auto">
+          <Reveal>
+            <Eyebrow>Plans</Eyebrow>
+            <SectionHeading id="plans-heading">Free is the real thing.</SectionHeading>
+            <p className="mt-3 text-[16px] leading-[1.6] text-vf-muted max-w-[52ch]">
+              Your twin, Discover, matches, chat, the Lounge and events, all free. Paid plans add room and a few extras, paid upfront and never renewing on their own.
+            </p>
+          </Reveal>
+          <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {PLAN_CARDS.map((card) => {
+              const free = card.tier === "free";
+              return (
+                <div
+                  key={card.tier}
+                  className={`h-full rounded-[22px] border p-5 flex flex-col ${free ? "border-vf-ember/60 bg-vf-surface" : "border-vf-line bg-vf-surface/60"}`}
+                  data-testid={`landing-plan-${card.tier}`}
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className={`font-display text-[26px] leading-none ${card.tier === "ember" ? "text-vf-gold" : "text-vf-text"}`}>{card.name}</span>
+                    {free && <span className="vf-label text-vf-ember">Start here</span>}
+                  </div>
+                  <div className="mt-3 font-mono text-[22px] text-vf-text">
+                    {free ? "$0" : priceLabel(card.priceCents)}
+                    <span className="ml-1.5 vf-label text-vf-faint">{free ? "always" : "a month"}</span>
+                  </div>
+                  <p className="mt-3 text-[14.5px] leading-[1.55] text-vf-muted flex-1">{card.pitch}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>

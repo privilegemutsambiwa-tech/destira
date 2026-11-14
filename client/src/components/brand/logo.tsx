@@ -167,20 +167,54 @@ export function DestiraLockup({ orientation = "horizontal", size, variant = "col
   );
 }
 
-/** The one app-wide loading screen — full-bleed, real two-ring mark, breathing.
+/** The mark in motion (brief 5.8 / 7.19). `join`: the two rings slide
+ *  together along their tilt and the lens fills in, in 600 ms, then the
+ *  mark breathes. `drift`: the rings drift apart and back, the lens fading
+ *  as they part (the 404). Reduced motion shows the still mark. The lens is
+ *  drawn static and only faded, so the clip geometry never has to move. */
+export function DestiraMarkMotion({ size, mode = "join", className }: { size: number; mode?: "join" | "drift"; className?: string }) {
+  const clipId = useId();
+  const stroke = strokeForSize(size);
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="10 9 140 102"
+      width={size}
+      height={Math.round(size * (102 / 140))}
+      className={`vf-mark-motion vf-mark-${mode}${className ? ` ${className}` : ""}`}
+      aria-hidden="true"
+    >
+      <defs>
+        <clipPath id={clipId}>
+          <circle cx="96" cy="60" r="34" />
+        </clipPath>
+      </defs>
+      <g transform="rotate(-15 80 60)">
+        <circle className="vf-ring-mint" cx="96" cy="60" r="34" fill="none" stroke={MINT} strokeWidth={stroke} />
+        <circle className="vf-ring-ember" cx="64" cy="60" r="34" fill="none" stroke={EMBER} strokeWidth={stroke} />
+        <g className="vf-ring-lens" clipPath={`url(#${clipId})`}>
+          <circle cx="64" cy="60" r="34" fill={`var(--vf-lens, ${CREAM})`} />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/** The one app-wide loading screen: the rings draw together, then breathe.
+ *  Pass `message` whenever the wait has a reason worth saying.
  *  Used for every in-app "waiting on auth/profile" checkpoint (App.tsx's
  *  route guards, AuthCallback) so there's a single place that decides what
  *  "Destira is loading" looks like, instead of each call site reaching for
  *  DestiraMark variant="tile" (the <28px glyph — wrong at this size, and the
  *  exact bug that had the wrong icon showing everywhere else too). */
-export function DestiraLoadingScreen() {
+export function DestiraLoadingScreen({ message }: { message?: string } = {}) {
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-background">
-      <DestiraLockup
-        orientation="stacked"
-        size={64}
-        className="motion-safe:animate-[vf-breathe_3.2s_ease-in-out_infinite]"
-      />
+    <div className="min-h-dvh flex flex-col items-center justify-center bg-background text-vf-text" role="status" aria-live="polite">
+      <DestiraMarkMotion size={84} mode="join" />
+      <DestiraWordmark size={34} className="mt-3" />
+      <p className={`mt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-vf-faint ${message ? "" : "sr-only"}`}>
+        {message ?? "Loading"}
+      </p>
     </div>
   );
 }

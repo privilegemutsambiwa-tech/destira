@@ -1,24 +1,37 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
-import { DestiraLockup } from "@/components/brand/logo";
+import { AuthShell, AUTH_INPUT as INPUT, AUTH_LABEL as LABEL, AUTH_PRIMARY, AUTH_SECONDARY, EMAIL_RE, maskEmail } from "@/components/auth-shell";
 
-const INPUT =
-  "w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-11 text-sm text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow";
-const LABEL = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-1.5 block";
+// Webmail inboxes we can open straight to. Anything else: no button, rather
+// than one that opens a blank "new email" screen.
+function inboxUrl(email: string): { url: string; name: string } | null {
+  const domain = email.split("@")[1]?.toLowerCase() ?? "";
+  if (domain === "gmail.com" || domain === "googlemail.com") return { url: "https://mail.google.com/mail/u/0/#inbox", name: "Gmail" };
+  if (/^(outlook|hotmail|live|msn)\./.test(domain)) return { url: "https://outlook.live.com/mail/", name: "Outlook" };
+  if (/^(yahoo|ymail)\./.test(domain)) return { url: "https://mail.yahoo.com/", name: "Yahoo Mail" };
+  if (domain === "icloud.com" || domain === "me.com") return { url: "https://www.icloud.com/mail", name: "iCloud Mail" };
+  return null;
+}
 
 export default function ForgotPassword() {
   const [, setLocation] = useLocation();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => new URLSearchParams(window.location.search).get("email") ?? "");
+  const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const trimmed = email.trim();
+  const valid = EMAIL_RE.test(trimmed);
+  const blurProblem = touched && trimmed && !valid ? "That email looks incomplete." : null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!email.trim()) {
-      setError("Enter your email.");
+    if (!valid) {
+      setTouched(true);
+      setError(trimmed ? null : "Enter your email.");
       return;
     }
     setSubmitting(true);
@@ -26,7 +39,7 @@ export default function ForgotPassword() {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: trimmed }),
       });
       // The endpoint always returns success shape regardless of outcome —
       // it never confirms or denies whether the email is registered.
@@ -37,99 +50,95 @@ export default function ForgotPassword() {
         setSent(true);
       }
     } catch {
-      setError("Couldn't reach the server. Try again.");
+      setError("Couldn't reach Destira. Check your connection and try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  return (
-    <div className="min-h-dvh flex flex-col items-center justify-center px-6 bg-vf-ink text-vf-text">
-      <div className="w-full max-w-[460px]">
-        <div className="flex justify-center mb-8 text-vf-text">
-          <DestiraLockup orientation="horizontal" size={30} />
-        </div>
+  const backToLogin = (
+    <button
+      onClick={() => setLocation("/login")}
+      className="text-vf-text underline underline-offset-4 hover:text-vf-muted transition-colors min-h-[44px]"
+      data-testid="link-back-to-login"
+    >
+      Back to login
+    </button>
+  );
 
-        <div className="rounded-[24px] border border-vf-line bg-vf-surface p-7 sm:p-8">
-          {sent ? (
-            <>
-              <h1
-                className="font-serif font-normal text-vf-text text-center"
-                style={{ fontSize: "26px", letterSpacing: "-0.01em" }}
-                data-testid="text-reset-sent-title"
-              >
-                Check your email
-              </h1>
-              <p className="text-center text-sm text-vf-muted mt-3 leading-relaxed">
-                If that email has an account, we've sent a link to reset your password. It works once and expires in
-                an hour.
-              </p>
-              <button
-                onClick={() => setLocation("/login")}
-                className="mt-6 w-full inline-flex items-center justify-center rounded-full border border-vf-line text-vf-text hover:border-vf-text/25 h-11 text-sm font-medium transition-colors"
-                data-testid="button-back-to-login"
-              >
-                Back to login
-              </button>
-            </>
-          ) : (
-            <>
-              <h1
-                className="font-serif font-normal text-vf-text text-center"
-                style={{ fontSize: "28px", letterSpacing: "-0.01em" }}
-                data-testid="text-forgot-title"
-              >
-                Reset your password
-              </h1>
-              <p className="text-center text-sm text-vf-muted mt-2 leading-relaxed">
-                Enter the email on your account and we'll send you a link to set a new password.
-              </p>
-
-              <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-                <div>
-                  <label htmlFor="forgot-email" className={LABEL}>Email</label>
-                  <input
-                    id="forgot-email"
-                    type="email"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@email.com"
-                    className={INPUT}
-                    data-testid="input-forgot-email"
-                  />
-                </div>
-
-                {error && (
-                  <p className="text-[13px] text-vf-ember" role="alert" data-testid="text-forgot-error">
-                    {error}
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-50"
-                  data-testid="button-submit-forgot"
-                >
-                  {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {submitting ? "Sending…" : "Send reset link"}
-                </button>
-              </form>
-
-              <p className="text-center text-sm text-vf-muted mt-6">
-                <button
-                  onClick={() => setLocation("/login")}
-                  className="text-vf-text underline underline-offset-4 hover:text-vf-muted transition-colors"
-                  data-testid="link-back-to-login"
-                >
-                  Back to login
-                </button>
-              </p>
-            </>
+  if (sent) {
+    const inbox = inboxUrl(trimmed);
+    return (
+      <AuthShell
+        title="Check your email"
+        titleTestId="text-reset-sent-title"
+        subtitle={
+          <>
+            If <span className="text-vf-text">{maskEmail(trimmed)}</span> has an account, a link to set a new password is on
+            its way. It works once, for an hour. Look in spam if it isn't there in a minute.
+          </>
+        }
+        footer={backToLogin}
+      >
+        <div className="flex flex-col gap-3">
+          {inbox && (
+            <a href={inbox.url} target="_blank" rel="noopener noreferrer" className={AUTH_PRIMARY} data-testid="link-open-inbox">
+              Open {inbox.name}
+            </a>
           )}
+          <button
+            onClick={() => { setSent(false); setError(null); }}
+            className={AUTH_SECONDARY}
+            data-testid="button-reset-try-again"
+          >
+            Use a different email
+          </button>
         </div>
-      </div>
-    </div>
+      </AuthShell>
+    );
+  }
+
+  return (
+    <AuthShell
+      title="Reset your password"
+      titleTestId="text-forgot-title"
+      subtitle={
+        valid
+          ? <>We'll email a link to <span className="text-vf-text">{maskEmail(trimmed)}</span>. It works for an hour.</>
+          : "Enter the email on your account and we'll send a link to set a new password."
+      }
+      footer={backToLogin}
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+        <div>
+          <label htmlFor="forgot-email" className={LABEL}>Email</label>
+          <input
+            id="forgot-email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onBlur={() => setTouched(true)}
+            aria-invalid={!!blurProblem}
+            placeholder="you@email.com"
+            className={INPUT}
+            data-testid="input-forgot-email"
+          />
+          {blurProblem && <p className="mt-1.5 text-[13px] text-vf-ember">{blurProblem}</p>}
+        </div>
+
+        {error && (
+          <p className="text-[13px] text-vf-ember" role="alert" data-testid="text-forgot-error">
+            {error}
+          </p>
+        )}
+
+        <button type="submit" disabled={submitting} className={AUTH_PRIMARY} data-testid="button-submit-forgot">
+          {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+          {submitting ? "Sending…" : "Send the link"}
+        </button>
+      </form>
+    </AuthShell>
   );
 }

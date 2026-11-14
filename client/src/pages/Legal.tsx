@@ -4,27 +4,80 @@
 //                    Play: "Delete account URL", required for apps with accounts)
 // Written to match what the code does — keep them in step when it changes
 // (server/storage.ts deleteAllUserData, the services in render.yaml).
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DestiraLockup } from "@/components/brand/logo";
 
-const H2 = "font-serif font-normal text-[24px] leading-tight text-vf-text mt-10 mb-3";
+// Typeset like a good book (brief 7.19): a 640 px measure, serif headings,
+// "last updated" in mono, a plain-language summary at the top, and on
+// desktop a sticky contents list built from the page's own headings.
+const H2 = "font-display font-normal text-[26px] leading-tight text-vf-text mt-12 mb-3 scroll-mt-6";
 const P = "text-[15px] leading-[1.7] text-vf-muted mb-4";
 const LI = "text-[15px] leading-[1.7] text-vf-muted";
 
-function Shell({ title, updated, children }: { title: string; updated: string; children: React.ReactNode }) {
+function slug(t: string) {
+  return t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function Shell({ title, updated, summary, children }: { title: string; updated: string; summary?: string[]; children: React.ReactNode }) {
   const [, setLocation] = useLocation();
+  const body = useRef<HTMLDivElement>(null);
+  const [toc, setToc] = useState<{ id: string; text: string }[]>([]);
+
+  useEffect(() => {
+    const hs = Array.from(body.current?.querySelectorAll("h2") ?? []);
+    setToc(hs.map((h) => {
+      const text = h.textContent ?? "";
+      if (!h.id) h.id = slug(text);
+      return { id: h.id, text };
+    }));
+  }, []);
+
   return (
     <div className="min-h-dvh bg-vf-ink text-vf-text">
-      <div className="max-w-[680px] mx-auto px-5 sm:px-8 py-8">
-        <button onClick={() => setLocation("/")} className="text-vf-text" aria-label="Destira home">
-          <DestiraLockup orientation="horizontal" size={28} />
-        </button>
-        <h1 className="font-serif font-normal text-[clamp(32px,6vw,44px)] leading-[1.05] tracking-[-0.02em] mt-10">{title}</h1>
-        <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-vf-faint mt-3">Last updated {updated}</p>
-        <div className="mt-6">{children}</div>
-        <p className={`${P} mt-12`}>
-          Questions: <span className="text-vf-text select-all">support@destira.date</span>
-        </p>
+      <div className="max-w-[1040px] mx-auto px-5 sm:px-8 py-8 lg:grid lg:grid-cols-[220px_minmax(0,640px)] lg:gap-16">
+        <div className="lg:col-span-2">
+          <button onClick={() => setLocation("/")} className="text-vf-text" aria-label="Destira home">
+            <DestiraLockup orientation="horizontal" size={28} />
+          </button>
+        </div>
+        {toc.length > 2 ? (
+          <nav className="hidden lg:block" aria-label="On this page">
+            <div className="sticky top-8 mt-[124px]">
+              <div className="vf-label text-vf-faint mb-3">On this page</div>
+              <ul className="space-y-2 border-l border-vf-line">
+                {toc.map((t) => (
+                  <li key={t.id}>
+                    <a href={`#${t.id}`} className="block pl-4 -ml-px border-l border-transparent hover:border-vf-ember text-[14px] text-vf-muted hover:text-vf-text transition-colors">
+                      {t.text}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </nav>
+        ) : <div className="hidden lg:block" />}
+        <article className="max-w-[640px]">
+          <h1 className="font-display font-normal text-[clamp(34px,6vw,48px)] leading-[1.05] tracking-[-0.02em] mt-10">{title}</h1>
+          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-vf-faint mt-3">Last updated {updated}</p>
+          {summary && (
+            <aside className="mt-7 rounded-[18px] border border-vf-line bg-vf-surface p-5" data-testid="legal-summary">
+              <div className="vf-label text-vf-faint">In plain words</div>
+              <ul className="mt-3 space-y-2">
+                {summary.map((line) => (
+                  <li key={line} className="flex gap-2.5 text-[15px] leading-[1.55] text-vf-text">
+                    <span className="mt-[9px] w-1.5 h-1.5 rounded-full bg-vf-ember shrink-0" aria-hidden="true" />
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </aside>
+          )}
+          <div className="mt-6" ref={body}>{children}</div>
+          <p className={`${P} mt-12`}>
+            Questions: <span className="text-vf-text select-all">support@destira.date</span>
+          </p>
+        </article>
       </div>
     </div>
   );
@@ -32,7 +85,16 @@ function Shell({ title, updated, children }: { title: string; updated: string; c
 
 export function PrivacyPolicy() {
   return (
-    <Shell title="Privacy policy" updated="13 October 2026">
+    <Shell
+      title="Privacy policy"
+      updated="13 October 2026"
+      summary={[
+        "We never sell your personal data.",
+        "Your twin only shares what you allow, and never speaks as you.",
+        "Other members never see where you are on a map.",
+        "You can download or delete everything, any time.",
+      ]}
+    >
       <p className={P}>
         Destira is a dating and social app for adults (18 and over). This page explains what we collect, why, who
         helps us run the service, and the choices you have. We never sell your personal data.
@@ -96,12 +158,16 @@ export function PrivacyPolicy() {
 export function DeleteAccountInfo() {
   const [, setLocation] = useLocation();
   return (
-    <Shell title="Delete your Destira account" updated="13 October 2026">
+    <Shell
+      title="Delete your Destira account"
+      updated="14 November 2026"
+      summary={["You can do it yourself, in a minute.", "It's permanent: your profile, twin, chats and photos go straight away."]}
+    >
       <p className={P}>You can delete your account yourself, at any time, from the app or the website.</p>
       <ol className="list-decimal pl-5 mb-6 space-y-1.5">
         <li className={LI}>Sign in at destira.date or in the Destira app.</li>
-        <li className={LI}>Open Settings, then Data & Privacy.</li>
-        <li className={LI}>Tap Delete All Data and type DELETE to confirm.</li>
+        <li className={LI}>Open Settings, then Privacy & safety, then Your data.</li>
+        <li className={LI}>Tap Delete all data and type DELETE to confirm.</li>
       </ol>
       <button
         onClick={() => setLocation("/login")}

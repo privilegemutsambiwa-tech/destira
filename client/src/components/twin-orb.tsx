@@ -43,6 +43,33 @@ function Orb({ size, lively }: { size: number; lively: boolean }) {
   );
 }
 
+/** Onboarding (brief 7.3): the twin taking shape. It grows with each
+ *  answer, and gains a faint ring at each quarter, so progress reads as
+ *  "my twin is getting to know me" rather than a form filling up. */
+export function TwinOrbGrowing({ progress }: { progress: number }) {
+  const p = Math.max(0, Math.min(1, progress));
+  const size = Math.round(40 + 36 * p);
+  const rings = Math.floor(p * 4 + 0.001);
+  return (
+    <span className="relative inline-flex items-center justify-center" style={{ width: 132, height: 132 }} aria-hidden="true">
+      {Array.from({ length: rings }).map((_, i) => (
+        <span
+          key={i}
+          className="absolute rounded-full border transition-all duration-700 ease-out"
+          style={{
+            width: size + 18 * (i + 1),
+            height: size + 18 * (i + 1),
+            borderColor: `color-mix(in srgb, var(--vf-mint-vivid) ${32 - i * 6}%, transparent)`,
+          }}
+        />
+      ))}
+      <span className="relative transition-all duration-700 ease-out" style={{ width: size, height: size, filter: `brightness(${0.85 + 0.25 * p})` }}>
+        <Orb size={size} lively={false} />
+      </span>
+    </span>
+  );
+}
+
 function Figure({ value, label }: { value: number; label: string }) {
   return (
     <div className="flex-1 rounded-[16px] border border-vf-line bg-vf-surface2 px-4 py-3">

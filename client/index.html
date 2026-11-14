@@ -97,9 +97,17 @@
         padding-bottom: 8%; /* pulls the block slightly above true center */
       }
       #vf-splash-mark {
-        animation: vf-splash-breathe 3.2s ease-in-out infinite;
+        animation: vf-splash-breathe 3.2s ease-in-out 800ms infinite;
         transform-origin: center;
       }
+      /* The rings draw together into the lens in 600 ms (brief 5.8); same
+         keyframes as DestiraMarkMotion in index.css. */
+      #vf-splash-mark .m { animation: vf-splash-mint 600ms cubic-bezier(.2,.8,.2,1) both; }
+      #vf-splash-mark .e { animation: vf-splash-ember 600ms cubic-bezier(.2,.8,.2,1) both; }
+      #vf-splash-mark .l { animation: vf-splash-lens 260ms ease-out 420ms both; }
+      @keyframes vf-splash-mint { from { transform: translateX(18px); } to { transform: none; } }
+      @keyframes vf-splash-ember { from { transform: translateX(-18px); } to { transform: none; } }
+      @keyframes vf-splash-lens { from { opacity: 0; } to { opacity: 1; } }
       #vf-splash-word {
         margin-top: 20px;
         font-family: "Instrument Serif", Georgia, "Times New Roman", serif;
@@ -122,7 +130,7 @@
         50% { transform: scale(1.06); opacity: 1; }
       }
       @media (prefers-reduced-motion: reduce) {
-        #vf-splash-mark { animation: none; }
+        #vf-splash-mark, #vf-splash-mark * { animation: none !important; }
       }
       @media (prefers-color-scheme: light) {
         html:not([data-theme]) #vf-splash { background: #FBF8F5; }
@@ -140,12 +148,12 @@
          seeing this for more than a second or two, the app's JS bundle is
          too slow to arrive, not this element. -->
     <div id="vf-splash">
-      <svg id="vf-splash-mark" width="128" height="102" viewBox="26 17 108 86" role="img" aria-label="Destira">
+      <svg id="vf-splash-mark" width="128" height="102" viewBox="26 17 108 86" overflow="visible" role="img" aria-label="Destira">
         <defs><clipPath id="vfSplashLens"><circle cx="96" cy="60" r="34"/></clipPath></defs>
         <g transform="rotate(-15 80 60)">
-          <circle cx="96" cy="60" r="34" fill="none" stroke="#8FE3C7" stroke-width="6"/>
-          <circle cx="64" cy="60" r="34" fill="none" stroke="#FF6B4A" stroke-width="6"/>
-          <g clip-path="url(#vfSplashLens)"><circle cx="64" cy="60" r="34" fill="#F5F0EA"/></g>
+          <circle class="m" cx="96" cy="60" r="34" fill="none" stroke="#8FE3C7" stroke-width="6"/>
+          <circle class="e" cx="64" cy="60" r="34" fill="none" stroke="#FF6B4A" stroke-width="6"/>
+          <g class="l" clip-path="url(#vfSplashLens)"><circle cx="64" cy="60" r="34" fill="#F5F0EA"/></g>
         </g>
       </svg>
       <div id="vf-splash-word">destira</div>

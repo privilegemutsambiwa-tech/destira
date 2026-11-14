@@ -1,21 +1,24 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
+import { useLocation } from "wouter";
+import { DestiraMarkMotion } from "@/components/brand/logo";
 
+// Brief 7.19: the two rings drifting apart, one line, one button home.
 export default function NotFound() {
+  const [, setLocation] = useLocation();
   return (
-    <div className="min-h-dvh w-full flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md mx-4">
-        <CardContent className="pt-6">
-          <div className="flex mb-4 gap-2">
-            <AlertCircle className="h-8 w-8 text-red-500" />
-            <h1 className="text-2xl font-bold text-gray-900">404 Page Not Found</h1>
-          </div>
-
-          <p className="mt-4 text-sm text-gray-600">
-            Did you forget to add the page to the router?
-          </p>
-        </CardContent>
-      </Card>
+    <div className="min-h-dvh w-full flex flex-col items-center justify-center bg-vf-ink text-vf-text px-6 text-center">
+      <DestiraMarkMotion size={140} mode="drift" />
+      <h1 className="vf-h1 font-display mt-8" data-testid="text-not-found">This page wandered off</h1>
+      <p className="vf-body text-vf-muted mt-2 max-w-[32ch]">
+        The link may be old, or the page has moved.
+      </p>
+      <button
+        onClick={() => setLocation("/")}
+        className="mt-8 h-12 px-7 rounded-full bg-vf-ember text-vf-ink font-semibold vf-press"
+        data-testid="button-not-found-home"
+      >
+        Take me home
+      </button>
+      <p className="mt-6 font-mono text-[11px] tracking-[0.12em] text-vf-faint">404</p>
     </div>
   );
 }

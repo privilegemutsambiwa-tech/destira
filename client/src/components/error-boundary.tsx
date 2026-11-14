@@ -1,7 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
 import { clientTag } from "@/lib/crash-report";
-import { AlertTriangle } from "lucide-react";
+import { DestiraMark } from "@/components/brand/logo";
 
 interface Props {
   children: ReactNode;
@@ -13,13 +12,22 @@ interface Props {
 
 interface State {
   error: Error | null;
+  errorId: string | null;
+  report: "idle" | "sending" | "sent" | "failed";
 }
 
-export class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
+// Short enough to read out over the phone, unique enough to find in the logs.
+function newErrorId() {
+  return `E-${Date.now().toString(36).slice(-4)}${Math.random().toString(36).slice(2, 5)}`.toUpperCase();
+}
 
-  static getDerivedStateFromError(error: Error) {
-    return { error };
+// Brief 7.19: a calm screen, "Something broke on our side", retry, and a
+// "Send report" that carries the error id.
+export class ErrorBoundary extends Component<Props, State> {
+  state: State = { error: null, errorId: null, report: "idle" };
+
+  static getDerivedStateFromError(error: Error): Partial<State> {
+    return { error, errorId: newErrorId(), report: "idle" };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -29,7 +37,9 @@ export class ErrorBoundary extends Component<Props, State> {
       credentials: "include",
       body: JSON.stringify({
         message: error.message,
-        stack: error.stack,
+        // The id rides at the top of the stack so it lands in the server log
+        // next to the crash without splitting the crash counts by id.
+        stack: `${this.state.errorId ?? ""}\n${error.stack ?? ""}`,
         componentStack: info.componentStack,
         url: window.location.href,
         ...clientTag(),
@@ -39,32 +49,76 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidUpdate(prevProps: Props) {
     if (this.state.error && prevProps.resetKey !== this.props.resetKey) {
-      this.setState({ error: null });
+      this.setState({ error: null, errorId: null, report: "idle" });
     }
   }
 
-  render() {
-    if (this.state.error) {
-      return (
-        <div className="min-h-dvh flex flex-col items-center justify-center bg-background px-6 text-center gap-4">
-          <AlertTriangle className="w-10 h-10 text-vf-ember" />
-          <div>
-            <h2 className="font-serif text-xl text-vf-text mb-1">This screen didn't load</h2>
-            <p className="text-sm text-vf-muted max-w-sm">
-              Something went wrong on our end. You can try again, or head back home.
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => this.setState({ error: null })} data-testid="button-error-retry">
-              Try again
-            </Button>
-            <Button onClick={() => { window.location.href = "/"; }} data-testid="button-error-home">
-              Go home
-            </Button>
-          </div>
-        </div>
-      );
+  sendReport = async () => {
+    const { error, errorId } = this.state;
+    this.setState({ report: "sending" });
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          category: "bug",
+          freeText: `Crash ${errorId} on ${window.location.pathname}: ${error?.message ?? "unknown"}`,
+          appVersion: clientTag().version,
+          platform: clientTag().client,
+        }),
+      });
+      this.setState({ report: res.ok ? "sent" : "failed" });
+    } catch {
+      this.setState({ report: "failed" });
     }
-    return this.props.children;
+  };
+
+  render() {
+    const { error, errorId, report } = this.state;
+    if (!error) return this.props.children;
+    const mailto = `mailto:support@destira.date?subject=${encodeURIComponent(`Crash ${errorId}`)}`;
+    return (
+      <div className="min-h-dvh flex flex-col items-center justify-center bg-vf-ink text-vf-text px-6 text-center" role="alert">
+        <DestiraMark size={64} decorative className="opacity-80" />
+        <h1 className="vf-h2 font-display mt-6">Something broke on our side</h1>
+        <p className="vf-body text-vf-muted mt-2 max-w-[34ch]">
+          Not something you did. Trying again usually fixes it.
+        </p>
+        <div className="mt-7 flex flex-col sm:flex-row gap-3 w-full max-w-[320px] sm:max-w-none sm:w-auto">
+          <button
+            onClick={() => this.setState({ error: null, errorId: null, report: "idle" })}
+            className="h-12 px-6 rounded-full bg-vf-ember text-vf-ink font-semibold vf-press"
+            data-testid="button-error-retry"
+          >
+            Try again
+          </button>
+          {report === "failed" ? (
+            <a href={mailto} className="h-12 px-6 rounded-full border border-vf-line inline-flex items-center justify-center" data-testid="link-error-email">
+              Email us instead
+            </a>
+          ) : (
+            <button
+              onClick={this.sendReport}
+              disabled={report !== "idle"}
+              className="h-12 px-6 rounded-full border border-vf-line text-vf-text disabled:opacity-60"
+              data-testid="button-error-report"
+            >
+              {report === "sending" ? "Sending…" : report === "sent" ? "Report sent. Thank you." : "Send report"}
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => { window.location.href = "/"; }}
+          className="mt-4 min-h-[44px] text-[14px] text-vf-muted underline underline-offset-4"
+          data-testid="button-error-home"
+        >
+          Go home
+        </button>
+        <p className="mt-6 font-mono text-[11px] tracking-[0.12em] text-vf-faint" data-testid="text-error-id">
+          Error {errorId}
+        </p>
+      </div>
+    );
   }
 }

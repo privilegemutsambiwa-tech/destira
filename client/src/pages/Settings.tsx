@@ -875,7 +875,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
 
   if (deleteStep === 1) {
     return (
-      <Panel title="Delete All Data" onBack={() => setDeleteStep(0)}>
+      <Panel title="Delete all data" onBack={() => setDeleteStep(0)}>
         <div style={{ padding: "16px" }}>
           <div
             className="vf-card"
@@ -916,7 +916,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <Panel title="Data & Privacy" onBack={onBack}>
+    <Panel title="Your data" onBack={onBack}>
       <p className="text-sm px-4 pt-4 pb-2" style={{ color: MUTED }}>
         You own your data. Download or delete everything at any time.
       </p>
@@ -955,7 +955,7 @@ function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
         <div className="vf-row" style={{ ...ROW_STYLE, borderBottom: "none" }} onClick={() => setDeleteStep(1)} data-testid="row-delete-data">
           <Trash2 className="w-5 h-5 mr-3" style={{ color: "#EF4444" }} />
           <div className="flex-1">
-            <p className="text-sm font-medium" style={{ color: "#EF4444" }}>Delete All Data</p>
+            <p className="text-sm font-medium" style={{ color: "#EF4444" }}>Delete all data</p>
             <p className="text-xs" style={{ color: MUTED }}>Permanently erase your account</p>
           </div>
           <ChevronRight className="w-4 h-4" style={{ color: MUTED }} />
@@ -1609,7 +1609,7 @@ function PrivacyPolicyPanel({ onBack }: { onBack: () => void }) {
         <p className="mb-4">AI features use Hive Models, routed to DeepSeek. Data sent for AI processing is subject to Hive's data processing terms.</p>
         <p className="mb-4">The full policy, including every company that helps us run Destira, is at destira.date/privacy.</p>
         <p className="text-foreground font-semibold mb-1">Data Retention</p>
-        <p className="mb-4">You can delete all your data at any time via Settings → Data & Privacy → Delete All Data.</p>
+        <p className="mb-4">You can delete all your data at any time via Settings → Privacy & safety → Your data → Delete all data.</p>
         <p className="text-foreground font-semibold mb-1">Cookies</p>
         <p className="mb-4">We use session cookies for authentication. No third-party advertising cookies are used.</p>
         <p className="text-foreground font-semibold mb-1">Contact</p>

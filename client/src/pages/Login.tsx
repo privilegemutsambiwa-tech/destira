@@ -2,15 +2,12 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
-import { DestiraLockup } from "@/components/brand/logo";
+import { AuthShell, AUTH_INPUT as INPUT, AUTH_LABEL as LABEL, AUTH_PRIMARY, AUTH_SECONDARY, EMAIL_RE } from "@/components/auth-shell";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
 import { GoogleSignInCancelled, googleSignInProblem, passwordSignInProblem, startGoogleSignIn } from "@/lib/google-signin";
 import { consumePendingInvite, resolvePendingInviteRoute } from "@/lib/pending-invite";
 
-const INPUT =
-  "w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-11 text-sm text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow";
-const LABEL = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-1.5 block";
 
 export default function Login() {
   const { user, isLoading, login, isLoggingIn } = useAuth();
@@ -20,6 +17,9 @@ export default function Login() {
   const [company, setCompany] = useState(""); // honeypot
   const [error, setError] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
+  // Validate after the first blur, never on every keystroke (brief 7.2).
+  const [emailTouched, setEmailTouched] = useState(false);
+  const emailProblem = emailTouched && email.trim() && !EMAIL_RE.test(email.trim()) ? "That email looks incomplete." : null;
 
   const goHome = () => {
     const pendingInvite = consumePendingInvite();
@@ -65,117 +65,102 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-dvh flex flex-col items-center justify-center px-6 bg-vf-ink text-vf-text">
-      <div className="w-full max-w-[460px]">
-        <div className="flex justify-center mb-8 text-vf-text">
-          <DestiraLockup orientation="horizontal" size={30} />
-        </div>
-
-        <div className="rounded-[24px] border border-vf-line bg-vf-surface p-7 sm:p-8">
-          <h1
-            className="font-serif font-normal text-vf-text text-center"
-            style={{ fontSize: "28px", letterSpacing: "-0.01em" }}
-            data-testid="text-login-title"
-          >
-            Welcome back
-          </h1>
-
-          <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-4">
-            <div
-              aria-hidden="true"
-              style={{ position: "absolute", left: "-9999px", width: 1, height: 1, overflow: "hidden" }}
-            >
-              <label>
-                Company
-                <input type="text" tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} />
-              </label>
-            </div>
-
-            <div>
-              <label htmlFor="login-email" className={LABEL}>Email</label>
-              <input
-                id="login-email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@email.com"
-                className={INPUT}
-                data-testid="input-login-email"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label htmlFor="login-password" className={`${LABEL} mb-0`}>Password</label>
-                <button
-                  type="button"
-                  onClick={() => setLocation("/forgot-password")}
-                  className="text-[12px] text-vf-muted hover:text-vf-text transition-colors"
-                  data-testid="link-forgot-password"
-                >
-                  Forgot password?
-                </button>
-              </div>
-              <PasswordInput
-                id="login-password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className={INPUT}
-                data-testid="input-login-password"
-              />
-            </div>
-
-            {error && (
-              <p className="text-[13px] text-vf-ember" role="alert" data-testid="text-login-error">
-                {error}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={isLoggingIn}
-              className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-50"
-              data-testid="button-submit-login"
-            >
-              {isLoggingIn && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isLoggingIn ? "Logging in…" : "Log in"}
-            </button>
-          </form>
-
-          <div className="my-4 flex items-center gap-3" aria-hidden="true">
-            <div className="h-px flex-1 bg-vf-line" />
-            <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">or</span>
-            <div className="h-px flex-1 bg-vf-line" />
-          </div>
-
+    <AuthShell
+      title="Welcome back"
+      titleTestId="text-login-title"
+      footer={
+        <>
+          New here?{" "}
           <button
-            type="button"
-            onClick={handleGoogleLogin}
-            disabled={googleLoading}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-full border border-vf-line text-vf-text hover:border-vf-text/25 h-11 text-sm font-medium transition-colors disabled:opacity-50"
-            data-testid="button-google-login"
+            onClick={() => setLocation("/signup")}
+            className="text-vf-text underline underline-offset-4 hover:text-vf-muted transition-colors min-h-[44px]"
+            data-testid="link-go-signup"
           >
-            {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FcGoogle className="w-4 h-4" />}
-            {googleLoading ? "Redirecting…" : "Continue with Google"}
+            Create your account
           </button>
+        </>
+      }
+    >
+      <button
+        type="button"
+        onClick={handleGoogleLogin}
+        disabled={googleLoading}
+        className={AUTH_SECONDARY}
+        data-testid="button-google-login"
+      >
+        {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FcGoogle className="w-4 h-4" />}
+        {googleLoading ? "Opening Google…" : "Continue with Google"}
+      </button>
 
-          <div className="my-6 h-px bg-vf-line" />
-
-          <p className="text-center text-sm text-vf-muted">
-            New here?{" "}
-            <button
-              onClick={() => setLocation("/signup")}
-              className="text-vf-text underline underline-offset-4 hover:text-vf-muted transition-colors"
-              data-testid="link-go-signup"
-            >
-              Create your account
-            </button>
-          </p>
-        </div>
+      <div className="my-6 flex items-center gap-3" aria-hidden="true">
+        <div className="h-px flex-1 bg-vf-line" />
+        <span className="vf-label text-vf-faint">or with email</span>
+        <div className="h-px flex-1 bg-vf-line" />
       </div>
-    </div>
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+        <div
+          aria-hidden="true"
+          style={{ position: "absolute", left: "-9999px", width: 1, height: 1, overflow: "hidden" }}
+        >
+          <label>
+            Company
+            <input type="text" tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} />
+          </label>
+        </div>
+
+        <div>
+          <label htmlFor="login-email" className={LABEL}>Email</label>
+          <input
+            id="login-email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onBlur={() => setEmailTouched(true)}
+            aria-invalid={!!emailProblem}
+            placeholder="you@email.com"
+            className={INPUT}
+            data-testid="input-login-email"
+          />
+          {emailProblem && <p className="mt-1.5 text-[13px] text-vf-ember">{emailProblem}</p>}
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label htmlFor="login-password" className={`${LABEL} mb-0`}>Password</label>
+            <button
+              type="button"
+              onClick={() => setLocation(`/forgot-password${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ""}`)}
+              className="text-[13px] text-vf-muted hover:text-vf-text transition-colors"
+              data-testid="link-forgot-password"
+            >
+              Forgot password?
+            </button>
+          </div>
+          <PasswordInput
+            id="login-password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Your password"
+            className={INPUT}
+            data-testid="input-login-password"
+          />
+        </div>
+
+        {error && (
+          <p className="text-[13px] text-vf-ember" role="alert" data-testid="text-login-error">
+            {error}
+          </p>
+        )}
+
+        <button type="submit" disabled={isLoggingIn} className={AUTH_PRIMARY} data-testid="button-submit-login">
+          {isLoggingIn && <Loader2 className="w-4 h-4 animate-spin" />}
+          {isLoggingIn ? "Logging in…" : "Log in"}
+        </button>
+      </form>
+    </AuthShell>
   );
 }

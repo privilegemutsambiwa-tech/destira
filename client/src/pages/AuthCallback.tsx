@@ -53,6 +53,7 @@ export default function AuthCallback() {
   if (error) {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center gap-4 px-6 bg-vf-ink text-vf-text text-center">
+        <h1 className="vf-h2 font-display">Google sign-in didn't finish</h1>
         <p className="text-sm text-vf-muted max-w-sm">{error}</p>
         <button
           onClick={() => setLocation("/login")}
@@ -65,5 +66,5 @@ export default function AuthCallback() {
     );
   }
 
-  return <DestiraLoadingScreen />;
+  return <DestiraLoadingScreen message="Signing you in" />;
 }

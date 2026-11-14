@@ -1,17 +1,14 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
-import { DestiraLockup } from "@/components/brand/logo";
+import { AuthShell, AUTH_INPUT as INPUT, AUTH_LABEL as LABEL, AUTH_PRIMARY, AUTH_SECONDARY, EMAIL_RE, maskEmail, passwordWords } from "@/components/auth-shell";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
 import { GoogleSignInCancelled, googleSignInProblem, startGoogleSignIn } from "@/lib/google-signin";
 import { ageFromDob, MIN_AGE } from "@shared/essentials";
 import { consumePendingInvite, resolvePendingInviteRoute } from "@/lib/pending-invite";
 
-const INPUT =
-  "w-full rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-11 text-sm text-vf-text placeholder:text-vf-faint focus:outline-none focus:ring-2 focus:ring-vf-ember/60 focus:ring-offset-2 focus:ring-offset-vf-ink transition-shadow";
-const LABEL = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint mb-1.5 block";
 
 // Signup collects the account + the basics only. The soul-mapping questions —
 // DB-driven, skippable, resumable — happen at /onboarding straight after.
@@ -20,13 +17,15 @@ const STORE_KEY = "vf_signup_progress";
 
 type Progress = {
   step: number;
+  /** Inside step 1, one field per screen (brief 7.2): email, then password. */
+  sub?: "email" | "password";
   email: string;
   name: string;
   dob: string; // yyyy-mm-dd
   city: string;
 };
 
-const BLANK: Progress = { step: 1, email: "", name: "", dob: "", city: "" };
+const BLANK: Progress = { step: 1, sub: "email", email: "", name: "", dob: "", city: "" };
 
 function loadProgress(): Progress {
   try {
@@ -36,16 +35,6 @@ function loadProgress(): Progress {
   } catch {
     return BLANK;
   }
-}
-
-function passwordScore(pw: string): number {
-  if (!pw) return 0;
-  let s = 0;
-  if (pw.length >= 8) s++;
-  if (pw.length >= 12) s++;
-  if (/\d/.test(pw)) s++;
-  if (/[^A-Za-z0-9]/.test(pw) || (/[a-z]/.test(pw) && /[A-Z]/.test(pw))) s++;
-  return Math.min(s, 4);
 }
 
 export default function Signup() {
@@ -58,8 +47,12 @@ export default function Signup() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [exists, setExists] = useState(false);
 
   const { step, email, name, dob, city } = progress;
+  const sub = progress.sub ?? "email";
+  const emailProblem = emailTouched && email.trim() && !EMAIL_RE.test(email.trim()) ? "That email looks incomplete." : null;
   const patch = (p: Partial<Progress>) => setProgress((cur) => ({ ...cur, ...p }));
 
   const [cityChoice, setCityChoice] = useState(() =>
@@ -91,7 +84,7 @@ export default function Signup() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isLoading, step]);
 
-  const pwScore = useMemo(() => passwordScore(password), [password]);
+  const strength = passwordWords(password);
 
   const done = () => {
     try {
@@ -130,16 +123,25 @@ export default function Signup() {
     if (!res.ok) throw new Error(await res.text());
   };
 
+  const submitEmail = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setExists(false);
+    if (company) return;
+    if (!EMAIL_RE.test(email.trim())) {
+      setEmailTouched(true);
+      setError(email.trim() ? null : "Enter your email.");
+      return;
+    }
+    patch({ sub: "password" });
+  };
+
   const submitStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (company) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setError("Enter a valid email address.");
-      return;
-    }
     if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+      setError("Use at least 8 characters.");
       return;
     }
     try {
@@ -147,7 +149,12 @@ export default function Signup() {
       patch({ step: 2 });
     } catch (err) {
       const msg = err instanceof Error ? err.message.replace(/^\d+:\s*/, "") : "";
-      setError(msg.includes("exists") ? "An account with this email already exists." : "Could not create your account.");
+      if (msg.includes("exists")) {
+        setExists(true);
+        setError("There's already an account with this email.");
+      } else {
+        setError("Couldn't create your account. Try again.");
+      }
     }
   };
 
@@ -173,197 +180,205 @@ export default function Signup() {
     }
   };
 
-  const heading = step === 1 ? "Create your account" : "The basics";
+  const screen = step === 1 ? (sub === "email" ? 1 : 2) : 3;
+  const heading = step === 1 ? (sub === "email" ? "Create your account" : "Choose a password") : "The basics";
+  const subtitle =
+    step === 1
+      ? sub === "email"
+        ? "Free to join. It takes about two minutes."
+        : (
+          <>
+            For <span className="text-vf-text">{maskEmail(email)}</span>.{" "}
+            <button type="button" onClick={() => { setError(null); setExists(false); patch({ sub: "email" }); }} className="underline underline-offset-4 hover:text-vf-text" data-testid="button-signup-change-email">
+              Change
+            </button>
+          </>
+        )
+      : "Only your first name and age are shown to people.";
+
+  const honeypot = (
+    <div aria-hidden="true" style={{ position: "absolute", left: "-9999px", width: 1, height: 1, overflow: "hidden" }}>
+      <label>
+        Company
+        <input type="text" tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} />
+      </label>
+    </div>
+  );
 
   return (
-    <div className="min-h-dvh flex flex-col items-center justify-center px-6 bg-vf-ink text-vf-text py-16">
-      <div className="w-full max-w-[460px]">
-        <div className="flex justify-center mb-8 text-vf-text">
-          <DestiraLockup orientation="horizontal" size={30} />
-        </div>
+    <AuthShell
+      title={heading}
+      titleTestId="text-signup-title"
+      subtitle={subtitle}
+      progress={screen / 3}
+      footer={
+        step === 1 ? (
+          <>
+            Already here?{" "}
+            <button onClick={() => setLocation("/login")} className="text-vf-text underline underline-offset-4 hover:text-vf-muted transition-colors min-h-[44px]" data-testid="link-go-login">
+              Log in
+            </button>
+          </>
+        ) : undefined
+      }
+    >
+      <p className="sr-only" aria-live="polite">Step {screen} of 3</p>
 
-        <div className="rounded-[24px] border border-vf-line bg-vf-surface p-7 sm:p-8">
-          <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
-            Step {step} of 2
-          </div>
-          <h1
-            className="font-serif font-normal text-vf-text mt-2"
-            style={{ fontSize: "28px", letterSpacing: "-0.01em" }}
-            data-testid="text-signup-title"
+      {step === 1 && sub === "email" && (
+        <>
+          <button
+            type="button"
+            onClick={handleGoogleSignup}
+            disabled={googleLoading}
+            className={AUTH_SECONDARY}
+            data-testid="button-google-signup"
           >
-            {heading}
-          </h1>
+            {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FcGoogle className="w-4 h-4" />}
+            {googleLoading ? "Opening Google…" : "Continue with Google"}
+          </button>
 
-          {step === 1 && (
-            <form onSubmit={submitStep1} className="mt-7 flex flex-col gap-4">
-              <div
-                aria-hidden="true"
-                style={{ position: "absolute", left: "-9999px", width: 1, height: 1, overflow: "hidden" }}
-              >
-                <label>
-                  Company
-                  <input type="text" tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} />
-                </label>
-              </div>
+          <div className="my-6 flex items-center gap-3" aria-hidden="true">
+            <div className="h-px flex-1 bg-vf-line" />
+            <span className="vf-label text-vf-faint">or with email</span>
+            <div className="h-px flex-1 bg-vf-line" />
+          </div>
 
-              <div>
-                <label htmlFor="su-email" className={LABEL}>Email</label>
-                <input
-                  id="su-email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => patch({ email: e.target.value })}
-                  placeholder="you@email.com"
-                  className={INPUT}
-                  data-testid="input-signup-email"
-                />
-              </div>
+          <form onSubmit={submitEmail} className="flex flex-col gap-4" noValidate>
+            {honeypot}
+            <div>
+              <label htmlFor="su-email" className={LABEL}>Email</label>
+              <input
+                id="su-email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => patch({ email: e.target.value })}
+                onBlur={() => setEmailTouched(true)}
+                aria-invalid={!!emailProblem}
+                placeholder="you@email.com"
+                className={INPUT}
+                data-testid="input-signup-email"
+              />
+              {emailProblem && <p className="mt-1.5 text-[13px] text-vf-ember">{emailProblem}</p>}
+            </div>
+            {error && <p className="text-[13px] text-vf-ember" role="alert" data-testid="text-signup-error">{error}</p>}
+            <button type="submit" className={AUTH_PRIMARY} data-testid="button-signup-next">
+              Continue
+            </button>
+          </form>
+        </>
+      )}
 
-              <div>
-                <label htmlFor="su-password" className={LABEL}>Password</label>
-                <PasswordInput
-                  id="su-password"
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 8 characters"
-                  className={INPUT}
-                  data-testid="input-signup-password"
-                />
-                <div className="mt-2 flex gap-1.5" aria-hidden="true">
-                  {[0, 1, 2, 3].map((i) => (
-                    <span
-                      key={i}
-                      className={`h-1 flex-1 rounded-full transition-colors ${
-                        i < pwScore ? "bg-vf-ember" : "bg-vf-text/[0.12]"
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
+      {step === 1 && sub === "password" && (
+        <form onSubmit={submitStep1} className="flex flex-col gap-4" noValidate>
+          {honeypot}
+          {/* Lets password managers save the pair. */}
+          <input type="email" autoComplete="username" value={email} readOnly hidden />
+          <div>
+            <label htmlFor="su-password" className={LABEL}>Password</label>
+            <PasswordInput
+              id="su-password"
+              autoComplete="new-password"
+              autoFocus
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 8 characters"
+              className={INPUT}
+              data-testid="input-signup-password"
+            />
+            <p className={`mt-1.5 text-[13px] ${strength.ok ? "text-vf-success" : "text-vf-faint"}`} aria-live="polite" data-testid="text-password-strength">
+              {strength.label}
+            </p>
+          </div>
 
-              {error && <p className="text-[13px] text-vf-ember" role="alert" data-testid="text-signup-error">{error}</p>}
-
-              <button
-                type="submit"
-                disabled={isSigningUp}
-                className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-50"
-                data-testid="button-signup-next"
-              >
-                {isSigningUp && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isSigningUp ? "Creating account…" : "Continue"}
-              </button>
-
-              <div className="flex items-center gap-3" aria-hidden="true">
-                <div className="h-px flex-1 bg-vf-line" />
-                <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">or</span>
-                <div className="h-px flex-1 bg-vf-line" />
-              </div>
-
-              <button
-                type="button"
-                onClick={handleGoogleSignup}
-                disabled={googleLoading}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-full border border-vf-line text-vf-text hover:border-vf-text/25 h-11 text-sm font-medium transition-colors disabled:opacity-50"
-                data-testid="button-google-signup"
-              >
-                {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FcGoogle className="w-4 h-4" />}
-                {googleLoading ? "Redirecting…" : "Continue with Google"}
-              </button>
-            </form>
-          )}
-
-          {step === 2 && (
-            <form onSubmit={submitStep2} className="mt-7 flex flex-col gap-4">
-              <div>
-                <label htmlFor="su-name" className={LABEL}>First name</label>
-                <input id="su-name" autoComplete="given-name" value={name} onChange={(e) => patch({ name: e.target.value })} className={INPUT} data-testid="input-signup-name" />
-              </div>
-              <div>
-                <label htmlFor="su-dob" className={LABEL}>Date of birth</label>
-                <input
-                  id="su-dob"
-                  type="date"
-                  value={dob}
-                  max={new Date(Date.now() - MIN_AGE * 365.25 * 864e5).toISOString().slice(0, 10)}
-                  onChange={(e) => patch({ dob: e.target.value })}
-                  className={INPUT}
-                  data-testid="input-signup-dob"
-                />
-                <p className="mt-1.5 text-[12px] text-vf-faint">You must be 18 or older. Only your age is shown.</p>
-              </div>
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label htmlFor="su-city" className={LABEL}>City</label>
-                  <select
-                    id="su-city"
-                    value={cityChoice}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setCityChoice(v);
-                      patch({ city: v === "other" ? "" : v });
-                    }}
-                    className={INPUT}
-                    data-testid="select-signup-city"
-                  >
-                    <option value="" disabled>Pick one</option>
-                    <option value="Harare">Harare</option>
-                    <option value="Bulawayo">Bulawayo</option>
-                    <option value="other">Somewhere else</option>
-                  </select>
-                </div>
-              </div>
-
-              {cityChoice === "other" && (
-                <div>
-                  <input
-                    autoComplete="address-level2"
-                    value={city}
-                    onChange={(e) => patch({ city: e.target.value })}
-                    placeholder="Your city"
-                    className={INPUT}
-                    data-testid="input-signup-city-other"
-                  />
-                  {city.trim() && (
-                    <p className="mt-2 text-[13px] text-vf-muted leading-[1.5]" data-testid="text-city-waitlist">
-                      We'll open your city when there are enough people there. You'll be first to know.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {error && <p className="text-[13px] text-vf-ember" role="alert" data-testid="text-signup-error">{error}</p>}
-
-              <button
-                type="submit"
-                disabled={busy}
-                className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-vf-ember text-vf-ink font-bold h-12 text-[15px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)] disabled:opacity-50"
-                data-testid="button-signup-next"
-              >
-                {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-                Continue
-              </button>
-            </form>
-          )}
-
-          <div className="my-6 h-px bg-vf-line" />
-          <p className="text-center text-sm text-vf-muted">
-            {step === 1 ? (
-              <>
-                Already here?{" "}
-                <button onClick={() => setLocation("/login")} className="text-vf-text underline underline-offset-4 hover:text-vf-muted transition-colors" data-testid="link-go-login">
-                  Log in
+          {error && (
+            <p className="text-[13px] text-vf-ember" role="alert" data-testid="text-signup-error">
+              {error}{" "}
+              {exists && (
+                <button type="button" onClick={() => setLocation("/login")} className="underline underline-offset-4 text-vf-text" data-testid="link-signup-exists-login">
+                  Log in instead
                 </button>
-              </>
-            ) : user ? null : (
-              <button onClick={() => patch({ step: step - 1 })} className="text-vf-muted hover:text-vf-text transition-colors" data-testid="button-signup-back">
-                ← Back
-              </button>
-            )}
+              )}
+            </p>
+          )}
+
+          <button type="submit" disabled={isSigningUp} className={AUTH_PRIMARY} data-testid="button-signup-create">
+            {isSigningUp && <Loader2 className="w-4 h-4 animate-spin" />}
+            {isSigningUp ? "Creating your account…" : "Create account"}
+          </button>
+          <p className="text-[12px] text-vf-faint leading-[1.5]">
+            How we look after your details is in our{" "}
+            <a href="/privacy" className="underline underline-offset-2">privacy policy</a>.
           </p>
-        </div>
-      </div>
-    </div>
+        </form>
+      )}
+
+      {step === 2 && (
+        <form onSubmit={submitStep2} className="flex flex-col gap-4">
+          <div>
+            <label htmlFor="su-name" className={LABEL}>First name</label>
+            <input id="su-name" autoComplete="given-name" value={name} onChange={(e) => patch({ name: e.target.value })} className={INPUT} data-testid="input-signup-name" />
+          </div>
+          <div>
+            <label htmlFor="su-dob" className={LABEL}>Date of birth</label>
+            <input
+              id="su-dob"
+              type="date"
+              value={dob}
+              max={new Date(Date.now() - MIN_AGE * 365.25 * 864e5).toISOString().slice(0, 10)}
+              onChange={(e) => patch({ dob: e.target.value })}
+              className={INPUT}
+              data-testid="input-signup-dob"
+            />
+            <p className="mt-1.5 text-[12px] text-vf-faint">You must be 18 or older. Only your age is shown.</p>
+          </div>
+          <div>
+            <label htmlFor="su-city" className={LABEL}>City</label>
+            <select
+              id="su-city"
+              value={cityChoice}
+              onChange={(e) => {
+                const v = e.target.value;
+                setCityChoice(v);
+                patch({ city: v === "other" ? "" : v });
+              }}
+              className={INPUT}
+              data-testid="select-signup-city"
+            >
+              <option value="" disabled>Pick one</option>
+              <option value="Harare">Harare</option>
+              <option value="Bulawayo">Bulawayo</option>
+              <option value="other">Somewhere else</option>
+            </select>
+          </div>
+
+          {cityChoice === "other" && (
+            <div>
+              <input
+                autoComplete="address-level2"
+                value={city}
+                onChange={(e) => patch({ city: e.target.value })}
+                placeholder="Your city"
+                className={INPUT}
+                data-testid="input-signup-city-other"
+              />
+              {city.trim() && (
+                <p className="mt-2 text-[13px] text-vf-muted leading-[1.5]" data-testid="text-city-waitlist">
+                  We'll open your city when there are enough people there. You'll be first to know.
+                </p>
+              )}
+            </div>
+          )}
+
+          {error && <p className="text-[13px] text-vf-ember" role="alert" data-testid="text-signup-error">{error}</p>}
+
+          <button type="submit" disabled={busy} className={AUTH_PRIMARY} data-testid="button-signup-next">
+            {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+            Continue
+          </button>
+        </form>
+      )}
+    </AuthShell>
   );
 }
