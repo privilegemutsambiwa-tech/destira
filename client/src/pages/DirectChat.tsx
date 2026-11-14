@@ -103,7 +103,7 @@ function when(msg: { createdAt?: string | null }): Date {
   const t = msg.createdAt ? new Date(msg.createdAt).getTime() : Date.now();
   return new Date(Math.min(Number.isFinite(t) ? t : Date.now(), Date.now()));
 }
-const timeLabel = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+const timeLabel = (d: Date) => d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 
 const FIRST_REPLY_KEY = "destira.first-reply.seen";
 function firstReplySeen(matchId: number): boolean {

@@ -13,7 +13,9 @@
 // "Android" OAuth client for date.destira.app with the SHA-1 of every key
 // the app is signed with (upload key, debug key, and Play's app-signing key).
 import { SocialLogin } from "@capgo/capacitor-social-login";
-import { supabase } from "./supabase";
+// Supabase (about 60 KB gzipped) is loaded only when someone actually
+// starts Google sign-in, so it stays out of the landing page's first load.
+const loadSupabase = () => import("./supabase").then((m) => m.supabase);
 import { queryClient } from "./queryClient";
 import { isNativeApp } from "./native";
 import { rememberUser } from "./app-api";
@@ -98,6 +100,7 @@ async function nativeGoogleSignIn(): Promise<User> {
     throw new GoogleSignInError("google", detailOf(e));
   }
   if (!idToken) throw new GoogleSignInError("google", "Google didn't return an ID token");
+  const supabase = await loadSupabase();
   const { data, error } = await supabase.auth.signInWithIdToken({ provider: "google", token: idToken, nonce: rawNonce });
   if (error || !data.session) throw new GoogleSignInError("account", error?.message || "No session");
   return finishGoogleSignIn(data.session.access_token);
@@ -108,6 +111,7 @@ async function nativeGoogleSignIn(): Promise<User> {
  *  never matters). */
 export async function startGoogleSignIn(): Promise<User | null> {
   if (isNativeApp()) return nativeGoogleSignIn();
+  const supabase = await loadSupabase();
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: { redirectTo: `${window.location.origin}/auth/callback` },

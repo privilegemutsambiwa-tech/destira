@@ -313,6 +313,18 @@
   ::-webkit-scrollbar-thumb:hover { background-color: var(--vf-faint); }
 }
 
+/* Evening light (lib/ambient.ts, brief 3.2): a background wash that follows
+   the member's clock. Background only: it sits under content, never changes
+   a semantic colour, and is "off" with reduce motion or Plain background. */
+html[data-daypart="golden"] { --vf-wash: radial-gradient(120% 55% at 50% -12%, hsl(var(--vf-ember) / 0.07), transparent 70%); }
+html[data-daypart="evening"] { --vf-wash: radial-gradient(120% 60% at 50% -14%, rgba(124, 92, 205, 0.12), transparent 72%); }
+html[data-daypart="night"] { --vf-wash: linear-gradient(rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.16)); }
+html[data-theme="light"][data-daypart="night"] { --vf-wash: linear-gradient(rgba(28, 20, 24, 0.035), rgba(28, 20, 24, 0.035)); }
+@media (prefers-color-scheme: light) {
+  html:not([data-theme])[data-daypart="night"] { --vf-wash: linear-gradient(rgba(28, 20, 24, 0.035), rgba(28, 20, 24, 0.035)); }
+}
+.vf-ambient { background-image: var(--vf-wash, none); background-attachment: fixed; background-repeat: no-repeat; }
+
 /* Cards lift a little under a mouse: translateY -2px and the e2 shadow.
    Only on devices that really hover, so a tap never leaves a card raised. */
 @media (hover: hover) and (pointer: fine) {

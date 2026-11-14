@@ -763,7 +763,7 @@ export default function Profile() {
                     <img src={p.photoUrl} alt="" className="w-full h-full object-cover" />
                   </div>
                 ))}
-                <button
+                <button aria-label="Add photos"
                   onClick={() => setLocation("/photos")}
                   className="rounded-[16px] border border-dashed border-vf-line text-vf-faint hover:border-vf-text/25 hover:text-vf-text transition-colors flex items-center justify-center"
                   style={{ aspectRatio: "3 / 4" }}

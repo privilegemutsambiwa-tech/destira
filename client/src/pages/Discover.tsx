@@ -33,6 +33,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
 import { recordPass, sendWaitingDecisions, undoPass as takeBackPass, useDecidedIds } from "@/lib/discover-decisions";
 import type { User } from "@shared/models/auth";
+import { dataSaverOn, photoForSaver } from "@/lib/data-saver";
 
 function formatDistance(km: number): string {
   if (km < 1) return "Less than 1km away";
@@ -191,7 +192,7 @@ function CardGallery({ photos, initial, seed }: { photos: GalleryPhoto[]; initia
 
       {lightboxOpen && (
         <PhotoLightbox
-          photos={photos.map((ph) => ({ url: ph.w1600 ?? ph.url }))}
+          photos={photos.map((ph) => ({ url: photoForSaver(ph.w1600, ph.w800, dataSaverOn()) ?? ph.url }))}
           initialIndex={idx}
           onClose={() => setLightboxOpen(false)}
         />

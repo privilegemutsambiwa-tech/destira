@@ -5,12 +5,13 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
 import { shrinkImage } from "@/lib/shrink-image";
 import { Textarea } from "@/components/ui/textarea";
-import { Heart, MessageCircle, X, Plus, Eye, Send, ChevronLeft, ChevronRight, Trash2, Camera, Pencil, Brain, Image as ImageIcon, Volume2, VolumeX } from "lucide-react";
+import { Heart, MessageCircle, X, Plus, Eye, Send, ChevronLeft, ChevronRight, Trash2, Camera, Pencil, Brain, Image as ImageIcon, Volume2, VolumeX, Play } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { UpgradeRequiredError } from "@/hooks/use-interactions";
 import { StoryEngagersSheet } from "@/components/story-engagers-sheet";
 import { withFrom } from "@/lib/from-route";
+import { useDataSaver } from "@/lib/data-saver";
 
 interface StoryEvent {
   id: number;
@@ -55,26 +56,48 @@ function StoryMediaView({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
+  // Data saver: a story video waits for a tap instead of downloading itself.
+  const { on: savingData } = useDataSaver();
+  const [tapped, setTapped] = useState(false);
+  const mayPlay = !savingData || tapped;
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (paused) v.pause();
+    if (paused || !mayPlay) v.pause();
     else v.play().catch(() => {});
-  }, [paused, media.url]);
+  }, [paused, media.url, mayPlay]);
+  useEffect(() => {
+    // Nothing to wait for while the video is held back: let the story run.
+    if (media.type === "video" && !mayPlay) onReady?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [media.url, mayPlay]);
   if (media.type === "video" && media.url) {
     return (
       <>
         <video
           ref={videoRef}
-          src={media.url}
+          src={mayPlay ? media.url : undefined}
           className="w-full h-full object-contain"
-          autoPlay
+          autoPlay={mayPlay}
           muted={muted}
           playsInline
-          preload="auto"
+          preload={mayPlay ? "auto" : "none"}
           onCanPlay={onReady}
           data-testid={testId}
         />
+        {!mayPlay && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setTapped(true); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 text-white"
+            data-testid="button-story-play"
+          >
+            <span className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "rgba(12,9,16,0.6)" }}>
+              <Play className="w-6 h-6 ml-0.5" />
+            </span>
+            <span className="text-[13px]">Data saver is on. Tap to play.</span>
+          </button>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); setMuted((m) => !m); }}
           onPointerDown={(e) => e.stopPropagation()}
@@ -461,7 +484,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
               <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }} data-testid="text-story-time">{formatTime(currentStory.publishAt ?? currentStory.createdAt)}</p>
             </div>
           </div>
-          <button
+          <button aria-label="Close"
             className="w-8 h-8 flex items-center justify-center text-white rounded-full"
             style={{ background: "rgba(255,255,255,0.1)" }}
             onClick={onClose}
@@ -507,7 +530,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
         </div>
 
         {currentIndex > 0 && (
-          <button
+          <button aria-label="Previous story"
             className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center"
             style={{ color: "rgba(255,255,255,0.7)" }}
             onClick={goPrev}
@@ -517,7 +540,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
           </button>
         )}
         {currentIndex < stories.length - 1 && (
-          <button
+          <button aria-label="Next story"
             className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center"
             style={{ color: "rgba(255,255,255,0.7)" }}
             onClick={goNext}
@@ -554,7 +577,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
             </button>
           )}
           <div className="flex items-center gap-2 mb-2">
-            <button
+            <button aria-label="Like this story"
               className="w-8 h-8 flex items-center justify-center"
               style={{ color: currentStory.likedByMe ? "#FF6B4A" : "#FFFFFF" }}
               onClick={() => likeMutation.mutate({ storyId: currentStory.id, liked: !!currentStory.likedByMe })}
@@ -564,7 +587,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
               <Heart className="w-5 h-5" fill={currentStory.likedByMe ? "#FF6B4A" : "none"} />
             </button>
             {!currentStory.isOfficial && (
-              <button
+              <button aria-label="Reply"
                 className="w-8 h-8 flex items-center justify-center text-white"
                 onClick={() => { setIsPaused(true); commentInputRef.current?.focus(); }}
                 data-testid="button-comment-story"
@@ -592,7 +615,7 @@ export function StoryViewer({ stories, initialIndex, onClose, userName, profileI
               style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "#FFFFFF" }}
               data-testid="input-story-comment"
             />
-            <button
+            <button aria-label="Send"
               className="w-8 h-8 flex items-center justify-center text-white"
               onClick={handleSubmitComment}
               disabled={!commentText.trim() || commentMutation.isPending}
@@ -805,7 +828,7 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <button aria-label="Add to your story"
               className="w-8 h-8 flex items-center justify-center text-white rounded-full"
               style={{ background: "rgba(255,255,255,0.1)" }}
               onClick={onAddStory}
@@ -813,7 +836,7 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
             >
               <Plus className="w-4 h-4" />
             </button>
-            <button
+            <button aria-label="Close"
               className="w-8 h-8 flex items-center justify-center text-white rounded-full"
               style={{ background: "rgba(255,255,255,0.1)" }}
               onClick={onClose}
@@ -852,7 +875,7 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
         </div>
 
         {currentIndex > 0 && (
-          <button
+          <button aria-label="Previous story"
             className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center"
             style={{ color: "rgba(255,255,255,0.7)" }}
             onClick={goPrev}
@@ -862,7 +885,7 @@ export function OwnStoryViewer({ stories, onClose, onAddStory, userName, profile
           </button>
         )}
         {currentIndex < stories.length - 1 && (
-          <button
+          <button aria-label="Next story"
             className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center"
             style={{ color: "rgba(255,255,255,0.7)" }}
             onClick={goNext}

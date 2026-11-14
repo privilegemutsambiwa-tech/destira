@@ -45,7 +45,7 @@ function readRevealed(): string | null {
 
 /** "19:00", in the member's own clock. */
 function releaseTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 /** "in 3h 12m", "in 40m", "any minute now". Ticks once a minute. */

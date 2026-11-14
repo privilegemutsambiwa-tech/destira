@@ -55,7 +55,7 @@ export function StoryEngagersSheet({ storyId, kind, onClose }: StoryEngagersShee
           <h2 style={{ fontFamily: '"Instrument Serif", serif', fontWeight: 400, color: "#F5F0EA", fontSize: "22px" }}>
             {title} <span style={{ color: "#7E7690" }}>{count}</span>
           </h2>
-          <button
+          <button aria-label="Close"
             className="w-8 h-8 flex items-center justify-center rounded-full"
             style={{ background: "rgba(255,255,255,0.08)", color: "#F5F0EA" }}
             onClick={onClose}

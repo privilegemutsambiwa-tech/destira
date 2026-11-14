@@ -28,6 +28,7 @@ import { PhotoLightbox } from "@/components/photo-lightbox";
 import { withFrom, getFromRoute } from "@/lib/from-route";
 import { MatchCelebration } from "@/components/match-celebration";
 import { requestPushNudge } from "@/lib/engagement-prompts";
+import { dataSaverOn } from "@/lib/data-saver";
 
 /** Small mono "Edit" affordance for an editable region in the preview. Quiet
  *  by default (visible-but-unobtrusive on touch, no hover to reveal it),
@@ -177,14 +178,17 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const coverPhoto = photos.find((p: any) => p.role === "cover");
   const portraitPhoto = photos.find((p: any) => p.role === "portrait");
   const galleryPhotos = photos.filter((p: any) => p.role === "gallery" || (!p.role && !p.isMainProfilePhoto));
-  const coverUrl = coverPhoto?.photoUrl || profile.coverPhotoUrl || null;
-  const portraitUrl = portraitPhoto?.photoUrl || profile.user?.profileImageUrl || null;
+  // Data saver: the 800 px derivative instead of the original upload.
+  const savingData = dataSaverOn();
+  const coverUrl = (savingData ? coverPhoto?.variants?.w800 : null) || coverPhoto?.photoUrl || profile.coverPhotoUrl || null;
+  const portraitUrl = (savingData ? portraitPhoto?.variants?.w800 : null) || portraitPhoto?.photoUrl || profile.user?.profileImageUrl || null;
   // Full, uncropped view for the lightbox — cover, then portrait, then the
   // gallery grid, in the same order they appear on the page. Prefers the
   // w1600 derivative (full photo, just not the original file size) over the
   // raw upload for load time; falls back to whatever URL each section
   // already uses when there's no derivative on record.
-  const fullPhotoUrl = (p: any, fallback: string | null) => p?.variants?.w1600 || p?.photoUrl || fallback;
+  const fullPhotoUrl = (p: any, fallback: string | null) =>
+    (savingData ? p?.variants?.w800 : p?.variants?.w1600) || p?.photoUrl || fallback;
   const lightboxPhotos = [
     coverUrl ? { url: fullPhotoUrl(coverPhoto, coverUrl) } : null,
     portraitUrl ? { url: fullPhotoUrl(portraitPhoto, portraitUrl) } : null,

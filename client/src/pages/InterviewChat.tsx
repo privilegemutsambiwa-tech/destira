@@ -444,7 +444,7 @@ export default function InterviewChat({ params }: { params: { id: string } }) {
                     {mine && !readOnly && (
                       <div className="flex items-center justify-end gap-1 px-1">
                         <span className="font-mono text-[11px] text-vf-faint">
-                          {msg.timestamp.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                          {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
                         </span>
                         <StatusIndicator status={msg.status} />
                       </div>

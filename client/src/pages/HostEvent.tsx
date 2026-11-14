@@ -297,7 +297,7 @@ export default function HostEvent() {
   return (
     <div className="min-h-dvh bg-vf-ink text-vf-text">
       <div className="sticky top-0 z-10 bg-vf-ink border-b border-vf-line flex items-center gap-3 px-4 h-14">
-        <button onClick={back} className="w-8 h-8 flex items-center justify-center" data-testid="button-host-back">
+        <button aria-label="Back" onClick={back} className="w-8 h-8 flex items-center justify-center" data-testid="button-host-back">
           <ArrowLeft className="w-5 h-5 text-vf-ember" />
         </button>
         <h1 className="font-serif text-[20px] text-vf-text">Host an event</h1>
@@ -356,7 +356,7 @@ export default function HostEvent() {
                 <div className="flex items-center gap-2 rounded-[12px] border border-vf-mint/40 bg-vf-mint/[0.06] px-3.5 h-11">
                   <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-vf-mint">Verified venue</span>
                   <span className="text-[14px] text-vf-text truncate">{d.placeName}</span>
-                  <button type="button" onClick={clearPlace} className="ml-auto text-vf-faint hover:text-vf-text" data-testid="button-clear-place">
+                  <button aria-label="Clear the place" type="button" onClick={clearPlace} className="ml-auto text-vf-faint hover:text-vf-text" data-testid="button-clear-place">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -453,7 +453,7 @@ export default function HostEvent() {
                 {d.photos.map((f, i) => (
                   <div key={i} className="relative rounded-[12px] overflow-hidden border border-vf-line" style={{ aspectRatio: "3/2" }}>
                     <img src={URL.createObjectURL(f)} alt="" className="w-full h-full object-cover" />
-                    <button type="button" onClick={() => set({ photos: d.photos.filter((_, j) => j !== i) })} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center">
+                    <button aria-label="Remove this photo" type="button" onClick={() => set({ photos: d.photos.filter((_, j) => j !== i) })} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -652,8 +652,8 @@ export default function HostEvent() {
               <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13.5px]">
                 <dt className="text-vf-faint">When</dt>
                 <dd className="text-vf-text">
-                  {startsAtISO ? new Date(startsAtISO).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
-                  {endsAtISO ? ` – ${new Date(endsAtISO).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}
+                  {startsAtISO ? new Date(startsAtISO).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "—"}
+                  {endsAtISO ? ` – ${new Date(endsAtISO).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}` : ""}
                 </dd>
                 <dt className="text-vf-faint">Where</dt>
                 <dd className="text-vf-text">{[d.venueName || d.placeName, d.suburb, d.city].filter(Boolean).join(", ") || "—"}</dd>

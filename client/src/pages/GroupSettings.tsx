@@ -98,7 +98,7 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
         className="px-4 py-3 flex items-center gap-3 sticky top-0 z-50"
         style={{ background: "var(--vf-surface2)", borderBottom: "1px solid var(--vf-line)" }}
       >
-        <button
+        <button aria-label="Back"
           onClick={() => setLocation(`/lounge/group/${groupId}/info`)}
           className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
           style={{ color: "hsl(var(--vf-text))", background: "transparent" }}

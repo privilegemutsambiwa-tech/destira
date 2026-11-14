@@ -690,7 +690,7 @@ function eventDay(iso: string) {
     dow: d.toLocaleDateString(undefined, { weekday: "short" }),
     day: d.toLocaleDateString(undefined, { day: "numeric" }),
     mon: d.toLocaleDateString(undefined, { month: "short" }),
-    time: d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
+    time: d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false }),
   };
 }
 

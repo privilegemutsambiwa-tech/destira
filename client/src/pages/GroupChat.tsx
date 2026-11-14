@@ -109,7 +109,7 @@ function withMentions(text: string): React.ReactNode {
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 function formatDateSeparator(dateStr: string) {
@@ -767,7 +767,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                         >
                           <div className="flex items-center gap-1 mb-2 flex-wrap">
                             {REACTIONS.map(({ key, Icon }) => (
-                              <button
+                              <button aria-label={`React with ${key}`}
                                 key={key}
                                 onClick={() => handleReact(msg.id, key)}
                                 className="w-8 h-8 rounded-full flex items-center justify-center btn-press transition-colors"
@@ -942,7 +942,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
               <span className="font-medium" style={{ color: EMBER }}>{replyTo.nickname || "Anonymous"}</span>
               <p className="truncate" style={{ color: MUTED }}>{replyTo.content}</p>
             </div>
-            <button
+            <button aria-label="Cancel reply"
               className="w-7 h-7 flex items-center justify-center btn-press rounded-full"
               style={{ color: MUTED, background: "transparent" }}
               onClick={() => setReplyTo(null)}
@@ -983,7 +983,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
               className="flex items-center gap-2"
               onSubmit={(e) => { e.preventDefault(); handleSend(); }}
             >
-              <button
+              <button aria-label="Attach a photo"
                 type="button"
                 className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
                 style={{ color: MUTED, background: "transparent" }}
@@ -992,7 +992,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
               >
                 <Paperclip className="w-4 h-4" />
               </button>
-              <button
+              <button aria-label="Start a poll"
                 type="button"
                 className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
                 style={{ color: MUTED, background: "transparent" }}
@@ -1001,7 +1001,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
               >
                 <BarChart3 className="w-4 h-4" />
               </button>
-              <button
+              <button aria-label="Start a game"
                 type="button"
                 className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
                 style={{ color: MUTED, background: "transparent" }}

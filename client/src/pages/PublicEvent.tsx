@@ -39,7 +39,7 @@ const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-fai
 function whenText(startsAt: string, endsAt: string | null) {
   const s = new Date(startsAt);
   const day = s.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
-  const t = (d: Date) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const t = (d: Date) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
   return `${day} · ${t(s)}${endsAt ? `–${t(new Date(endsAt))}` : ""}`;
 }
 

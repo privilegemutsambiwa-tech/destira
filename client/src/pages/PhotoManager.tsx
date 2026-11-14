@@ -228,7 +228,7 @@ export default function PhotoManager() {
         }}
       >
         <div className="flex items-center gap-3">
-          <button onClick={() => setLocation("/profile")} className="w-9 h-9 flex items-center justify-center -ml-1" data-testid="button-back">
+          <button aria-label="Back" onClick={() => setLocation("/profile")} className="w-9 h-9 flex items-center justify-center -ml-1" data-testid="button-back">
             <ArrowLeft className="w-5 h-5 text-vf-ember" />
           </button>
           <h1 className="font-serif font-normal text-2xl text-vf-text">Photos</h1>

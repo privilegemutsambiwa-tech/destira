@@ -159,7 +159,7 @@ export default function EventPreferences() {
   return (
     <div className="min-h-dvh bg-vf-ink text-vf-text">
       <div className="sticky top-0 z-10 bg-vf-ink border-b border-vf-line flex items-center gap-3 px-4 h-14">
-        <button onClick={() => setLocation(backTo)} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-150 hover:bg-[var(--vf-elevated)]" data-testid="button-prefs-back">
+        <button aria-label="Back" onClick={() => setLocation(backTo)} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-150 hover:bg-[var(--vf-elevated)]" data-testid="button-prefs-back">
           <ArrowLeft className="w-5 h-5 text-vf-ember" />
         </button>
         <h1 className="font-serif text-[20px] text-vf-text">Event preferences</h1>

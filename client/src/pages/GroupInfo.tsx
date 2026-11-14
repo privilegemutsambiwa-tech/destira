@@ -377,7 +377,7 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
         className="px-4 py-3 flex items-center gap-3 sticky top-0 z-50"
         style={{ background: SURFACE2, borderBottom: `1px solid ${LINE}` }}
       >
-        <button
+        <button aria-label="Back"
           onClick={() => setLocation(`/lounge/group/${groupId}`)}
           className="w-9 h-9 flex items-center justify-center btn-press rounded-full"
           style={{ color: TEXT, background: "transparent" }}

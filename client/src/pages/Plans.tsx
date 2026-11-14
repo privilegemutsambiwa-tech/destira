@@ -131,7 +131,7 @@ export default function Plans() {
     <div className="min-h-dvh bg-vf-ink text-vf-text">
       <div className="max-w-5xl mx-auto px-5 sm:px-8 py-6">
         <div className="flex items-center justify-between">
-          <button onClick={() => setLocation("/")} className="text-vf-text" data-testid="link-home">
+          <button aria-label="Destira home" onClick={() => setLocation("/")} className="text-vf-text" data-testid="link-home">
             <DestiraLockup orientation="horizontal" size={28} />
           </button>
           <button

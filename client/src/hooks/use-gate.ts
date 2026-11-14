@@ -36,5 +36,5 @@ export function resetLabel(iso?: string): string | null {
   if (Number.isNaN(d.getTime())) return null;
   const h = d.getHours();
   if (h === 0) return "at midnight";
-  return `at ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  return `at ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}`;
 }

@@ -19,6 +19,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { AppLockSetting } from "@/components/app-lock";
 import { SearchField } from "@/components/ui-vf";
+import { plainBackground, setPlainBackground } from "@/lib/ambient";
+import { bytesThisWeek, formatBytes, setDataSaverPref, useDataSaver } from "@/lib/data-saver";
 import { PushTestRow } from "@/components/push-test";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
@@ -184,7 +186,7 @@ function Panel({ title, onBack, children }: { title: string; onBack: () => void;
     <div className="min-h-dvh" style={{ background: BG, color: TEXT }}>
       <div className="sticky top-0 z-10 flex items-center gap-3 px-4"
         style={{ height: "56px", background: BG, borderBottom: `1px solid ${BORDER}` }}>
-        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center" data-testid="button-panel-back">
+        <button aria-label="Back" onClick={onBack} className="w-8 h-8 flex items-center justify-center" data-testid="button-panel-back">
           <ArrowLeft className="w-5 h-5" style={{ color: EMBER }} />
         </button>
         <h1 style={{ ...SERIF, color: TEXT, fontSize: "20px" }}>{title}</h1>
@@ -1762,6 +1764,9 @@ export default function Settings() {
   const [activePanel, setActivePanel] = useState<PanelKey>(null);
   const [activeSection, setActiveSection] = useState("account"); // desktop two-pane nav only
   // ?q= opens Settings already filtered (the command palette links here).
+  const [plainBg, setPlainBg] = useState(plainBackground);
+  const dataSaver = useDataSaver();
+  const usedThisWeek = bytesThisWeek();
   const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "");
   const [showPauseDialog, setShowPauseDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -1980,10 +1985,32 @@ export default function Settings() {
     {
       id: "appearance",
       label: "App",
-      keywords: "appearance theme dark light system photos",
+      keywords: "appearance theme dark light system photos background evening light data saver mobile data",
       content: (
         <div className="vf-card" style={cardStyle}>
           <AppearanceRow />
+          <ToggleRow
+            icon={Sliders}
+            label="Plain background"
+            sublabel="Turns off the light that follows the time of day"
+            value={plainBg}
+            onChange={(v) => { setPlainBackground(v); setPlainBg(v); }}
+            testId="toggle-plain-background"
+          />
+          <ToggleRow
+            icon={Zap}
+            label="Always save data"
+            sublabel={`${
+              dataSaver.pref === "on"
+                ? "Smaller photos, and story videos wait for a tap."
+                : dataSaver.slow
+                  ? "On by itself right now: your connection is slow."
+                  : "Off: it turns on by itself on a slow connection."
+            }${usedThisWeek > 0 ? ` About ${formatBytes(usedThisWeek)} used this week on this device.` : ""}`}
+            value={dataSaver.pref === "on"}
+            onChange={(v) => setDataSaverPref(v ? "on" : "auto")}
+            testId="toggle-data-saver"
+          />
           <ChevronRow icon={Wrench} label="Photos" sublabel="Order, cover and crops" onClick={() => setLocation("/photos")} testId="row-manage-photos" />
         </div>
       ),
@@ -2050,7 +2077,7 @@ export default function Settings() {
     <div className="min-h-dvh" style={{ background: BG, color: TEXT }} data-testid="page-settings">
       <div className="sticky top-0 z-10 flex items-center gap-3 px-4"
         style={{ height: "56px", background: BG, borderBottom: `1px solid ${BORDER}` }}>
-        <button onClick={() => setLocation("/profile")} className="w-8 h-8 flex items-center justify-center" data-testid="button-settings-back">
+        <button aria-label="Back" onClick={() => setLocation("/profile")} className="w-8 h-8 flex items-center justify-center" data-testid="button-settings-back">
           <ArrowLeft className="w-5 h-5" style={{ color: EMBER }} />
         </button>
         <h1 style={{ ...SERIF, color: TEXT, fontSize: "20px" }}>Settings</h1>

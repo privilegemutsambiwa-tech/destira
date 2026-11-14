@@ -87,7 +87,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const railLabel = "hidden lg:inline";
 
   return (
-    <div className="min-h-dvh bg-vf-ink">
+    <div className="min-h-dvh bg-vf-ink vf-ambient">
       <LocationPermissionModal />
       <PushNudge />
       <ProximityAlerts />
