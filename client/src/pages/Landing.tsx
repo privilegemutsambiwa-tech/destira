@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowRight, CalendarHeart, ChevronDown, Download, Flag, 
 import { FcGoogle } from "react-icons/fc";
 import { DestiraLockup } from "@/components/brand/logo";
 import { ResonanceDial } from "@/components/resonance-dial";
-import { photos as BUNDLED_PHOTOS, type Photo } from "@/lib/photos";
+import type { Photo } from "@/lib/photos";
 import { isNativeApp } from "@/lib/native";
 import { useDataSaver } from "@/lib/data-saver";
 import { pendingReferralCode } from "@/lib/attribution";
@@ -19,9 +19,6 @@ import { LANDING_QUIZ, saveQuizAnswers, twinNote, type QuizAnswers } from "@/lib
 // placeholder while offline.
 const PHOTO_ORIGIN = isNativeApp() ? "https://www.destira.date" : "";
 const remote = (u: string) => u.replace(/(^|\s|,)\/photos\//g, `$1${PHOTO_ORIGIN}/photos/`);
-const HERO_PHOTOS: Photo[] = PHOTO_ORIGIN
-  ? BUNDLED_PHOTOS.map((p) => ({ ...p, src: remote(p.src), srcSet: remote(p.srcSet), webpSrcSet: remote(p.webpSrcSet), variants: p.variants.map((v) => ({ ...v, webp: remote(v.webp), jpg: remote(v.jpg) })) }))
-  : BUNDLED_PHOTOS;
 
 /* ------------------------------------------------------------------ *
  *  Landing — route "/" for signed-out visitors, and where the ads land.
@@ -125,9 +122,46 @@ function Reveal({
 // a hand-picked set from client/public/photos (hero-81+ repeat 26–80, so
 // only the originals are listed). Order is for variety along each column.
 const LOCAL_ORDER = [39, 64, 26, 46, 59, 41, 43, 62, 66, 36, 38, 28, 70, 30, 42, 44, 45, 52, 56, 61, 65, 67, 68, 71, 75, 37];
-const PHOTO_BY_NAME = new Map(HERO_PHOTOS.map((p) => [p.name, p]));
-const LOCAL: Photo[] = LOCAL_ORDER.map((n) => PHOTO_BY_NAME.get(`hero-${n}`)).filter((p): p is Photo => !!p);
-const pick = (...ns: number[]) => ns.map((n) => PHOTO_BY_NAME.get(`hero-${n}`)).filter((p): p is Photo => !!p);
+//
+// The manifest (lib/photos.ts) is mostly blur-up placeholders for every
+// photo, so it loads as its own chunk instead of sitting in the app's first
+// load. The request starts as soon as this module runs, so it overlaps with
+// the first render; the headline and buttons never wait for it.
+interface PhotoSet {
+  local: Photo[];
+  byName: Map<string, Photo>;
+  pick: (...ns: number[]) => Photo[];
+}
+
+let photoSet: PhotoSet | null = null;
+let photoLoad: Promise<PhotoSet> | null = null;
+
+function loadPhotos(): Promise<PhotoSet> {
+  photoLoad ??= import("@/lib/photos").then(({ photos }) => {
+    const all: Photo[] = PHOTO_ORIGIN
+      ? photos.map((p) => ({ ...p, src: remote(p.src), srcSet: remote(p.srcSet), webpSrcSet: remote(p.webpSrcSet), variants: p.variants.map((v) => ({ ...v, webp: remote(v.webp), jpg: remote(v.jpg) })) }))
+      : photos;
+    const byName = new Map(all.map((p) => [p.name, p]));
+    const pick = (...ns: number[]) => ns.map((n) => byName.get(`hero-${n}`)).filter((p): p is Photo => !!p);
+    photoSet = { local: pick(...LOCAL_ORDER), byName, pick };
+    return photoSet;
+  });
+  return photoLoad;
+}
+if (typeof window !== "undefined") loadPhotos().catch(() => { photoLoad = null; });
+
+function usePhotos(): PhotoSet | null {
+  const [set, setSet] = useState(photoSet);
+  useEffect(() => {
+    if (set) return;
+    let live = true;
+    loadPhotos().then((s) => live && setSet(s)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [set]);
+  return set;
+}
 
 /** Wall tiles are small, so their srcset stops at 960w. */
 const tileSet = (p: Photo, ext: "webp" | "jpg") =>
@@ -739,7 +773,8 @@ const TEASER = [
 function TonightsThreeTeaser() {
   const t = useTonight();
   const [, setLocation] = useLocation();
-  const cards = TEASER.map((c) => ({ ...c, p: PHOTO_BY_NAME.get(`hero-${c.n}`) }));
+  const photos = usePhotos();
+  const cards = TEASER.map((c) => ({ ...c, p: photos?.byName.get(`hero-${c.n}`) }));
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-12 lg:gap-16 items-center">
       <div>
@@ -1004,6 +1039,9 @@ export default function Landing() {
   const [, setLocation] = useLocation();
   const [scrolled, setScrolled] = useState(false);
   const headline = useHeadline();
+  const photos = usePhotos();
+  const LOCAL = photos?.local ?? [];
+  const pick = (...ns: number[]) => photos?.pick(...ns) ?? [];
 
   const heroCtaRef = useRef<HTMLDivElement>(null);
   const closingRef = useRef<HTMLElement>(null);
