@@ -323,11 +323,8 @@ export function useInterviewChat(interviewId: number) {
 // one-shot fetch; Discover.tsx just needs to call fetchNextPage() as the
 // flattened list runs low.
 export function useDiscoverProfiles(filter?: string, userLat?: number | null, userLng?: number | null) {
-  // One shuffle seed per mount of this hook (i.e. per Discover page load) —
-  // stable across pagination and re-renders within that load (so scrolling
-  // doesn't reorder cards underneath the viewer), fresh next time Discover
-  // mounts again (a new login, or just navigating back to it), which is what
-  // actually makes the deck reshuffle instead of always opening the same way.
+  // Per-load key only: the server now ignores ?seed= and orders the deck by
+  // the member's day, so reloading never puts someone new at the front.
   const [seed] = useState(() => Math.random().toString(36).slice(2));
 
   const query = useInfiniteQuery({

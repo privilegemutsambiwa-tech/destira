@@ -1051,6 +1051,13 @@ export class DatabaseStorage implements IStorage {
       .map((g) => ({ id: g.id, name: g.name, iconUrl: g.iconUrl, viewerIsMember: mineSet.has(g.id), categoryTags: g.categoryTags }));
   }
 
+  async hasDiscoverPass(userId: string, targetId: string): Promise<boolean> {
+    const [row] = await db.select({ id: discoverPasses.id }).from(discoverPasses)
+      .where(and(eq(discoverPasses.userId, userId), eq(discoverPasses.targetId, targetId)))
+      .limit(1);
+    return !!row;
+  }
+
   // Idempotent — a double-tap or a retried request must not throw on the
   // unique (userId, targetId) index; the pass already existing is success.
   async recordDiscoverPass(userId: string, targetId: string): Promise<void> {

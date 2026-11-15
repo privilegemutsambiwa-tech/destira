@@ -164,6 +164,9 @@ export async function sendWaitingDecisions() {
       // back round and sends the newer decision.
       if (!now || now.kind !== next.kind) continue;
       if (next.kind !== "pass") refresh = true;
+      // Passes are counted on free (daily_passes): keep the count fresh, so
+      // Discover refuses the pass after the last one before the server has to.
+      if (next.kind !== "like") queryClient.invalidateQueries({ queryKey: ["/api/gate", "daily_passes"] });
       if (outcome === "refused" || next.kind === "undo-pass") {
         save(items.filter((d) => !mine(d, by, next.targetId)));
       } else {

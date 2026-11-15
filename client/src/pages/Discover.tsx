@@ -936,7 +936,8 @@ export default function Discover() {
     }
   };
 
-  // Free and uncounted — only likes touch the daily cap. Persisted
+  // Counted on free (daily_passes, resets at midnight; paid plans have no
+  // limit), so the deck can't be passed through to see everyone. Persisted
   // server-side (discover_passes) so this person never comes back, the
   // same permanence a like already has via the matches table.
   const handlePass = () => {
@@ -944,13 +945,19 @@ export default function Discover() {
     isActingRef.current = true;
     setIsActing(true);
     const passedProfile = currentProfile;
-    setExitDir("left");
-    haptic.pass();
-    handleNext(passedProfile.userId);
-    recordPass(passedProfile.userId);
-    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-    setUndoPass({ userId: passedProfile.userId, name: passedProfile.displayName || "them" });
-    undoTimerRef.current = setTimeout(() => setUndoPass(null), 6000);
+    paywall.guard("daily_passes", () => {
+      setExitDir("left");
+      haptic.pass();
+      handleNext(passedProfile.userId);
+      recordPass(passedProfile.userId);
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      setUndoPass({ userId: passedProfile.userId, name: passedProfile.displayName || "them" });
+      undoTimerRef.current = setTimeout(() => setUndoPass(null), 6000);
+    }).finally(() => {
+      // The refused path never advances the deck, so release the buttons here.
+      isActingRef.current = false;
+      setIsActing(false);
+    });
   };
 
   // Brings the last passed card back to the front and forgets the pass.
@@ -1296,34 +1303,35 @@ export default function Discover() {
           </div>
         </div>
 
-        {/* A peek at who's next, not a second feed. Tapping one brings them
-            to the front; whoever was there goes to the back of the line, so
-            the same two people never just trade places. */}
+        {/* A peek at who's next, never a way to get to them: on every plan,
+            the only way forward is to like or pass the person in front. No
+            jumping ahead, so nobody can browse the deck without deciding, and
+            the faces waiting here are a reason to keep going (and, at the
+            daily limit, to upgrade). Tapping one only says so. */}
         {upcoming.length > 0 && (
           <section className="mb-10" data-testid="next-up">
-            <div className="vf-label text-vf-faint mb-3">Next up</div>
+            <div className="flex items-baseline justify-between gap-3 mb-3">
+              <div className="vf-label text-vf-faint">Next up</div>
+              <div className="text-[12px] text-vf-faint" data-testid="text-next-up-hint">
+                Like or pass {(currentProfile.displayName || "").split(/\s+/)[0] || "this person"} to meet them
+              </div>
+            </div>
             <div className="flex gap-3">
               {upcoming.map((p: any) => {
-                const handlePin = () => {
-                  if (isActingRef.current) return;
-                  const pinnedId = p.userId;
-                  setDeckOrder((prev) => {
-                    const idx = prev.indexOf(pinnedId);
-                    if (idx <= 0) return prev;
-                    const rest = prev.slice();
-                    const [pinned] = rest.splice(idx, 1);
-                    const [oldFront] = rest.splice(0, 1);
-                    return oldFront ? [pinned, ...rest, oldFront] : [pinned, ...rest];
+                const handleTap = () => {
+                  haptic.pass();
+                  toast({
+                    title: `Like or pass ${(currentProfile.displayName || "").split(/\s+/)[0] || "this person"} first`,
+                    description: "Everyone gets a yes or a no before the next person comes forward.",
                   });
-                  window.scrollTo({ top: 0, behavior: "smooth" });
                 };
                 return (
                   <button
                     key={p.userId}
                     type="button"
-                    onClick={handlePin}
-                    className="vf-press relative w-[104px] h-[138px] rounded-[16px] overflow-hidden border border-vf-line bg-vf-surface2 shrink-0 text-left"
-                    aria-label={`Show ${p.displayName || "this person"} now`}
+                    onClick={handleTap}
+                    className="relative w-[104px] h-[138px] rounded-[16px] overflow-hidden border border-vf-line bg-vf-surface2 shrink-0 text-left"
+                    aria-label={`${p.displayName || "This person"} is next`}
                     data-testid={`card-upcoming-${p.userId}`}
                   >
                     {p.coverPhotoUrl ? (

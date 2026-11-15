@@ -18,6 +18,11 @@ export interface TierLimits {
   priceCents: number;
   /** likes you can send per day; resets at local midnight */
   dailyLikes: number | null;
+  /** people you can pass on in Discover per day; resets at local midnight.
+   *  Without it a free member could pass through the whole deck, seeing
+   *  everyone, while the likes cap only limited who they could like. Taking
+   *  a pass back gives it back. */
+  dailyPasses: number | null;
   /** twin interviews you can start per rolling 7 days */
   weeklyInterviews: number | null;
   /** lines of a twin<->twin transcript you can read; null = the whole thing */
@@ -47,6 +52,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
   free: {
     priceCents: 0,
     dailyLikes: 30,
+    dailyPasses: 50,
     weeklyInterviews: 3,
     transcriptLines: 2,
     seeWhoAsked: false,
@@ -60,6 +66,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
   spark: {
     priceCents: 499,
     dailyLikes: 80,
+    dailyPasses: null,
     weeklyInterviews: 15,
     transcriptLines: 2,
     seeWhoAsked: true,
@@ -73,6 +80,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
   flame: {
     priceCents: 999,
     dailyLikes: 200,
+    dailyPasses: null,
     weeklyInterviews: 40,
     transcriptLines: null,
     seeWhoAsked: true,
@@ -86,6 +94,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
   ember: {
     priceCents: 1999,
     dailyLikes: null,
+    dailyPasses: null,
     weeklyInterviews: null,
     transcriptLines: null,
     seeWhoAsked: true,
@@ -101,6 +110,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
 // Feature keys used by the server gate (Phase 3) and the client useGate hook.
 export const FEATURES = [
   "daily_likes",
+  "daily_passes", // passing on someone in Discover (free only; paid plans have no limit)
   "start_interview",
   "read_transcript",
   "see_who_asked",
@@ -117,6 +127,7 @@ export type Feature = (typeof FEATURES)[number];
 /** Lowest tier that unlocks a boolean feature (for the upgrade prompt copy). */
 export const FEATURE_MIN_TIER: Record<Feature, Tier> = {
   daily_likes: "free",
+  daily_passes: "free",
   start_interview: "free",
   read_transcript: "flame", // full transcript
   see_who_asked: "spark",
@@ -148,7 +159,7 @@ export const PLAN_CARDS: PlanCard[] = [
     priceCents: LIMITS.free.priceCents,
     pitch: "Enough room to feel the twin work before anything asks for money.",
     gets: [
-      `${LIMITS.free.dailyLikes} likes a day`,
+      `${LIMITS.free.dailyLikes} likes and ${LIMITS.free.dailyPasses} passes a day`,
       `${LIMITS.free.weeklyInterviews} twin interviews a week`,
       "The full Discover feed",
       `Join up to ${LIMITS.free.groupsMax} rooms in the Lounge`,
@@ -163,7 +174,7 @@ export const PLAN_CARDS: PlanCard[] = [
     pitch: "You can finally see who asked to meet you, not just that someone did.",
     gets: [
       "Names and profiles of everyone who asked you",
-      `${LIMITS.spark.dailyLikes} likes a day`,
+      `${LIMITS.spark.dailyLikes} likes a day, unlimited passes`,
       `${LIMITS.spark.weeklyInterviews} interviews a week`,
       `Up to ${LIMITS.spark.groupsMax} rooms in the Lounge`,
     ],
@@ -288,6 +299,7 @@ function nextTierForLimit(fromTier: Tier, key: keyof TierLimits): Tier {
 
 const LIMIT_KEY: Partial<Record<Feature, keyof TierLimits>> = {
   daily_likes: "dailyLikes",
+  daily_passes: "dailyPasses",
   start_interview: "weeklyInterviews",
   join_group: "groupsMax",
   story_reply: "storyRepliesPerWeek",
@@ -296,6 +308,7 @@ const LIMIT_KEY: Partial<Record<Feature, keyof TierLimits>> = {
 
 const ACTION: Record<Feature, string> = {
   daily_likes: "Sending more likes",
+  daily_passes: "Passing on more people",
   start_interview: "Starting another interview",
   read_transcript: "Reading the full transcript",
   see_who_asked: "Seeing who asked to meet you",
@@ -341,12 +354,13 @@ export function gateCopy(feature: Feature, s: GateCopyState = {}): GateCopy {
 
     const noun =
       feature === "daily_likes" ? "likes"
+      : feature === "daily_passes" ? "passes"
       : feature === "start_interview" ? "interviews"
       : feature === "story_reply" ? "replies"
       : feature === "group_chat_request" ? "requests"
       : "rooms";
     const per =
-      feature === "daily_likes" ? "today"
+      feature === "daily_likes" || feature === "daily_passes" ? "today"
       : feature === "start_interview" || feature === "story_reply" || feature === "group_chat_request" ? "this week"
       : "";
 

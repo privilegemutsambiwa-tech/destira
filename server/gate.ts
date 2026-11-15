@@ -10,7 +10,7 @@
 // they're back on Flame+.
 
 import { db } from "./db";
-import { subscriptions, profiles, interviews, groupMembers, groups, dailyLikeCounts, storyComments, chatRequests } from "@shared/schema";
+import { subscriptions, profiles, interviews, groupMembers, groups, dailyLikeCounts, storyComments, chatRequests, discoverPasses } from "@shared/schema";
 import { and, eq, gte, count, asc } from "drizzle-orm";
 import { LIMITS, tierRank, FEATURE_MIN_TIER, gateCopy, type Tier, type Feature } from "@shared/entitlements";
 
@@ -130,6 +130,8 @@ async function usage(userId: string, feature: Feature): Promise<number> {
         .from(dailyLikeCounts)
         .where(and(eq(dailyLikeCounts.userId, userId), eq(dailyLikeCounts.date, localDayKey(await userTimezone(userId)))))
         .then((r) => r[0]?.n ?? 0);
+    case "daily_passes":
+      return passesToday(userId);
     case "start_interview":
       return db
         .select({ n: count() })
@@ -163,6 +165,17 @@ async function usage(userId: string, feature: Feature): Promise<number> {
     default:
       return 0;
   }
+}
+
+/** Discover passes since this member's local midnight. A pass taken back is
+ *  deleted, so it gives the pass back too. */
+export async function passesToday(userId: string): Promise<number> {
+  const dayStart = new Date(new Date(nextMidnightISO(await userTimezone(userId))).getTime() - 24 * 60 * 60 * 1000);
+  return db
+    .select({ n: count() })
+    .from(discoverPasses)
+    .where(and(eq(discoverPasses.userId, userId), gte(discoverPasses.createdAt, dayStart)))
+    .then((r) => Number(r[0]?.n ?? 0));
 }
 
 async function oldestInterviewInWindow(userId: string, since: Date): Promise<Date | undefined> {
@@ -207,7 +220,7 @@ export async function checkGate(
 ): Promise<GateResult> {
   const tier = await getEffectiveTier(userId);
   const limits = LIMITS[tier];
-  const dailyReset = feature === "daily_likes";
+  const dailyReset = feature === "daily_likes" || feature === "daily_passes";
 
   const boolMap: Partial<Record<Feature, boolean>> = {
     see_who_asked: limits.seeWhoAsked,
@@ -256,6 +269,8 @@ export async function checkGate(
   const limit =
     feature === "daily_likes"
       ? limits.dailyLikes
+      : feature === "daily_passes"
+        ? limits.dailyPasses
       : feature === "start_interview"
         ? limits.weeklyInterviews
         : feature === "join_group"

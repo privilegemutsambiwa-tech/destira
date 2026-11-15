@@ -244,11 +244,12 @@ export async function registerRoutes(
       }
       const limitParam = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
       const limit = limitParam && limitParam > 0 && limitParam <= 50 ? limitParam : undefined;
-      // One per Discover mount, generated client-side — same seed for every
-      // page of one load (so scrolling doesn't reorder cards underneath the
-      // viewer), a fresh one next time they open Discover (so the deck
-      // actually reshuffles instead of always starting the same way).
-      const seed = typeof req.query.seed === "string" ? req.query.seed.slice(0, 100) : undefined;
+      // The deck's order is fixed for the member's day: same seed for every
+      // page and every load, a new shuffle at their midnight. It used to be a
+      // fresh client seed per load, which put a new person at the front on
+      // every reload, a way to browse everyone without liking or passing.
+      // The client's ?seed= is ignored for that reason.
+      const seed = `${userId}:${gate.localDayKey(await gate.userTimezone(userId))}`;
       const { profiles: discoverable, nextCursor } = await storage.getDiscoverableProfiles(userId, filter, userLat, userLng, cursor, limit, seed);
       const nextCursorEncoded = nextCursor ? Buffer.from(JSON.stringify(nextCursor), "utf8").toString("base64url") : null;
       res.json({ profiles: await withClickReasons(userId, discoverable as any[]), nextCursor: nextCursorEncoded });
@@ -1371,15 +1372,22 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
-  // "Not interested" from the Discover deck — free and uncounted (only likes
-  // count against the daily cap), but persisted so this person never comes
-  // back into the feed, the same permanence a like already has.
+  // "Not interested" from the Discover deck, persisted so this person never
+  // comes back into the feed, the same permanence a like already has.
+  // Counted against daily_passes (free only), so nobody can pass through the
+  // whole deck to see everyone; a repeat of a pass already recorded (a retry
+  // from a weak connection) is never refused.
   app.post("/api/discover/pass", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     const targetId = typeof req.body?.targetId === "string" ? req.body.targetId : undefined;
     if (!targetId) return res.status(400).json({ message: "targetId is required" });
     try {
+      const already = await storage.hasDiscoverPass(userId, targetId);
+      if (!already) {
+        const g = await gate.checkGate(userId, "daily_passes");
+        if (!g.ok) return res.status(403).json(gate.gateBody(g, "daily_passes"));
+      }
       await storage.recordDiscoverPass(userId, targetId);
       res.json({ ok: true });
     } catch (e) {
