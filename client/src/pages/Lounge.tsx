@@ -1,7 +1,7 @@
 // Lounge home (docs/destira-upgrade-prompt.md §7.13): "Your rooms" first as
 // sideways cards (cover, unread, a live game), then "Find a room": search,
 // chips and a grid of rooms with who's in them and one button to join.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { motion, useReducedMotion } from "framer-motion";
 import { LayoutShell } from "@/components/layout-shell";
@@ -11,6 +11,7 @@ import { useGroups, useCreateGroup, useJoinGroup } from "@/hooks/use-interaction
 import { useToast } from "@/hooks/use-toast";
 import { usePaywall } from "@/hooks/use-paywall";
 import { useQueryClient } from "@tanstack/react-query";
+import { warmLounge } from "@/lib/lounge-warmup";
 import { avatarColor } from "@/lib/avatar-color";
 import { gameName } from "@/lib/game-names";
 import {
@@ -105,6 +106,12 @@ export default function Lounge() {
         ),
     [everything],
   );
+  // Your rooms' latest messages and faces, fetched quietly in the background
+  // and kept on the phone, so opening one is instant (lib/lounge-warmup.ts).
+  const warmQc = useQueryClient();
+  useEffect(() => {
+    if (mine.length) warmLounge(warmQc, mine);
+  }, [mine, warmQc]);
   const searching = !!searchQuery.trim();
   const found = useMemo(() => {
     const list = (groups || []).filter((g: any) => searching || !g.isMember);

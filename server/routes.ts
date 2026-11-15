@@ -1196,11 +1196,15 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const key = Array.isArray(parts) ? parts.join("/") : String(parts ?? "");
     if (!key || key.includes("..")) return res.sendStatus(400);
 
+    // Files never change (unique names): let the browser keep them, and hand
+    // out the same storage link for a day so it lands on its cached copy.
     if (isObjectStorageEnabled) {
-      const url = await getSignedUrl(key);
+      const url = await getSignedUrl(key, 2 * 86_400);
       if (!url) return res.sendStatus(404);
+      res.setHeader("Cache-Control", "private, max-age=86400");
       return res.redirect(url);
     }
+    res.setHeader("Cache-Control", "private, max-age=2592000, immutable");
     res.sendFile(path.join(UPLOAD_DIR, key), (err: unknown) => {
       if (err) res.sendStatus(404);
     });

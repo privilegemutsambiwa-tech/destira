@@ -1071,14 +1071,22 @@ export function useGenerateSummary() {
   });
 }
 
-export function useEnrichedGroupMessages(groupId: number) {
-  return useQuery({
-    queryKey: ["/api/groups", groupId, "messages-enriched"],
+/** A room's messages: shared by the room screen and the Lounge's background
+ *  warm-up (lib/lounge-warmup.ts), so both fill the same cache entry. */
+export function enrichedMessagesQuery(groupId: number) {
+  return {
+    queryKey: ["/api/groups", groupId, "messages-enriched"] as const,
     queryFn: async () => {
       const res = await fetch(`/api/groups/${groupId}/messages-enriched`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
+  };
+}
+
+export function useEnrichedGroupMessages(groupId: number) {
+  return useQuery({
+    ...enrichedMessagesQuery(groupId),
     refetchInterval: 5000,
     refetchIntervalInBackground: false,
   });

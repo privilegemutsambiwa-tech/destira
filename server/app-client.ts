@@ -33,10 +33,14 @@ function sign(value: string): string {
   return crypto.createHmac("sha256", secret()).update(value).digest("base64url").slice(0, 32);
 }
 
-// A day-numbered expiry (today + 2), so a photo's link stays the same all day
-// and the phone can cache it, but an old link stops working soon after.
+// A week-numbered expiry: a photo's link stays the same for a whole week, so
+// the phone downloads it once and shows it from its cache after that (it
+// used to change daily, a fresh download of every face each morning). A link
+// works for 7 to 14 days, so screens saved for offline still show photos.
+const MEDIA_WEEK_DAYS = 7;
 function mediaUrl(key: string, origin: string): string {
-  const exp = Math.floor(Date.now() / 86_400_000) + 2;
+  const today = Math.floor(Date.now() / 86_400_000);
+  const exp = today - (today % MEDIA_WEEK_DAYS) + 2 * MEDIA_WEEK_DAYS;
   return `${origin}/m/${key.split("/").map(encodeURIComponent).join("/")}?e=${exp}&s=${sign(`${key}.${exp}`)}`;
 }
 
@@ -115,11 +119,19 @@ export function mountAppClient(app: Express) {
     if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return res.sendStatus(404);
     // The app shows these from another origin (helmet defaults to same-origin).
     res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-    res.setHeader("Cache-Control", "private, max-age=3600");
+    // A link's file never changes (unique names), so the phone keeps it for
+    // as long as the link works and never asks again. The storage redirect
+    // is reused for most of that time too (getSignedUrl caches it), so it
+    // lands on the same, already-cached file.
+    const secondsLeft = Math.max(60, (exp + 1) * 86_400 - Math.floor(Date.now() / 1000));
     if (isObjectStorageEnabled) {
-      const url = await getSignedUrl(key, 3 * 3600);
-      return url ? res.redirect(url) : res.sendStatus(404);
+      const life = Math.min(secondsLeft, 7 * 86_400);
+      const url = await getSignedUrl(key, life);
+      if (!url) return res.sendStatus(404);
+      res.setHeader("Cache-Control", `private, max-age=${Math.floor(life / 2)}`);
+      return res.redirect(url);
     }
+    res.setHeader("Cache-Control", `private, max-age=${secondsLeft}, immutable`);
     const buf = await getObjectBuffer(key);
     if (!buf) return res.sendStatus(404);
     res.type(path.extname(key) || "application/octet-stream").send(buf);

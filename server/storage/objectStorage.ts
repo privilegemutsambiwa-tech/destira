@@ -52,9 +52,14 @@ export async function ensureBucketExists(): Promise<void> {
   if (createError) throw new Error(`Failed to create bucket "${BUCKET}": ${createError.message}`);
 }
 
+// Every stored file gets a fresh, unique name (generateFilename, or a content
+// hash), so a key's bytes never change: phones may keep a copy for 30 days
+// instead of asking again every hour (Supabase's default).
+const OBJECT_CACHE_SECONDS = String(30 * 24 * 3600);
+
 export async function putObject(key: string, data: Buffer, contentType: string): Promise<void> {
   if (client) {
-    const { error } = await client.storage.from(BUCKET).upload(key, data, { contentType, upsert: true });
+    const { error } = await client.storage.from(BUCKET).upload(key, data, { contentType, upsert: true, cacheControl: OBJECT_CACHE_SECONDS });
     if (error) throw new Error(`Object storage upload failed for "${key}": ${error.message}`);
     return;
   }
@@ -90,11 +95,24 @@ export function keyFromUploadUrl(url: string | null | undefined): string | null 
   return url.slice("/uploads/".length);
 }
 
+// Signed links handed out recently, reused while they have at least half
+// their life left. Supabase mints a different link on every call, and a
+// different link is a different file to the phone's cache: without this,
+// every photo was downloaded again each time a screen asked for it.
+const signedCache = new Map<string, { url: string; until: number }>();
+const SIGNED_CACHE_MAX = 20_000;
+
 /** Null when object storage isn't configured — callers fall back to streaming the buffer instead. */
 export async function getSignedUrl(key: string, expiresInSeconds = 3600): Promise<string | null> {
   if (!client) return null;
+  const now = Date.now();
+  const hit = signedCache.get(key);
+  if (hit && hit.until - now > (expiresInSeconds * 1000) / 2) return hit.url;
   const { data, error } = await client.storage.from(BUCKET).createSignedUrl(key, expiresInSeconds);
   if (error || !data) return null;
+  if (signedCache.size >= SIGNED_CACHE_MAX) signedCache.delete(signedCache.keys().next().value as string);
+  signedCache.delete(key);
+  signedCache.set(key, { url: data.signedUrl, until: now + expiresInSeconds * 1000 });
   return data.signedUrl;
 }
 
