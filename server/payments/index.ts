@@ -5,7 +5,7 @@
 import { db } from "../db";
 import { payments, subscriptions, profiles } from "@shared/schema";
 import { periodPriceCents, PERIOD_DAYS, type BillingPeriod } from "@shared/entitlements";
-import { and, eq, lt, isNull, or } from "drizzle-orm";
+import { and, eq, gte, lt, isNull, or } from "drizzle-orm";
 import { MockProvider } from "./mock";
 import { PaynowProvider, paynowConfigured } from "./paynow";
 import { NardoPayProvider } from "./nardopay";
@@ -197,13 +197,22 @@ export async function refreshPayment(paymentId: number) {
 }
 
 // Payments left "pending" too long with the gateway never confirming them —
-// the "took money, gave nothing" case. Alerts once per stuck payment (marks
-// it so it isn't re-alerted every sweep) and leaves status as pending; a
-// human has to look, this isn't something to auto-fail.
+// the "took money, gave nothing" case. Alerts once per stuck payment and
+// leaves status as pending; a human has to look, this isn't something to
+// auto-fail.
+//
+// "Once" has to survive a restart: the set below is only memory, so every
+// deploy (or saving an env var on Render, which restarts the service) used
+// to email about every old pending payment again, eating the email quota.
+// Only payments that became stuck within the last few hours are alerted.
+// The sweep runs every 5 minutes, so each one is caught in that window, and
+// anything older was already reported (it stays visible in the console).
 const STUCK_AFTER_MS = 20 * 60 * 1000;
+const ALERT_WINDOW_MS = 6 * 60 * 60 * 1000;
 const alertedStuck = new Set<number>();
 export async function sweepStuckPayments(): Promise<number> {
   const cutoff = new Date(Date.now() - STUCK_AFTER_MS);
+  const oldest = new Date(Date.now() - STUCK_AFTER_MS - ALERT_WINDOW_MS);
   const stuck = await db
     .select()
     .from(payments)
@@ -211,6 +220,7 @@ export async function sweepStuckPayments(): Promise<number> {
       and(
         eq(payments.status, "pending"),
         lt(payments.createdAt, cutoff),
+        gte(payments.createdAt, oldest),
         or(isNull(payments.lastPolledAt), lt(payments.lastPolledAt, cutoff)),
       ),
     );
