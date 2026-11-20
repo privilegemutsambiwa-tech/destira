@@ -362,7 +362,7 @@ function plan(members: Member[], ctx: WeekContext, settings: MemberEmailSettings
 
     // One email per member per sweep, most valuable first.
     if (newLikes > 0 && idle > 2 * DAY_MS) {
-      if (add("likes_waiting", `likes:${likeBucket}`, T.likesWaitingEmail(ctxFor(m, "likes_waiting"), { count: newLikes, href: `${o}/discover` }))) continue;
+      if (add("likes_waiting", `likes:${likeBucket}`, T.likesWaitingEmail(ctxFor(m, "likes_waiting"), { count: newLikes, href: `${o}/matches` }))) continue;
     }
     if (age > 10 * 60_000 && age < 3 * DAY_MS) {
       const step = nextStep(m);
@@ -523,7 +523,7 @@ export async function previewFor(userId: string, kind: MemberEmailKind, now = ne
       });
     }
     case "likes_waiting":
-      return T.likesWaitingEmail(c, { count: Math.max(1, m.pendingLikes.length), href: `${o}/discover` });
+      return T.likesWaitingEmail(c, { count: Math.max(1, m.pendingLikes.length), href: `${o}/matches` });
     case "weekly_digest":
       return T.digestEmail(c, { city: m.city, newPeople, events: evs, likesWaiting: m.pendingLikes.length, eventsHref: `${o}/events`, discoverHref: `${o}/discover` });
     case "win_back":
