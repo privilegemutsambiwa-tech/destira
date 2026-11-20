@@ -1447,8 +1447,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       // run of likes collapses into a single notification instead of a pile.
       push.sendCategorizedPush(targetId, "matches", {
         title: "Someone liked you",
-        body: "Like them back from Discover and it's a match.",
-        url: "/discover",
+        body: "See it on your Likes page. Like them back and it's a match.",
+        // The Likes page ("Liked you" tab), where the like is waiting.
+        url: "/matches",
         tag: "likes-waiting",
       }).catch(() => {});
     } catch (e) {
