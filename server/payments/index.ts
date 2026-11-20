@@ -197,22 +197,31 @@ export async function refreshPayment(paymentId: number) {
 }
 
 // Payments left "pending" too long with the gateway never confirming them —
-// the "took money, gave nothing" case. Alerts once per stuck payment and
-// leaves status as pending; a human has to look, this isn't something to
-// auto-fail.
+// the "took money, gave nothing" case. Before anyone is alerted, the gateway
+// is asked again (refreshPayment, the same check the app's own polling uses):
+//   - paid       -> the plan switches on by itself (activateFromPayment)
+//   - cancelled / expired / failed -> the payment is closed
+//   - still pending, or the gateway can't be reached -> one alert, saying
+//     what the gateway last said
+// Each pending payment is re-asked every 20 minutes for 48 hours, so a
+// payment that confirms late (a slow EcoCash approval) still activates; after
+// that it's left for a human and never polled again.
 //
 // "Once" has to survive a restart: the set below is only memory, so every
 // deploy (or saving an env var on Render, which restarts the service) used
 // to email about every old pending payment again, eating the email quota.
 // Only payments that became stuck within the last few hours are alerted.
 // The sweep runs every 5 minutes, so each one is caught in that window, and
-// anything older was already reported (it stays visible in the console).
+// anything older was already reported.
 const STUCK_AFTER_MS = 20 * 60 * 1000;
 const ALERT_WINDOW_MS = 6 * 60 * 60 * 1000;
+const RECHECK_FOR_MS = 48 * 60 * 60 * 1000;
+/** Gateway checks per sweep, so a backlog can't hammer Paynow. */
+const RECHECKS_PER_SWEEP = 20;
 const alertedStuck = new Set<number>();
 export async function sweepStuckPayments(): Promise<number> {
-  const cutoff = new Date(Date.now() - STUCK_AFTER_MS);
-  const oldest = new Date(Date.now() - STUCK_AFTER_MS - ALERT_WINDOW_MS);
+  const now = Date.now();
+  const cutoff = new Date(now - STUCK_AFTER_MS);
   const stuck = await db
     .select()
     .from(payments)
@@ -220,12 +229,30 @@ export async function sweepStuckPayments(): Promise<number> {
       and(
         eq(payments.status, "pending"),
         lt(payments.createdAt, cutoff),
-        gte(payments.createdAt, oldest),
+        gte(payments.createdAt, new Date(now - RECHECK_FOR_MS)),
         or(isNull(payments.lastPolledAt), lt(payments.lastPolledAt, cutoff)),
       ),
-    );
+    )
+    .orderBy(payments.createdAt)
+    .limit(RECHECKS_PER_SWEEP);
   let alerted = 0;
   for (const p of stuck) {
+    let after: typeof p = p;
+    let reached = false;
+    if (p.pollUrl) {
+      try {
+        after = (await refreshPayment(p.id)) ?? p;
+        reached = true;
+      } catch (e) {
+        console.error(`[payments] couldn't check #${p.id} with the gateway:`, e);
+      }
+    }
+    if (after.status !== "pending") {
+      console.log(`[payments] #${p.id} settled by the stuck check: ${after.status}${after.rawStatus ? ` (gateway said "${after.rawStatus}")` : ""}`);
+      continue;
+    }
+    // Still pending. Alert once, while it's recent; keep re-checking quietly.
+    if (p.createdAt!.getTime() < now - STUCK_AFTER_MS - ALERT_WINDOW_MS) continue;
     if (alertedStuck.has(p.id)) continue;
     alertedStuck.add(p.id);
     alerted++;
@@ -234,7 +261,8 @@ export async function sweepStuckPayments(): Promise<number> {
       userId: p.userId,
       tier: p.tier || "?",
       amountCents: p.amount,
-      minutesStuck: Math.round((Date.now() - p.createdAt!.getTime()) / 60000),
+      minutesStuck: Math.round((now - p.createdAt!.getTime()) / 60000),
+      gatewaySaid: reached ? after.rawStatus ?? null : undefined,
     });
   }
   return alerted;

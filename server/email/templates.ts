@@ -29,12 +29,18 @@ export async function alertPaymentFailed(p: { userId: string; tier: string; amou
 }
 
 /** The page-me one: money was taken but the webhook never confirmed it. */
-export async function alertPaymentStuck(p: { paymentId: number; userId: string; tier: string; amountCents: number; minutesStuck: number }) {
+/** `gatewaySaid`: what the gateway answered when asked again just now
+ *  (undefined: it couldn't be asked or reached). */
+export async function alertPaymentStuck(p: { paymentId: number; userId: string; tier: string; amountCents: number; minutesStuck: number; gatewaySaid?: string | null }) {
+  const asked =
+    p.gatewaySaid === undefined
+      ? "The gateway couldn't be reached to check it again."
+      : `The gateway was asked again just now and still says "${p.gatewaySaid || "no status"}". It will keep being checked every 20 minutes for 48 hours and switches the plan on by itself if it confirms.`;
   await sendAlert(
     "payment_stuck",
     `STUCK: payment #${p.paymentId} — webhook never confirmed`,
-    `User ${p.userId} started paying ${priceLabel(p.amountCents)} for ${p.tier} (${p.minutesStuck} min ago) and the gateway never confirmed it. ` +
-      `They may have paid and gotten nothing. Check payment #${p.paymentId} now.`,
+    `User ${p.userId} started paying ${priceLabel(p.amountCents)} for ${p.tier} (${p.minutesStuck} min ago) and the gateway never confirmed it. ${asked} ` +
+      `If they say they paid, check payment #${p.paymentId} in Paynow's merchant dashboard.`,
     { consolePath: "/console" },
   );
 }
