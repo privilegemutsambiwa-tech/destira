@@ -1753,3 +1753,31 @@ export type Feedback = typeof feedback.$inferSelect;
 
 export type CreateProfileRequest = InsertProfile;
 export type UpdateProfileRequest = Partial<InsertProfile>;
+
+
+// Selfie verification (docs/destira-3-upgrade-prompt.md Part A). A member
+// takes a live selfie copying a pose; a person on the team compares it with
+// their profile photos and approves or rejects. The selfie itself is deleted
+// once it's been checked (selfieKey goes null); the decision is kept.
+export const verificationRequests = pgTable(
+  "verification_requests",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    /** shared/verification.ts POSES key; null for requests from old app builds. */
+    pose: text("pose"),
+    /** Object storage key of the selfie while it waits; null once reviewed. */
+    selfieKey: text("selfie_key"),
+    status: text("status").notNull().default("pending"), // pending | approved | rejected
+    /** Shown to the member when rejected. */
+    rejectReason: text("reject_reason"),
+    reviewedBy: varchar("reviewed_by").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [
+    index("verification_requests_status_idx").on(t.status, t.createdAt),
+    index("verification_requests_user_idx").on(t.userId, t.createdAt),
+  ],
+);
+export type VerificationRequest = typeof verificationRequests.$inferSelect;

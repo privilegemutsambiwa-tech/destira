@@ -376,6 +376,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProfile(userId: string, updates: Partial<InsertProfile>): Promise<Profile> {
+    // Nothing left to change (e.g. a save that only carried server-owned
+    // fields, which the routes strip): hand back the profile as it is.
+    if (Object.values(updates ?? {}).every((v) => v === undefined)) {
+      const [current] = await db.select().from(profiles).where(eq(profiles.userId, userId));
+      return current;
+    }
     const [updated] = await db.update(profiles)
       .set(updates)
       .where(eq(profiles.userId, userId))

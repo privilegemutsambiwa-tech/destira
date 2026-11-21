@@ -52,6 +52,7 @@ import { referralClaimSchema } from "@shared/schema";
 import * as disclosure from "./disclosure";
 import * as groupInvite from "./group-invite";
 import { registerAdminConsole } from "./admin";
+import { registerVerificationRoutes, isSelfieKey } from "./verification";
 import * as emailTemplates from "./email/templates";
 import { setAdminLockoutHook } from "./admin/auth";
 import { trackActivity } from "./admin/activity";
@@ -166,6 +167,8 @@ export async function registerRoutes(
   // Phase 1 retention: public event teaser + share card, first-day checklist,
   // member email unsubscribe and the member-email sweep.
   registerGrowthRoutes(app, getUserId);
+  // Selfie verification (server/verification.ts).
+  registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group
   // id in the URL, so without this a member of ANY group could read/react to
@@ -555,6 +558,23 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     return null;
   }
 
+  // Fields only the server sets. A profile save from the app can never touch
+  // them: without this, any member could send isVerified: true, lift their
+  // own suspension, or hand themselves boosts.
+  const SERVER_OWNED_PROFILE_FIELDS = [
+    "id", "userId", "createdAt",
+    "subscriptionTier",
+    "isVerified", "verificationStatus",
+    "moderationStatus", "moderationStatusReason", "moderationStatusAt",
+    "superMatchesRemaining", "boostsRemaining",
+    "profileCompletionScore", "twinQuestionsAnswered",
+  ] as const;
+  function withoutServerOwned<T extends Record<string, any>>(body: T): T {
+    const out: Record<string, any> = { ...(body ?? {}) };
+    for (const k of SERVER_OWNED_PROFILE_FIELDS) delete out[k];
+    return out as T;
+  }
+
   app.post("/api/profiles", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -580,7 +600,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         ? { ...req.body, twinQuestionsAnswered: onboardingCount }
         : req.body;
 
-      const { subscriptionTier: _stripped, ...safeBody } = bodyWithCount;
+      // twinQuestionsAnswered is re-added just below from the server's own count.
+      const safeBody = withoutServerOwned(bodyWithCount);
       const safeCounted = onboardingCount !== undefined
         ? { ...safeBody, twinQuestionsAnswered: onboardingCount }
         : safeBody;
@@ -649,7 +670,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     if (req.params.userId !== userId) return res.sendStatus(403);
     try {
-      const { subscriptionTier: _s, ...safeUpdate } = req.body;
+      const safeUpdate = withoutServerOwned(req.body);
       if (typeof safeUpdate.dateOfBirth === "string" && safeUpdate.dateOfBirth) {
         const derived = ageFromDob(safeUpdate.dateOfBirth);
         if (derived == null) return res.status(400).json({ message: "Enter a valid date of birth." });
@@ -1195,6 +1216,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const parts = req.params.key;
     const key = Array.isArray(parts) ? parts.join("/") : String(parts ?? "");
     if (!key || key.includes("..")) return res.sendStatus(400);
+    // Verification selfies are for the review team only (server/verification.ts).
+    if (isSelfieKey(key)) return res.sendStatus(404);
 
     // Files never change (unique names): let the browser keep them, and hand
     // out the same storage link for a day so it lands on its cached copy.
@@ -5412,24 +5435,6 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   });
 
   // Verification status update
-  app.post("/api/profile/verify", async (req, res) => {
-    const userId = getUserId(req);
-    if (!userId) return res.sendStatus(401);
-    try {
-      await storage.updateProfile(userId, { verificationStatus: "pending", isVerified: false });
-      res.json({ success: true, verificationStatus: "pending" });
-      setTimeout(async () => {
-        try {
-          await storage.updateProfile(userId, { verificationStatus: "verified", isVerified: true });
-        } catch {
-          // Auto-approve failed silently
-        }
-      }, 60 * 1000);
-    } catch (err) {
-      res.status(500).json({ message: "Failed to submit verification" });
-    }
-  });
-
   // Twin Tone settings — persisted in twinProfileStructured.twinToneProfile
   app.post("/api/settings/twin-tone", async (req, res) => {
     const userId = getUserId(req);

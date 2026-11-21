@@ -14,6 +14,7 @@ import { registerAdminOfficialStoryRoutes } from "./official-stories";
 import { registerAdminTeamRoutes } from "./team";
 import { registerAdminAccountRoutes } from "./account";
 import { registerAdminMemberEmailRoutes } from "./member-email";
+import { registerAdminVerificationRoutes } from "./verification";
 
 export function registerAdminConsole(app: Express) {
   mountAdminSession(app);
@@ -29,4 +30,5 @@ export function registerAdminConsole(app: Express) {
   registerAdminTeamRoutes(app);
   registerAdminAccountRoutes(app);
   registerAdminMemberEmailRoutes(app);
+  registerAdminVerificationRoutes(app);
 }

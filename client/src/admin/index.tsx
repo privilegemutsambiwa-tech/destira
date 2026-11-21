@@ -10,6 +10,7 @@ import AdminOverview from "./AdminOverview";
 import AdminReports from "./AdminReports";
 import AdminReportDetail from "./AdminReportDetail";
 import AdminEventsPending from "./AdminEventsPending";
+import AdminVerification from "./AdminVerification";
 import AdminOfficialEvents from "./AdminOfficialEvents";
 import AdminMemberEmail from "./AdminMemberEmail";
 import AdminFeedback from "./AdminFeedback";
@@ -71,6 +72,7 @@ function AdminApp() {
         <Route path="/console/reports" component={AdminReports} />
         <Route path="/console/reports/:id">{(params) => <AdminReportDetail id={params.id} />}</Route>
         <Route path="/console/events" component={AdminEventsPending} />
+        <Route path="/console/verification" component={AdminVerification} />
         <Route path="/console/events/official" component={AdminOfficialEvents} />
         <Route path="/console/member-email" component={AdminMemberEmail} />
         <Route path="/console/feedback" component={AdminFeedback} />

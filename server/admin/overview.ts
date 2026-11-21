@@ -2,7 +2,7 @@
 // error rate, LLM spend, MRR — everything else lives behind nav.
 import type { Express } from "express";
 import { db } from "../db";
-import { reports, feedback, payments, metricDaily, events, llmCallLog } from "@shared/schema";
+import { reports, feedback, payments, metricDaily, events, llmCallLog, verificationRequests } from "@shared/schema";
 import { eq, count, and, inArray, gte, lt, desc, asc, like, sum } from "drizzle-orm";
 import { adminRoute } from "./auth";
 import { SAFETY_CATEGORIES, REPORT_CATEGORY_LABEL, FEEDBACK_CATEGORY_LABEL } from "@shared/admin";
@@ -285,8 +285,10 @@ export function registerAdminOverviewRoutes(app: Express) {
         seriesForKey("llm.cost_usd_estimated", 14),
       ]);
 
+      const [pendingVerifications] = await db.select({ n: count() }).from(verificationRequests).where(eq(verificationRequests.status, "pending"));
       res.json({
         computedAt: new Date().toISOString(),
+        pendingVerifications: Number(pendingVerifications?.n ?? 0),
         openReports: Number(open?.n ?? 0),
         openReportsYesterday,
         investigatingReports: Number(investigating?.n ?? 0),

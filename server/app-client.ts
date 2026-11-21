@@ -14,6 +14,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import path from "path";
 import { getSignedUrl, getObjectBuffer, isObjectStorageEnabled } from "./storage/objectStorage";
+import { isSelfieKey } from "./verification";
 
 const APP_ORIGINS = new Set(["https://localhost", "capacitor://localhost", "http://localhost"]);
 const SESSION_COOKIE = "connect.sid";
@@ -114,7 +115,7 @@ export function mountAppClient(app: Express) {
     const exp = Number(req.query.e);
     const sig = String(req.query.s ?? "");
     const today = Math.floor(Date.now() / 86_400_000);
-    if (!key || key.includes("..") || !Number.isInteger(exp) || exp < today) return res.sendStatus(404);
+    if (!key || key.includes("..") || isSelfieKey(key) || !Number.isInteger(exp) || exp < today) return res.sendStatus(404);
     const expected = sign(`${key}.${exp}`);
     if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return res.sendStatus(404);
     // The app shows these from another origin (helmet defaults to same-origin).

@@ -93,6 +93,7 @@ const NAV = [
   { href: "/console", label: "Overview" },
   { href: "/console/reports", label: "Reports", badgeKey: "openReports" as const },
   { href: "/console/events", label: "Events", badgeKey: "pendingEvents" as const },
+  { href: "/console/verification", label: "Verification", badgeKey: "pendingVerifications" as const },
   { href: "/console/events/official", label: "Official events" },
   { href: "/console/status", label: "Destira status" },
   { href: "/console/feedback", label: "Feedback", badgeKey: "openFeedback" as const },
@@ -291,6 +292,7 @@ type OverviewSnapshot = {
   failedPaymentsToday: number;
   openFeedback: number;
   pendingEvents: number;
+  pendingVerifications: number;
 };
 
 export function AdminShell({ role, email, children }: { role: string; email?: string | null; children: React.ReactNode }) {
@@ -323,6 +325,7 @@ export function AdminShell({ role, email, children }: { role: string; email?: st
         overview.openReports > 0 ? { label: "open reports", n: overview.openReports } : null,
         overview.failedPaymentsToday > 0 ? { label: "failed payments today", n: overview.failedPaymentsToday } : null,
         overview.pendingEvents > 0 ? { label: "events awaiting review", n: overview.pendingEvents } : null,
+        overview.pendingVerifications > 0 ? { label: "selfies to verify", n: overview.pendingVerifications } : null,
       ].filter(Boolean) as { label: string; n: number }[])
     : [];
 
