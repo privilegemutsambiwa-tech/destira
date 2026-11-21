@@ -1,7 +1,7 @@
 import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { AlertTriangle, ArrowRight, CalendarHeart, ChevronDown, Download, Flag, Lock, MapPin, MessageCircle, RotateCcw, ShieldCheck, SlidersHorizontal, Smartphone, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarHeart, ChevronDown, Download, Flag, Heart, HeartHandshake, Lock, MapPin, MessageCircle, PartyPopper, RotateCcw, ShieldCheck, SlidersHorizontal, Smartphone, Sparkles, Users } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { DestiraLockup } from "@/components/brand/logo";
 import { ResonanceDial } from "@/components/resonance-dial";
@@ -270,66 +270,17 @@ function useTonight() {
 }
 
 /** The little live chip on the hero. */
-function TonightChip() {
-  const t = useTonight();
-  return (
-    <div
-      className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12.5px] font-medium backdrop-blur-md"
-      style={{ background: "rgba(12,9,16,0.55)", color: "#F5F0EA", border: "1px solid rgba(245,240,234,0.16)" }}
-      data-testid="hero-tonight-chip"
-    >
-      <span className="relative flex w-2 h-2" aria-hidden="true">
-        <span className="absolute inset-0 rounded-full bg-vf-mint animate-ping opacity-70" />
-        <span className="relative w-2 h-2 rounded-full bg-vf-mint" />
-      </span>
-      {t.out ? "Tonight's three are out" : <>Tonight's three in <span className="font-mono tabular-nums">{t.short}</span></>}
-    </div>
-  );
-}
-
-/** Example lines that drift over the hero wall, one at a time. */
-const WHISPERS = [
-  { who: "Rufaro's twin", line: "She's at the Avondale market before nine most Saturdays." },
-  { who: "Tendai's twin", line: "He'd come, if there's coffee. He's up at six anyway." },
-  { who: "Nyasha's twin", line: "Sunday lunch at her gogo's is not negotiable." },
-  { who: "Farai's twin", line: "Same for him. He's the one who carves the chicken." },
-  { who: "Rudo's twin", line: "She'll say yes to Domboshava, as long as you leave early." },
-];
-
-function TwinWhisper({ className = "" }: { className?: string }) {
-  const reduce = usePrefersReducedMotion();
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    if (reduce) return;
-    const id = window.setInterval(() => setI((n) => (n + 1) % WHISPERS.length), 4200);
-    return () => window.clearInterval(id);
-  }, [reduce]);
-  const w = WHISPERS[i];
-  return (
-    <div className={className} aria-hidden="true">
-      <div
-        key={i}
-        className="rounded-[18px] rounded-bl-[6px] px-4 py-3 shadow-[0_18px_50px_-20px_rgba(0,0,0,0.6)] animate-in fade-in slide-in-from-bottom-3 duration-700 backdrop-blur-md"
-        style={{ background: "rgba(245,240,234,0.92)", color: "#16121B", maxWidth: 290 }}
-      >
-        <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: "#0E8F6E" }}>
-          <Sparkles className="w-3 h-3" /> {w.who} · example
-        </div>
-        <p className="mt-1 text-[14px] leading-[1.4]">{w.line}</p>
-      </div>
-    </div>
-  );
-}
-
 // ── Message match ────────────────────────────────────────────────────
 // Each ad set links with ?v=<key> so the first line someone reads continues
 // the ad they tapped. Unknown or missing keys get the default. Kept for the
 // visit, so coming back to "/" from /signup shows the same promise.
 const HEADLINES: Record<string, { lead: string; accent: string; sub: string }> = {
+  // What someone tapping a dating ad came for, before anything about how it
+  // works: love, a partner, people. The twin is explained further down.
   default: {
-    lead: "Meet people you",
-    accent: "actually click with.",
-    sub: "Your AI twin chats with other members' twins first, then brings you the people you'd really get on with, and tells you why. No endless swiping. No cold openers.",
+    lead: "Find love.",
+    accent: "Find your forever.",
+    sub: "Meet new people, date someone who wants what you want, and build a relationship that lasts. Make friends in groups and meet in person at events.",
   },
   twin: {
     lead: "Your AI twin breaks",
@@ -361,6 +312,127 @@ function useHeadline() {
     return HEADLINES[v] ? v : "default";
   });
   return HEADLINES[key];
+}
+
+// ── What's here: said plainly, first ─────────────────────────────────
+// Ad visitors are looking for love, a partner, people. Big (the headline),
+// medium (the line under it), small (this row): the three things the eye
+// lands on in order, before any button.
+
+const OFFERS = [
+  { icon: Users, label: "Meet new people", short: "Meet people" },
+  { icon: Heart, label: "Find a partner", short: "Find a partner" },
+  { icon: HeartHandshake, label: "Build something real", short: "Something real" },
+  { icon: MessageCircle, label: "Join groups", short: "Groups" },
+  { icon: PartyPopper, label: "Go to events", short: "Events" },
+];
+
+function HeroOffers({ className = "" }: { className?: string }) {
+  return (
+    <ul className={`flex flex-wrap gap-1.5 sm:gap-2 ${className}`} data-testid="hero-offers">
+      {OFFERS.map((o) => (
+        <li
+          key={o.label}
+          className="inline-flex items-center gap-1.5 rounded-full px-2.5 sm:px-3 py-1 sm:py-1.5 text-[12.5px] sm:text-[13px] font-medium"
+          style={{ background: "rgba(245,240,234,0.10)", border: "1px solid rgba(245,240,234,0.18)", color: "#F5F0EA" }}
+        >
+          <o.icon className="w-3.5 h-3.5" style={{ color: "#FF8A6B" }} aria-hidden="true" />
+          <span className="sm:hidden">{o.short}</span>
+          <span className="hidden sm:inline">{o.label}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Right under the hero: everything Destira is for, as four cards, before
+ *  any of how it works. */
+function WhatYoullFind({ pick }: { pick: (...ns: number[]) => Photo[] }) {
+  const [meet] = pick(39);
+  const [love] = pick(64);
+  const faces = pick(59, 41, 43, 62);
+  const photoCards = [
+    {
+      p: meet,
+      icon: Users,
+      title: "Meet new people",
+      body: "See people near you, like the ones you'd love to meet, and when they like you back, it's a match. Then just say hello.",
+    },
+    {
+      p: love,
+      icon: Heart,
+      title: "Find love that lasts",
+      body: "Everyone here is looking for something real: a partner, a relationship, someone to build a life with. No games.",
+    },
+  ];
+  const iconCards = [
+    {
+      icon: MessageCircle,
+      title: "Join groups",
+      body: "Rooms for what you love: faith, fitness, food, music, your city. Chat, play games together and make friends.",
+    },
+    {
+      icon: PartyPopper,
+      title: "Go to events, or host your own",
+      body: "Dinners, hikes and game nights near you. Meet people face to face, where it's easy to talk.",
+    },
+  ];
+  return (
+    <div>
+      <Reveal>
+        <Eyebrow tone="ember">What you'll find</Eyebrow>
+        <SectionHeading id="find-heading">Everything you need to find your person.</SectionHeading>
+      </Reveal>
+      <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+        {photoCards.map((c, n) => (
+          <Reveal key={c.title} delay={n * 90}>
+            <div className="h-full rounded-[24px] border border-vf-line bg-vf-surface overflow-hidden" data-testid={`find-${n + 1}`}>
+              {c.p ? (
+                <PhotoTile p={c.p} ratio="16/10" sizes="(min-width: 768px) 46vw, 92vw" />
+              ) : (
+                <div style={{ aspectRatio: "16/10" }} className="bg-vf-surface2" />
+              )}
+              <div className="p-6">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-9 h-9 rounded-full bg-vf-ember/10 text-vf-ember flex items-center justify-center">
+                    <c.icon className="w-[18px] h-[18px]" />
+                  </span>
+                  <div className="text-[20px] font-semibold text-vf-text">{c.title}</div>
+                </div>
+                <p className="mt-3 text-[15.5px] leading-[1.6] text-vf-muted">{c.body}</p>
+              </div>
+            </div>
+          </Reveal>
+        ))}
+        {iconCards.map((c, n) => (
+          <Reveal key={c.title} delay={(n + 2) * 90}>
+            <div className="h-full rounded-[24px] border border-vf-line bg-vf-surface p-6" data-testid={`find-${n + 3}`}>
+              <div className="flex items-center justify-between">
+                <span className="w-11 h-11 rounded-full bg-vf-ember/10 text-vf-ember flex items-center justify-center">
+                  <c.icon className="w-5 h-5" />
+                </span>
+                <div className="flex -space-x-2.5" aria-hidden="true">
+                  {faces.slice(n * 2, n * 2 + 2).concat(faces.slice(0, 1)).map((p, i) => (
+                    <div key={i} className="w-9 h-9 rounded-full overflow-hidden border-2 border-vf-surface">
+                      <PhotoTile p={p} ratio="1/1" sizes="40px" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-5 text-[20px] font-semibold text-vf-text">{c.title}</div>
+              <p className="mt-2 text-[15.5px] leading-[1.6] text-vf-muted">{c.body}</p>
+            </div>
+          </Reveal>
+        ))}
+      </div>
+      <Reveal delay={120}>
+        <div className="mt-10 flex flex-col items-center text-center">
+          <p className="text-[16px] text-vf-muted">Free to join. It takes about two minutes.</p>
+          <SignupButtons className="mt-4" testId="find" />
+        </div>
+      </Reveal>
+    </div>
+  );
 }
 
 // ── Sign-up buttons ──────────────────────────────────────────────────
@@ -1194,7 +1266,7 @@ export default function Landing() {
           <div
             className="absolute inset-0 lg:hidden"
             aria-hidden="true"
-            style={{ background: "linear-gradient(180deg, rgba(12,9,16,0.10) 0%, rgba(12,9,16,0.30) 28%, rgba(12,9,16,0.90) 50%, #0C0910 66%)" }}
+            style={{ background: "linear-gradient(180deg, rgba(12,9,16,0.05) 0%, rgba(12,9,16,0.35) 18%, rgba(12,9,16,0.92) 34%, #0C0910 46%)" }}
           />
           <div
             className="absolute inset-0 hidden lg:block"
@@ -1206,9 +1278,8 @@ export default function Landing() {
             aria-hidden="true"
             style={{ background: "linear-gradient(0deg, rgba(12,9,16,0.85), transparent)" }}
           />
-          <TwinWhisper className="absolute z-10 right-4 top-[11%] lg:right-[7%] lg:top-[20%]" />
 
-          <div className="relative z-10 w-full max-w-[1180px] mx-auto px-5 sm:px-8 lg:px-12 flex flex-col justify-end lg:justify-center pt-[40vh] sm:pt-[42vh] lg:pt-16 pb-8 lg:pb-16">
+          <div className="relative z-10 w-full max-w-[1180px] mx-auto px-5 sm:px-8 lg:px-12 flex flex-col justify-end lg:justify-center pt-[26vh] sm:pt-[36vh] lg:pt-16 pb-8 lg:pb-16">
             <div className="max-w-[580px]">
               {inviter && (
                 <div
@@ -1220,20 +1291,20 @@ export default function Landing() {
                   {inviter.firstName} invited you. Join and you both get a free week.
                 </div>
               )}
-              <TonightChip />
               <h1
                 id="hero-heading"
-                className="font-serif font-normal mt-5"
+                className="font-serif font-normal"
                 style={{ color: "#F5F0EA", fontSize: "clamp(42px, 6.6vw, 86px)", lineHeight: 0.98, letterSpacing: "-0.03em" }}
               >
                 {headline.lead}
                 <br />
                 <em className="italic" style={{ color: "#FF8A6B" }}>{headline.accent}</em>
               </h1>
-              <p className="mt-5 text-[16px] md:text-[18px] leading-[1.6] max-w-[48ch]" style={{ color: "rgba(245,240,234,0.78)" }}>
+              <p className="mt-4 sm:mt-5 text-[16.5px] md:text-[19px] leading-[1.55] max-w-[46ch]" style={{ color: "rgba(245,240,234,0.86)" }}>
                 {headline.sub}
               </p>
-              <div ref={heroCtaRef} className="mt-7">
+              <HeroOffers className="mt-4 sm:mt-5" />
+              <div ref={heroCtaRef} className="mt-6 sm:mt-7">
                 <SignupButtons />
                 <GetTheApp className="mt-3" />
                 <p className="mt-3.5 text-[13px]" style={{ color: "rgba(245,240,234,0.66)" }}>
@@ -1255,109 +1326,14 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 3 · TONIGHT'S THREE ============ */}
-      <section className="px-5 sm:px-6 py-20 sm:py-28 overflow-hidden" aria-labelledby="tonight-heading" data-testid="section-tonight">
-        <div className="max-w-[1180px] mx-auto">
-          <TonightsThreeTeaser />
+      {/* ============ 3 · WHAT YOU'LL FIND ============ */}
+      <section className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="find-heading" data-testid="section-find">
+        <div className="max-w-[1080px] mx-auto">
+          <WhatYoullFind pick={pick} />
         </div>
       </section>
 
-      {/* ============ 4 · TWINS TALKING ============ */}
-      <section className="px-5 sm:px-6 py-20 sm:py-28 bg-vf-surface2/60" aria-labelledby="talk-heading" data-testid="section-talk">
-        <div className="max-w-[1080px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-10 lg:gap-14 items-center">
-          <Reveal>
-            <Eyebrow tone="mint">While you get on with your day</Eyebrow>
-            <SectionHeading id="talk-heading">Before you say hello, your twins already have.</SectionHeading>
-            <p className="mt-4 text-[16px] md:text-[17px] leading-[1.6] text-vf-muted max-w-[46ch]">
-              Your twin has the getting-to-know-you chat with other members' twins: the small talk, the deal-breakers,
-              the Saturday plans. You only hear about the people worth meeting, and why.
-            </p>
-          </Reveal>
-          <Reveal delay={100}>
-            <TwinsTalking />
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ============ 5 · QUIZ ============ */}
-      <section id="try" className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="quiz-heading" data-testid="section-quiz">
-        <div className="max-w-[1080px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-8 lg:gap-14 items-center">
-          <div>
-            <Reveal>
-              <Eyebrow tone="mint">Try it · 30 seconds</Eyebrow>
-              <SectionHeading id="quiz-heading">See what your twin would say about you.</SectionHeading>
-              <p className="mt-4 text-[16px] md:text-[17px] leading-[1.6] text-vf-muted max-w-[46ch]">
-                Three taps. These are real questions from Destira, so your answers carry straight into your account
-                when you join.
-              </p>
-            </Reveal>
-          </div>
-          <Reveal delay={100}>
-            <TwinQuiz />
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ============ 6 · ASK A TWIN ============ */}
-      <section className="px-5 sm:px-6 py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="ask-heading" data-testid="section-ask">
-        <div className="max-w-[1080px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14 items-center">
-          <Reveal>
-            <Eyebrow tone="ember">No more cold openers</Eyebrow>
-            <SectionHeading id="ask-heading">Curious about someone? Ask their twin.</SectionHeading>
-            <p className="mt-4 text-[16px] md:text-[17px] leading-[1.6] text-vf-muted max-w-[48ch]">
-              Instead of “hey” and a long wait, ask what you actually want to know. Their twin answers honestly, and
-              politely declines anything they've kept private.
-            </p>
-          </Reveal>
-          <Reveal delay={100}>
-            <AskATwin />
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ============ 7 · HOW IT WORKS ============ */}
-      <section id="how-it-works" className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="how-heading" data-testid="section-how">
-        <div className="max-w-[1180px] mx-auto">
-          <Reveal>
-            <Eyebrow>How it works</Eyebrow>
-            <SectionHeading id="how-heading">Less swiping. Better first dates.</SectionHeading>
-          </Reveal>
-          <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-            {[
-              {
-                icon: MessageCircle,
-                title: "Tell your twin who you are",
-                body: "Answer a few quick questions. Your twin learns what matters to you and what you won't compromise on.",
-              },
-              {
-                icon: Sparkles,
-                title: "Twins talk first",
-                body: "Your twin chats with other members' twins, then brings you the people you'd get on with, with the reasons shown.",
-              },
-              {
-                icon: CalendarHeart,
-                title: "You take it from there",
-                body: "Say hi to a match who already has something in common with you, or meet people at a small event nearby.",
-              },
-            ].map((s, n) => (
-              <Reveal key={s.title} delay={n * 90}>
-                <div className="h-full rounded-[24px] border border-vf-line bg-vf-surface p-6" data-testid={`how-step-${n + 1}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="w-11 h-11 rounded-full bg-vf-ember/10 text-vf-ember flex items-center justify-center">
-                      <s.icon className="w-5 h-5" />
-                    </span>
-                    <span className="font-serif text-[40px] leading-none text-vf-text/15">{n + 1}</span>
-                  </div>
-                  <div className="mt-5 text-[19px] font-semibold text-vf-text">{s.title}</div>
-                  <p className="mt-2 text-[15px] leading-[1.6] text-vf-muted">{s.body}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ============ 8 · MADE IN HARARE (+ real events) ============ */}
+      {/* ============ 4 · MADE IN HARARE (+ real events) ============ */}
       <section className="py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="local-heading" data-testid="section-local">
         <div className="max-w-[1180px] mx-auto px-5 sm:px-6 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-10 lg:gap-16 items-center">
           <Reveal>
@@ -1415,39 +1391,8 @@ export default function Landing() {
         )}
       </section>
 
-      {/* ============ 9 · WHY SWITCH ============ */}
-      <section className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="why-heading" data-testid="section-why">
-        <div className="max-w-[880px] mx-auto">
-          <Reveal>
-            <Eyebrow>Why people switch</Eyebrow>
-            <SectionHeading id="why-heading">Not another swiping app.</SectionHeading>
-          </Reveal>
-          <Reveal delay={100}>
-            <div className="mt-8 rounded-[24px] border border-vf-line bg-vf-surface overflow-hidden">
-              <div className="grid grid-cols-[1fr_1fr] sm:grid-cols-[0.8fr_1fr_1fr] text-[12px] font-mono uppercase tracking-[0.12em] border-b border-vf-line">
-                <div className="hidden sm:block p-4 text-vf-faint" />
-                <div className="p-4 text-vf-faint">Swiping apps</div>
-                <div className="p-4 text-vf-ember bg-vf-ember/[0.06]">Destira</div>
-              </div>
-              {[
-                ["First message", "“Hey” and hoping", "Your twins already found common ground"],
-                ["Who you see", "Whoever swiped right", "People your twin talked to, with reasons"],
-                ["Your time", "Hours of swiping", "A few questions, then your twin does the work"],
-                ["Meeting up", "Up to you to arrange", "Events and groups to show up to"],
-              ].map(([label, them, us]) => (
-                <div key={label} className="grid grid-cols-[1fr_1fr] sm:grid-cols-[0.8fr_1fr_1fr] border-b last:border-b-0 border-vf-line">
-                  <div className="col-span-2 sm:col-span-1 px-4 pt-4 sm:p-4 text-[13px] font-semibold text-vf-text">{label}</div>
-                  <div className="p-4 pt-2 sm:pt-4 text-[14px] text-vf-muted">{them}</div>
-                  <div className="p-4 pt-2 sm:pt-4 text-[14px] text-vf-text font-medium bg-vf-ember/[0.06]">{us}</div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ============ 10 · SAFETY ============ */}
-      <section className="px-5 sm:px-6 py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="safety-heading" data-testid="section-safety">
+      {/* ============ 5 · SAFETY ============ */}
+      <section className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="safety-heading" data-testid="section-safety">
         <div className="max-w-[1180px] mx-auto">
           <Reveal>
             <Eyebrow tone="mint">You stay in control</Eyebrow>
@@ -1478,8 +1423,141 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 11 · FAQ ============ */}
-      <section id="faq" className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="faq-heading" data-testid="section-faq">
+      {/* ============ 6 · HOW IT WORKS ============ */}
+      <section id="how-it-works" className="px-5 sm:px-6 py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="how-heading" data-testid="section-how">
+        <div className="max-w-[1180px] mx-auto">
+          <Reveal>
+            <Eyebrow>How it works</Eyebrow>
+            <SectionHeading id="how-heading">Less swiping. Better first dates.</SectionHeading>
+          </Reveal>
+          <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+            {[
+              {
+                icon: MessageCircle,
+                title: "Tell your twin who you are",
+                body: "Answer a few quick questions. Your twin learns what matters to you and what you won't compromise on.",
+              },
+              {
+                icon: Sparkles,
+                title: "Twins talk first",
+                body: "Your twin chats with other members' twins, then brings you the people you'd get on with, with the reasons shown.",
+              },
+              {
+                icon: CalendarHeart,
+                title: "You take it from there",
+                body: "Say hi to a match who already has something in common with you, or meet people at a small event nearby.",
+              },
+            ].map((s, n) => (
+              <Reveal key={s.title} delay={n * 90}>
+                <div className="h-full rounded-[24px] border border-vf-line bg-vf-surface p-6" data-testid={`how-step-${n + 1}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="w-11 h-11 rounded-full bg-vf-ember/10 text-vf-ember flex items-center justify-center">
+                      <s.icon className="w-5 h-5" />
+                    </span>
+                    <span className="font-serif text-[40px] leading-none text-vf-text/15">{n + 1}</span>
+                  </div>
+                  <div className="mt-5 text-[19px] font-semibold text-vf-text">{s.title}</div>
+                  <p className="mt-2 text-[15px] leading-[1.6] text-vf-muted">{s.body}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ============ 7 · TONIGHT'S THREE ============ */}
+      <section className="px-5 sm:px-6 py-20 sm:py-28 overflow-hidden" aria-labelledby="tonight-heading" data-testid="section-tonight">
+        <div className="max-w-[1180px] mx-auto">
+          <TonightsThreeTeaser />
+        </div>
+      </section>
+
+      {/* ============ 8 · TWINS TALKING ============ */}
+      <section className="px-5 sm:px-6 py-20 sm:py-28 bg-vf-surface2/60" aria-labelledby="talk-heading" data-testid="section-talk">
+        <div className="max-w-[1080px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-10 lg:gap-14 items-center">
+          <Reveal>
+            <Eyebrow tone="mint">While you get on with your day</Eyebrow>
+            <SectionHeading id="talk-heading">Before you say hello, your twins already have.</SectionHeading>
+            <p className="mt-4 text-[16px] md:text-[17px] leading-[1.6] text-vf-muted max-w-[46ch]">
+              Your twin has the getting-to-know-you chat with other members' twins: the small talk, the deal-breakers,
+              the Saturday plans. You only hear about the people worth meeting, and why.
+            </p>
+          </Reveal>
+          <Reveal delay={100}>
+            <TwinsTalking />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ============ 9 · QUIZ ============ */}
+      <section id="try" className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="quiz-heading" data-testid="section-quiz">
+        <div className="max-w-[1080px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-8 lg:gap-14 items-center">
+          <div>
+            <Reveal>
+              <Eyebrow tone="mint">Try it · 30 seconds</Eyebrow>
+              <SectionHeading id="quiz-heading">See what your twin would say about you.</SectionHeading>
+              <p className="mt-4 text-[16px] md:text-[17px] leading-[1.6] text-vf-muted max-w-[46ch]">
+                Three taps. These are real questions from Destira, so your answers carry straight into your account
+                when you join.
+              </p>
+            </Reveal>
+          </div>
+          <Reveal delay={100}>
+            <TwinQuiz />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ============ 10 · ASK A TWIN ============ */}
+      <section className="px-5 sm:px-6 py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="ask-heading" data-testid="section-ask">
+        <div className="max-w-[1080px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14 items-center">
+          <Reveal>
+            <Eyebrow tone="ember">No more cold openers</Eyebrow>
+            <SectionHeading id="ask-heading">Curious about someone? Ask their twin.</SectionHeading>
+            <p className="mt-4 text-[16px] md:text-[17px] leading-[1.6] text-vf-muted max-w-[48ch]">
+              Instead of “hey” and a long wait, ask what you actually want to know. Their twin answers honestly, and
+              politely declines anything they've kept private.
+            </p>
+          </Reveal>
+          <Reveal delay={100}>
+            <AskATwin />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ============ 11 · WHY SWITCH ============ */}
+      <section className="px-5 sm:px-6 py-16 sm:py-24" aria-labelledby="why-heading" data-testid="section-why">
+        <div className="max-w-[880px] mx-auto">
+          <Reveal>
+            <Eyebrow>Why people switch</Eyebrow>
+            <SectionHeading id="why-heading">Not another swiping app.</SectionHeading>
+          </Reveal>
+          <Reveal delay={100}>
+            <div className="mt-8 rounded-[24px] border border-vf-line bg-vf-surface overflow-hidden">
+              <div className="grid grid-cols-[1fr_1fr] sm:grid-cols-[0.8fr_1fr_1fr] text-[12px] font-mono uppercase tracking-[0.12em] border-b border-vf-line">
+                <div className="hidden sm:block p-4 text-vf-faint" />
+                <div className="p-4 text-vf-faint">Swiping apps</div>
+                <div className="p-4 text-vf-ember bg-vf-ember/[0.06]">Destira</div>
+              </div>
+              {[
+                ["First message", "“Hey” and hoping", "Your twins already found common ground"],
+                ["Who you see", "Whoever swiped right", "People your twin talked to, with reasons"],
+                ["Your time", "Hours of swiping", "A few questions, then your twin does the work"],
+                ["Meeting up", "Up to you to arrange", "Events and groups to show up to"],
+              ].map(([label, them, us]) => (
+                <div key={label} className="grid grid-cols-[1fr_1fr] sm:grid-cols-[0.8fr_1fr_1fr] border-b last:border-b-0 border-vf-line">
+                  <div className="col-span-2 sm:col-span-1 px-4 pt-4 sm:p-4 text-[13px] font-semibold text-vf-text">{label}</div>
+                  <div className="p-4 pt-2 sm:pt-4 text-[14px] text-vf-muted">{them}</div>
+                  <div className="p-4 pt-2 sm:pt-4 text-[14px] text-vf-text font-medium bg-vf-ember/[0.06]">{us}</div>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ============ 12 · FAQ ============ */}
+      <section id="faq" className="px-5 sm:px-6 py-16 sm:py-24 bg-vf-surface2/60" aria-labelledby="faq-heading" data-testid="section-faq">
         <div className="max-w-[760px] mx-auto">
           <Reveal>
             <Eyebrow>Questions</Eyebrow>
@@ -1493,7 +1571,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ 12 · CLOSING CTA ============ */}
+      {/* ============ 13 · CLOSING CTA ============ */}
       <section ref={closingRef} className="px-2 sm:px-3 pb-3" aria-labelledby="closing-heading" data-testid="section-closing">
         <div
           className="relative overflow-hidden rounded-[28px] sm:rounded-[36px] px-5 sm:px-6 py-24 sm:py-32 flex items-center justify-center"
