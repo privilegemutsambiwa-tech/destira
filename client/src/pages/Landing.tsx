@@ -269,7 +269,6 @@ function useTonight() {
   return { out, clock: `${pad(hh)}:${pad(mm)}:${pad(ss)}`, short: hh > 0 ? `${hh}h ${pad(mm)}m` : `${mm}m ${pad(ss)}s` };
 }
 
-/** The little live chip on the hero. */
 // ── Message match ────────────────────────────────────────────────────
 // Each ad set links with ?v=<key> so the first line someone reads continues
 // the ad they tapped. Unknown or missing keys get the default. Kept for the
@@ -281,6 +280,12 @@ const HEADLINES: Record<string, { lead: string; accent: string; sub: string }> =
     lead: "Find love.",
     accent: "Find your forever.",
     sub: "Meet new people, date someone who wants what you want, and build a relationship that lasts. Make friends in groups and meet in person at events.",
+  },
+  // Ads about love and a partner (couples, romance, "your person").
+  love: {
+    lead: "Someone is looking",
+    accent: "for someone like you.",
+    sub: "Meet single people in Zimbabwe who want a real relationship. Like the ones you'd love to meet, and when they like you back, start talking. Free to join.",
   },
   twin: {
     lead: "Your AI twin breaks",
