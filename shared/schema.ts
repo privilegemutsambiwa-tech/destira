@@ -1781,3 +1781,62 @@ export const verificationRequests = pgTable(
   ],
 );
 export type VerificationRequest = typeof verificationRequests.$inferSelect;
+
+
+// Scam defence (docs/destira-3-upgrade-prompt.md Part B, server/safety/).
+// A signal about a member for the console's Risk queue. Never a verdict:
+// a person clears it, holds the account, or bans. The snippet is only the
+// matched words with a little context, and is wiped when the flag is closed.
+export const riskFlags = pgTable(
+  "risk_flags",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // shared/safety.ts RISK_LABEL keys
+    severity: text("severity").notNull(), // low | medium | high
+    /** Where it was seen: dm | group | story_comment | profile | photo | like | device | system */
+    source: text("source").notNull(),
+    refId: text("ref_id"),
+    /** The other member involved (message recipient, the other account with the same photo...). */
+    otherUserId: varchar("other_user_id"),
+    snippet: text("snippet"),
+    status: text("status").notNull().default("open"), // open | cleared | actioned
+    reviewedBy: varchar("reviewed_by").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [
+    index("risk_flags_status_idx").on(t.status, t.createdAt),
+    index("risk_flags_user_idx").on(t.userId, t.createdAt),
+  ],
+);
+export type RiskFlag = typeof riskFlags.$inferSelect;
+
+// Which phones and browsers each account uses (a random id the app or the
+// browser keeps), so a banned member can't simply sign up again on the same
+// phone. Only ever compared with banned accounts, never shown to members.
+export const accountDevices = pgTable(
+  "account_devices",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    deviceId: varchar("device_id", { length: 64 }).notNull(),
+    firstSeenAt: timestamp("first_seen_at").defaultNow(),
+    lastSeenAt: timestamp("last_seen_at").defaultNow(),
+  },
+  (t) => [uniqueIndex("account_devices_user_device_idx").on(t.userId, t.deviceId), index("account_devices_device_idx").on(t.deviceId)],
+);
+
+// A small fingerprint of each profile photo (difference hash), to spot the
+// same picture on two accounts: stolen photos, or one person running several
+// profiles.
+export const photoHashes = pgTable(
+  "photo_hashes",
+  {
+    photoId: integer("photo_id").primaryKey(),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    hash: varchar("hash", { length: 16 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [index("photo_hashes_user_idx").on(t.userId)],
+);

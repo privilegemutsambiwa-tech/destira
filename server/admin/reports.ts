@@ -10,6 +10,7 @@ import { and, desc, asc, eq, sql, inArray, count } from "drizzle-orm";
 import { adminRoute, requireStepUp } from "./auth";
 import { auditAdmin } from "./audit";
 import { storage } from "../storage";
+import { forgetStatus } from "../safety";
 import {
   REPORT_CATEGORIES,
   REPORT_STATUSES,
@@ -230,6 +231,7 @@ export function registerAdminReportRoutes(app: Express) {
           moderationStatusReason: trimmedReason,
           moderationStatusAt: new Date(),
         }).where(eq(profiles.userId, r.subjectId));
+        forgetStatus(r.subjectId); // applies to their open sessions at once
       } else if (type === "remove_photo") {
         const photoId = Number(ref!.id);
         const [photo] = await db.select().from(userPhotos).where(eq(userPhotos.id, photoId));

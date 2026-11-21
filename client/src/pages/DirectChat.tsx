@@ -14,6 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { parseDestiraLink } from "@/lib/link-preview";
 import { LinkPreviewCard } from "@/components/link-preview-card";
+import { SafetyTip } from "@/components/safety-tip";
+import { RISK_LABEL } from "@shared/safety";
 import { enqueue, isConnectionError } from "@/lib/outbox";
 import { OutboxBubbles } from "@/components/outbox-bubbles";
 import { IconButton, TwinGlyph, VfAvatar, VfButton, VfSheet } from "@/components/ui-vf";
@@ -455,6 +457,16 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
               )}
             </div>
           )}
+          <SafetyTip
+            matchId={matchId}
+            myId={user?.id}
+            messages={list}
+            onReport={(messageId, kind) => {
+              if (!other?.userId) return;
+              setReportReason(RISK_LABEL[kind]);
+              setReportTarget({ userId: other.userId, messageId });
+            }}
+          />
           <div className="mt-3 flex flex-col gap-1">
             <OutboxBubbles kind="direct" targetId={matchId} />
           </div>

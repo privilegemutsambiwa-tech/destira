@@ -79,6 +79,22 @@ export function hasAppSession(): boolean {
   return !!readToken();
 }
 
+// A random id this install keeps, so a banned member can't just sign up
+// again on the same phone (server/safety/). Browsers get a cookie instead.
+function deviceId(): string | null {
+  try {
+    let id = localStorage.getItem("destira.device");
+    if (!id) {
+      const bytes = crypto.getRandomValues(new Uint8Array(18));
+      id = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      localStorage.setItem("destira.device", id);
+    }
+    return id;
+  } catch {
+    return null;
+  }
+}
+
 export function installAppApi() {
   if (!isNativeApp()) return;
   const original = window.fetch.bind(window);
@@ -92,6 +108,8 @@ export function installAppApi() {
     const url = relative ? `${API_BASE}${raw}` : raw;
     const headers = new Headers(init.headers ?? (input instanceof Request ? input.headers : undefined));
     headers.set("X-Destira-Client", "app");
+    const dev = deviceId();
+    if (dev) headers.set("X-Destira-Device", dev);
     const token = readToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
 

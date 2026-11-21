@@ -53,6 +53,7 @@ import * as disclosure from "./disclosure";
 import * as groupInvite from "./group-invite";
 import { registerAdminConsole } from "./admin";
 import { registerVerificationRoutes, isSelfieKey } from "./verification";
+import * as safety from "./safety";
 import * as emailTemplates from "./email/templates";
 import { setAdminLockoutHook } from "./admin/auth";
 import { trackActivity } from "./admin/activity";
@@ -146,11 +147,20 @@ async function notifyMatch(match: { id: number; user1Id: string; user2Id: string
   }
 }
 
+// Profile text that reaches everyone (bio, about me, prompt answers): flag
+// numbers, money asks and scam lines for the Risk queue (server/safety/).
+function scanProfileText(userId: string, body: any) {
+  const parts = [body?.bio, body?.aboutMe, body?.prompts ? JSON.stringify(body.prompts) : null].filter((v) => typeof v === "string" && v.trim());
+  if (parts.length) safety.scanText({ senderId: userId, text: parts.join("\n"), source: "profile" }).catch(() => {});
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   await setupAuth(app);
+  // Ends a banned member's session everywhere; records device ids (server/safety/).
+  app.use(safety.sessionGuard());
   app.use(trackActivity());
   app.use(requestOutcomeMiddleware());
   registerAuthRoutes(app);
@@ -620,6 +630,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
 
       if (existing) {
         const updated = await storage.updateProfile(userId, safeCounted);
+        scanProfileText(userId, safeCounted);
         if (safeCounted.groupNickname) {
           // Awaited, not fire-and-forget — it's one fast UPDATE, and awaiting
           // it closes the window where sending a message right after
@@ -655,6 +666,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         seedOnboardingIntoTwinMemory(userId, legacyPersonalityProfileToPairs(req.body.personalityProfile)).catch(() => {});
       }
       referralsService.checkQualification(userId).catch(() => {});
+      await safety.checkNewProfile(req, userId);
+      scanProfileText(userId, safeCounted);
       res.status(201).json(stripRawLocation(profile));
     } catch (err) {
       console.error("Profile create error:", err);
@@ -694,6 +707,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         safeUpdate.groupNickname = nick;
       }
       const updated = await storage.updateProfile(userId, safeUpdate);
+      scanProfileText(userId, safeUpdate);
       if (safeUpdate.groupNickname) {
         await storage.syncGroupNicknameForAllMemberships(userId, safeUpdate.groupNickname);
       }
@@ -1314,6 +1328,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         variants: safeVariants && Object.keys(safeVariants).length ? safeVariants : undefined,
       });
       res.status(201).json(photo);
+      safety.checkPhoto(userId, photo.id, photoUrl).catch(() => {});
     } catch (e) {
       res.status(500).json({ message: "Failed to add photo" });
     }
@@ -1440,6 +1455,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     const { targetId } = req.body;
+    if (await safety.blockIfHeld(res, userId)) return;
     try {
       const blockedByTarget = await storage.isBlocked(targetId, userId);
       if (blockedByTarget) return res.status(403).json({ message: "Cannot connect with this user" });
@@ -1466,6 +1482,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       await storage.incrementDailyLikes(userId);
       const match = await storage.createMatch(userId, targetId);
       res.status(201).json(match);
+      safety.checkLikeBurst(userId).catch(() => {});
       // No name — "who" stays a paid feature (see_who_asked). One tag, so a
       // run of likes collapses into a single notification instead of a pile.
       push.sendCategorizedPush(targetId, "matches", {
@@ -2902,9 +2919,11 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (!match) return res.status(404).json({ message: "Match not found" });
       if (match.user1Id !== userId && match.user2Id !== userId) return res.sendStatus(403);
       if (match.status !== "matched") return res.status(400).json({ message: "Not matched yet" });
+      if (await safety.blockIfHeld(res, userId)) return;
       const msg = await storage.sendDirectMessage(matchId, userId, content);
       res.status(201).json(msg);
       const recipientId = match.user1Id === userId ? match.user2Id : match.user1Id;
+      safety.scanText({ senderId: userId, text: content, source: "dm", refId: msg.id, recipientId }).catch(() => {});
       const senderProfile = await storage.getProfile(userId);
       const senderName = senderProfile?.displayName || "Someone";
       push.sendCategorizedPush(recipientId, "messages", {
@@ -3401,10 +3420,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         const profile = await storage.getProfile(userId);
         displayNickname = profile?.groupNickname || profile?.displayName || "Anonymous";
       }
+      if (await safety.blockIfHeld(res, userId)) return;
       const msg = await storage.sendGroupMessage(groupId, userId, displayNickname, content, {
         contentType, mediaUrl, replyToMessageId
       });
       res.status(201).json(msg);
+      safety.scanText({ senderId: userId, text: content, source: "group", refId: msg.id, recipientId: `group:${groupId}` }).catch(() => {});
     } catch (e) {
       res.status(500).json({ message: "Failed to send message" });
     }
@@ -5000,8 +5021,10 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         return res.sendStatus(403);
       }
       if (await gate.denyIfGated(res, userId, "story_reply")) return;
+      if (await safety.blockIfHeld(res, userId)) return;
       const comment = await storage.addStoryComment(story.id, userId, text.trim());
       res.json(comment);
+      safety.scanText({ senderId: userId, text, source: "story_comment", refId: comment.id, recipientId: story.userId }).catch(() => {});
       if (story.userId !== userId) {
         const replierProfile = await storage.getProfile(userId);
         const replierName = replierProfile?.displayName || "Someone";

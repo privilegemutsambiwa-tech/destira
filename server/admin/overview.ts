@@ -7,6 +7,7 @@ import { eq, count, and, inArray, gte, lt, desc, asc, like, sum } from "drizzle-
 import { adminRoute } from "./auth";
 import { SAFETY_CATEGORIES, REPORT_CATEGORY_LABEL, FEEDBACK_CATEGORY_LABEL } from "@shared/admin";
 import { LIMITS } from "@shared/entitlements";
+import { openRiskCount } from "./risk";
 import { currentErrorRate, failureSummary, ERROR_WINDOW_MS, ERROR_RETAIN_MS } from "./error-rate";
 
 // One line in a tile's "what's behind this number" panel.
@@ -289,6 +290,7 @@ export function registerAdminOverviewRoutes(app: Express) {
       res.json({
         computedAt: new Date().toISOString(),
         pendingVerifications: Number(pendingVerifications?.n ?? 0),
+        openRisk: await openRiskCount(),
         openReports: Number(open?.n ?? 0),
         openReportsYesterday,
         investigatingReports: Number(investigating?.n ?? 0),

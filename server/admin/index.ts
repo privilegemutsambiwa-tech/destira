@@ -15,6 +15,7 @@ import { registerAdminTeamRoutes } from "./team";
 import { registerAdminAccountRoutes } from "./account";
 import { registerAdminMemberEmailRoutes } from "./member-email";
 import { registerAdminVerificationRoutes } from "./verification";
+import { registerAdminRiskRoutes } from "./risk";
 
 export function registerAdminConsole(app: Express) {
   mountAdminSession(app);
@@ -31,4 +32,5 @@ export function registerAdminConsole(app: Express) {
   registerAdminAccountRoutes(app);
   registerAdminMemberEmailRoutes(app);
   registerAdminVerificationRoutes(app);
+  registerAdminRiskRoutes(app);
 }
