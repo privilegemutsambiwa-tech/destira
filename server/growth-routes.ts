@@ -5,6 +5,8 @@ import type { Express, Request } from "express";
 import { getPublicEventTeaser, getOrRenderEventShareCard, getUpcomingPublicEvents } from "./event-share";
 import { getFirstDayState, claimFirstDayReward, FirstDayNotDoneError } from "./first-day";
 import * as memberEmail from "./member-email";
+import rateLimit from "express-rate-limit";
+import { recordLandingVisit } from "./growth";
 import { runAnnouncementSweep } from "./member-email/announcements";
 import { getDailyPicks, runDailyPicksPushSweep } from "./daily-picks";
 import { escapeHtml } from "./group-invite";
@@ -14,6 +16,21 @@ import { db } from "./db";
 import { profiles } from "@shared/schema";
 
 export function registerGrowthRoutes(app: Express, getUserId: (req: Request) => string | null) {
+  // ── landing visit (the Funnel's first step) ───────────────────────
+  // Signed-out, once per browser session. The per-address limit is generous
+  // (many phones share one mobile-network address) but stops anyone
+  // hammering it to inflate the numbers.
+  const visitLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false });
+  app.post("/api/growth/visit", visitLimiter, async (req, res) => {
+    if (getUserId(req)) return res.sendStatus(204); // members don't count as visits
+    try {
+      await recordLandingVisit(req.body?.variant, req.body?.source);
+    } catch (e) {
+      console.error("[growth] visit record failed:", e);
+    }
+    res.sendStatus(204);
+  });
+
   // ── public event teaser (no sign-in) ──────────────────────────────
   app.get("/api/public/events/:id", async (req, res) => {
     try {

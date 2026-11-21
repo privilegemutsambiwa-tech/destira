@@ -12,6 +12,7 @@ import { pendingReferralCode } from "@/lib/attribution";
 import { GoogleSignInCancelled, startGoogleSignIn } from "@/lib/google-signin";
 import { consumePendingInvite, resolvePendingInviteRoute } from "@/lib/pending-invite";
 import { trackCustom, trackEvent, trackPageView } from "@/lib/pixel";
+import { recordLandingVisit } from "@/lib/attribution";
 import { LANDING_QUIZ, saveQuizAnswers, twinNote, type QuizAnswers } from "@/lib/landing-quiz";
 
 // The app doesn't carry the website's photo library (hundreds of MB); its
@@ -316,7 +317,7 @@ function useHeadline() {
     }
     return HEADLINES[v] ? v : "default";
   });
-  return HEADLINES[key];
+  return { ...HEADLINES[key], key };
 }
 
 // ── What's here: said plainly, first ─────────────────────────────────
@@ -1129,6 +1130,7 @@ export default function Landing() {
 
   useEffect(() => {
     trackPageView();
+    recordLandingVisit(headline.key);
     fetch("/api/public/landing")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setLive({ events: d.events ?? [], memberCount: d.memberCount ?? 0 }))

@@ -99,6 +99,7 @@ const NAV = [
   { href: "/console/status", label: "Destira status" },
   { href: "/console/feedback", label: "Feedback", badgeKey: "openFeedback" as const },
   { href: "/console/metrics", label: "Metrics" },
+  { href: "/console/funnel", label: "Funnel" },
   { href: "/console/growth", label: "Growth" },
   { href: "/console/member-email", label: "Member emails" },
   { href: "/console/email", label: "Email alerts" },

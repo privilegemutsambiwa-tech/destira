@@ -45,6 +45,9 @@ function sourceFor(url: URL, ref: string | null): string {
   if (event) return `event|${event[1]}`;
   if (url.pathname.startsWith("/join/")) return "group|";
   if (utm) return `campaign|${[utm, url.searchParams.get("utm_campaign")].filter(Boolean).join("/")}`;
+  // A tap on a Facebook or Instagram ad adds fbclid (the in-app browsers
+  // often hide the referrer, so this is the only sign it was an ad).
+  if (url.searchParams.get("fbclid")) return "campaign|meta";
 
   let host = "";
   try {
@@ -66,7 +69,36 @@ export function captureAttribution() {
     const ref = rawRef && REF_RE.test(rawRef) ? rawRef.toUpperCase() : null;
     if (ref) setCookie("vf_ref", ref);
     if (!readCookie("vf_src")) setCookie("vf_src", sourceFor(url, ref).slice(0, 120));
+    // Meta's click id, kept the way its pixel would keep it, so a sign-up or
+    // payment can be matched to the ad even where the pixel is blocked.
+    const fbclid = url.searchParams.get("fbclid");
+    if (fbclid && !readCookie("_fbc")) {
+      try {
+        document.cookie = `_fbc=fb.1.${Date.now()}.${encodeURIComponent(fbclid)}; path=/; max-age=${60 * 60 * 24 * 90}; samesite=lax`;
+      } catch {
+        /* ignore */
+      }
+    }
   } catch {
     /* never block the app on attribution */
+  }
+}
+
+/** The landing page reports one visit per browser session, with the headline
+ *  shown (?v=) and where the visitor came from: the Funnel's first step.
+ *  The headline is also kept (first one seen) for the sign-up record. */
+export function recordLandingVisit(variant: string) {
+  try {
+    if (!readCookie("vf_v")) setCookie("vf_v", variant);
+    if (sessionStorage.getItem("destira.visit")) return;
+    sessionStorage.setItem("destira.visit", "1");
+  } catch {
+    return;
+  }
+  const body = JSON.stringify({ variant, source: readCookie("vf_src") ?? "" });
+  try {
+    fetch("/api/growth/visit", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true, credentials: "include" }).catch(() => {});
+  } catch {
+    /* ignore */
   }
 }

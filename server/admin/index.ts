@@ -16,6 +16,7 @@ import { registerAdminAccountRoutes } from "./account";
 import { registerAdminMemberEmailRoutes } from "./member-email";
 import { registerAdminVerificationRoutes } from "./verification";
 import { registerAdminRiskRoutes } from "./risk";
+import { registerAdminFunnelRoutes } from "./funnel";
 
 export function registerAdminConsole(app: Express) {
   mountAdminSession(app);
@@ -33,4 +34,5 @@ export function registerAdminConsole(app: Express) {
   registerAdminMemberEmailRoutes(app);
   registerAdminVerificationRoutes(app);
   registerAdminRiskRoutes(app);
+  registerAdminFunnelRoutes(app);
 }

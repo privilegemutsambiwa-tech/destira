@@ -54,6 +54,7 @@ import * as groupInvite from "./group-invite";
 import { registerAdminConsole } from "./admin";
 import { registerVerificationRoutes, isSelfieKey } from "./verification";
 import * as safety from "./safety";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import * as emailTemplates from "./email/templates";
 import { setAdminLockoutHook } from "./admin/auth";
 import { trackActivity } from "./admin/activity";
@@ -161,6 +162,23 @@ export async function registerRoutes(
   await setupAuth(app);
   // Ends a banned member's session everywhere; records device ids (server/safety/).
   app.use(safety.sessionGuard());
+  // Per member, not per address: many phones share one mobile-network
+  // address in Zimbabwe, so an address limit would block innocent people.
+  const perMember = (windowMs: number, limit: number, message: string) => {
+    const limiter = rateLimit({
+      windowMs,
+      limit,
+      standardHeaders: true,
+      legacyHeaders: false,
+      keyGenerator: (req: any) => req.user?.claims?.sub ?? ipKeyGenerator(req.ip ?? ""),
+      message: { message },
+    });
+    return (req: any, res: any, next: any) => (req.method === "POST" ? limiter(req, res, next) : next());
+  };
+  app.use(/^\/api\/messages\/\d+$/, perMember(60 * 1000, 30, "You're sending messages very fast. Take a breath and try again in a minute."));
+  app.use(/^\/api\/groups\/\d+\/messages$/, perMember(60 * 1000, 30, "You're posting very fast. Try again in a minute."));
+  app.use(/^\/api\/stories\/\d+\/comments$/, perMember(60 * 1000, 20, "Too many replies at once. Try again in a minute."));
+  app.use(/^\/api\/users\/[^/]+\/report$/, perMember(60 * 60 * 1000, 20, "You've sent a lot of reports this hour. Our team is on it; try again later."));
   app.use(trackActivity());
   app.use(requestOutcomeMiddleware());
   registerAuthRoutes(app);

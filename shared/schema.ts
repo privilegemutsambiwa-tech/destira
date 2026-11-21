@@ -750,6 +750,33 @@ export const signupSources = pgTable("signup_sources", {
   userId: varchar("user_id").primaryKey().references(() => users.id),
   source: text("source").notNull(),
   detail: text("detail"),
+  /** The landing headline they saw (?v= on the ad link; "default" without one). */
+  landingVariant: text("landing_variant"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Signed-out landing page visits per day, headline and source: the first
+// step of the console's Funnel. One count per browser session; no ids.
+export const landingVisits = pgTable(
+  "landing_visits",
+  {
+    day: date("day").notNull(),
+    variant: text("variant").notNull(),
+    source: text("source").notNull(),
+    visits: integer("visits").notNull().default(0),
+  },
+  (t) => [uniqueIndex("landing_visits_key_idx").on(t.day, t.variant, t.source)],
+);
+
+// What Meta needs to match a later payment to the ad click that brought the
+// member (server/meta-capi.ts): its own cookies, plus the browser's address
+// and user agent at sign-up. Only ever sent to Meta, hashed where Meta asks.
+export const adMatchKeys = pgTable("ad_match_keys", {
+  userId: varchar("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  fbp: text("fbp"),
+  fbc: text("fbc"),
+  clientIp: text("client_ip"),
+  userAgent: text("user_agent"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

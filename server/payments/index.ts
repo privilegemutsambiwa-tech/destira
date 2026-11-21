@@ -11,6 +11,7 @@ import { PaynowProvider, paynowConfigured } from "./paynow";
 import { NardoPayProvider } from "./nardopay";
 import { maskPhone, type PaymentMethod, type PaymentProvider, type PaymentStatus } from "./types";
 import { alertPaymentSuccess, alertPaymentFailed, alertPaymentStuck } from "../email/templates";
+import { sendMetaEvent } from "../meta-capi";
 
 const mock = new MockProvider();
 const paynow = new PaynowProvider();
@@ -338,7 +339,20 @@ export async function activateFromPayment(paymentId: number): Promise<void> {
   // The success alert is a side effect outside the DB, deliberately fired
   // only when THIS call actually did the activating (result is null for the
   // call that lost the race) — never once per racing caller.
-  if (result) await alertPaymentSuccess(result);
+  if (result) {
+    await alertPaymentSuccess(result);
+    // Meta: a real payment, with its value, so ads can optimise for members
+    // who pay (server/meta-capi.ts). Once per payment: this branch only runs
+    // for the call that did the activating.
+    sendMetaEvent({
+      name: "Purchase",
+      eventId: `pay-${paymentId}`,
+      userId: result.userId,
+      value: result.amountCents / 100,
+      currency: "USD",
+      contentName: result.tier,
+    }).catch(() => {});
+  }
 }
 
 // Cancel: as easy as subscribing. Keep the tier until the paid period ends,

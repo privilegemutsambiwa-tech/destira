@@ -7,7 +7,9 @@
 // account is created — by email/password or Google — then clears them.
 import type { Request, Response } from "express";
 import { db } from "./db";
-import { signupSources, shareEvents } from "@shared/schema";
+import { signupSources, shareEvents, landingVisits } from "@shared/schema";
+import { sql } from "drizzle-orm";
+import { rememberAdMatchKeys, sendMetaEvent, registrationEventId } from "./meta-capi";
 import * as referrals from "./referrals";
 
 export const SIGNUP_SOURCES = [
@@ -53,10 +55,15 @@ function parseSourceCookie(raw: string | null): { source: SignupSource; detail: 
 export async function attributeNewSignup(userId: string, req: Request, res: Response): Promise<void> {
   const refCode = readCookie(req, "vf_ref");
   const src = parseSourceCookie(readCookie(req, "vf_src"));
+  const variant = cleanVariant(readCookie(req, "vf_v"));
   if (refCode || src) {
     res.append("Set-Cookie", "vf_ref=; Path=/; Max-Age=0; SameSite=Lax");
     res.append("Set-Cookie", "vf_src=; Path=/; Max-Age=0; SameSite=Lax");
   }
+  // Meta: remember the ad cookies for a later payment, and report the sign-up
+  // (same event id as the browser pixel, so it's counted once).
+  await rememberAdMatchKeys(userId, req);
+  sendMetaEvent({ name: "CompleteRegistration", eventId: registrationEventId(userId), userId, sourceUrl: req.get("referer") || undefined }).catch(() => {});
 
   let referred = false;
   if (refCode) {
@@ -74,10 +81,27 @@ export async function attributeNewSignup(userId: string, req: Request, res: Resp
   const source: SignupSource = referred ? "referral" : src?.source ?? "direct";
   const detail = referred ? (src && src.source !== "referral" ? src.source : null) : src?.detail ?? null;
   try {
-    await db.insert(signupSources).values({ userId, source, detail }).onConflictDoNothing();
+    await db.insert(signupSources).values({ userId, source, detail, landingVariant: variant }).onConflictDoNothing();
   } catch (err) {
     console.error("[growth] signup source insert failed:", err);
   }
+}
+
+/** Landing headline keys (client/src/pages/Landing.tsx HEADLINES). */
+function cleanVariant(v: string | null | undefined): string {
+  const s = (v ?? "").toLowerCase().trim();
+  return /^[a-z0-9_-]{1,24}$/.test(s) ? s : "default";
+}
+
+/** One signed-out landing visit (the page sends it once per browser session). */
+export async function recordLandingVisit(variantRaw: unknown, sourceRaw: unknown): Promise<void> {
+  const variant = cleanVariant(typeof variantRaw === "string" ? variantRaw : null);
+  const parsed = parseSourceCookie(typeof sourceRaw === "string" ? sourceRaw : null);
+  const source = parsed?.source ?? "direct";
+  await db
+    .insert(landingVisits)
+    .values({ day: sql`current_date`, variant, source, visits: 1 })
+    .onConflictDoUpdate({ target: [landingVisits.day, landingVisits.variant, landingVisits.source], set: { visits: sql`${landingVisits.visits} + 1` } });
 }
 
 export async function recordShare(

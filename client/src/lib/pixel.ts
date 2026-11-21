@@ -9,6 +9,7 @@
 //   ViewContent           the homepage quiz was started
 //   Lead                  the homepage quiz was finished
 //   CompleteRegistration  a new account reached the basics screen (once per account)
+// The server also reports sign-ups and payments (server/meta-capi.ts).
 import { isNativeApp } from "./native";
 
 const DESTIRA_PIXEL_ID = "1741505700253566";
@@ -55,8 +56,8 @@ export function trackPageView() {
   if (start()) window.fbq!("track", "PageView");
 }
 
-export function trackEvent(name: "ViewContent" | "Lead" | "CompleteRegistration", params?: Record<string, unknown>) {
-  if (start()) window.fbq!("track", name, params ?? {});
+export function trackEvent(name: "ViewContent" | "Lead" | "CompleteRegistration", params?: Record<string, unknown>, eventId?: string) {
+  if (start()) window.fbq!("track", name, params ?? {}, eventId ? { eventID: eventId } : undefined);
 }
 
 /** Our own events (Events Manager can turn them into custom conversions). */
@@ -74,5 +75,7 @@ export function trackRegistrationOnce(userId: string) {
   } catch {
     /* storage blocked: may send twice, which Meta de-duplicates loosely */
   }
-  trackEvent("CompleteRegistration");
+  // Same id the server sends (server/meta-capi.ts registrationEventId), so
+  // Meta counts the sign-up once whichever arrives first.
+  trackEvent("CompleteRegistration", {}, `reg-${userId}`);
 }
