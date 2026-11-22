@@ -100,7 +100,7 @@ async function maybeHold(userId: string) {
 export async function scanText(p: {
   senderId: string;
   text: unknown;
-  source: "dm" | "group" | "story_comment" | "profile";
+  source: "dm" | "group" | "story_comment" | "profile" | "intro";
   refId?: string | number | null;
   recipientId?: string | null;
 }): Promise<RiskHit[]> {

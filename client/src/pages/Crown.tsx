@@ -156,6 +156,7 @@ function StateCard({
         <div className="text-[17px] text-vf-text font-serif">You're Crown until {longDate(s.activeUntil!)}.</div>
         <p className="text-[13.5px] text-vf-muted mt-1.5">Nothing renews by itself; we'll remind you before it ends. Add time whenever you like.</p>
         {!s.payBlock && <PayButtons />}
+        <PerksPanel />
       </>
     );
   }
@@ -244,6 +245,56 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-vf-ink text-vf-text px-6 py-12">
       <div className="w-full max-w-[560px] mx-auto">{children}</div>
+    </div>
+  );
+}
+
+type Perks = { crown: boolean; privateMode: boolean; introsLeft: number; introsPerDay: number };
+
+// A Crown member's own switches: private mode, and introductions left today.
+function PerksPanel() {
+  const qc = useQueryClient();
+  const { data: p } = useQuery<Perks>({ queryKey: ["/api/crown/perks"] });
+  const toggle = useMutation({
+    mutationFn: async (on: boolean) => (await apiRequest("PATCH", "/api/crown/private-mode", { on })).json(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/crown/perks"] }),
+  });
+  if (!p?.crown) return null;
+  return (
+    <div className="mt-5 pt-5 border-t border-vf-line flex flex-col gap-4" data-testid="crown-my-perks">
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-[14.5px] text-vf-text">Private mode</div>
+          <p className="text-[13px] text-vf-muted mt-0.5 leading-[1.45]">
+            {p.privateMode
+              ? "On. Only people you've liked can see you: you're out of everyone else's Discover and Tonight's three."
+              : "Off. Turn it on and only people you've liked can see you."}
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={p.privateMode}
+          aria-label="Private mode"
+          disabled={toggle.isPending}
+          onClick={() => toggle.mutate(!p.privateMode)}
+          className="shrink-0 w-12 h-7 rounded-full relative transition-colors disabled:opacity-50"
+          style={{ background: p.privateMode ? GOLD : "var(--vf-line)" }}
+          data-testid="switch-private-mode"
+        >
+          <span
+            className="absolute top-1 w-5 h-5 rounded-full bg-white transition-all"
+            style={{ left: p.privateMode ? 24 : 4 }}
+          />
+        </button>
+      </div>
+      <div>
+        <div className="text-[14.5px] text-vf-text">
+          Introductions: <span className="font-mono" data-testid="text-intros-left">{p.introsLeft}</span> of {p.introsPerDay} left today
+        </div>
+        <p className="text-[13px] text-vf-muted mt-0.5 leading-[1.45]">
+          Open someone's profile and tap "Introduce yourself" to send a like with a short note. They choose; you won't be told if they decline.
+        </p>
+      </div>
     </div>
   );
 }

@@ -87,7 +87,7 @@ export default function AdminRisk() {
                         <span style={{ width: 8, height: 8, borderRadius: 4, background: SEV_COLOR[f.severity], display: "inline-block" }} />
                         <span style={{ fontWeight: 600 }}>{f.label}</span>
                         <span style={{ ...LABEL, color: FAINT }}>
-                          {f.source === "dm" ? "in a chat" : f.source === "group" ? "in a group" : f.source === "story_comment" ? "in a story reply" : f.source === "profile" ? "on their profile" : f.source}
+                          {f.source === "dm" ? "in a chat" : f.source === "group" ? "in a group" : f.source === "story_comment" ? "in a story reply" : f.source === "profile" ? "on their profile" : f.source === "intro" ? "in a Crown introduction" : f.source}
                           {f.other ? ` · with ${f.other}` : ""} · {formatDateTime(f.createdAt)}
                         </span>
                       </div>

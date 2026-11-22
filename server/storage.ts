@@ -25,6 +25,7 @@ import { users } from "@shared/models/auth";
 import { getStoryEventCard, type StoryEventCard } from "./event-seats";
 import { coerceTraits, applyTraitSignals } from "./personality";
 import { localDayKey, userTimezone } from "./gate";
+import { privateCrownIds } from "./crown";
 import type { PhotoRole } from "@shared/schema";
 import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lt, lte, inArray, notInArray, isNotNull, isNull } from "drizzle-orm";
 
@@ -447,6 +448,7 @@ export class DatabaseStorage implements IStorage {
     cursor?: DiscoverCursor | null,
     limit: number = 25,
     seed: string = "",
+    opts: { onlyUserIds?: string[] } = {},
   ): Promise<{ profiles: any[]; nextCursor: DiscoverCursor | null }> {
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
     // Falls back to the requester's own id when the client sends no seed —
@@ -491,12 +493,18 @@ export class DatabaseStorage implements IStorage {
       .from(discoverPasses)
       .where(eq(discoverPasses.userId, excludeUserId));
 
+    // Crown members in private mode are seen only by people they've liked:
+    // they never enter the regular pool. Someone they liked still gets them
+    // through the pending-liker path below, like any other liker.
+    const privateCrown = await privateCrownIds();
+
     const excludedIds = new Set([
       excludeUserId,
       ...blockedByRequester.map(r => r.blockedId),
       ...blockedOfRequester.map(r => r.blockerId),
       ...evaluatedMatches.map(m => m.user1Id === excludeUserId ? m.user2Id : m.user1Id),
       ...passed.map(p => p.targetId),
+      ...privateCrown,
     ]);
 
     // People who already liked the requester and are still waiting on an
@@ -532,9 +540,14 @@ export class DatabaseStorage implements IStorage {
     // below still do) keeps a returning power user's query from scanning
     // rows it already knows it'll throw away.
     const excludedArray = Array.from(excludedIds);
+    // onlyUserIds narrows the same pool to a few people (Crown Spotlight
+    // asks "which of these would this viewer's deck show at all?"), so every
+    // rule here still applies to them.
+    if (opts.onlyUserIds && opts.onlyUserIds.length === 0) return { profiles: [], nextCursor: null };
     const filterCondition = and(
       filter === "online" ? and(baseCondition, gt(profiles.locationUpdatedAt, thirtyMinutesAgo)) : baseCondition,
       excludedArray.length > 0 ? notInArray(profiles.userId, excludedArray) : undefined,
+      opts.onlyUserIds ? inArray(profiles.userId, opts.onlyUserIds) : undefined,
     );
 
     // "new" is a literal, explicit ask for newest-first — never shuffled or
@@ -681,7 +694,7 @@ export class DatabaseStorage implements IStorage {
     // eligibility rules as everyone else — a liker outside the requester's
     // age/distance/gender settings stays out. The cursor above still points
     // into the regular shuffled pool, so later pages are unaffected.
-    if (!cursor && pendingLikerIds.length > 0) {
+    if (!cursor && !opts.onlyUserIds && pendingLikerIds.length > 0) {
       const likerRows = await db
         .select(candidateFields)
         .from(profiles)

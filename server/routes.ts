@@ -57,6 +57,7 @@ import * as safety from "./safety";
 import { registerBillingRoutes } from "./billing";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { registerCrownRoutes, canPayCrown } from "./crown";
+import { registerCrownPerkRoutes, applySpotlight, dropLiftedToday, privateModeHides, introMatchIds } from "./crown-perks";
 import { isCrownPeriod } from "@shared/crown";
 import * as emailTemplates from "./email/templates";
 import { setAdminLockoutHook } from "./admin/auth";
@@ -204,6 +205,7 @@ export async function registerRoutes(
   // Selfie verification (server/verification.ts).
   // Destira Crown: apply, state, who wears it (server/crown.ts).
   registerCrownRoutes(app, getUserId);
+  registerCrownPerkRoutes(app, getUserId);
   registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group
@@ -289,7 +291,12 @@ export async function registerRoutes(
       // every reload, a way to browse everyone without liking or passing.
       // The client's ?seed= is ignored for that reason.
       const seed = `${userId}:${gate.localDayKey(await gate.userTimezone(userId))}`;
-      const { profiles: discoverable, nextCursor } = await storage.getDiscoverableProfiles(userId, filter, userLat, userLng, cursor, limit, seed);
+      const { profiles: deck, nextCursor } = await storage.getDiscoverableProfiles(userId, filter, userLat, userLng, cursor, limit, seed);
+      // Crown Spotlight: first page only, and only someone this deck would
+      // show anyway (server/crown-perks.ts).
+      const discoverable = cursor
+        ? await dropLiftedToday(userId, deck)
+        : await applySpotlight(userId, deck, filter, userLat, userLng);
       const nextCursorEncoded = nextCursor ? Buffer.from(JSON.stringify(nextCursor), "utf8").toString("base64url") : null;
       res.json({ profiles: await withClickReasons(userId, discoverable as any[]), nextCursor: nextCursorEncoded });
     } catch (e) {
@@ -769,6 +776,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   app.get("/api/profiles/:userId", async (req, res) => {
     const viewerId = getUserId(req);
     if (!viewerId) return res.sendStatus(401);
+    // A Crown member in private mode is visible only to people they've liked.
+    if (await privateModeHides(req.params.userId, viewerId)) return res.status(404).json({ message: "Profile not found" });
     const profile = await storage.getProfileWithUser(req.params.userId, viewerId);
     if (!profile) return res.status(404).json({ message: "Profile not found" });
     res.json(profile);
@@ -4583,7 +4592,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     try {
       const canSee = (await gate.checkGate(userId, "see_who_asked")).ok;
       const userMatches = await storage.getMatchesWithProfiles(userId);
-      const pendingRaw = userMatches.filter((m: any) => m.status === "pending" && !m.isRequester);
+      // Crown introductions have their own section (/api/crown/intros/incoming).
+      const intros = await introMatchIds(userId);
+      const pendingRaw = userMatches.filter((m: any) => m.status === "pending" && !m.isRequester && !intros.has(m.id));
 
       // Old data (or a race before the create-match dedupe) can leave more
       // than one pending row for the same pair — collapse to one per person,

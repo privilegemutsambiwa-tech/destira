@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, Flag, Heart, Loader2, Pencil } from "lucide-react";
 import { CrownBadge } from "@/components/crown-badge";
+import { IntroduceButton } from "@/components/crown-intro";
 import { LayoutShell } from "@/components/layout-shell";
 import { WhyYouMightClick, useClickReasons } from "@/components/why-click";
 import { ResonanceGlyph, TwinGlyph, VfButton } from "@/components/ui-vf";
@@ -900,6 +901,11 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
           {OverlapChips}
           {RoomsCard}
         </div>
+        {!preview && !match && (
+          <div className="flex justify-center">
+            <IntroduceButton targetId={userId} name={name} />
+          </div>
+        )}
         {SafetyRow}
         {ActionBar}
       </div>

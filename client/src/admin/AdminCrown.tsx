@@ -24,7 +24,13 @@ type Row = {
   active: boolean;
   holdLapsed: boolean;
 };
-type Data = { settings: { seatCap: number; open: boolean }; seatsTaken: number; holdDays: number; rows: Row[] };
+type Data = {
+  settings: { seatCap: number; open: boolean };
+  seatsTaken: number;
+  holdDays: number;
+  rows: Row[];
+  intros: { sent: number; accepted: number; declined: number; waiting: number };
+};
 
 const GOLD = "#E9B949";
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "–");
@@ -81,6 +87,7 @@ export default function AdminCrown() {
         <StatTile label="Seats left" value={Math.max(0, data.settings.seatCap - data.seatsTaken)} trend={`of ${data.settings.seatCap}; approvals hold one for ${data.holdDays} days`} testId="crown-seats" />
         <StatTile label="Applications" value={applied.length} trend={data.settings.open ? "applications open" : "applications closed"} testId="crown-applied" />
         <StatTile label="Approved, not paid" value={approved.length} trend={`${approved.filter((a) => a.holdLapsed).length} past the hold`} testId="crown-approved" />
+        <StatTile label="Introductions, 30 days" value={data.intros.sent} trend={`${data.intros.accepted} liked back · ${data.intros.declined} declined · ${data.intros.waiting} waiting`} testId="crown-intros" />
       </div>
 
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>

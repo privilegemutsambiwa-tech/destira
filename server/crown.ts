@@ -75,21 +75,34 @@ export function isActiveRow(row: { status: string; activeUntil: Date | null } | 
 
 // ── who is Crown (cached) ─────────────────────────────────────────
 
-let cache: { ids: Set<string>; at: number } | null = null;
+let cache: { ids: Set<string>; privateIds: Set<string>; at: number } | null = null;
 const CACHE_MS = 60_000;
 
 export function forgetCrownCache(): void {
   cache = null;
 }
 
-export async function activeCrownIds(): Promise<Set<string>> {
-  if (cache && Date.now() - cache.at < CACHE_MS) return cache.ids;
+async function loadCache() {
+  if (cache && Date.now() - cache.at < CACHE_MS) return cache;
   const rows = await db
-    .select({ userId: crownMembers.userId })
+    .select({ userId: crownMembers.userId, privateMode: crownMembers.privateMode })
     .from(crownMembers)
     .where(and(eq(crownMembers.status, "active"), gt(crownMembers.activeUntil, new Date())));
-  cache = { ids: new Set(rows.map((r) => r.userId)), at: Date.now() };
-  return cache.ids;
+  cache = {
+    ids: new Set(rows.map((r) => r.userId)),
+    privateIds: new Set(rows.filter((r) => r.privateMode).map((r) => r.userId)),
+    at: Date.now(),
+  };
+  return cache;
+}
+
+export async function activeCrownIds(): Promise<Set<string>> {
+  return (await loadCache()).ids;
+}
+
+/** Active Crown members in private mode: only people they've liked see them. */
+export async function privateCrownIds(): Promise<Set<string>> {
+  return (await loadCache()).privateIds;
 }
 
 export async function isCrown(userId: string): Promise<boolean> {
@@ -128,6 +141,8 @@ export type CrownState = {
   payBlock: string | null;
   prices: Record<CrownPeriod, number>;
   city: string;
+  /** Private mode: only people they've liked can see them. */
+  privateMode: boolean;
 };
 
 export async function crownState(userId: string, now = new Date()): Promise<CrownState> {
@@ -176,6 +191,7 @@ export async function crownState(userId: string, now = new Date()): Promise<Crow
     payBlock,
     prices: CROWN_PRICE_CENTS,
     city: CROWN_CITY,
+    privateMode: !!row?.privateMode,
   };
 }
 

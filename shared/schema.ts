@@ -814,9 +814,46 @@ export const crownMembers = pgTable(
     /** Shown to the member when an application is declined or a crown revoked. */
     reason: text("reason"),
     activeUntil: timestamp("active_until"),
+    /** Private mode: only people they've liked can see them (server/crown-perks.ts). */
+    privateMode: boolean("private_mode").notNull().default(false),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
   (t) => [index("crown_members_status_idx").on(t.status)],
+);
+
+// Crown Spotlight: which Crown member was lifted near the top of whose deck,
+// and on which day (the viewer's local day), so each viewer gets at most a
+// couple a day and never the same one twice in a day.
+export const crownSpotlights = pgTable(
+  "crown_spotlights",
+  {
+    id: serial("id").primaryKey(),
+    viewerId: varchar("viewer_id").notNull(),
+    crownId: varchar("crown_id").notNull(),
+    day: text("day").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [uniqueIndex("crown_spotlights_viewer_crown_day_idx").on(t.viewerId, t.crownId, t.day)],
+);
+
+// Crown direct introductions: a like that carries a short note. The like is
+// an ordinary pending matches row; this is the note riding on it. Accepting
+// is a like back, declining is a silent pass.
+export const crownIntros = pgTable(
+  "crown_intros",
+  {
+    id: serial("id").primaryKey(),
+    matchId: integer("match_id").notNull(),
+    fromUserId: varchar("from_user_id").notNull(),
+    toUserId: varchar("to_user_id").notNull(),
+    note: text("note").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("crown_intros_match_idx").on(t.matchId),
+    index("crown_intros_from_created_idx").on(t.fromUserId, t.createdAt),
+    index("crown_intros_to_idx").on(t.toUserId),
+  ],
 );
 
 // Each tap on a share action (an event or invite, as a link or a Status

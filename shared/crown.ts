@@ -33,9 +33,9 @@ export const CROWN_PERKS: { title: string; detail: string; status: "live" | "soo
   { title: "The crown, on your profile", detail: "A crown and a gold frame wherever people see you: Discover, likes, chats and events.", status: "live" },
   { title: "Everything in Ember", detail: "Unlimited likes, whole twin transcripts, see who likes you, host events.", status: "live" },
   { title: "Verified, by people", detail: "Every Crown member is checked by the Destira team. That's what the crown means.", status: "live" },
-  { title: "Crown Spotlight", detail: "Shown near the top for people who fit you, once a day each, never past anyone's filters.", status: "soon" },
-  { title: "Direct introductions", detail: "Send a short note with a like, 3 a day. They choose; declining is silent.", status: "soon" },
-  { title: "Private mode", detail: "Only people you've liked can see you.", status: "soon" },
+  { title: "Crown Spotlight", detail: "Shown near the top for people who fit you, once a day each, never past anyone's filters.", status: "live" },
+  { title: "Direct introductions", detail: "Send a short note with a like, 3 a day. They choose; declining is silent.", status: "live" },
+  { title: "Private mode", detail: "Only people you've liked can see you. Turn it on or off here any time.", status: "live" },
   { title: "Your own matchmaker", detail: "A monthly chat with someone on our team, and hand-picked introductions.", status: "soon" },
   { title: "Crown Table", detail: "A private monthly dinner with other Crown members, and a seat kept for you at official events.", status: "soon" },
 ];

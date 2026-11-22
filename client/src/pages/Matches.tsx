@@ -9,7 +9,8 @@ import {
   useRespondChatRequest,
 } from "@/hooks/use-interactions";
 import { Heart, Loader2, X } from "lucide-react";
-import { CrownBadge } from "@/components/crown-badge";
+import { CrownBadge, CROWN_GRADIENT } from "@/components/crown-badge";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { motion, useReducedMotion } from "framer-motion";
@@ -284,8 +285,12 @@ export default function Matches() {
 
   const likes = incoming?.likes || [];
   const asks = outgoing?.asks || [];
+  // Crown introductions: a like with a note, shown with who sent it on every
+  // plan (server/crown-perks.ts).
+  const qc = useQueryClient();
+  const { data: intros = [] } = useQuery<Intro[]>({ queryKey: ["/api/crown/intros/incoming"] });
 
-  const waitingCount = likes.length + pendingRequests.length;
+  const waitingCount = likes.length + pendingRequests.length + intros.length;
   const waitingLoading = incomingLoading || crLoading;
 
   const err = () => toast({ title: "Something went wrong", variant: "destructive" });
@@ -310,6 +315,15 @@ export default function Matches() {
     } catch {
       err();
     }
+  };
+
+  const acceptIntro = async (intro: Intro) => {
+    await acceptLike({ matchId: intro.matchId, fromUserId: intro.fromUserId, profile: { displayName: intro.displayName, photoUrl: intro.photoUrl } });
+    qc.invalidateQueries({ queryKey: ["/api/crown/intros/incoming"] });
+  };
+  const declineIntro = async (intro: Intro) => {
+    await passLike(intro.matchId);
+    qc.invalidateQueries({ queryKey: ["/api/crown/intros/incoming"] });
   };
 
   const acceptRequest = async (req: any) => {
@@ -378,6 +392,23 @@ export default function Matches() {
           />
         ) : (
           <div data-testid="list-waiting">
+            {intros.length > 0 && (
+              <div className="mb-6" data-testid="list-intros">
+                <div className="vf-label text-vf-faint mb-2">Introductions</div>
+                <div className="flex flex-col gap-3">
+                  {intros.map((intro) => (
+                    <IntroCard
+                      key={`intro-${intro.matchId}`}
+                      intro={intro}
+                      onOpen={() => setLocation(withFrom(`/u/${intro.fromUserId}`, "/matches"))}
+                      onAccept={() => { haptic.like(); acceptIntro(intro); }}
+                      onDecline={() => { haptic.pass(); declineIntro(intro); }}
+                      busy={respondToMatch.isPending || likeBack.isPending}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
             {incoming?.seeWhoAsked === false && likes.some((l: any) => l.masked) ? (
               <MaskedLikes count={likes.length} onPlans={() => setLocation(withFrom("/plans?feature=see_who_asked", "/matches"))} />
             ) : likes.length > 0 ? (
@@ -488,5 +519,55 @@ export default function Matches() {
         />
       )}
     </LayoutShell>
+  );
+}
+
+type Intro = {
+  matchId: number;
+  fromUserId: string;
+  note: string;
+  createdAt: string;
+  displayName: string | null;
+  age: number | null;
+  location: string | null;
+  isVerified: boolean | null;
+  photoUrl: string | null;
+};
+
+/** A Crown introduction: who, their note, and two plain choices. Declining
+ *  is silent; they aren't told. */
+function IntroCard({ intro, onOpen, onAccept, onDecline, busy }: { intro: Intro; onOpen: () => void; onAccept: () => void; onDecline: () => void; busy: boolean }) {
+  const name = intro.displayName || "Someone";
+  return (
+    <div className="rounded-[20px] p-[1.5px]" style={{ background: CROWN_GRADIENT }} data-testid={`card-intro-${intro.matchId}`}>
+      <div className="rounded-[18.5px] bg-vf-surface p-4">
+        <button onClick={onOpen} className="flex items-center gap-3 text-left w-full">
+          {intro.photoUrl ? (
+            <img src={intro.photoUrl} alt="" className="w-14 h-14 rounded-full object-cover shrink-0" />
+          ) : (
+            <VfAvatar name={name} size={56} />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[16px] text-vf-text truncate">{name}{intro.age ? `, ${intro.age}` : ""}</span>
+              <CrownBadge userId={intro.fromUserId} size={22} />
+            </div>
+            <div className="text-[12.5px] text-vf-muted truncate">
+              {intro.isVerified ? "Verified" : ""}{intro.isVerified && intro.location ? " · " : ""}{intro.location ?? ""}
+            </div>
+          </div>
+        </button>
+        <p className="mt-3 text-[15px] text-vf-text leading-[1.5] whitespace-pre-line" data-testid="text-intro-note">"{intro.note}"</p>
+        <div className="mt-4 flex gap-2">
+          <VfButton variant="secondary" className="flex-1" disabled={busy} onClick={onDecline} data-testid={`button-decline-intro-${intro.matchId}`}>
+            Not for me
+          </VfButton>
+          <VfButton className="flex-1" disabled={busy} onClick={onAccept} leading={<Heart className="w-4 h-4" fill="currentColor" strokeWidth={0} />} data-testid={`button-accept-intro-${intro.matchId}`}>
+            Like back
+          </VfButton>
+        </div>
+        <p className="mt-2 text-[11.5px] text-vf-faint text-center">If it's not for you, they won't be told.</p>
+      </div>
+    </div>
   );
 }

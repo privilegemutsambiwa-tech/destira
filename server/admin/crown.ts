@@ -9,6 +9,7 @@ import { CROWN_APPROVAL_HOLD_DAYS } from "@shared/crown";
 import { adminRoute, requireStepUp } from "./auth";
 import { auditAdmin } from "./audit";
 import { crownSettings, forgetCrownCache, isActiveRow, seatsTaken, setCrownSettings } from "../crown";
+import { introStats } from "../crown-perks";
 import { getObjectBuffer, keyFromUploadUrl } from "../storage/objectStorage";
 import { storage } from "../storage";
 import { sendPush } from "../push";
@@ -78,7 +79,7 @@ export function registerAdminCrownRoutes(app: Express) {
         holdLapsed: r.status === "approved" && (!r.decidedAt || r.decidedAt.getTime() <= holdFrom),
       }));
       const [settings, taken] = await Promise.all([crownSettings(), seatsTaken(now)]);
-      res.json({ settings, seatsTaken: taken, holdDays: CROWN_APPROVAL_HOLD_DAYS, rows: out });
+      res.json({ settings, seatsTaken: taken, holdDays: CROWN_APPROVAL_HOLD_DAYS, rows: out, intros: await introStats(30) });
     } catch (e) {
       console.error("[admin] crown error:", e);
       res.status(500).json({ message: "Failed to load Crown" });

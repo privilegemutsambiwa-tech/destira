@@ -31,7 +31,7 @@ const INVESTMENT =
   /\b(investment (opportunity|platform|plan)|invest with me|trading platform|guaranteed (profits?|returns?)|double your money|forex trading|binary options?|crypto trading|mining pool|profit daily|daily profits?)\b/i;
 const SCRIPT =
   /\b(peace ?keeping|deployed (in|to|abroad)|army (doctor|general|captain)|oil rig|offshore (engineer|platform|job)|un mission|inheritance|consignment|(package|parcel|box) (is )?(stuck|held|seized)|customs (fee|clearance|duty)|clearance fee|diplomat(ic)? (bag|box))\b/i;
-const TRANSACTIONAL = /\b(sugar ?(daddy|mummy|mommy|baby)|blesser|blessee|monthly allowance|allowance of|spoil you financially|i will pay you(?! back)|pay you to)\b/i;
+const TRANSACTIONAL = /\b(sugar ?(daddy|mummy|mommy|baby)|blesser|blessee|monthly allowance|weekly allowance|allowance of|(give|offer|send|pay) you (an? )?allowance|spoil you financially|i will pay you(?! back)|pay you to)\b/i;
 const PHONE = /(\+?263[\s-]?7[1378]\d|\b07[1378]\d)[\s-]?\d{3}[\s-]?\d{3,4}\b|\+\d[\d\s-]{9,15}\d/;
 const OFF_APP = /\b(whatsapp|whats app|watsapp|wa\.me|telegram|signal app|imo app|my number is|call me on|text me on|inbox me on|add me on)\b/i;
 

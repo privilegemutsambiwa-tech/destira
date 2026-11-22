@@ -1181,6 +1181,17 @@ export default function Discover() {
               {/* On a phone the decision bar floats over the bottom of the
                   photo, so the name sits above it rather than under it. */}
               <div className="absolute left-5 right-5 bottom-[100px] md:bottom-6 md:left-6 md:right-6 pointer-events-none">
+                {/* Crown Spotlight (server/crown-perks.ts): said plainly, so a
+                    lifted card is never mistaken for the deck's own order. */}
+                {(currentProfile as any).spotlight && (
+                  <div
+                    className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-1 rounded-full font-mono text-[10.5px] uppercase tracking-[0.14em]"
+                    style={{ color: "#F5E3B0", background: "rgba(26,20,24,0.55)", border: "1px solid rgba(233,185,73,0.45)", backdropFilter: "blur(6px)" }}
+                    data-testid="label-spotlight"
+                  >
+                    Crown Spotlight
+                  </div>
+                )}
                 <h2
                   className="font-display font-normal leading-[1.02] tracking-[-0.01em] mb-1.5 flex items-center gap-2 text-[clamp(32px,9vw,42px)]"
                   style={{ color: "#F5F0EA" }}
