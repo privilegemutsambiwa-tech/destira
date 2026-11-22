@@ -95,6 +95,7 @@ const NAV = [
   { href: "/console/events", label: "Events", badgeKey: "pendingEvents" as const },
   { href: "/console/verification", label: "Verification", badgeKey: "pendingVerifications" as const },
   { href: "/console/risk", label: "Risk", badgeKey: "openRisk" as const },
+  { href: "/console/crown", label: "Crown", badgeKey: "crownApplications" as const },
   { href: "/console/events/official", label: "Official events" },
   { href: "/console/status", label: "Destira status" },
   { href: "/console/feedback", label: "Feedback", badgeKey: "openFeedback" as const },
@@ -297,6 +298,7 @@ type OverviewSnapshot = {
   pendingEvents: number;
   pendingVerifications: number;
   openRisk: number;
+  crownApplications: number;
 };
 
 export function AdminShell({ role, email, children }: { role: string; email?: string | null; children: React.ReactNode }) {
@@ -331,6 +333,7 @@ export function AdminShell({ role, email, children }: { role: string; email?: st
         overview.pendingEvents > 0 ? { label: "events awaiting review", n: overview.pendingEvents } : null,
         overview.pendingVerifications > 0 ? { label: "selfies to verify", n: overview.pendingVerifications } : null,
         overview.openRisk > 0 ? { label: "members flagged for risk", n: overview.openRisk } : null,
+        overview.crownApplications > 0 ? { label: "Crown applications", n: overview.crownApplications } : null,
       ].filter(Boolean) as { label: string; n: number }[])
     : [];
 

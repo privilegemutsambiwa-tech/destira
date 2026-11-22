@@ -12,6 +12,7 @@ import { TwinOrbButton } from "@/components/twin-orb";
 import { WhyYouMightClick, type ClickReason } from "@/components/why-click";
 import { LocationAskSheet, hasLocationConsent } from "@/components/location-permission-modal";
 import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2 } from "lucide-react";
+import { CrownBadge } from "@/components/crown-badge";
 import { useDiscoverProfiles, useDiscoverExpandOptions, useStartInterview, useCreateMatch, useFeedStories, useProfileCompletion, UpgradeRequiredError, LikeWaitingError } from "@/hooks/use-interactions";
 import { useTwinReadiness } from "@/hooks/use-onboarding";
 import { ScreenNotes, NOTE_PRIORITY, type NoteSpec, EmptyState, VfButton } from "@/components/ui-vf";
@@ -1196,6 +1197,7 @@ export default function Discover() {
                       <Check className="w-3 h-3" strokeWidth={3} style={{ color: "#F5F0EA" }} />
                     </span>
                   )}
+                  <CrownBadge userId={currentProfile.userId} onPhoto />
                 </h2>
 
                 {(currentProfile.locationName || currentProfile.location) && (

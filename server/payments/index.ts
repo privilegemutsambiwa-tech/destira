@@ -13,6 +13,8 @@ import { maskPhone, type PaymentMethod, type PaymentProvider, type PaymentStatus
 import { alertPaymentSuccess, alertPaymentFailed, alertPaymentStuck } from "../email/templates";
 import { sendMetaEvent } from "../meta-capi";
 import { sendReceipt } from "../billing";
+import { activateCrown } from "../crown";
+import { crownPriceCents, isCrownPeriod, type PayPeriod, type PayTier } from "@shared/crown";
 
 const mock = new MockProvider();
 const paynow = new PaynowProvider();
@@ -42,7 +44,13 @@ function providerByStoredName(name: string): PaymentProvider {
   return mock;
 }
 
-export function priceCentsFor(tier: "spark" | "flame" | "ember", period: BillingPeriod = "monthly"): number {
+export function priceCentsFor(tier: PayTier, period: PayPeriod = "monthly"): number {
+  // Crown (shared/crown.ts) has its own prices and periods.
+  if (tier === "crown") {
+    if (!isCrownPeriod(period)) throw new Error("Crown is monthly or 3 months");
+    return crownPriceCents(period);
+  }
+  if (period === "threeMonth") throw new Error("3 months is a Crown period");
   return periodPriceCents(tier, period);
 }
 
@@ -55,8 +63,8 @@ export function priceCentsFor(tier: "spark" | "flame" | "ember", period: Billing
 // and reused for the new attempt.
 export async function initiatePayment(
   userId: string,
-  tier: "spark" | "flame" | "ember",
-  period: BillingPeriod,
+  tier: PayTier,
+  period: PayPeriod,
   method: PaymentMethod,
   phone: string | undefined,
   authEmail: string | undefined,
@@ -285,9 +293,15 @@ export async function activateFromPayment(paymentId: number): Promise<void> {
   const result = await db.transaction(async (tx) => {
     const [pay] = await tx.select().from(payments).where(eq(payments.id, paymentId)).for("update");
     if (!pay || pay.status === "paid") return null;
-    const tier = pay.tier as "spark" | "flame" | "ember";
-    const period = (pay.period || "monthly") as BillingPeriod;
-    const durationMs = PERIOD_DAYS[period] * 24 * 60 * 60 * 1000;
+    // Crown is Ember plus the crown (shared/crown.ts): the plan underneath is
+    // Ember, for the Crown period's length, and the crown itself is switched
+    // on in the same transaction.
+    const isCrownPay = pay.tier === "crown" && isCrownPeriod(pay.period);
+    const tier = (isCrownPay ? "ember" : pay.tier) as "spark" | "flame" | "ember";
+    const period = (isCrownPay ? "monthly" : pay.period || "monthly") as BillingPeriod;
+    const durationMs = isCrownPay
+      ? (pay.period === "threeMonth" ? 93 : 31) * 24 * 60 * 60 * 1000
+      : PERIOD_DAYS[period] * 24 * 60 * 60 * 1000;
 
     const now = new Date();
     const periodEnd = new Date(now.getTime() + durationMs);
@@ -334,7 +348,8 @@ export async function activateFromPayment(paymentId: number): Promise<void> {
 
     await tx.update(payments).set({ status: "paid", subscriptionId: subId }).where(eq(payments.id, paymentId));
     await tx.update(profiles).set({ subscriptionTier: tier }).where(eq(profiles.userId, pay.userId));
-    return { userId: pay.userId, tier, amountCents: pay.amount, method: pay.provider, phoneMasked: pay.phoneNumberMasked };
+    if (isCrownPay) await activateCrown(tx, pay.userId, pay.period as "monthly" | "threeMonth", now);
+    return { userId: pay.userId, tier: isCrownPay ? "crown" : tier, amountCents: pay.amount, method: pay.provider, phoneMasked: pay.phoneNumberMasked };
   });
 
   // The success alert is a side effect outside the DB, deliberately fired

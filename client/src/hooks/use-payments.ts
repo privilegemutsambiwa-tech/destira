@@ -49,8 +49,8 @@ function friendlyPaymentError(message: unknown): string {
 export function useInitiatePayment() {
   return useMutation({
     mutationFn: async (input: {
-      tier: "spark" | "flame" | "ember";
-      period: "weekly" | "monthly" | "sixMonth";
+      tier: "spark" | "flame" | "ember" | "crown";
+      period: "weekly" | "monthly" | "sixMonth" | "threeMonth";
       method: PayMethod;
       phone?: string;
       sourceFeature?: string;

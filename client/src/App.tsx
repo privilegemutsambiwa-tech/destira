@@ -82,6 +82,7 @@ const DevGallery = import.meta.env.MODE === "development" ? screen(() => import(
 const Plans = screen(() => import("@/pages/Plans"));
 const PlansPay = screen(() => import("@/pages/PlansPay"));
 const GroupChatPage = screen(() => import("@/pages/GroupChat"));
+const Crown = screen(() => import("@/pages/Crown"));
 const GameRoomLobby = screen(() => import("@/pages/GameRoomLobby"));
 const GameRoomScreen = screen(() => import("@/pages/GameRoomScreen"));
 const GroupInfoPage = screen(() => import("@/pages/GroupInfo"));
@@ -345,6 +346,9 @@ function Router() {
       <Route path="/upgrade"><Redirect to="/plans" /></Route>
       <Route path="/settings">
         <ProtectedRoute component={Settings} />
+      </Route>
+      <Route path="/crown">
+        <ProtectedRoute component={Crown} />
       </Route>
       <Route path="/join/:token">
         {(params) => <JoinGroup params={params} />}

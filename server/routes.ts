@@ -56,6 +56,8 @@ import { registerVerificationRoutes, isSelfieKey } from "./verification";
 import * as safety from "./safety";
 import { registerBillingRoutes } from "./billing";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import { registerCrownRoutes, canPayCrown } from "./crown";
+import { isCrownPeriod } from "@shared/crown";
 import * as emailTemplates from "./email/templates";
 import { setAdminLockoutHook } from "./admin/auth";
 import { trackActivity } from "./admin/activity";
@@ -200,6 +202,8 @@ export async function registerRoutes(
   // Before the /api/payments/:id route so "history" isn't taken for an id.
   registerBillingRoutes(app, getUserId);
   // Selfie verification (server/verification.ts).
+  // Destira Crown: apply, state, who wears it (server/crown.ts).
+  registerCrownRoutes(app, getUserId);
   registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group
@@ -4175,6 +4179,15 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     // NardoPay's hosted link takes the wallet number on its own page, not
     // ours — the phone requirement only applies to Paynow's direct USSD push.
     const walletMethod = method === "ecocash" || method === "onemoney" || method === "innbucks";
+    // Crown: only its own periods, and only once the team has approved this
+    // member (server/crown.ts). Every other plan: never a Crown period.
+    if (tier === "crown") {
+      if (!isCrownPeriod(period)) return res.status(400).json({ message: "Crown is monthly or for 3 months." });
+      const block = await canPayCrown(userId);
+      if (block) return res.status(403).json({ message: block });
+    } else if (period === "threeMonth") {
+      return res.status(400).json({ message: "Invalid payment request" });
+    }
     const handledByNardoPay = walletMethod && payments.providerFor(method).name.startsWith("nardopay");
     if (walletMethod && !handledByNardoPay && !/^0?7\d{8}$/.test((phone || "").replace(/\D/g, ""))) {
       return res.status(400).json({ message: "Enter the wallet number as 07XX XXX XXX." });

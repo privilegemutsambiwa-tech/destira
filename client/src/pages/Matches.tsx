@@ -9,6 +9,7 @@ import {
   useRespondChatRequest,
 } from "@/hooks/use-interactions";
 import { Heart, Loader2, X } from "lucide-react";
+import { CrownBadge } from "@/components/crown-badge";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { motion, useReducedMotion } from "framer-motion";
@@ -169,6 +170,9 @@ function LikeCard({
           {first}{like.profile?.age ? `, ${like.profile.age}` : ""}
         </span>
       </button>
+      <span className="absolute top-2.5 right-2.5">
+        <CrownBadge userId={like.fromUserId} onPhoto size={26} />
+      </span>
       <div className="absolute left-2 right-2 bottom-2 flex gap-2">
         <button
           onClick={onPass}

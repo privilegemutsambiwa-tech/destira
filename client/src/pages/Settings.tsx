@@ -1202,7 +1202,7 @@ type PaymentRow = {
   receiptNo: string | null;
   createdAt: string;
   planName: string | null;
-  period: BillingPeriod;
+  period: BillingPeriod | "threeMonth";
   amountCents: number;
   status: "paid" | "failed";
   method: string;
@@ -1250,6 +1250,14 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
     details: card.gets.slice(0, 3).join(" · "),
   };
   const { data: history, isLoading: historyLoading } = useQuery<PaymentRow[]>({ queryKey: ["/api/payments/history"] });
+  // A Crown member's plan underneath is Ember; this panel talks about Crown.
+  const { data: crown } = useQuery<{ active: boolean; activeUntil: string | null; prices: { monthly: number } }>({ queryKey: ["/api/crown"] });
+  if (crown?.active && crown.activeUntil) {
+    tierInfo.label = "Crown";
+    tierInfo.price = `$${(crown.prices.monthly / 100).toFixed(2)}`;
+    tierInfo.cycle = "A month, USD";
+    tierInfo.renewal = `Crown until ${new Date(crown.activeUntil).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}. Nothing renews by itself; we'll remind you before it ends.`;
+  }
 
   return (
     <>
@@ -1279,8 +1287,8 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
       {tier !== "free" && !isTrial && !autoRenews && (
         <div style={{ padding: "0 16px 16px" }}>
           <GradientButton
-            label={`Pay for another ${period === "sixMonth" ? "6 months" : PERIOD_LABEL[period]}`}
-            onClick={() => setLocation(`/plans/pay?tier=${tier}&period=${period}`)}
+            label={crown?.active ? "Add time to Crown" : `Pay for another ${period === "sixMonth" ? "6 months" : PERIOD_LABEL[period]}`}
+            onClick={() => setLocation(crown?.active ? "/crown" : `/plans/pay?tier=${tier}&period=${period}`)}
             testId="button-renew-billing"
           />
         </div>
@@ -1300,7 +1308,7 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
                   <div className="flex justify-between items-center gap-3">
                     <p className="text-sm text-foreground">
                       Destira {p.planName ?? "plan"}
-                      <span style={{ color: MUTED }}>, {p.period === "sixMonth" ? "6 months" : `1 ${PERIOD_LABEL[p.period]}`}</span>
+                      <span style={{ color: MUTED }}>, {p.period === "sixMonth" ? "6 months" : p.period === "threeMonth" ? "3 months" : `1 ${PERIOD_LABEL[p.period]}`}</span>
                     </p>
                     <p className="text-sm font-semibold text-foreground">${(p.amountCents / 100).toFixed(2)}</p>
                   </div>

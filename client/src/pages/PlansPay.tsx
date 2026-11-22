@@ -12,10 +12,14 @@ import {
   type PayMethod,
 } from "@/hooks/use-payments";
 import { getFromRoute, withFrom } from "@/lib/from-route";
+import { CROWN_NAME, CROWN_PERIODS, CROWN_PERIOD_LABEL, CROWN_PRICE_CENTS, type CrownPeriod, type PayPeriod, type PayTier } from "@shared/crown";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 const RESEND_AFTER_MS = 45_000;
-const RENEWAL_WINDOW: Record<BillingPeriod, string> = { weekly: "a week", monthly: "a month", sixMonth: "six months" };
+const RENEWAL_WINDOW: Record<PayPeriod, string> = { weekly: "a week", monthly: "a month", sixMonth: "six months", threeMonth: "three months" };
+const periodWord = (p: PayPeriod) => (p === "threeMonth" ? CROWN_PERIOD_LABEL.threeMonth : PERIOD_LABEL[p]);
+// Crown (shared/crown.ts) pays through this same page, with its own periods.
+const CROWN_CARD = { tier: "crown" as const, name: CROWN_NAME };
 
 // EcoCash/OneMoney's subtitle depends on which gateway is actually live:
 // Paynow pushes a USSD prompt straight to the phone, but NardoPay is a
@@ -53,6 +57,11 @@ const TRY_NOW = {
     { title: "Host an event", sub: "Small, hosted, in a real place", href: "/events/host" },
     { title: "See who likes you", sub: "Names and faces, not just a count", href: "/matches" },
   ],
+  crown: [
+    { title: "See your crown", sub: "How people see you now", href: "/profile" },
+    { title: "Discover", sub: "Everything in Ember is on too", href: "/discover" },
+    { title: "Your Crown page", sub: "What's yours, and what's coming", href: "/crown" },
+  ],
 } as const;
 
 export default function PlansPay() {
@@ -69,9 +78,12 @@ export default function PlansPay() {
   // reasonable landing spot in that one case, not the whole-app default.
   const from = getFromRoute(search, "/discover");
   const periodParam = params.get("period");
-  const period: BillingPeriod = (BILLING_PERIODS as readonly string[]).includes(periodParam as string)
-    ? (periodParam as BillingPeriod)
-    : "monthly";
+  const crownParam = tierParam === "crown";
+  const period: PayPeriod = crownParam
+    ? ((CROWN_PERIODS as readonly string[]).includes(periodParam as string) ? (periodParam as CrownPeriod) : "monthly")
+    : (BILLING_PERIODS as readonly string[]).includes(periodParam as string)
+      ? (periodParam as BillingPeriod)
+      : "monthly";
 
   const [method, setMethod] = useState<PayMethod | null>(null);
   const [phone, setPhone] = useState("");
@@ -86,9 +98,15 @@ export default function PlansPay() {
   // on the payment row itself rather than showing a false "not here" dead end.
   const { data: status, isError: statusCheckFailing } = usePaymentStatus(paymentId, paymentId != null);
   const effectiveTierParam = tierParam || status?.tier || null;
-  const card = useMemo(() => PLAN_CARDS.find((c) => c.tier === effectiveTierParam), [effectiveTierParam]);
-  const tier = card?.tier as "spark" | "flame" | "ember" | undefined;
-  const priceCents = tier ? periodPriceCents(tier, period) : 0;
+  const card = useMemo(
+    () => (effectiveTierParam === "crown" ? CROWN_CARD : PLAN_CARDS.find((c) => c.tier === effectiveTierParam)),
+    [effectiveTierParam],
+  );
+  const tier = card?.tier as PayTier | undefined;
+  const priceFor = (t: PayTier, p: PayPeriod) =>
+    t === "crown" ? CROWN_PRICE_CENTS[p === "threeMonth" ? "threeMonth" : "monthly"] : periodPriceCents(t, p === "threeMonth" ? "monthly" : p);
+  const priceCents = tier ? priceFor(tier, period) : 0;
+  const backTo = tier === "crown" ? "/crown" : withFrom("/plans", from);
 
   // Wouter keeps this component mounted across a /plans/pay navigation that
   // only changes the query string (e.g. picking a different plan after a
@@ -165,21 +183,22 @@ export default function PlansPay() {
 
   // ── confirmed ──
   if (status?.status === "paid") {
-    const paidPeriod: BillingPeriod = (BILLING_PERIODS as readonly string[]).includes(status.period as string)
-      ? (status.period as BillingPeriod)
+    const paidPeriod: PayPeriod = ([...BILLING_PERIODS, "threeMonth"] as readonly string[]).includes(status.period as string)
+      ? (status.period as PayPeriod)
       : period;
-    const paidPriceCents = periodPriceCents(tier, paidPeriod);
+    const paidPriceCents = priceFor(tier, paidPeriod);
     const isAutoRenewing = status.provider === "stripe";
     const renewalWindow = RENEWAL_WINDOW[paidPeriod];
     return (
       <Shell>
         <div className={EYEBROW}>Done</div>
         <h1 className="font-serif font-normal text-vf-text mt-3 text-[clamp(28px,8vw,38px)] leading-[1.06]" data-testid="text-paid-title">
-          You're on <span className={tier === "ember" ? "text-vf-gold" : "text-vf-ember"}>{card.name}</span>.
+          {tier === "crown" ? "You're " : "You're on "}
+          <span className={tier === "ember" || tier === "crown" ? "text-vf-gold" : "text-vf-ember"}>{tier === "crown" ? "Crown" : card.name}</span>.
         </h1>
         <p className="font-serif text-[20px] text-vf-muted mt-1">Here's what just opened up.</p>
         <p className="text-[14px] text-vf-muted mt-3">
-          {priceLabel(paidPriceCents)} / {PERIOD_LABEL[paidPeriod]}, in US dollars.{" "}
+          {priceLabel(paidPriceCents)} / {periodWord(paidPeriod)}, in US dollars.{" "}
           {isAutoRenewing
             ? `Renews automatically in about ${renewalWindow} — cancel any time from Settings.`
             : `We'll remind you before it ends in about ${renewalWindow} — pay again to keep it going, cancel any time from Settings.`}
@@ -230,8 +249,8 @@ export default function PlansPay() {
           >
             Try again
           </button>
-          <button onClick={() => setLocation(withFrom("/plans", from))} className="h-11 px-4 text-[13px] text-vf-muted hover:text-vf-text">
-            Back to plans
+          <button onClick={() => setLocation(backTo)} className="h-11 px-4 text-[13px] text-vf-muted hover:text-vf-text">
+            {tier === "crown" ? "Back to Crown" : "Back to plans"}
           </button>
         </div>
       </Shell>
@@ -309,7 +328,7 @@ export default function PlansPay() {
           >
             {canResend ? "Send the prompt again" : `Resend in ${Math.ceil((RESEND_AFTER_MS - waited) / 1000)}s`}
           </button>
-          <button onClick={() => setLocation(withFrom("/plans", from))} className="h-10 px-3 text-[13px] text-vf-muted hover:text-vf-text">
+          <button onClick={() => setLocation(backTo)} className="h-10 px-3 text-[13px] text-vf-muted hover:text-vf-text">
             Cancel
           </button>
         </div>
@@ -320,11 +339,11 @@ export default function PlansPay() {
   // ── choose method ──
   return (
     <Shell>
-      <button onClick={() => setLocation(withFrom("/plans", from))} className="text-[13px] text-vf-muted hover:text-vf-text transition-colors">
-        ← Plans
+      <button onClick={() => setLocation(backTo)} className="text-[13px] text-vf-muted hover:text-vf-text transition-colors">
+        ← {tier === "crown" ? "Crown" : "Plans"}
       </button>
       <div className={`${EYEBROW} mt-6`}>
-        {card.name} · {priceLabel(priceCents)} / {period === "monthly" ? "mo" : PERIOD_LABEL[period]} · USD
+        {card.name} · {priceLabel(priceCents)} / {period === "monthly" ? "mo" : periodWord(period)} · USD
       </div>
       <h1 className="font-serif font-normal text-vf-text mt-3 text-[28px] leading-[1.12]">How do you want to pay?</h1>
 

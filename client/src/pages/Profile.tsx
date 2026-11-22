@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, Plus, X, LogOut, Camera, ChevronRight, Eye, Images, MessageSquareQuote, Pencil, Settings as SettingsIcon, Gift, Gem } from "lucide-react";
+import { CrownBadge } from "@/components/crown-badge";
 import { AddStoryButton, OwnStoryViewer, type OwnStory } from "@/components/story-viewer";
 import { RefineWithAI } from "@/components/refine-with-ai";
 import { useAuth } from "@/hooks/use-auth";
@@ -520,6 +521,9 @@ export default function Profile() {
                 <h1 className="font-display leading-[1.02] text-[clamp(36px,8vw,52px)]" data-testid="text-display-name">
                   {profile.displayName || user?.firstName}
                   {profile.age ? <span className="opacity-80">, {profile.age}</span> : null}
+                  <span className="inline-block align-middle ml-2.5">
+                    <CrownBadge userId={profile.userId} size={28} onPhoto />
+                  </span>
                 </h1>
                 <p className="text-[15px] mt-1 opacity-85" data-testid="text-meta-line">{metaLine}{profile.isVerified ? " · verified" : ""}</p>
               </div>
@@ -531,6 +535,9 @@ export default function Profile() {
               <h1 className="vf-display text-vf-text text-[clamp(34px,7vw,48px)] leading-[1.02]" data-testid="text-display-name">
                 {profile.displayName || user?.firstName}
                 {profile.age ? <span className="text-vf-muted">, {profile.age}</span> : null}
+                <span className="inline-block align-middle ml-2.5">
+                  <CrownBadge userId={profile.userId} size={28} />
+                </span>
               </h1>
               <p className="vf-body text-vf-muted mt-1" data-testid="text-meta-line">{metaLine}{profile.isVerified ? " · verified" : ""}</p>
             </div>

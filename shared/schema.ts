@@ -445,8 +445,10 @@ export const payments = pgTable("payments", {
 export const PAYMENT_METHODS = ["ecocash", "onemoney", "innbucks", "ecocash_card", "card"] as const;
 export const paymentMethodEnum = z.enum(PAYMENT_METHODS);
 export const initiatePaymentSchema = z.object({
-  tier: z.enum(["spark", "flame", "ember"]),
-  period: z.enum(["weekly", "monthly", "sixMonth"]).default("monthly"),
+  // "crown" is the $100 membership (shared/crown.ts): monthly or threeMonth
+  // only, and only once the team has approved the member (server/crown.ts).
+  tier: z.enum(["spark", "flame", "ember", "crown"]),
+  period: z.enum(["weekly", "monthly", "sixMonth", "threeMonth"]).default("monthly"),
   method: paymentMethodEnum,
   phone: z.string().trim().max(20).optional(),
   sourceFeature: z.string().max(60).optional(),
@@ -792,6 +794,29 @@ export const billingNotices = pgTable(
     createdAt: timestamp("created_at").defaultNow(),
   },
   (t) => [uniqueIndex("billing_notices_user_key_idx").on(t.userId, t.key)],
+);
+
+// Destira Crown (shared/crown.ts, server/crown.ts): one row per member who
+// ever applied. applied -> approved (holds a seat while they pay) -> active
+// (paid; activeUntil) -> revoked; or declined. A member is Crown only while
+// status is "active" and activeUntil is in the future.
+export const crownMembers = pgTable(
+  "crown_members",
+  {
+    userId: varchar("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("applied"),
+    city: text("city").notNull().default("Harare"),
+    /** What they told us when applying. Team-only. */
+    note: text("note"),
+    appliedAt: timestamp("applied_at").defaultNow(),
+    decidedAt: timestamp("decided_at"),
+    decidedBy: varchar("decided_by"),
+    /** Shown to the member when an application is declined or a crown revoked. */
+    reason: text("reason"),
+    activeUntil: timestamp("active_until"),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => [index("crown_members_status_idx").on(t.status)],
 );
 
 // Each tap on a share action (an event or invite, as a link or a Status

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, Flag, Heart, Loader2, Pencil } from "lucide-react";
+import { CrownBadge } from "@/components/crown-badge";
 import { LayoutShell } from "@/components/layout-shell";
 import { WhyYouMightClick, useClickReasons } from "@/components/why-click";
 import { ResonanceGlyph, TwinGlyph, VfButton } from "@/components/ui-vf";
@@ -418,6 +419,9 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
           <h1 className="font-display font-normal leading-[1.02] tracking-[-0.01em] text-[clamp(36px,8vw,60px)] text-vf-text" data-testid="text-profile-view-name">
             {name}
             {profile.age ? <span>, {profile.age}</span> : null}
+            <span className="inline-block align-middle ml-3">
+              <CrownBadge userId={userId} size={30} />
+            </span>
           </h1>
           {preview && (
             <div className="mt-3.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">

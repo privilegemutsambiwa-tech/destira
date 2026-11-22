@@ -15,10 +15,12 @@ import { db } from "../db";
 import { adminRoute } from "./auth";
 import { auditAdmin } from "./audit";
 import { PERIOD_PRICE_CENTS } from "@shared/entitlements";
+import { CROWN_PRICE_CENTS } from "@shared/crown";
 
 const PERIOD_DAYS_SQL = sql`(case period when 'weekly' then 7 when 'sixMonth' then 186 else 31 end)`;
 
 function monthlyValueCents(tier: string, period: string): number {
+  if (tier === "crown") return CROWN_PRICE_CENTS.monthly;
   const p = (PERIOD_PRICE_CENTS as Record<string, Record<string, number>>)[tier];
   if (!p) return 0;
   if (period === "weekly") return Math.round((p.weekly * 52) / 12);
@@ -38,9 +40,14 @@ export async function revenueReport(days: number) {
       group by 1 order by 1
     `),
     db.execute(sql`
-      select tier, period, (provider = 'trial') as trial, count(*)::int as n
-      from subscriptions
-      where status = 'active' and tier <> 'free' and current_period_end > now()
+      -- A Crown member's plan underneath is Ember; count them as Crown.
+      select case when exists (
+               select 1 from crown_members c
+               where c.user_id = s.user_id and c.status = 'active' and c.active_until > now()
+             ) then 'crown' else s.tier end as tier,
+             s.period, (s.provider = 'trial') as trial, count(*)::int as n
+      from subscriptions s
+      where s.status = 'active' and s.tier <> 'free' and s.current_period_end > now()
       group by 1, 2, 3
     `),
     db.execute(sql`

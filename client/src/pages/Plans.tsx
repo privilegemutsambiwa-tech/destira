@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, X } from "lucide-react";
+import { Check, ChevronDown, Crown, X } from "lucide-react";
+import { CROWN_GRADIENT } from "@/components/crown-badge";
 import { useGate } from "@/hooks/use-gate";
 import { SegmentedControl } from "@/components/ui-vf";
 import { useSubscription } from "@/hooks/use-interactions";
@@ -308,6 +309,23 @@ export default function Plans() {
             );
           })}
         </div>
+
+        {/* Destira Crown: by application, not a fourth card (shared/crown.ts). */}
+        <button
+          onClick={() => setLocation("/crown")}
+          className="mt-6 w-full text-left rounded-[20px] border px-5 py-4 flex items-center gap-4 transition-colors hover:bg-[rgba(233,185,73,0.06)]"
+          style={{ borderColor: "rgba(233,185,73,0.4)" }}
+          data-testid="link-crown"
+        >
+          <span className="inline-flex items-center justify-center rounded-full w-9 h-9 shrink-0" style={{ background: CROWN_GRADIENT }}>
+            <Crown className="w-[18px] h-[18px]" style={{ color: "#1A1418" }} strokeWidth={2.4} />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15px] text-vf-text">Destira Crown</span>
+            <span className="block text-[13px] text-vf-muted">By application. Verified members, a crown on your profile, and a more personal way to meet.</span>
+          </span>
+          <span className="text-[18px]" style={{ color: "#E9B949" }} aria-hidden="true">→</span>
+        </button>
 
         <details className="mt-12 group" data-testid="plans-compare">
           <summary className="list-none cursor-pointer inline-flex items-center gap-2 min-h-[44px] text-[15px] text-vf-text [&::-webkit-details-marker]:hidden">

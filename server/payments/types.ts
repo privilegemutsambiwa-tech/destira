@@ -24,8 +24,8 @@ export interface InitiateInput {
   authEmail?: string;
   userId?: string;
   /** hosted-checkout providers (NardoPay) need these for the plan label + line-item metadata; wallet PIN flows ignore them. */
-  tier?: "spark" | "flame" | "ember";
-  period?: "weekly" | "monthly" | "sixMonth";
+  tier?: "spark" | "flame" | "ember" | "crown";
+  period?: "weekly" | "monthly" | "sixMonth" | "threeMonth";
 }
 
 export interface InitiateResult {

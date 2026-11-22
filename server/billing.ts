@@ -18,6 +18,8 @@ import { PLAN_CARDS, PERIOD_LABEL, periodPriceCents, priceLabel, type BillingPer
 import * as memberEmail from "./member-email";
 import * as T from "./member-email/templates";
 import { storage } from "./storage";
+import { activeCrownIds } from "./crown";
+import { CROWN_NAME, CROWN_PERIOD_LABEL, CROWN_PRICE_CENTS } from "@shared/crown";
 import { sendPush } from "./push";
 
 const DAY_MS = 86_400_000;
@@ -26,7 +28,14 @@ const HOUR_MS = 3_600_000;
 export const receiptNo = (paymentId: number) => `DST-${String(paymentId).padStart(6, "0")}`;
 
 export function planName(tier: string): string {
+  if (tier === "crown") return CROWN_NAME;
   return PLAN_CARDS.find((c) => c.tier === tier)?.name ?? tier;
+}
+
+/** "week", "month", "6 months", "3 months" */
+function periodLabel(period: string | null | undefined): string {
+  if (period === "threeMonth") return CROWN_PERIOD_LABEL.threeMonth;
+  return PERIOD_LABEL[asPeriod(period)];
 }
 
 export function methodLabel(provider: string | null | undefined): string {
@@ -120,7 +129,7 @@ export async function sendReceipt(paymentId: number): Promise<void> {
         receiptNo: receiptNo(p.id),
         paidOn: memberEmail.fmtDay(p.createdAt ?? new Date()),
         planName: planName(p.tier!),
-        periodLabel: PERIOD_LABEL[asPeriod(p.period)],
+        periodLabel: periodLabel(p.period),
         amount: priceLabel(p.amount),
         method: methodLabel(p.provider),
         phoneMasked: p.phoneNumberMasked ?? null,
@@ -183,6 +192,7 @@ export async function runBillingNoticeSweep(now = new Date()): Promise<{ sent: n
       ),
     );
   let sent = 0;
+  const crowns = await activeCrownIds();
   for (const s of rows) {
     const tier = asPaidTier(s.tier);
     if (!tier || !s.currentPeriodEnd) continue;
@@ -196,9 +206,11 @@ export async function runBillingNoticeSweep(now = new Date()): Promise<{ sent: n
     if (!claimed) continue;
     sent++;
 
-    const name = planName(tier);
+    // A Crown member's plan underneath is Ember; the reminder is about Crown.
+    const crown = !isTrial && crowns.has(s.userId);
+    const name = crown ? CROWN_NAME : planName(tier);
     // A trial is a taste; the renew link opens the plans so they can pick.
-    const path = isTrial ? "/plans" : `/plans/pay?tier=${tier}&period=${period}`;
+    const path = crown ? "/crown" : isTrial ? "/plans" : `/plans/pay?tier=${tier}&period=${period}`;
     const { title, body } = noticeText(stage, name, isTrial);
     await storage.createNotification(s.userId, "plan", title, body).catch(() => {});
     sendPush(s.userId, { title, body, url: path, tag: "plan" }).catch(() => {});
@@ -210,8 +222,8 @@ export async function runBillingNoticeSweep(now = new Date()): Promise<{ sent: n
       when: stage,
       endsOn: memberEmail.fmtDay(s.currentPeriodEnd),
       renewHref: `${memberEmail.appOrigin()}${path}`,
-      priceLine: priceLine(tier, linePeriod),
-      cheaperLine: cheaperLine(tier, linePeriod),
+      priceLine: crown ? `${priceLabel(CROWN_PRICE_CENTS.monthly)} a month` : priceLine(tier, linePeriod),
+      cheaperLine: crown ? `or ${priceLabel(CROWN_PRICE_CENTS.threeMonth)} for 3 months` : cheaperLine(tier, linePeriod),
     };
     await sendMoneyEmail(s.userId, isTrial ? "trial_ending" : "plan_ending", key, (ctx) =>
       isTrial ? T.trialEndingEmail(ctx, data) : T.planEndingEmail(ctx, data),
@@ -242,7 +254,7 @@ export function registerBillingRoutes(app: Express, getUserId: (req: Request) =>
           createdAt: p.createdAt,
           tier: p.tier,
           planName: p.tier ? planName(p.tier) : null,
-          period: asPeriod(p.period),
+          period: p.period === "threeMonth" ? "threeMonth" : asPeriod(p.period),
           amountCents: p.amount,
           status: p.status,
           method: methodLabel(p.provider),

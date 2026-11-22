@@ -17,8 +17,8 @@ type Report = {
   stuck: { rechecking: number; forAHuman: number };
 };
 
-const TIER = ["spark", "flame", "ember"];
-const TIER_NAME: Record<string, string> = { spark: "Spark", flame: "Flame", ember: "Ember" };
+const TIER = ["spark", "flame", "ember", "crown"];
+const TIER_NAME: Record<string, string> = { spark: "Spark", flame: "Flame", ember: "Ember", crown: "Crown" };
 const PERIOD_NAME: Record<string, string> = { weekly: "Weekly", monthly: "Monthly", sixMonth: "6 months" };
 const METHOD_NAME: Record<string, string> = {
   paynow_ecocash: "EcoCash",
