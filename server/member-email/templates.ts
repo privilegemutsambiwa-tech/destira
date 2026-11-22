@@ -108,14 +108,19 @@ export function layout(ctx: LayoutCtx, preheader: string, body: string): string 
 </td></tr>
 <tr><td style="background:${C.card};border:1px solid ${C.line};border-radius:20px;padding:30px 28px">${body}</td></tr>
 <tr><td style="padding:18px 8px;font:400 12px/1.6 Helvetica,Arial,sans-serif;color:${C.faint}">
-You're getting this because you have a Destira account.
+${
+    ctx.unsubscribeUrl
+      ? `You're getting this because you have a Destira account.
 <a href="${esc(ctx.unsubscribeUrl)}" style="color:${C.faint}">Stop ${esc(ctx.unsubscribeLabel)}</a>
-· <a href="${esc(ctx.origin)}/settings" style="color:${C.faint}">Email settings</a>
+· `
+      : `A record of a payment on your Destira account. `
+  }<a href="${esc(ctx.origin)}/settings" style="color:${C.faint}">Email settings</a>
 </td></tr>
 </table></td></tr></table></body></html>`;
 }
 
 export function textFooter(ctx: LayoutCtx): string {
+  if (!ctx.unsubscribeUrl) return `\n\n—\nDestira · ${ctx.origin}`;
   return `\n\n—\nDestira · ${ctx.origin}\nStop ${ctx.unsubscribeLabel}: ${ctx.unsubscribeUrl}`;
 }
 
@@ -264,4 +269,115 @@ export function announcementEmail(
     d.button ? `${d.button.label}: ${d.button.href}` : "",
   ].filter(Boolean).join("\n\n");
   return { subject: d.subject, preheader, html: layout(ctx, preheader, html), text: text + textFooter(ctx) };
+}
+
+// ── money (server/billing.ts) ───────────────────────────────────────
+
+export interface PlanEndingData {
+  planName: string;
+  /** 3 days before, the day before, or the day it ended. */
+  when: "3d" | "1d" | "ended";
+  endsOn: string;
+  renewHref: string;
+  /** e.g. "$9.99 a month" */
+  priceLine: string;
+  /** e.g. "or $3.49 a week"; null to leave out. */
+  cheaperLine: string | null;
+}
+
+function stripTags(html: string): string {
+  return html.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&");
+}
+
+export function planEndingEmail(ctx: LayoutCtx, d: PlanEndingData): EmailContent {
+  const subject =
+    d.when === "ended" ? `Your ${d.planName} plan has ended` : d.when === "1d" ? `Your ${d.planName} plan ends tomorrow` : `Your ${d.planName} plan ends in 3 days`;
+  const preheader =
+    d.when === "ended" ? "Your matches and chats are all still there. Renewing takes a minute with EcoCash." : `It ends on ${d.endsOn}. Renewing takes a minute with EcoCash.`;
+  const head =
+    d.when === "ended"
+      ? `${lead(ctx, "{name}, your", "Your")} ${d.planName} plan has ended.`
+      : `${lead(ctx, "{name}, your", "Your")} ${d.planName} plan ends ${d.when === "1d" ? "tomorrow" : "in 3 days"}.`;
+  const what =
+    d.when === "ended"
+      ? `You're on the free plan now. Your matches, chats and profile are all still there; only the ${esc(d.planName)} extras are paused.`
+      : `It ends on <strong>${esc(d.endsOn)}</strong>. Nothing renews by itself, so if you'd like to keep ${esc(d.planName)}, renew before then and the new time is added on top of what's left.`;
+  const price = `${d.priceLine}${d.cheaperLine ? `, ${d.cheaperLine}` : ""}`;
+  const body = [
+    heading(head),
+    para(what),
+    button(d.renewHref, `Renew ${d.planName}`),
+    small(`${esc(price)}. EcoCash, OneMoney, InnBucks or card.`),
+  ].join("");
+  const text = `${head} ${stripTags(what)}\n\nRenew (${price}): ${d.renewHref}`;
+  return { subject, preheader, html: layout(ctx, preheader, body), text: text + textFooter(ctx) };
+}
+
+export function trialEndingEmail(ctx: LayoutCtx, d: PlanEndingData): EmailContent {
+  const subject =
+    d.when === "ended"
+      ? `Your free ${d.planName} trial has ended`
+      : d.when === "1d"
+        ? `Your free ${d.planName} trial ends tomorrow`
+        : `Your free ${d.planName} trial ends in 3 days`;
+  const preheader =
+    d.when === "ended" ? "Everything you made is still there. Keep the extras from a few dollars." : `It ends on ${d.endsOn}. Keep it from a few dollars, or carry on free.`;
+  const head =
+    d.when === "ended"
+      ? `${lead(ctx, "{name}, your", "Your")} free ${d.planName} trial has ended.`
+      : `${lead(ctx, "{name}, your", "Your")} free ${d.planName} trial ends ${d.when === "1d" ? "tomorrow" : "in 3 days"}.`;
+  const what =
+    d.when === "ended"
+      ? `You're on the free plan now, and everything you made is still there. If you'd like the ${esc(d.planName)} extras back, it takes a minute with EcoCash.`
+      : `It ends on <strong>${esc(d.endsOn)}</strong>. You don't have to do anything: you'll simply move to the free plan. If you'd like to keep ${esc(d.planName)}, you can do it now.`;
+  const price = `${d.priceLine}${d.cheaperLine ? `, ${d.cheaperLine}` : ""}`;
+  const body = [
+    heading(head),
+    para(what),
+    button(d.renewHref, `Keep ${d.planName}`),
+    small(`${esc(price)}. Nothing renews by itself.`),
+  ].join("");
+  const text = `${head} ${stripTags(what)}\n\nKeep it (${price}): ${d.renewHref}`;
+  return { subject, preheader, html: layout(ctx, preheader, body), text: text + textFooter(ctx) };
+}
+
+export interface ReceiptData {
+  receiptNo: string;
+  paidOn: string;
+  planName: string;
+  /** "week", "month", "6 months" */
+  periodLabel: string;
+  amount: string;
+  method: string;
+  /** e.g. "07•• ••• 1234"; null for card. */
+  phoneMasked: string | null;
+  activeUntil: string | null;
+  historyHref: string;
+}
+
+export function receiptEmail(ctx: LayoutCtx, d: ReceiptData): EmailContent {
+  const subject = `Receipt ${d.receiptNo}: Destira ${d.planName}, ${d.amount}`;
+  const preheader = `Paid ${d.amount} on ${d.paidOn}.${d.activeUntil ? ` ${d.planName} is yours until ${d.activeUntil}.` : ""}`;
+  const rows: { title: string; detail: string }[] = [
+    { title: "Receipt", detail: d.receiptNo },
+    { title: "Paid on", detail: d.paidOn },
+    { title: "Plan", detail: `${d.planName}, ${d.periodLabel === "6 months" ? "6 months" : `one ${d.periodLabel}`}` },
+    { title: "Amount", detail: `${d.amount} (USD)` },
+    { title: "Paid with", detail: d.phoneMasked ? `${d.method}, ${d.phoneMasked}` : d.method },
+  ];
+  if (d.activeUntil) rows.push({ title: "Active until", detail: d.activeUntil });
+  const body = [
+    heading(`Thank you${comma(ctx)}.`),
+    para(`Your payment went through and ${esc(d.planName)} is on. Keep this email as your receipt.`),
+    itemList(rows),
+    small(
+      `Nothing renews by itself; we'll remind you before it ends. All your payments are in <a href="${esc(d.historyHref)}" style="color:${C.ember}">Settings</a>. A question about a payment? Email support@destira.date.`,
+    ),
+  ].join("");
+  const text =
+    `Thank you${comma(ctx)}. Your payment went through and ${d.planName} is on. Keep this email as your receipt.\n\n` +
+    rows.map((r) => `${r.title}: ${r.detail}`).join("\n") +
+    `\n\nNothing renews by itself; we'll remind you before it ends. All your payments: ${d.historyHref}
+A question about a payment? Email support@destira.date.`;
+  return { subject, preheader, html: layout(ctx, preheader, body), text: text + textFooter(ctx) };
 }

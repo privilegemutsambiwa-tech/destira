@@ -12,6 +12,7 @@ import { NardoPayProvider } from "./nardopay";
 import { maskPhone, type PaymentMethod, type PaymentProvider, type PaymentStatus } from "./types";
 import { alertPaymentSuccess, alertPaymentFailed, alertPaymentStuck } from "../email/templates";
 import { sendMetaEvent } from "../meta-capi";
+import { sendReceipt } from "../billing";
 
 const mock = new MockProvider();
 const paynow = new PaynowProvider();
@@ -352,6 +353,8 @@ export async function activateFromPayment(paymentId: number): Promise<void> {
       currency: "USD",
       contentName: result.tier,
     }).catch(() => {});
+    // The member's receipt (server/billing.ts); once per payment, same reason.
+    sendReceipt(paymentId).catch(() => {});
   }
 }
 

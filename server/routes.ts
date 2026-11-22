@@ -54,6 +54,7 @@ import * as groupInvite from "./group-invite";
 import { registerAdminConsole } from "./admin";
 import { registerVerificationRoutes, isSelfieKey } from "./verification";
 import * as safety from "./safety";
+import { registerBillingRoutes } from "./billing";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import * as emailTemplates from "./email/templates";
 import { setAdminLockoutHook } from "./admin/auth";
@@ -195,6 +196,9 @@ export async function registerRoutes(
   // Phase 1 retention: public event teaser + share card, first-day checklist,
   // member email unsubscribe and the member-email sweep.
   registerGrowthRoutes(app, getUserId);
+  // Plan reminders, receipts and payment history (server/billing.ts).
+  // Before the /api/payments/:id route so "history" isn't taken for an id.
+  registerBillingRoutes(app, getUserId);
   // Selfie verification (server/verification.ts).
   registerVerificationRoutes(app, getUserId, upload);
 

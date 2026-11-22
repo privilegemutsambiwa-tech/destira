@@ -18,6 +18,7 @@ import AdminFeedback from "./AdminFeedback";
 import AdminMetrics from "./AdminMetrics";
 import AdminGrowth from "./AdminGrowth";
 import AdminFunnel from "./AdminFunnel";
+import AdminRevenue from "./AdminRevenue";
 import AdminOfficialStatus from "./AdminOfficialStatus";
 import AdminEmailConfig from "./AdminEmailConfig";
 import AdminTeam from "./AdminTeam";
@@ -81,6 +82,7 @@ function AdminApp() {
         <Route path="/console/feedback" component={AdminFeedback} />
         <Route path="/console/metrics" component={AdminMetrics} />
         <Route path="/console/funnel" component={AdminFunnel} />
+        <Route path="/console/revenue" component={AdminRevenue} />
         <Route path="/console/growth" component={AdminGrowth} />
         <Route path="/console/status" component={AdminOfficialStatus} />
         <Route path="/console/email" component={AdminEmailConfig} />

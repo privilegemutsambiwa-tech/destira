@@ -101,8 +101,13 @@ export function RefusalSheet({
           className="mt-5 w-full h-12 rounded-full bg-vf-ember text-vf-ink font-semibold text-[14px] btn-press transition-colors hover:bg-[var(--vf-ember-soft)]"
           data-testid={`refusal-cta-${feature}`}
         >
-          {copy.kind === "tier" && reqPrice !== "Free" ? `Get ${reqName} · ${reqPrice}/mo` : `See ${reqName}`}
+          {reqPrice && reqPrice !== "Free" ? `Get ${reqName} · ${reqPrice}/mo` : `See ${reqName}`}
         </button>
+        {copy.requiredWeekly ? (
+          <p className="mt-2.5 text-center text-[12.5px] leading-[1.5] text-vf-faint" data-testid={`refusal-weekly-${feature}`}>
+            Or {copy.requiredWeekly} a week. EcoCash, OneMoney, InnBucks or card; nothing renews by itself.
+          </p>
+        ) : null}
         <button
           onClick={onClose}
           className="mt-2.5 w-full h-11 text-[14px] font-medium text-vf-faint hover:text-vf-text transition-colors"

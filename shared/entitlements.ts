@@ -330,7 +330,14 @@ export interface GateCopy {
   requiredTier: Tier;
   requiredTierName: string;
   requiredPrice: string;
+  /** The same plan by the week, e.g. "$3.49": a smaller amount on EcoCash. */
+  requiredWeekly: string;
   kind: "tier" | "limit";
+}
+
+/** "$3.49" for a paid tier's weekly price; "" for free. */
+export function weeklyPriceLabel(tier: Tier): string {
+  return tier === "free" ? "" : priceLabel(PERIOD_PRICE_CENTS[tier].weekly);
 }
 
 export interface GateCopyState {
@@ -385,6 +392,7 @@ export function gateCopy(feature: Feature, s: GateCopyState = {}): GateCopy {
       requiredTier: nextTier,
       requiredTierName: nextName,
       requiredPrice: priceLabel(LIMITS[nextTier].priceCents),
+      requiredWeekly: weeklyPriceLabel(nextTier),
       kind: "limit",
     };
   }
@@ -393,7 +401,7 @@ export function gateCopy(feature: Feature, s: GateCopyState = {}): GateCopy {
   const req = FEATURE_MIN_TIER[feature];
   const reqName = TIER_NAME[req];
   const price = priceLabel(LIMITS[req].priceCents);
-  const priced = LIMITS[req].priceCents > 0 ? `, ${price} a month` : "";
+  const priced = LIMITS[req].priceCents > 0 ? `, ${price} a month or ${weeklyPriceLabel(req)} a week` : "";
   const curName = TIER_NAME[curTier];
 
   const LINES: Partial<Record<Feature, string>> = {
@@ -411,6 +419,7 @@ export function gateCopy(feature: Feature, s: GateCopyState = {}): GateCopy {
     requiredTier: req,
     requiredTierName: reqName,
     requiredPrice: price,
+    requiredWeekly: weeklyPriceLabel(req),
     kind: "tier",
   };
 }

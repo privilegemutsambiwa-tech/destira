@@ -780,6 +780,20 @@ export const adMatchKeys = pgTable("ad_match_keys", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Plan reminders already sent (server/billing.ts): "ends in 3 days", "ends
+// tomorrow", "ended today", one row each per member and plan end date, so a
+// push or in-app reminder can never repeat. Emails dedupe in member_email_log.
+export const billingNotices = pgTable(
+  "billing_notices",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [uniqueIndex("billing_notices_user_key_idx").on(t.userId, t.key)],
+);
+
 // Each tap on a share action (an event or invite, as a link or a Status
 // card) — so the console can show shares next to the signups they bring.
 export const shareEvents = pgTable("share_events", {

@@ -30,7 +30,11 @@ import { DESTIRA_SYSTEM_USER_ID } from "../system-user";
 import * as T from "./templates";
 import { publicAppUrl } from "../public-url";
 
-export const MEMBER_EMAIL_KINDS = ["welcome", "finish_profile", "likes_waiting", "weekly_digest", "win_back"] as const;
+export const MEMBER_EMAIL_KINDS = [
+  "welcome", "finish_profile", "likes_waiting", "weekly_digest", "win_back",
+  // Money (server/billing.ts): sent when it happens, not by the sweep below.
+  "plan_ending", "trial_ending", "receipt",
+] as const;
 export type MemberEmailKind = (typeof MEMBER_EMAIL_KINDS)[number];
 
 export const KIND_LABEL: Record<MemberEmailKind, string> = {
@@ -39,6 +43,9 @@ export const KIND_LABEL: Record<MemberEmailKind, string> = {
   likes_waiting: "Someone liked you",
   weekly_digest: "Weekly digest",
   win_back: "We miss you",
+  plan_ending: "Plan ending",
+  trial_ending: "Trial ending",
+  receipt: "Payment receipt",
 };
 // What the unsubscribe link in each kind turns off (used in the footer copy).
 const UNSUB_LABEL: Record<MemberEmailKind, string> = {
@@ -47,6 +54,9 @@ const UNSUB_LABEL: Record<MemberEmailKind, string> = {
   likes_waiting: "like notifications by email",
   weekly_digest: "the weekly digest",
   win_back: "catch-up emails",
+  plan_ending: "plan reminders",
+  trial_ending: "plan reminders",
+  receipt: "receipts",
 };
 // Kinds share an unsubscribe switch where it makes sense to a member.
 const PREF_KEY: Record<MemberEmailKind, string> = {
@@ -55,8 +65,12 @@ const PREF_KEY: Record<MemberEmailKind, string> = {
   likes_waiting: "email_likes",
   weekly_digest: "email_digest",
   win_back: "email_digest",
+  plan_ending: "email_billing",
+  trial_ending: "email_billing",
+  // A receipt is a record of a payment, not marketing: no unsubscribe.
+  receipt: "",
 };
-export const MEMBER_EMAIL_PREF_KEYS = ["email_all", "email_tips", "email_likes", "email_digest", "email_news"] as const;
+export const MEMBER_EMAIL_PREF_KEYS = ["email_all", "email_tips", "email_likes", "email_digest", "email_news", "email_billing"] as const;
 
 const HARARE_UTC_OFFSET = 2;
 const DAY_MS = 86_400_000;
@@ -74,7 +88,7 @@ const SETTINGS_KEY = "member_email";
 const DEFAULT_SETTINGS: MemberEmailSettings = {
   mode: "off",
   dailyCap: 90,
-  kinds: { welcome: true, finish_profile: true, likes_waiting: true, weekly_digest: true, win_back: true },
+  kinds: { welcome: true, finish_profile: true, likes_waiting: true, weekly_digest: true, win_back: true, plan_ending: true, trial_ending: true, receipt: true },
 };
 
 export async function getMemberEmailSettings(): Promise<MemberEmailSettings> {
@@ -153,6 +167,11 @@ function fmtEventWhen(d: Date): string {
   const day = local.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   const time = local.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" });
   return `${day} · ${time}`;
+}
+/** "Tue 25 Nov" in Harare time. */
+export function fmtDay(d: Date): string {
+  const local = new Date(d.getTime() + HARARE_UTC_OFFSET * HOUR_MS);
+  return local.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 }
 function cityOf(location: string | null | undefined): string | null {
   const s = (location ?? "").trim();
@@ -302,16 +321,17 @@ export interface PlannedEmail {
   unsubscribeScope: string;
 }
 
-function allowed(m: Member, kind: MemberEmailKind): boolean {
+export function allowed(m: { prefs: Record<string, boolean> }, kind: MemberEmailKind): boolean {
+  if (kind === "receipt") return true;
   if (m.prefs.email_all === false) return false;
   return m.prefs[PREF_KEY[kind]] !== false;
 }
 
-function ctxFor(m: Member, kind: MemberEmailKind): T.LayoutCtx {
+export function ctxFor(m: { userId: string; firstName: string }, kind: MemberEmailKind): T.LayoutCtx {
   return {
     origin: appOrigin(),
     firstName: m.firstName,
-    unsubscribeUrl: unsubscribeUrl(m.userId, PREF_KEY[kind]),
+    unsubscribeUrl: PREF_KEY[kind] ? unsubscribeUrl(m.userId, PREF_KEY[kind]) : "",
     unsubscribeLabel: UNSUB_LABEL[kind],
   };
 }
@@ -401,7 +421,7 @@ function plan(members: Member[], ctx: WeekContext, settings: MemberEmailSettings
     }
   }
 
-  const priority: Record<MemberEmailKind, number> = { likes_waiting: 0, welcome: 1, finish_profile: 2, win_back: 3, weekly_digest: 4 };
+  const priority: Record<MemberEmailKind, number> = { likes_waiting: 0, welcome: 1, finish_profile: 2, win_back: 3, weekly_digest: 4, plan_ending: 5, trial_ending: 5, receipt: 5 };
   return out.sort((a, b) => priority[a.kind as MemberEmailKind] - priority[b.kind as MemberEmailKind]);
 }
 
@@ -431,14 +451,14 @@ export async function deliver(p: PlannedEmail): Promise<"sent" | "failed" | "log
     await db.update(memberEmailLog).set({ status: "logged", error: blocked }).where(eq(memberEmailLog.id, claimed.id));
     return "logged";
   }
-  const unsub = unsubscribeUrl(p.userId, p.unsubscribeScope);
+  const unsub = p.unsubscribeScope ? unsubscribeUrl(p.userId, p.unsubscribeScope) : null;
   const r = await sendViaResend({
     to: p.to,
     subject: p.content.subject,
     text: p.content.text,
     html: p.content.html,
     from: process.env.EMAIL_FROM_MEMBERS || process.env.EMAIL_FROM || undefined,
-    headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+    headers: unsub ? { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } : undefined,
   });
   if (r.ok) {
     await db.update(memberEmailLog).set({ status: "sent", providerMessageId: r.providerMessageId }).where(eq(memberEmailLog.id, claimed.id));
@@ -528,6 +548,23 @@ export async function previewFor(userId: string, kind: MemberEmailKind, now = ne
       return T.digestEmail(c, { city: m.city, newPeople, events: evs, likesWaiting: m.pendingLikes.length, eventsHref: `${o}/events`, discoverHref: `${o}/discover` });
     case "win_back":
       return T.winBackEmail(c, { daysAway: 7, newPeople, likesWaiting: m.pendingLikes.length, nextEvent: evs[0] ?? null, href: `${o}/discover` });
+    // Money kinds preview with example figures (the real ones come from
+    // server/billing.ts at the moment they're sent).
+    case "plan_ending":
+      return T.planEndingEmail(c, {
+        planName: "Flame", when: "1d", endsOn: fmtDay(new Date(now.getTime() + DAY_MS)),
+        renewHref: `${o}/plans/pay?tier=flame&period=monthly`, priceLine: "$9.99 a month", cheaperLine: "or $3.49 a week",
+      });
+    case "trial_ending":
+      return T.trialEndingEmail(c, {
+        planName: "Flame", when: "3d", endsOn: fmtDay(new Date(now.getTime() + 3 * DAY_MS)),
+        renewHref: `${o}/plans/pay?tier=flame&period=weekly`, priceLine: "$3.49 a week", cheaperLine: "or $9.99 a month",
+      });
+    case "receipt":
+      return T.receiptEmail(c, {
+        receiptNo: "DST-000123 (example)", paidOn: fmtDay(now), planName: "Flame", periodLabel: "month", amount: "$9.99",
+        method: "EcoCash", phoneMasked: "07•• ••• 1234", activeUntil: fmtDay(new Date(now.getTime() + 31 * DAY_MS)), historyHref: `${o}/settings#payments`,
+      });
   }
 }
 

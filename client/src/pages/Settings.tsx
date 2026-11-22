@@ -11,7 +11,7 @@ import { useTheme, type ThemePreference } from "@/hooks/use-theme";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { useToast } from "@/hooks/use-toast";
-import { PLAN_CARDS as SETTINGS_PLAN_CARDS, LIMITS as SETTINGS_LIMITS, PERIOD_LABEL, type BillingPeriod } from "@shared/entitlements";
+import { PLAN_CARDS as SETTINGS_PLAN_CARDS, LIMITS as SETTINGS_LIMITS, PERIOD_LABEL, periodPriceCents, type BillingPeriod } from "@shared/entitlements";
 import { SEEKING_OPTIONS, ageFieldError } from "@shared/essentials";
 import { useSubscription, useGenerateAboutMe } from "@/hooks/use-interactions";
 import { useCancelSubscription } from "@/hooks/use-payments";
@@ -1197,6 +1197,18 @@ function VerifyPanel({ onBack }: { onBack: () => void }) {
   );
 }
 
+type PaymentRow = {
+  id: number;
+  receiptNo: string | null;
+  createdAt: string;
+  planName: string | null;
+  period: BillingPeriod;
+  amountCents: number;
+  status: "paid" | "failed";
+  method: string;
+  phoneMasked: string | null;
+};
+
 function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any }) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -1210,23 +1222,34 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
   const period: BillingPeriod = (sub?.period as BillingPeriod) ?? "monthly";
   const renewsAt: string | null = sub?.currentPeriodEnd ?? null;
   const autoRenews = sub?.provider === "stripe";
+  const isTrial = sub?.provider === "trial";
+  const cancelled = !!sub?.cancelAtPeriodEnd;
+  const periodCents = tier === "free" ? 0 : periodPriceCents(tier, period);
+  const endDate = renewsAt ? new Date(renewsAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null;
   const tierInfo = {
     label: card.name,
-    price: card.priceCents === 0 ? "$0" : `$${(card.priceCents / 100).toFixed(2)}`,
+    price: isTrial ? "Free trial" : periodCents === 0 ? "$0" : `$${(periodCents / 100).toFixed(2)}`,
     cycle:
       card.priceCents === 0
         ? "No billing"
-        : `Billed every ${PERIOD_LABEL[period]}, USD`,
+        : isTrial
+          ? "Nothing to pay"
+          : period === "sixMonth"
+            ? "For 6 months, USD"
+            : `For one ${PERIOD_LABEL[period]}, USD`,
     renewal:
-      card.priceCents === 0
+      card.priceCents === 0 || !endDate
         ? null
-        : renewsAt
-          ? autoRenews
-            ? `Renews automatically on ${new Date(renewsAt).toLocaleDateString()}`
-            : `Pay again by ${new Date(renewsAt).toLocaleDateString()} to keep it — we'll remind you first`
-          : null,
+        : isTrial
+          ? `Your free trial ends on ${endDate}, then you're on Free. We'll remind you first.`
+          : cancelled
+            ? `Cancelled. Yours until ${endDate}, then Free.`
+            : autoRenews
+              ? `Renews automatically on ${endDate}`
+              : `Nothing renews by itself. Pay again by ${endDate} to keep it; we'll remind you before it ends.`,
     details: card.gets.slice(0, 3).join(" · "),
   };
+  const { data: history, isLoading: historyLoading } = useQuery<PaymentRow[]>({ queryKey: ["/api/payments/history"] });
 
   return (
     <>
@@ -1248,31 +1271,57 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
         )}
       </div>
 
-      {tier === "free" && (
+      {(tier === "free" || isTrial) && (
         <div style={{ padding: "0 16px 16px" }}>
-          <GradientButton label="See plans" onClick={() => setLocation("/plans")} testId="button-upgrade-billing" />
+          <GradientButton label={isTrial ? `Keep ${tierInfo.label}` : "See plans"} onClick={() => setLocation("/plans")} testId="button-upgrade-billing" />
+        </div>
+      )}
+      {tier !== "free" && !isTrial && !autoRenews && (
+        <div style={{ padding: "0 16px 16px" }}>
+          <GradientButton
+            label={`Pay for another ${period === "sixMonth" ? "6 months" : PERIOD_LABEL[period]}`}
+            onClick={() => setLocation(`/plans/pay?tier=${tier}&period=${period}`)}
+            testId="button-renew-billing"
+          />
         </div>
       )}
 
       <div className="vf-card" style={{ margin: "0 16px", borderRadius: "16px", background: CARD, overflow: "hidden" }}>
         <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}` }}>
           <p className="text-xs font-semibold mb-2" style={{ color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>Payment History</p>
-          {tier === "free" ? (
-            <p className="text-sm text-center py-2" style={{ color: MUTED }}>No payment history</p>
+          {historyLoading ? (
+            <p className="text-sm text-center py-2" style={{ color: MUTED }}>Loading…</p>
+          ) : !history?.length ? (
+            <p className="text-sm text-center py-2" style={{ color: MUTED }} data-testid="text-no-payments">No payments yet</p>
           ) : (
-            <div>
-              <div className="flex justify-between items-center py-1.5">
-                <p className="text-sm text-foreground">Destira {tierInfo.label}</p>
-                <p className="text-sm font-semibold text-foreground">{tierInfo.price}</p>
-              </div>
-              <div className="flex justify-between items-center py-1.5">
-                <p className="text-xs" style={{ color: MUTED }}>March 1, 2026</p>
-                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(16,185,129,0.15)", color: "#10B981" }}>Paid</span>
-              </div>
+            <div data-testid="list-payments">
+              {history.map((p) => (
+                <div key={p.id} className="py-2" style={{ borderTop: `1px solid ${BORDER}` }} data-testid={`payment-${p.id}`}>
+                  <div className="flex justify-between items-center gap-3">
+                    <p className="text-sm text-foreground">
+                      Destira {p.planName ?? "plan"}
+                      <span style={{ color: MUTED }}>, {p.period === "sixMonth" ? "6 months" : `1 ${PERIOD_LABEL[p.period]}`}</span>
+                    </p>
+                    <p className="text-sm font-semibold text-foreground">${(p.amountCents / 100).toFixed(2)}</p>
+                  </div>
+                  <div className="flex justify-between items-center gap-3 mt-0.5">
+                    <p className="text-xs" style={{ color: MUTED }}>
+                      {new Date(p.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })} · {p.method}
+                      {p.phoneMasked ? ` ${p.phoneMasked}` : ""}
+                      {p.receiptNo ? ` · ${p.receiptNo}` : ""}
+                    </p>
+                    {p.status === "paid" ? (
+                      <span className="text-xs px-2 py-0.5 rounded-full shrink-0" style={{ background: "rgba(16,185,129,0.15)", color: "#10B981" }}>Paid</span>
+                    ) : (
+                      <span className="text-xs px-2 py-0.5 rounded-full shrink-0" style={{ background: "rgba(239,68,68,0.12)", color: "#EF4444" }} title="No money was taken">Didn't go through</span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
-        {tier !== "free" && (
+        {tier !== "free" && !isTrial && !cancelled && (
           <button
             className="vf-row"
             style={{ ...ROW_STYLE, borderBottom: "none", width: "100%", textAlign: "left", background: "transparent", border: "none" }}
@@ -1943,6 +1992,10 @@ export default function Settings() {
     if (requested === "proximity" || (typeof window !== "undefined" && window.location.hash === "#proximity")) {
       setActivePanel("proximity");
     }
+    // A receipt's "Settings" link opens the payment history.
+    if (requested === "billing" || (typeof window !== "undefined" && window.location.hash === "#payments")) {
+      setActivePanel("billing");
+    }
     // The "try your selfie again" notification opens the verify panel.
     if (requested === "verify" || (typeof window !== "undefined" && window.location.hash === "#verify")) {
       setActivePanel("verify");
@@ -2094,6 +2147,7 @@ export default function Settings() {
                 <ToggleRow icon={CalendarDays} label="Weekly digest" sublabel="What happened while you were away" value={notifEnabled("email_digest")} onChange={(v) => handleToggleNotifPref("email_digest", v)} testId="toggle-email-digest" />
                 <ToggleRow icon={Bell} label="Getting-started tips" sublabel="A few, early on, then they stop" value={notifEnabled("email_tips")} onChange={(v) => handleToggleNotifPref("email_tips", v)} testId="toggle-email-tips" />
                 <ToggleRow icon={Megaphone} label="News and updates" sublabel="New features, now and then" value={notifEnabled("email_news")} onChange={(v) => handleToggleNotifPref("email_news", v)} testId="toggle-email-news" />
+                <ToggleRow icon={Bell} label="Plan reminders" sublabel="Before a plan or free trial ends. Receipts always come" value={notifEnabled("email_billing")} onChange={(v) => handleToggleNotifPref("email_billing", v)} testId="toggle-email-billing" />
               </>
             )}
           </div>

@@ -401,3 +401,53 @@ export function GrowthSignupsChart({
     </div>
   );
 }
+
+// ── Revenue per day (Revenue page) ───────────────────────────────────────
+function RevenueTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload as { usd: number; payments: number };
+  return (
+    <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 9px", fontSize: 11, fontFamily: CHART_MONO, color: TEXT }}>
+      <div style={{ color: FAINT, marginBottom: 3 }}>{label}</div>
+      <div>
+        ${d.usd.toFixed(2)} · {d.payments} payment{d.payments === 1 ? "" : "s"}
+      </div>
+    </div>
+  );
+}
+
+export function DailyRevenueChart({ series }: { series: { date: string; cents: number; payments: number }[] }) {
+  const reduced = usePrefersReducedMotion();
+  const data = series.map((s) => ({ date: s.date, usd: s.cents / 100, payments: s.payments }));
+  const total = data.reduce((s, d) => s + d.usd, 0);
+  if (total === 0) return <ChartEmpty note={`No paid payments in the last ${series.length} days.`} />;
+  const todayIso = series.at(-1)?.date;
+  return (
+    <div>
+      <ChartFigure
+        label={`Revenue per day, last ${series.length} days (Harare)`}
+        figure={`$${total.toFixed(2)} total · today: $${(data.at(-1)?.usd ?? 0).toFixed(2)}`}
+      />
+      <ResponsiveContainer width="100%" height={190}>
+        <BarChart data={data} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+          <CartesianGrid stroke={grid} vertical={false} />
+          <XAxis
+            dataKey="date"
+            tick={axisTick}
+            tickFormatter={(d: string) => d.slice(5)}
+            interval={Math.max(0, Math.ceil(data.length / 8) - 1)}
+            axisLine={{ stroke: LINE }}
+            tickLine={false}
+          />
+          <YAxis tick={axisTick} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `$${v}`} />
+          <Tooltip content={<RevenueTooltip />} cursor={{ fill: "rgba(255,255,255,.04)" }} />
+          <Bar dataKey="usd" name="revenue" isAnimationActive={!reduced} radius={[2, 2, 0, 0]}>
+            {data.map((d, i) => (
+              <Cell key={i} fill={d.date === todayIso ? EMBER : MUTED} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}

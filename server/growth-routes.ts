@@ -139,6 +139,7 @@ export function registerGrowthRoutes(app: Express, getUserId: (req: Request) => 
     email_likes: "like notifications by email",
     email_digest: "the weekly digest and catch-up emails",
     email_news: "news and updates from Destira",
+    email_billing: "reminders before your plan ends",
   };
   const page = (title: string, body: string) => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head>
 <body style="margin:0;background:#FBF8F5;font-family:Helvetica,Arial,sans-serif;color:#1A1418">
