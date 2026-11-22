@@ -59,6 +59,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { registerCrownRoutes, canPayCrown } from "./crown";
 import { registerCrownPerkRoutes, applySpotlight, dropLiftedToday, privateModeHides, introMatchIds } from "./crown-perks";
 import { registerDiscoverPerkRoutes, applyBoosts, dropBoosted, undoOrRewind } from "./discover-perks";
+import { recordShown, startMatchStatsSweep } from "./matching";
 import { isCrownPeriod } from "@shared/crown";
 import { DETAILS_SCHEMA, detailFacts, mergeDetails } from "@shared/profile-details";
 import { ADVANCED_PREF_KEYS, MATCH_PREFS_SCHEMA, mergePrefs } from "@shared/match-prefs";
@@ -211,6 +212,8 @@ export async function registerRoutes(
   registerCrownPerkRoutes(app, getUserId);
   // Rewind, super like and boost (server/discover-perks.ts).
   registerDiscoverPerkRoutes(app, getUserId, withClickReasons);
+  // The deck score's daily inputs: reply rates and the popularity cap.
+  startMatchStatsSweep();
   registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group
@@ -335,6 +338,8 @@ export async function registerRoutes(
         ? await dropBoosted(userId, lifted)
         : await applyBoosts(userId, lifted, filter, userLat, userLng);
       const nextCursorEncoded = nextCursor ? Buffer.from(JSON.stringify(nextCursor), "utf8").toString("base64url") : null;
+      // For the popularity cap (server/matching.ts).
+      recordShown((discoverable as any[]).map((p) => p.userId)).catch((e) => console.error("recordShown:", e));
       res.json({ profiles: await withClickReasons(userId, discoverable as any[]), nextCursor: nextCursorEncoded });
     } catch (e) {
       console.error("Discover error:", e);

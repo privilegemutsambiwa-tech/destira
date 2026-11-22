@@ -189,10 +189,9 @@ async function rollMatching(dateStr: string) {
   await upsert(dateStr, "match.mutual_matches_of_cohort", mutual);
   await upsert(dateStr, "match.ask_to_match_pct", asks.length ? Math.round((mutual / asks.length) * 1000) / 10 : 0);
 
-  // Whether the resonance model is wired to real matches at all — see
-  // resonance.ts: there's no real pairwise score for organic users today, so
-  // this is expected to read near 0%. That answer is itself the useful
-  // signal; a fabricated distribution would not be.
+  // matches.compatibility_score is never written: the deck's fit score
+  // (server/matching.ts) only orders the deck and is never stored or shown.
+  // So this reads 0%, on purpose; a fabricated distribution would not help.
   const [scored] = await db.select({ n: count() }).from(matches).where(isNotNull(matches.compatibilityScore));
   const [totalMatches] = await db.select({ n: count() }).from(matches);
   await upsert(dateStr, "match.resonance_scored_pct", Number(totalMatches?.n ?? 0) ? Math.round((Number(scored?.n ?? 0) / Number(totalMatches!.n)) * 1000) / 10 : 0);

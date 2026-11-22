@@ -36,8 +36,6 @@
   --vf-gold: 43 74% 66%;           /* #E9C46A — Ember premium only */
   --vf-warn: #FFC46B;
   --vf-soft: #CFC7DA;              /* secondary text on dark cards (lighter than vf-muted) */
-  --vf-dial-remainder: rgba(255, 255, 255, 0.08); /* resonance-dial's unfilled arc */
-  --vf-dial-glow: rgba(255, 122, 87, 0.28);       /* resonance-dial's outer breathing glow */
   --vf-elevated: rgba(255, 255, 255, 0.05);       /* input-fill tint one step off the page ground */
 
   color-scheme: dark;
@@ -61,8 +59,6 @@
     --vf-gold: 43 38% 36%;         /* #806C3A — 4.8:1 on ground */
     --vf-warn: #8C6C3B;
     --vf-soft: #4A3F47;
-    --vf-dial-remainder: rgba(28, 20, 24, 0.06);
-    --vf-dial-glow: rgba(179, 75, 52, 0.18);
     --vf-elevated: rgba(28, 20, 24, 0.04);
     color-scheme: light;
   }
@@ -85,8 +81,6 @@
   --vf-gold: 43 38% 36%;
   --vf-warn: #8C6C3B;
   --vf-soft: #4A3F47;
-  --vf-dial-remainder: rgba(28, 20, 24, 0.06);
-  --vf-dial-glow: rgba(179, 75, 52, 0.18);
   --vf-elevated: rgba(28, 20, 24, 0.04);
   color-scheme: light;
 }
@@ -109,8 +103,6 @@
   --vf-gold: 43 74% 66%;
   --vf-warn: #FFC46B;
   --vf-soft: #CFC7DA;
-  --vf-dial-remainder: rgba(255, 255, 255, 0.08);
-  --vf-dial-glow: rgba(255, 122, 87, 0.28);
   --vf-elevated: rgba(255, 255, 255, 0.05);
   color-scheme: dark;
 }

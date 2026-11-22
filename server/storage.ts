@@ -26,8 +26,9 @@ import { getStoryEventCard, type StoryEventCard } from "./event-seats";
 import { coerceTraits, applyTraitSignals } from "./personality";
 import { localDayKey, userTimezone, checkGate } from "./gate";
 import { privateCrownIds } from "./crown";
-import { basicsAnswered, CHRISTIAN, type ProfileDetails } from "@shared/profile-details";
-import { ADVANCED_PREF_KEYS, effectivePrefs, type MatchPrefs } from "@shared/match-prefs";
+import { basicsAnswered, type ProfileDetails } from "@shared/profile-details";
+import { ADVANCED_PREF_KEYS, effectivePrefs } from "@shared/match-prefs";
+import { matchScoreExpr } from "./matching";
 import type { PhotoRole } from "@shared/schema";
 import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lt, lte, inArray, notInArray, isNotNull, isNull, type SQL } from "drizzle-orm";
 
@@ -133,52 +134,6 @@ function sortKeyExpr(seed: string, score?: SQL) {
   const rand01 = sql`((hashtext(${profiles.userId} || ${seed}) + 2147483648)::double precision / 4294967296.0)`;
   const weight = score ? sql`(${TIER_WEIGHT_SQL} * ${score})` : TIER_WEIGHT_SQL;
   return sql<number>`(-ln(GREATEST(${rand01}, 0.0000001)) / ${weight})`;
-}
-
-// How well a candidate fits this viewer (Part D3), as a multiplier on the
-// shuffle weight: never below 0.3, so nobody is buried for good, and the
-// draw stays random — a better fit just comes up sooner on average. Every
-// input is fixed for the day (activity counts days before today), so the
-// keyset paging never sees a card change place mid-scroll.
-function matchScoreExpr(viewer: Profile | undefined, prefs: MatchPrefs): SQL {
-  const d = (viewer?.details ?? {}) as ProfileDetails;
-  const field = (k: string) => sql`(${profiles.details} ->> ${k})`;
-  const terms: SQL[] = [];
-  if (d.faith && d.faith !== "prefer_not") {
-    terms.push(sql`(case when ${field("faith")} = ${d.faith} then 0.6 else 0 end)`);
-    if (CHRISTIAN.has(d.faith)) {
-      const christian = Array.from(CHRISTIAN);
-      terms.push(sql`(case when ${field("faith")} <> ${d.faith} and ${field("faith")} in (${sql.join(christian.map((v) => sql`${v}`), sql`, `)}) then 0.3 else 0 end)`);
-    }
-  }
-  if (d.wantsChildren === "yes" || d.wantsChildren === "no") {
-    const other = d.wantsChildren === "yes" ? "no" : "yes";
-    terms.push(sql`(case ${field("wantsChildren")} when ${d.wantsChildren} then 0.5 when ${other} then -0.4 else 0 end)`);
-  }
-  if (d.marriage && d.marriage !== "prefer_not") {
-    terms.push(sql`(case when ${field("marriage")} = ${d.marriage} then 0.3 else 0 end)`);
-  }
-  const langs = (d.languages ?? []).filter((l) => l !== "english");
-  if (langs.length > 0) {
-    terms.push(sql`(case when jsonb_exists_any(${profiles.details} -> 'languages', array[${sql.join(langs.map((l) => sql`${l}`), sql`, `)}]::text[]) then 0.3 else 0 end)`);
-  }
-  // A preference that isn't a dealbreaker only lifts people who meet it.
-  for (const k of ADVANCED_PREF_KEYS) {
-    const p = prefs[k];
-    if (!p || p.must || p.values.length === 0) continue;
-    terms.push(sql`(case when ${field(k)} in (${sql.join(p.values.map((v) => sql`${v}`), sql`, `)}) then 0.8 else 0 end)`);
-  }
-  // They'd want this viewer back: the viewer's age is inside their range.
-  if (viewer?.age != null) {
-    terms.push(sql`(case when coalesce(${profiles.ageMinPreference}, 18) <= ${viewer.age} and coalesce(${profiles.ageMaxPreference}, 99) >= ${viewer.age} then 0.4 else 0 end)`);
-  }
-  const today = new Date().toISOString().slice(0, 10);
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-  terms.push(sql`(case when exists (select 1 from ${userActivityDaily} where ${userActivityDaily.userId} = ${profiles.userId} and ${userActivityDaily.date} >= ${weekAgo} and ${userActivityDaily.date} < ${today}) then 0.5 else 0 end)`);
-  const newSince = new Date(Date.now() - 7 * 86400000);
-  newSince.setUTCHours(0, 0, 0, 0);
-  terms.push(sql`(case when ${profiles.createdAt} >= ${newSince} then 0.4 else 0 end)`);
-  return sql`greatest(0.3, 1 + ${sql.join(terms, sql` + `)})`;
 }
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {

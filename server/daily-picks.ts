@@ -3,11 +3,11 @@
 // biased toward people who'll actually answer.
 //
 // Picks come from the same pool as Discover (getDiscoverableProfiles), so
-// every eligibility rule there — reciprocal gender, age range, blocks,
-// passes, anyone already liked/matched — applies here too. Within that pool
-// they're ranked by things that make a reply likely, and every reason shown
-// to the member is a real, checkable fact (never an invented compatibility
-// number — see server/resonance.ts for why that matters here).
+// every eligibility rule there — reciprocal gender, age range, filters and
+// dealbreakers, blocks, passes, anyone already liked/matched — applies here
+// too, and the pool arrives in the deck's own fit order (server/matching.ts).
+// Within it they're ranked by things that make a reply likely, and every
+// reason shown to the member is a real, checkable fact, never a score.
 //
 // The three are written once per member per day (daily_picks) the first time
 // they're asked for, so they never reshuffle while someone's acting on them.
@@ -17,8 +17,9 @@ import { db } from "./db";
 import { storage } from "./storage";
 import * as push from "./push";
 import {
-  dailyPicks, discoverPasses, matches, profiles, pushSubscriptions, userActivityDaily,
+  dailyPicks, discoverPasses, matches, memberMatchStats, profiles, pushSubscriptions, userActivityDaily,
 } from "@shared/schema";
+import { sharedDetailLines, type ProfileDetails } from "@shared/profile-details";
 
 const HARARE_UTC_OFFSET = 2;
 const HOUR_MS = 60 * 60 * 1000;
@@ -66,7 +67,7 @@ async function choosePicks(userId: string, pickDate: string): Promise<StoredPick
 
   const ids = pool.map((p: any) => p.userId as string);
   const weekAgo = new Date(Date.now() - 7 * DAY_MS).toISOString().slice(0, 10);
-  const [activeRows, likerRows, myInterestsMap] = await Promise.all([
+  const [activeRows, likerRows, myInterestsMap, statRows] = await Promise.all([
     db.selectDistinct({ userId: userActivityDaily.userId })
       .from(userActivityDaily)
       .where(and(inArray(userActivityDaily.userId, ids), gte(userActivityDaily.date, weekAgo))),
@@ -74,7 +75,11 @@ async function choosePicks(userId: string, pickDate: string): Promise<StoredPick
       .from(matches)
       .where(and(eq(matches.user2Id, userId), eq(matches.status, "pending"), inArray(matches.user1Id, ids))),
     storage.getInterestsForUsers([userId]),
+    db.select({ userId: memberMatchStats.userId, replyRate: memberMatchStats.replyRate })
+      .from(memberMatchStats)
+      .where(inArray(memberMatchStats.userId, ids)),
   ]);
+  const replyRate = new Map(statRows.map((r) => [r.userId, r.replyRate]));
   const active = new Set(activeRows.map((r) => r.userId));
   const likedMe = new Set(likerRows.map((r) => r.userId));
   const myInterests = new Set((myInterestsMap.get(userId) ?? []).map(norm));
@@ -87,14 +92,21 @@ async function choosePicks(userId: string, pickDate: string): Promise<StoredPick
     const hasPhoto = (p.photos?.length ?? 0) > 0 || !!p.coverPhotoUrl;
     const isNew = p.createdAt && Date.now() - new Date(p.createdAt).getTime() < 7 * DAY_MS;
 
+    const details = sharedDetailLines(me.details as ProfileDetails | null, p.details as ProfileDetails | null);
+    const rate = replyRate.get(p.userId);
+
     let score = 0;
     if (isActive) score += 4; // the one that matters most: they'll see a like
     if (hasPhoto) score += 2;
     score += shared.length * 1.5;
+    score += Math.min(details.length, 2) * 1.5;
     if (sameCity) score += 2;
     if (likedMe.has(p.userId)) score += 2; // never surfaced as a reason
+    if (rate != null) score += (rate - 0.5) * 4; // they answer, or they don't
+    score += ((pool.length - order) / pool.length) * 2; // the deck's own fit order
 
     const reasons: string[] = [];
+    reasons.push(...details.slice(0, 1));
     if (shared.length) reasons.push(`You both like ${joinNatural(shared)}`);
     if (sameCity) reasons.push(`Also in ${p.location}`);
     if (isActive) reasons.push("Active this week");

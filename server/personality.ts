@@ -1,11 +1,9 @@
-// Real, dynamic Big Five trait estimates for the Discover resonance panel —
-// grounded in what a person actually wrote (onboarding answers), then nudged
-// over time by real twin-chat conversation, instead of the hardcoded numbers
-// the demo-seeded accounts have always carried. Stored in the same
-// profiles.personalityProfile jsonb column the demo accounts already use, so
-// every existing reader (Discover.tsx's getResonance, Matches.tsx's
-// resonanceScore, profile-derived.ts) picks this up with no changes on their
-// end — the panel simply starts rendering once a real value exists.
+// Big Five trait estimates, grounded in what a person actually wrote
+// (onboarding answers), then nudged over time by real twin-chat
+// conversation. Stored in profiles.personalityProfile. They're never shown
+// as a score: the deck order uses shared details and fit instead
+// (server/storage.ts matchScoreExpr), and the card says why two people
+// might click from things that are true (server/click-reasons.ts).
 import { completeText } from "./ai";
 
 export type BigFiveTraits = {

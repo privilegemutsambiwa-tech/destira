@@ -4,7 +4,6 @@ import { useLocation } from "wouter";
 import { AlertTriangle, ArrowRight, CalendarHeart, ChevronDown, Download, Flag, Heart, HeartHandshake, Lock, MapPin, MessageCircle, PartyPopper, RotateCcw, ShieldCheck, SlidersHorizontal, Smartphone, Sparkles, Users } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { DestiraLockup } from "@/components/brand/logo";
-import { ResonanceDial } from "@/components/resonance-dial";
 import type { Photo } from "@/lib/photos";
 import { isNativeApp } from "@/lib/native";
 import { useDataSaver } from "@/lib/data-saver";
@@ -1046,7 +1045,10 @@ function TwinsTalking() {
         }`}
         data-testid="twins-result"
       >
-        <ResonanceDial score={87} size={56} />
+        {/* No score: Destira never puts a number on two people. */}
+        <span className="shrink-0 w-14 h-14 rounded-full flex items-center justify-center bg-vf-ember/[0.12] text-vf-ember" aria-hidden="true">
+          <HeartHandshake className="w-6 h-6" />
+        </span>
         <div className="min-w-0">
           <div className="text-[14.5px] font-semibold text-vf-text">Introduced to both of them</div>
           <div className="text-[13px] leading-[1.45] text-vf-muted">Both say what's wrong straight away. Both love an early Saturday.</div>

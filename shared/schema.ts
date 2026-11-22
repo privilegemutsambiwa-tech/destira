@@ -926,6 +926,27 @@ export const discoverBoostViews = pgTable("discover_boost_views", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [uniqueIndex("discover_boost_views_boost_viewer_idx").on(t.boostId, t.viewerId)]);
 
+// How many decks each member was dealt into, per Harare day (server/matching.ts).
+// Yesterday's count is what the popularity cap reads, so a member's place in
+// a deck never moves during the day.
+export const discoverShownDaily = pgTable("discover_shown_daily", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  day: date("day").notNull(),
+  shown: integer("shown").notNull().default(0),
+}, (t) => [uniqueIndex("discover_shown_daily_user_day_idx").on(t.userId, t.day)]);
+
+// Per-member inputs to the deck score, refreshed once a day
+// (server/matching.ts). replyRate: of conversations someone else started in
+// the last 60 days, the share this member answered; null under 3.
+export const memberMatchStats = pgTable("member_match_stats", {
+  userId: varchar("user_id").primaryKey().references(() => users.id),
+  replyRate: real("reply_rate"),
+  replySample: integer("reply_sample").notNull().default(0),
+  shownYesterday: integer("shown_yesterday").notNull().default(0),
+  updatedDay: date("updated_day"),
+});
+
 export const dailyLikeCounts = pgTable("daily_like_counts", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
