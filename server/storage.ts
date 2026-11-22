@@ -530,7 +530,7 @@ export class DatabaseStorage implements IStorage {
     // Anyone already evaluated (liked, matched, rejected, or unmatched) never
     // reappears in the feed — a matches row between the pair means the
     // requester has already been shown this candidate and acted on them.
-    const evaluatedMatches = await db.select({ user1Id: matches.user1Id, user2Id: matches.user2Id, status: matches.status })
+    const evaluatedMatches = await db.select({ user1Id: matches.user1Id, user2Id: matches.user2Id, status: matches.status, isSuper: matches.isSuper })
       .from(matches)
       .where(or(eq(matches.user1Id, excludeUserId), eq(matches.user2Id, excludeUserId)));
 
@@ -572,6 +572,13 @@ export class DatabaseStorage implements IStorage {
         .filter(m => m.status === "pending" && m.user2Id === excludeUserId && !blockedOrPassed.has(m.user1Id))
         .map(m => m.user1Id),
     ));
+    // Super likes (server/discover-perks.ts): they paid for "they see you
+    // first", so they go to the very front, marked as a super like.
+    const superLikerIds = new Set(
+      evaluatedMatches
+        .filter(m => m.isSuper && m.status === "pending" && m.user2Id === excludeUserId)
+        .map(m => m.user1Id),
+    );
 
     // Their filters and dealbreakers (shared/match-prefs.ts). Hard ones join
     // baseCondition, so a pending liker who breaks one stays out too.
@@ -656,6 +663,7 @@ export class DatabaseStorage implements IStorage {
     locationUpdatedAt: profiles.locationUpdatedAt,
     showDistance: profiles.showDistance,
     coverPhotoUrl: profiles.coverPhotoUrl,
+    _diaspora: sql<boolean>`coalesce((${profiles.matchPrefs} ->> 'diasporaMode') = 'true', false)`,
     user: {
       id: users.id,
       firstName: users.firstName,
@@ -663,6 +671,17 @@ export class DatabaseStorage implements IStorage {
       profileImageUrl: users.profileImageUrl,
     }
   };
+
+    // Diaspora mode: the distance limit is skipped only for the people each
+    // side opted into. Abroad with it on: everyone at home. At home and open
+    // to diaspora: people abroad who turned diaspora mode on.
+    const myBase = (requesterProfile?.details as ProfileDetails | null)?.base;
+    const seeHome = !!prefs.diasporaMode && myBase === "diaspora";
+    const seeAbroad = !!prefs.openToDiaspora && myBase !== "diaspora";
+    const farIsFine = (row: any, theirMode: boolean) => {
+      const theirBase = (row.details as ProfileDetails | null)?.base;
+      return (seeHome && theirBase !== "diaspora") || (seeAbroad && theirBase === "diaspora" && theirMode);
+    };
 
     const shapeRows = (rows: any[]) => rows
       .filter(row => {
@@ -684,7 +703,7 @@ export class DatabaseStorage implements IStorage {
         if (!seekingIncludesGender(candidateSeekingGenders, requesterGender)) return false;
         return true;
       })
-      .map(({ _lat, _lng, seekingGenders: _candidateSeeking, ...rest }) => {
+      .map(({ _lat, _lng, _diaspora, seekingGenders: _candidateSeeking, ...rest }) => {
         if (!rest.showDistance) {
           return { ...rest, locationName: null, locationUpdatedAt: null, distanceKm: null, isNearbyNow: false };
         }
@@ -693,7 +712,7 @@ export class DatabaseStorage implements IStorage {
         const rawDistanceKm = (userLat !== undefined && userLng !== undefined && pLat !== null && pLng !== null)
           ? haversineKm(userLat, userLng, pLat, pLng)
           : null;
-        if (maxDistanceKm !== null && rawDistanceKm !== null && rawDistanceKm > maxDistanceKm) return null;
+        if (maxDistanceKm !== null && rawDistanceKm !== null && rawDistanceKm > maxDistanceKm && !farIsFine(rest, !!_diaspora)) return null;
         const isNearby = rest.locationUpdatedAt
           ? Date.now() - new Date(rest.locationUpdatedAt).getTime() < 30 * 60 * 1000
           : false;
@@ -771,14 +790,17 @@ export class DatabaseStorage implements IStorage {
           inArray(profiles.userId, pendingLikerIds),
         ))
         .orderBy(asc(sortKey), asc(profiles.id));
-      const likers = shapeRows(likerRows).slice(0, 5);
-      if (likers.length > 0) {
+      const shaped = shapeRows(likerRows);
+      const supers = shaped.filter((r) => superLikerIds.has(r.userId)).slice(0, 5).map((r) => ({ ...r, superLiked: true }));
+      const likers = shaped.filter((r) => !superLikerIds.has(r.userId)).slice(0, 5);
+      if (likers.length > 0 || supers.length > 0) {
         page = [...page];
         let pos = 1;
         for (const liker of likers) {
           page.splice(Math.min(pos, page.length), 0, liker);
           pos += 2 + (liker.id % 2);
         }
+        page.unshift(...supers);
       }
     }
 

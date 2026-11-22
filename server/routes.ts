@@ -58,6 +58,7 @@ import { registerBillingRoutes } from "./billing";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { registerCrownRoutes, canPayCrown } from "./crown";
 import { registerCrownPerkRoutes, applySpotlight, dropLiftedToday, privateModeHides, introMatchIds } from "./crown-perks";
+import { registerDiscoverPerkRoutes, applyBoosts, dropBoosted, undoOrRewind } from "./discover-perks";
 import { isCrownPeriod } from "@shared/crown";
 import { DETAILS_SCHEMA, detailFacts, mergeDetails } from "@shared/profile-details";
 import { ADVANCED_PREF_KEYS, MATCH_PREFS_SCHEMA, mergePrefs } from "@shared/match-prefs";
@@ -208,6 +209,8 @@ export async function registerRoutes(
   // Destira Crown: apply, state, who wears it (server/crown.ts).
   registerCrownRoutes(app, getUserId);
   registerCrownPerkRoutes(app, getUserId);
+  // Rewind, super like and boost (server/discover-perks.ts).
+  registerDiscoverPerkRoutes(app, getUserId, withClickReasons);
   registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group
@@ -324,9 +327,13 @@ export async function registerRoutes(
       const { profiles: deck, nextCursor } = await storage.getDiscoverableProfiles(userId, filter, userLat, userLng, cursor, limit, seed);
       // Crown Spotlight: first page only, and only someone this deck would
       // show anyway (server/crown-perks.ts).
-      const discoverable = cursor
+      const lifted = cursor
         ? await dropLiftedToday(userId, deck)
         : await applySpotlight(userId, deck, filter, userLat, userLng);
+      // Boosts: first page only, right after any super likes.
+      const discoverable = cursor
+        ? await dropBoosted(userId, lifted)
+        : await applyBoosts(userId, lifted, filter, userLat, userLng);
       const nextCursorEncoded = nextCursor ? Buffer.from(JSON.stringify(nextCursor), "utf8").toString("base64url") : null;
       res.json({ profiles: await withClickReasons(userId, discoverable as any[]), nextCursor: nextCursorEncoded });
     } catch (e) {
@@ -1520,13 +1527,14 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     }
   });
 
-  // Free for everyone: an accidental pass shouldn't cost money to take back.
+  // Free for everyone right after the pass: an accidental pass shouldn't
+  // cost money to take back. Later it's a rewind (server/discover-perks.ts).
   app.delete("/api/discover/pass/:targetId", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     try {
-      await storage.undoDiscoverPass(userId, String(req.params.targetId));
-      res.json({ ok: true });
+      const r = await undoOrRewind(userId, String(req.params.targetId));
+      res.status(r.status).json(r.body);
     } catch (e) {
       console.error("Undo pass error:", e);
       res.status(500).json({ message: "Couldn't undo that pass" });
@@ -4657,17 +4665,20 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       for (const m of pendingRaw.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())) {
         if (!byRequester.has(m.user1Id)) byRequester.set(m.user1Id, m);
       }
-      const pending = [...byRequester.values()];
+      // Super likes first (server/discover-perks.ts).
+      const pending = [...byRequester.values()].sort((a: any, b: any) => Number(!!b.isSuper) - Number(!!a.isSuper));
 
       // Below Spark you get the COUNT, not the people — no names, no photos, no
-      // userId (so the row can't be opened). Never a fake blur.
+      // userId (so the row can't be opened). Never a fake blur. A super like
+      // is the exception on every plan: the sender chose to be seen.
       const likes = pending.map((m: any) => {
-        if (!canSee) return { matchId: m.id, createdAt: m.createdAt, masked: true, profile: null, fromUserId: null };
+        if (!canSee && !m.isSuper) return { matchId: m.id, createdAt: m.createdAt, masked: true, profile: null, fromUserId: null };
         return {
           matchId: m.id,
           fromUserId: m.isRequester ? m.user2Id : m.user1Id,
           profile: m.otherProfile ? { ...m.otherProfile, blurred: false } : null,
           createdAt: m.createdAt,
+          isSuper: !!m.isSuper,
         };
       });
 

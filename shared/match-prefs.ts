@@ -22,6 +22,11 @@ export const MATCH_PREFS_SCHEMA = z
   .object({
     verifiedOnly: z.boolean().nullable(),
     hasPhotos: z.boolean().nullable(),
+    // Diaspora mode (Part D8). Abroad: see people at home and be seen by
+    // those open to it. At home: also see Zimbabweans abroad who turned it
+    // on. Both skip the distance limit for those people only. Free.
+    diasporaMode: z.boolean().nullable(),
+    openToDiaspora: z.boolean().nullable(),
     faith: pref(said(FAITH_OPTIONS)),
     wantsChildren: pref(said(WANTS_CHILDREN_OPTIONS)),
     marriage: pref(said(MARRIAGE_OPTIONS)),
@@ -33,6 +38,8 @@ export type MatchPref = { values: string[]; must: boolean };
 export type MatchPrefs = {
   verifiedOnly?: boolean;
   hasPhotos?: boolean;
+  diasporaMode?: boolean;
+  openToDiaspora?: boolean;
   faith?: MatchPref;
   wantsChildren?: MatchPref;
   marriage?: MatchPref;
@@ -77,6 +84,8 @@ export function filtersSummary(prefs: MatchPrefs | null | undefined): string {
   const parts: string[] = [];
   if (p.verifiedOnly) parts.push("Verified");
   if (p.hasPhotos) parts.push("With photos");
+  if (p.diasporaMode) parts.push("Diaspora mode");
+  if (p.openToDiaspora) parts.push("Open to diaspora");
   for (const k of ADVANCED_PREF_KEYS) if (p[k]) parts.push(PREF_FIELD_LABEL[k] + (p[k]!.must ? " (must)" : ""));
   return parts.length ? parts.join(", ") : "None set";
 }

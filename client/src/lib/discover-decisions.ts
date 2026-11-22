@@ -104,6 +104,11 @@ export function recordPass(targetId: string) {
   void sendWaitingDecisions();
 }
 
+/** A rewind brought them back on the server: forget the local decision. */
+export function forgetDecision(targetId: string) {
+  remove(targetId);
+}
+
 /** Takes a pass back. If the server never heard it, there's nothing to tell. */
 export function undoPass(targetId: string) {
   const by = me() ?? "";

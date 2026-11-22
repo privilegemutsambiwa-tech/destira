@@ -12,6 +12,7 @@ import { LayoutShell } from "@/components/layout-shell";
 import { Switch } from "@/components/ui/switch";
 import { Gated } from "@/components/gated";
 import { Chip } from "@/pages/ProfileDetails";
+import { useProfile } from "@/hooks/use-profiles";
 import { ADVANCED_PREF_KEYS, PREF_OPTIONS, type AdvancedPrefKey, type MatchPrefs } from "@shared/match-prefs";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
@@ -40,6 +41,8 @@ export default function FiltersPage() {
   const { toast } = useToast();
   const { data, isLoading } = useQuery<{ prefs: MatchPrefs; advanced: boolean }>({ queryKey: ["/api/match-prefs"] });
   const [p, setP] = useState<MatchPrefs>({});
+  const { data: profile } = useProfile();
+  const abroad = (profile as any)?.details?.base === "diaspora";
 
   useEffect(() => {
     if (data) setP(data.prefs ?? {});
@@ -129,6 +132,34 @@ export default function FiltersPage() {
         <div className="mt-4" data-testid="filters-basic">
           <ToggleRow label="Verified only" note="People who passed the selfie check." on={!!p.verifiedOnly} onChange={(v) => save({ verifiedOnly: v })} testId="pref-verified-only" />
           <ToggleRow label="With photos only" note="Skip profiles that have no photo yet." on={!!p.hasPhotos} onChange={(v) => save({ hasPhotos: v })} testId="pref-has-photos" />
+        </div>
+
+        <div className={`${EYEBROW} mt-8`}>Home and abroad</div>
+        <div className="mt-1" data-testid="filters-diaspora">
+          {abroad ? (
+            <ToggleRow
+              label="Diaspora mode"
+              note="See people at home in Zimbabwe, however far. People at home who are open to diaspora see you too."
+              on={!!p.diasporaMode}
+              onChange={(v) => save({ diasporaMode: v })}
+              testId="pref-diaspora-mode"
+            />
+          ) : (
+            <ToggleRow
+              label="Open to diaspora"
+              note="Also see Zimbabweans abroad who are looking at home, however far."
+              on={!!p.openToDiaspora}
+              onChange={(v) => save({ openToDiaspora: v })}
+              testId="pref-open-to-diaspora"
+            />
+          )}
+          <p className="text-[12.5px] text-vf-faint pb-2">
+            {abroad ? "You said you live abroad." : "Live abroad?"}{" "}
+            <button onClick={() => setLocation("/profile/details")} className="underline underline-offset-2 hover:text-vf-text" data-testid="link-filters-base">
+              {abroad ? "Change it in About you" : "Say so in About you"}
+            </button>
+            .
+          </p>
         </div>
 
         <div className={`${EYEBROW} mt-8`}>Faith, children and marriage</div>

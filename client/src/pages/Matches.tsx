@@ -8,7 +8,7 @@ import {
   useChatRequests,
   useRespondChatRequest,
 } from "@/hooks/use-interactions";
-import { Heart, Loader2, X } from "lucide-react";
+import { Heart, Loader2, Star, X } from "lucide-react";
 import { CrownBadge, CROWN_GRADIENT } from "@/components/crown-badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -174,6 +174,14 @@ function LikeCard({
       <span className="absolute top-2.5 right-2.5">
         <CrownBadge userId={like.fromUserId} onPhoto size={26} />
       </span>
+      {like.isSuper && (
+        <span
+          className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11.5px] font-semibold bg-vf-ember text-vf-ink"
+          data-testid={`badge-super-${like.matchId}`}
+        >
+          <Star className="w-3 h-3" fill="currentColor" strokeWidth={0} /> Super like
+        </span>
+      )}
       <div className="absolute left-2 right-2 bottom-2 flex gap-2">
         <button
           onClick={onPass}
@@ -409,11 +417,10 @@ export default function Matches() {
                 </div>
               </div>
             )}
-            {incoming?.seeWhoAsked === false && likes.some((l: any) => l.masked) ? (
-              <MaskedLikes count={likes.length} onPlans={() => setLocation(withFrom("/plans?feature=see_who_asked", "/matches"))} />
-            ) : likes.length > 0 ? (
+            {/* Super likes show on every plan; the rest wait for Spark. */}
+            {likes.some((l: any) => !l.masked) && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {likes.map((like: any, i: number) => (
+                {likes.filter((l: any) => !l.masked).map((like: any, i: number) => (
                   <LikeCard
                     key={`like-${like.matchId}`}
                     like={like}
@@ -425,7 +432,12 @@ export default function Matches() {
                   />
                 ))}
               </div>
-            ) : null}
+            )}
+            {incoming?.seeWhoAsked === false && likes.some((l: any) => l.masked) && (
+              <div className={likes.some((l: any) => !l.masked) ? "mt-4" : undefined}>
+                <MaskedLikes count={likes.filter((l: any) => l.masked).length} onPlans={() => setLocation(withFrom("/plans?feature=see_who_asked", "/matches"))} />
+              </div>
+            )}
             {pendingRequests.length > 0 && (
               <div className="mt-6">
                 <div className="vf-label text-vf-faint mb-2">Want to chat</div>

@@ -6,7 +6,7 @@
 // is on screen and settles under it at the end, and on desktop it stays
 // aligned with the content column instead of the whole window.
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Heart, Brain, Loader2, RotateCcw } from "lucide-react";
+import { X, Heart, Brain, Loader2, RotateCcw, Star } from "lucide-react";
 
 interface DecisionDockProps {
   name: string;
@@ -18,9 +18,15 @@ interface DecisionDockProps {
   interviewPending: boolean;
   /** Set for a few seconds after a pass, so it can be taken back. */
   undo: { name: string; onUndo: () => void } | null;
+  /** Bring back the last pass (free right after it, a rewind later). */
+  onRewind: () => void;
+  rewindPending: boolean;
+  /** A like they see first (server/discover-perks.ts). */
+  onSuperLike: () => void;
+  superPending: boolean;
 }
 
-export function DecisionDock({ name, onPass, onLike, onInterview, busy, likePending, interviewPending, undo }: DecisionDockProps) {
+export function DecisionDock({ name, onPass, onLike, onInterview, busy, likePending, interviewPending, undo, onRewind, rewindPending, onSuperLike, superPending }: DecisionDockProps) {
   const first = name.trim().split(/\s+/)[0] || "them";
   return (
     <div
@@ -52,10 +58,22 @@ export function DecisionDock({ name, onPass, onLike, onInterview, busy, likePend
       </AnimatePresence>
 
       <div
-        className="pointer-events-auto w-full max-w-[440px] flex items-center gap-3 rounded-full border border-vf-line bg-vf-surface/90 backdrop-blur-md p-2 shadow-[0_12px_40px_rgba(12,9,16,0.28)]"
+        className="pointer-events-auto w-full max-w-[440px] flex items-center gap-2 [@media(min-width:380px)]:gap-2.5 rounded-full border border-vf-line bg-vf-surface/90 backdrop-blur-md p-2 shadow-[0_12px_40px_rgba(12,9,16,0.28)]"
         role="group"
         aria-label={`Decide on ${first}`}
       >
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          onClick={onRewind}
+          disabled={rewindPending}
+          className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-vf-muted hover:text-vf-text hover:bg-vf-text/5 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-vf-ember"
+          aria-label="Bring back the last person you passed on"
+          title="Rewind (Z)"
+          data-testid="button-rewind"
+        >
+          {rewindPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-[18px] h-[18px]" />}
+        </motion.button>
+
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={onPass}
@@ -79,8 +97,20 @@ export function DecisionDock({ name, onPass, onLike, onInterview, busy, likePend
           {interviewPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4 shrink-0" />}
           {/* Long names would be cut mid-word, and a small phone has no room
               for a name at all. */}
-          <span className="truncate hidden [@media(min-width:360px)]:inline">{first.length > 9 ? "Ask their twin" : `Ask ${first}'s twin`}</span>
-          <span className="[@media(min-width:360px)]:hidden">Ask twin</span>
+          <span className="truncate hidden [@media(min-width:420px)]:inline">{first.length > 9 ? "Ask their twin" : `Ask ${first}'s twin`}</span>
+          <span className="[@media(min-width:420px)]:hidden">Ask twin</span>
+        </motion.button>
+
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          onClick={onSuperLike}
+          disabled={busy || superPending}
+          className="shrink-0 w-11 h-11 rounded-full flex items-center justify-center border border-vf-ember/45 text-vf-ember bg-vf-ember/10 hover:bg-vf-ember/15 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-vf-ember"
+          aria-label={`Super like ${first}: they see you first`}
+          title="Super like: they see you first"
+          data-testid="button-super-like"
+        >
+          {superPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Star className="w-[18px] h-[18px]" fill="currentColor" strokeWidth={0} />}
         </motion.button>
 
         <motion.button
@@ -97,7 +127,7 @@ export function DecisionDock({ name, onPass, onLike, onInterview, busy, likePend
       </div>
 
       <p className="hidden lg:block text-[11.5px] text-vf-faint font-mono tracking-[0.06em]" aria-hidden="true">
-        ← pass · → like · I interview · Z undo
+        ← pass · → like · I interview · Z undo or rewind
       </p>
     </div>
   );

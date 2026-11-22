@@ -11,7 +11,7 @@ import { requestPushNudge } from "@/lib/engagement-prompts";
 import { TwinOrbButton } from "@/components/twin-orb";
 import { WhyYouMightClick, type ClickReason } from "@/components/why-click";
 import { LocationAskSheet, hasLocationConsent } from "@/components/location-permission-modal";
-import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2 } from "lucide-react";
+import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2, Star, Zap, RotateCcw } from "lucide-react";
 import { CrownBadge } from "@/components/crown-badge";
 import { DetailChips } from "@/components/detail-chips";
 import { useDiscoverProfiles, useDiscoverExpandOptions, useStartInterview, useCreateMatch, useFeedStories, useProfileCompletion, UpgradeRequiredError, LikeWaitingError } from "@/hooks/use-interactions";
@@ -19,8 +19,8 @@ import { useTwinReadiness } from "@/hooks/use-onboarding";
 import { ScreenNotes, NOTE_PRIORITY, type NoteSpec, EmptyState, VfButton } from "@/components/ui-vf";
 import { haptic } from "@/lib/haptics";
 import { LIMITS, gateCopy } from "@shared/entitlements";
-import { usePaywall } from "@/hooks/use-paywall";
-import { useGate, resetLabel } from "@/hooks/use-gate";
+import { usePaywall, RefusalSheet } from "@/hooks/use-paywall";
+import { useGate, resetLabel, type GateState } from "@/hooks/use-gate";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -33,7 +33,8 @@ import { withFrom } from "@/lib/from-route";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
-import { recordPass, sendWaitingDecisions, undoPass as takeBackPass, useDecidedIds } from "@/lib/discover-decisions";
+import { recordPass, sendWaitingDecisions, undoPass as takeBackPass, useDecidedIds, forgetDecision, likeDelivered } from "@/lib/discover-decisions";
+import type { Feature } from "@shared/entitlements";
 import type { User } from "@shared/models/auth";
 import { dataSaverOn, photoForSaver } from "@/lib/data-saver";
 
@@ -577,6 +578,51 @@ function ExpandSearchOptions({ userLat, userLng }: { userLat: number | null; use
   );
 }
 
+type DiscoverPerks = {
+  tier: string;
+  rewind: { perDay: number | null; usedToday: number };
+  superLike: { perWeek: number; usedThisWeek: number; bought: number; left: number };
+  boost: { perWeek: number; usedThisWeek: number; bought: number; left: number; active: { endsAt: string; shownTo: number } | null };
+};
+
+/** Only for members who have a boost to use or one running. Says what it
+ *  really did: minutes left and how many decks it reached. */
+function BoostControl({ perks, onBoost, busy }: { perks?: DiscoverPerks; onBoost: () => void; busy: boolean }) {
+  const [, tick] = useState(0);
+  const active = perks?.boost.active;
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => tick((n) => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, [active]);
+  if (!perks) return null;
+  if (active) {
+    const mins = Math.max(0, Math.ceil((new Date(active.endsAt).getTime() - Date.now()) / 60_000));
+    return (
+      <div className="flex justify-center mt-3">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-vf-ember/10 text-vf-ember text-[12.5px] font-medium" data-testid="boost-on">
+          <Zap className="w-3.5 h-3.5 shrink-0" fill="currentColor" strokeWidth={0} />
+          Boost on · {mins} min left · first in {active.shownTo} {active.shownTo === 1 ? "deck" : "decks"} so far
+        </span>
+      </div>
+    );
+  }
+  if (perks.boost.left <= 0) return null;
+  return (
+    <div className="flex justify-center mt-3">
+    <button
+      onClick={onBoost}
+      disabled={busy}
+      className="inline-flex items-center gap-1 h-8 px-3 rounded-full border border-vf-ember/40 text-vf-ember text-[12.5px] font-semibold hover:bg-vf-ember/10 disabled:opacity-50"
+      data-testid="button-boost"
+    >
+      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" fill="currentColor" strokeWidth={0} />}
+      Boost for 30 minutes · {perks.boost.left} left
+    </button>
+    </div>
+  );
+}
+
 export default function Discover() {
   // Anyone liked or passed leaves the deck the instant you act, and stays out:
   // the device remembers the decision (lib/discover-decisions) until the
@@ -622,6 +668,15 @@ export default function Discover() {
   // invalidated feed query reaches this viewer while it's still open.
   const [viewingCardMeta, setViewingCardMeta] = useState<{ userId: string; displayName: string; photoUrl: string } | null>(null);
   const paywall = usePaywall();
+  // Rewind, super like and boost (server/discover-perks.ts). Their refusals
+  // come from the server, so the sheet is fed the 403 body directly.
+  const { data: perks } = useQuery<DiscoverPerks>({ queryKey: ["/api/discover/perks"] });
+  const [perkSheet, setPerkSheet] = useState<{ feature: Feature; gate: GateState } | null>(null);
+  const [rewinding, setRewinding] = useState(false);
+  const [superLiking, setSuperLiking] = useState(false);
+  const [boosting, setBoosting] = useState(false);
+  // Cards a rewind brought back that this session's pages never had.
+  const [extraCards, setExtraCards] = useState<Record<string, any>>({});
   const [confirm, setConfirm] = useState<"block" | "report" | null>(null);
   const [reportReason, setReportReason] = useState("");
   const [reportPhotoId, setReportPhotoId] = useState<number | null>(null);
@@ -719,9 +774,11 @@ export default function Discover() {
   // evaluatedIds on purpose: the counter's total shouldn't shrink every time
   // a card leaves the deck, only the position within it should climb.
   const eligibleForFilter = useMemo(() => {
-    if (!rawProfiles) return [];
-    return filter === "nearby" ? rawProfiles.filter((p: any) => p.distanceKm !== null && p.distanceKm !== undefined) : rawProfiles;
-  }, [rawProfiles, filter]);
+    const base: any[] = rawProfiles ?? [];
+    const have = new Set(base.map((p: any) => p.userId));
+    const all = [...Object.values(extraCards).filter((c: any) => !have.has(c.userId)), ...base];
+    return filter === "nearby" ? all.filter((p: any) => p.distanceKm !== null && p.distanceKm !== undefined) : all;
+  }, [rawProfiles, filter, extraCards]);
 
   // Keeps the deck's browsing order stable across renders instead of
   // re-deriving it from the raw list every time. Newly-seen candidates
@@ -790,6 +847,84 @@ export default function Discover() {
       photoUrl: profile.user?.profileImageUrl || "",
     });
   }, [storiesByUserId]);
+
+  const refusePerk = (feature: Feature, body: any) => {
+    if (body?.requiredTierName) {
+      setPerkSheet({
+        feature,
+        gate: {
+          ok: false,
+          tier: body.currentTier ?? "free",
+          limit: null,
+          resetAt: body.resetAt,
+          line: body.message,
+          action: body.action,
+          requiredTierName: body.requiredTierName,
+          requiredPrice: body.requiredPrice,
+        },
+      });
+    } else {
+      toast({ title: body?.message || "Not right now" });
+    }
+  };
+
+  // The few-second Undo is free; after that it's a rewind of the last pass.
+  const handleRewind = async () => {
+    // Still inside the free undo: the same as tapping Undo. (Written out
+    // here because the empty deck renders before handleUndoPass exists.)
+    if (undoPass) {
+      const { userId } = undoPass;
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      setUndoPass(null);
+      setExitDir(null);
+      setDismissedIds((prev) => { const next = new Set(prev); next.delete(userId); return next; });
+      setDeckOrder((prev) => [userId, ...prev.filter((id) => id !== userId)]);
+      takeBackPass(userId);
+      return;
+    }
+    if (rewinding) return;
+    setRewinding(true);
+    try {
+      const res = await fetch("/api/discover/rewind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ lat: userLat, lng: userLng }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 403) return refusePerk("rewind", body);
+      if (!res.ok) return toast({ title: body?.message || "Couldn't bring them back" });
+      const card = body.profile;
+      forgetDecision(card.userId);
+      setExtraCards((prev) => ({ ...prev, [card.userId]: card }));
+      setDismissedIds((prev) => { const next = new Set(prev); next.delete(card.userId); return next; });
+      setDeckOrder((prev) => [card.userId, ...prev.filter((id) => id !== card.userId)]);
+      setExitDir(null);
+      qc.setQueryData(["/api/discover/perks"], body.perks);
+      toast({ title: `${(card.displayName || "They").split(/\s+/)[0]} is back`, description: "Take another look." });
+    } catch {
+      toast({ title: "Couldn't bring them back", description: "Check your connection and try again.", variant: "destructive" });
+    } finally {
+      setRewinding(false);
+    }
+  };
+
+  const handleBoost = async () => {
+    if (boosting) return;
+    setBoosting(true);
+    try {
+      const res = await fetch("/api/discover/boost", { method: "POST", credentials: "include" });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 403) return refusePerk("boost", body);
+      if (body?.perks) qc.setQueryData(["/api/discover/perks"], body.perks);
+      if (res.ok) toast({ title: "Boost on", description: "For 30 minutes you're at the front of decks near you." });
+      else toast({ title: body?.message || "Couldn't start your boost" });
+    } catch {
+      toast({ title: "Couldn't start your boost", variant: "destructive" });
+    } finally {
+      setBoosting(false);
+    }
+  };
 
   if (isLoading || isOwnProfileLoading || needsEssentials) {
     return (
@@ -893,6 +1028,17 @@ export default function Discover() {
                 <ExpandSearchOptions userLat={userLat} userLng={userLng} />
               </div>
             )}
+            <div className="px-6 pb-6 -mt-2 flex justify-center">
+              <button
+                onClick={handleRewind}
+                disabled={rewinding}
+                className="inline-flex items-center gap-1.5 text-[13px] text-vf-muted hover:text-vf-text min-h-[40px] disabled:opacity-50"
+                data-testid="button-rewind-empty"
+              >
+                {rewinding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                Bring back the last person you passed on
+              </button>
+            </div>
           </div>
           <div className="mt-8 space-y-4">
             <DiscoverNotes />
@@ -1033,6 +1179,39 @@ export default function Discover() {
     });
   };
 
+  // A like they see first. If they already liked you, it's a plain like
+  // (that's already a match), so nothing is spent.
+  const handleSuperLike = async () => {
+    if (isActingRef.current || superLiking) return;
+    const target = currentProfile;
+    setSuperLiking(true);
+    try {
+      const res = await fetch("/api/discover/super-like", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ targetId: target.userId }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 409 && body?.code === "liked_you") return handleLike();
+      if (res.status === 403) return refusePerk("super_like", body);
+      if (!res.ok) return toast({ title: body?.message || "Couldn't send that super like" });
+      likeDelivered(target.userId);
+      setExitDir("right");
+      haptic.like();
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      setUndoPass(null);
+      handleNext(target.userId);
+      if (body?.perks) qc.setQueryData(["/api/discover/perks"], body.perks);
+      const first = (target.displayName || "They").split(/\s+/)[0];
+      toast({ title: "Super like sent", description: `${first} will see you first, marked as a super like.` });
+    } catch {
+      toast({ title: "Couldn't send that super like", description: "Check your connection and try again.", variant: "destructive" });
+    } finally {
+      setSuperLiking(false);
+    }
+  };
+
   const doLike = async (targetProfile: typeof currentProfile) => {
     try {
       const result = await createMatch.mutateAsync(targetProfile.userId);
@@ -1091,7 +1270,7 @@ export default function Discover() {
   const aboutText: string = currentProfile.aboutMe || currentProfile.bio || "";
 
   const upcoming = profiles.slice(1, 4);
-  keyActionsRef.current = { pass: handlePass, like: handleLike, interview: handleInterview, undo: handleUndoPass };
+  keyActionsRef.current = { pass: handlePass, like: handleLike, interview: handleInterview, undo: handleRewind };
 
   return (
     <LayoutShell>
@@ -1184,6 +1363,14 @@ export default function Discover() {
               <div className="absolute left-5 right-5 bottom-[100px] md:bottom-6 md:left-6 md:right-6 pointer-events-none">
                 {/* Crown Spotlight (server/crown-perks.ts): said plainly, so a
                     lifted card is never mistaken for the deck's own order. */}
+                {(currentProfile as any).superLiked && (
+                  <div
+                    className="inline-flex items-center gap-1.5 mb-2 mr-2 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-vf-ember text-vf-ink"
+                    data-testid="label-super-liked"
+                  >
+                    <Star className="w-3 h-3" fill="currentColor" strokeWidth={0} /> Super liked you
+                  </div>
+                )}
                 {(currentProfile as any).spotlight && (
                   <div
                     className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-1 rounded-full font-mono text-[10.5px] uppercase tracking-[0.14em]"
@@ -1294,9 +1481,14 @@ export default function Discover() {
           likePending={createMatch.isPending}
           interviewPending={startInterview.isPending}
           undo={undoPass ? { name: undoPass.name, onUndo: handleUndoPass } : null}
+          onRewind={handleRewind}
+          rewindPending={rewinding}
+          onSuperLike={handleSuperLike}
+          superPending={superLiking}
         />
         </div>
 
+        <BoostControl perks={perks} onBoost={handleBoost} busy={boosting} />
         <div className="flex items-center justify-between px-1 mt-2 mb-8">
           <p className="vf-small text-vf-faint">
             {eligibleForFilter.length - profiles.length + 1} of {eligibleForFilter.length}
@@ -1475,6 +1667,7 @@ export default function Discover() {
       )}
 
       {paywall.sheet}
+      {perkSheet && <RefusalSheet feature={perkSheet.feature} gate={perkSheet.gate} onClose={() => setPerkSheet(null)} />}
       {celebration}
     </LayoutShell>
   );

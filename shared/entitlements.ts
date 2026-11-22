@@ -46,6 +46,13 @@ export interface TierLimits {
   /** "Request Private Chat" from inside a Lounge, per rolling 7 days; free is
    *  0 — this is a paying-tier-only action, not just metered lower for free. */
   groupChatRequestsPerWeek: number | null;
+  /** Discover rewinds per day: bringing back someone you passed on after
+   *  the few-second "Undo" has gone (that one is free). null = no limit. */
+  dailyRewinds: number | null;
+  /** super likes included per rolling 7 days; bought ones come on top */
+  superLikesPerWeek: number;
+  /** boosts included per rolling 7 days; bought ones come on top */
+  boostsPerWeek: number;
 }
 
 export const LIMITS: Record<Tier, TierLimits> = {
@@ -62,6 +69,9 @@ export const LIMITS: Record<Tier, TierLimits> = {
     seeStoryEngagers: false,
     storyRepliesPerWeek: 0,
     groupChatRequestsPerWeek: 0,
+    dailyRewinds: 0,
+    superLikesPerWeek: 0,
+    boostsPerWeek: 0,
   },
   spark: {
     priceCents: 499,
@@ -76,6 +86,9 @@ export const LIMITS: Record<Tier, TierLimits> = {
     seeStoryEngagers: true,
     storyRepliesPerWeek: 20,
     groupChatRequestsPerWeek: 5,
+    dailyRewinds: 1,
+    superLikesPerWeek: 0,
+    boostsPerWeek: 0,
   },
   flame: {
     priceCents: 999,
@@ -90,6 +103,9 @@ export const LIMITS: Record<Tier, TierLimits> = {
     seeStoryEngagers: true,
     storyRepliesPerWeek: 60,
     groupChatRequestsPerWeek: 20,
+    dailyRewinds: null,
+    superLikesPerWeek: 3,
+    boostsPerWeek: 0,
   },
   ember: {
     priceCents: 1999,
@@ -104,6 +120,9 @@ export const LIMITS: Record<Tier, TierLimits> = {
     seeStoryEngagers: true,
     storyRepliesPerWeek: null,
     groupChatRequestsPerWeek: null,
+    dailyRewinds: null,
+    superLikesPerWeek: 10,
+    boostsPerWeek: 1,
   },
 };
 
@@ -115,6 +134,9 @@ export const FEATURES = [
   "read_transcript",
   "see_who_asked",
   "advanced_filters", // faith, children and marriage filters and dealbreakers (shared/match-prefs.ts)
+  "rewind", // bring back a pass after the free few-second undo (server/discover-perks.ts)
+  "super_like", // a like they see first, marked as a super like
+  "boost", // 30 minutes at the front of nearby decks
   "join_group",
   "create_group",
   "host_event",
@@ -133,6 +155,9 @@ export const FEATURE_MIN_TIER: Record<Feature, Tier> = {
   read_transcript: "flame", // full transcript
   see_who_asked: "spark",
   advanced_filters: "spark",
+  rewind: "spark",
+  super_like: "flame",
+  boost: "ember",
   join_group: "free",
   create_group: "flame",
   host_event: "flame",
@@ -177,6 +202,7 @@ export const PLAN_CARDS: PlanCard[] = [
     gets: [
       "Names and profiles of everyone who asked you",
       "Filters and dealbreakers for faith, children and marriage plans",
+      `${LIMITS.spark.dailyRewinds} rewind a day, to bring back someone you passed on`,
       `${LIMITS.spark.dailyLikes} likes a day, unlimited passes`,
       `${LIMITS.spark.weeklyInterviews} interviews a week`,
       `Up to ${LIMITS.spark.groupsMax} rooms in the Lounge`,
@@ -191,6 +217,7 @@ export const PLAN_CARDS: PlanCard[] = [
     gets: [
       "The full twin‑to‑twin transcript, every time",
       "Host your own events",
+      `${LIMITS.flame.superLikesPerWeek} super likes a week, and unlimited rewinds`,
       `${LIMITS.flame.dailyLikes} likes a day`,
       `${LIMITS.flame.weeklyInterviews} interviews a week`,
       `Up to ${LIMITS.flame.groupsMax} rooms, create up to ${LIMITS.flame.groupsCreatedMax}`,
@@ -209,6 +236,7 @@ export const PLAN_CARDS: PlanCard[] = [
       "Unlimited rooms, hosted or joined",
       "The full transcript, every time",
       "Host your own events",
+      `${LIMITS.ember.superLikesPerWeek} super likes and ${LIMITS.ember.boostsPerWeek} boost a week`,
     ],
     notYet: [],
   },
@@ -285,7 +313,7 @@ export function periodSavingsPct(tier: Tier, period: BillingPeriod): number | nu
 // says "upgrade", "unlock", or "you're missing out"; always states what you
 // CAN still do where there's an answer.
 
-const TIER_NAME: Record<Tier, string> = Object.fromEntries(
+export const TIER_NAME: Record<Tier, string> = Object.fromEntries(
   PLAN_CARDS.map((c) => [c.tier, c.name]),
 ) as Record<Tier, string>;
 
@@ -316,6 +344,9 @@ const ACTION: Record<Feature, string> = {
   read_transcript: "Reading the full transcript",
   see_who_asked: "Seeing who asked to meet you",
   advanced_filters: "Filtering by faith, children and marriage plans",
+  rewind: "Bringing back someone you passed on",
+  super_like: "Sending a super like",
+  boost: "Boosting your profile",
   join_group: "Joining another room",
   create_group: "Creating a room",
   host_event: "Hosting an event",
@@ -415,6 +446,9 @@ export function gateCopy(feature: Feature, s: GateCopyState = {}): GateCopy {
     create_group: `Creating a room starts on ${reqName}${priced}. You can still join up to ${LIMITS[curTier].groupsMax ?? "several"} on ${curName}.`,
     proximity_identity: `Your twin can tell you someone's nearby, but opening their profile needs ${reqName}${priced}.`,
     see_story_engagers: `You can see how many people viewed or liked your story, but not who. ${reqName} shows you the names and profiles${priced}.`,
+    rewind: `Bringing back someone you passed on starts on ${reqName}${priced}. The "Undo" right after a pass stays free.`,
+    super_like: `Super likes come with ${reqName}, ${LIMITS[req].superLikesPerWeek} a week${priced}. They see you first, marked as a super like.`,
+    boost: `A boost comes with ${reqName}, ${LIMITS[req].boostsPerWeek} a week${priced}: 30 minutes at the front of decks near you.`,
   };
 
   return {

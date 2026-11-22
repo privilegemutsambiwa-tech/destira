@@ -160,6 +160,9 @@ export const matches = pgTable("matches", {
   // count (messages from the other person after this timestamp).
   user1LastReadAt: timestamp("user1_last_read_at"),
   user2LastReadAt: timestamp("user2_last_read_at"),
+  // A super like: the receiver sees it first and it's marked as one
+  // (server/discover-perks.ts).
+  isSuper: boolean("is_super").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -895,6 +898,33 @@ export const discoverPasses = pgTable("discover_passes", {
 }, (t) => [
   uniqueIndex("discover_passes_user_target_idx").on(t.userId, t.targetId),
 ]);
+
+// A pass brought back after the free few-second undo (Spark: 1 a day).
+export const discoverRewinds = pgTable("discover_rewinds", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  targetId: varchar("target_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [index("discover_rewinds_user_idx").on(t.userId, t.createdAt)]);
+
+// 30 minutes at the front of nearby decks. source: "plan" (Ember's weekly
+// one) or "credit" (bought, from profiles.boostsRemaining).
+export const discoverBoosts = pgTable("discover_boosts", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  source: text("source").notNull(),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  endsAt: timestamp("ends_at").notNull(),
+}, (t) => [index("discover_boosts_ends_idx").on(t.endsAt)]);
+
+// Each deck a boost was actually placed at the front of, once per viewer:
+// the honest "shown to N people" the member who boosted sees.
+export const discoverBoostViews = pgTable("discover_boost_views", {
+  id: serial("id").primaryKey(),
+  boostId: integer("boost_id").notNull().references(() => discoverBoosts.id),
+  viewerId: varchar("viewer_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [uniqueIndex("discover_boost_views_boost_viewer_idx").on(t.boostId, t.viewerId)]);
 
 export const dailyLikeCounts = pgTable("daily_like_counts", {
   id: serial("id").primaryKey(),
