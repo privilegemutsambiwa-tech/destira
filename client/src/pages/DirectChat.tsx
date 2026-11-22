@@ -16,7 +16,11 @@ import { parseDestiraLink } from "@/lib/link-preview";
 import { LinkPreviewCard } from "@/components/link-preview-card";
 import { SafetyTip } from "@/components/safety-tip";
 import { RISK_LABEL } from "@shared/safety";
-import { enqueue, isConnectionError } from "@/lib/outbox";
+import { enqueue, enqueueReaction, isConnectionError, newClientId, useOutbox } from "@/lib/outbox";
+import { DmSpecialBody, MessageActions, ReactionChips, TypingBubble, useTyping } from "@/components/dm-message";
+import { MicButton, PhotoButton, RecordingBar, useVoiceNote } from "@/components/dm-composer-extras";
+import { Pencil as PencilIcon, X as XIcon } from "lucide-react";
+import type { DmMessageView } from "@shared/dm";
 import { OutboxBubbles } from "@/components/outbox-bubbles";
 import { IconButton, TwinGlyph, VfAvatar, VfButton, VfSheet } from "@/components/ui-vf";
 import { ease } from "@/lib/motion";
@@ -163,6 +167,11 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
   const [reportReason, setReportReason] = useState("");
   const [reportBusy, setReportBusy] = useState(false);
   const [confirm, setConfirm] = useState<"block" | "unmatch" | null>(null);
+  // Editing one of my messages: the composer holds its text until saved.
+  const [editing, setEditing] = useState<DmMessageView | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const voice = useVoiceNote(matchId);
+  const queued = useOutbox("direct", matchId);
 
   const submitReport = async () => {
     if (!reportTarget) return;
@@ -216,6 +225,45 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
     : null;
 
   const list: any[] = Array.isArray(messages) ? messages : [];
+  const typing = useTyping(matchId, input, !!match && !editing);
+  // A reaction still in the outbox shows on its message straight away.
+  const reactionsFor = (msg: DmMessageView) => {
+    const waiting = queued.find((q) => q.op === "react" && q.messageId === msg.id);
+    const base = (msg.reactions ?? []).filter((r) => !(waiting && r.userId === user?.id));
+    return waiting?.emoji && user?.id ? [...base, { userId: user.id, emoji: waiting.emoji }] : base;
+  };
+  const react = (msg: DmMessageView, emoji: string | null) => {
+    enqueueReaction(matchId, msg.id, emoji);
+    setShownTimeId(null);
+  };
+  const unsend = async (msg: DmMessageView) => {
+    setShownTimeId(null);
+    try {
+      await apiRequest("DELETE", `/api/dm/${msg.id}`);
+      queryClient.invalidateQueries({ queryKey: ["/api/messages", matchId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/chat/threads"] });
+    } catch (e: any) {
+      const m = String(e?.message || "").replace(/^\d+:\s*/, "");
+      toast({ title: "Couldn't unsend", description: m || "Check your connection and try again.", variant: "destructive" });
+    }
+  };
+  // A tapped message's actions can sit under the composer: bring them up.
+  useEffect(() => {
+    if (shownTimeId == null) return;
+    requestAnimationFrame(() =>
+      document.querySelector(`[data-testid="message-${shownTimeId}"]`)?.parentElement?.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" }),
+    );
+  }, [shownTimeId, reduce]);
+  const startEdit = (msg: DmMessageView) => {
+    setShownTimeId(null);
+    setEditing(msg);
+    setInput(msg.content);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+  const cancelEdit = () => {
+    setEditing(null);
+    setInput("");
+  };
   // "Seen" moves as they read: re-read the match when new messages land.
   useEffect(() => {
     if (list.length) refetchMatches();
@@ -249,21 +297,41 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
     el.style.height = `${Math.min(el.scrollHeight, 5 * 22 + 20)}px`;
   }, [input]);
 
+  const saveEdit = async () => {
+    if (!editing || !input.trim()) return;
+    if (input.trim() === editing.content.trim()) return cancelEdit();
+    setSavingEdit(true);
+    try {
+      await apiRequest("PATCH", `/api/dm/${editing.id}`, { content: input });
+      cancelEdit();
+      queryClient.invalidateQueries({ queryKey: ["/api/messages", matchId] });
+    } catch (e: any) {
+      const m = String(e?.message || "").replace(/^\d+:\s*/, "");
+      toast({ title: "Couldn't save the edit", description: m || "Check your connection and try again.", variant: "destructive" });
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const handleSend = async () => {
+    if (editing) return saveEdit();
     if (!input.trim()) return;
     const text = input;
+    // The same id for the first try and any outbox retry.
+    const clientId = newClientId();
     setInput("");
     suggestions.clear();
+    typing.sent();
     // No connection: it waits in the outbox and sends itself later.
     if (navigator.onLine === false) {
-      enqueue("direct", matchId, text);
+      enqueue("direct", matchId, text, undefined, clientId);
       return;
     }
     try {
-      await sendMessage.mutateAsync(text);
+      await sendMessage.mutateAsync({ content: text, clientId });
     } catch (error) {
       if (isConnectionError(error)) {
-        enqueue("direct", matchId, text);
+        enqueue("direct", matchId, text, undefined, clientId);
         return;
       }
       console.error("Failed to send:", error);
@@ -336,7 +404,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
               )}
             </span>
             <span className="block vf-label text-vf-faint truncate mt-0.5">
-              {firstReply ? `${otherFirst} replied` : otherMeta || "Matched"}
+              {typing.theyType ? "typing…" : firstReply ? `${otherFirst} replied` : otherMeta || "Matched"}
             </span>
           </span>
         </button>
@@ -402,31 +470,62 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
                     transition={{ duration: 0.18 }}
                     className={`flex flex-col ${isMe ? "items-end" : "items-start"} ${joinsPrev ? "mt-0.5" : newDay ? "" : "mt-3"}`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => setShownTimeId(showTime ? null : msg.id)}
-                      className={`text-left max-w-[80%] px-4 py-2.5 text-[15px] leading-[1.45] break-words whitespace-pre-wrap ${corner} ${msg.pending ? "opacity-70" : ""} ${
-                        isMe
-                          ? "bg-vf-ember/[0.16] border border-vf-ember/25 text-vf-text"
-                          : "bg-vf-surface border border-vf-line text-vf-text"
-                      }`}
-                      data-testid={`message-${msg.id}`}
-                    >
-                      {link ? <LinkPreviewCard content={msg.content} /> : msg.content}
-                    </button>
-                    {(showTime || isMyLast) && (
-                      <div className={`flex items-center gap-2 mt-1 px-1 font-mono text-[11px] text-vf-faint ${isMe ? "justify-end" : ""}`}>
-                        {showTime && <span>{timeLabel(at)}</span>}
+                    {msg.unsentAt || (msg.contentType && msg.contentType !== "text") ? (
+                      <div
+                        className={`max-w-[80%] ${msg.pending ? "opacity-70" : ""}`}
+                        // Tapping the bubble (not its play button or photo) shows the actions;
+                        // a long press works on a photo too.
+                        onClick={(e) => { if (!(e.target as HTMLElement).closest("button")) setShownTimeId(showTime ? null : msg.id); }}
+                        onContextMenu={(e) => { e.preventDefault(); setShownTimeId(msg.id); }}
+                        data-testid={`message-${msg.id}`}
+                      >
+                        <DmSpecialBody
+                          msg={msg}
+                          isMe={isMe}
+                          corner={corner}
+                          onChanged={() => queryClient.invalidateQueries({ queryKey: ["/api/messages", matchId] })}
+                        />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShownTimeId(showTime ? null : msg.id)}
+                        className={`text-left max-w-[80%] px-4 py-2.5 text-[15px] leading-[1.45] break-words whitespace-pre-wrap ${corner} ${msg.pending ? "opacity-70" : ""} ${
+                          isMe
+                            ? "bg-vf-ember/[0.16] border border-vf-ember/25 text-vf-text"
+                            : "bg-vf-surface border border-vf-line text-vf-text"
+                        } ${editing?.id === msg.id ? "ring-2 ring-vf-ember/50" : ""}`}
+                        data-testid={`message-${msg.id}`}
+                      >
+                        {link ? <LinkPreviewCard content={msg.content} /> : msg.content}
+                      </button>
+                    )}
+                    {!msg.pending && (
+                      <ReactionChips
+                        reactions={reactionsFor(msg)}
+                        myId={user?.id}
+                        isMe={isMe}
+                        onTap={(e) => react(msg, reactionsFor(msg).some((r) => r.userId === user?.id && r.emoji === e) ? null : e)}
+                      />
+                    )}
+                    {showTime && !msg.pending ? (
+                      <MessageActions
+                        msg={msg}
+                        isMe={isMe}
+                        myReaction={reactionsFor(msg).find((r) => r.userId === user?.id)?.emoji}
+                        onReact={(e) => react(msg, e)}
+                        onEdit={() => startEdit(msg)}
+                        onUnsend={() => unsend(msg)}
+                        onReport={() => { setReportTarget({ userId: msg.senderId, messageId: msg.id }); setShownTimeId(null); }}
+                      >
+                        <span>{timeLabel(at)}</span>
+                        {msg.editedAt && !msg.unsentAt && <span data-testid={`edited-${msg.id}`}>Edited</span>}
                         {isMyLast && <span data-testid="message-state">{seen ? "Seen" : "Sent"}</span>}
-                        {showTime && !isMe && (
-                          <button
-                            onClick={() => { setReportTarget({ userId: msg.senderId, messageId: msg.id }); setShownTimeId(null); }}
-                            className="inline-flex items-center gap-1 text-vf-faint hover:text-vf-text"
-                            data-testid={`action-report-${msg.id}`}
-                          >
-                            <Flag className="w-3 h-3" /> Report
-                          </button>
-                        )}
+                      </MessageActions>
+                    ) : (isMyLast || (msg.editedAt && !msg.unsentAt)) && (
+                      <div className={`flex items-center gap-2 mt-1 px-1 font-mono text-[11px] text-vf-faint ${isMe ? "justify-end" : ""}`}>
+                        {msg.editedAt && !msg.unsentAt && <span data-testid={`edited-${msg.id}`}>Edited</span>}
+                        {isMyLast && <span data-testid="message-state">{seen ? "Seen" : "Sent"}</span>}
                       </div>
                     )}
                   </motion.div>
@@ -470,6 +569,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
           <div className="mt-3 flex flex-col gap-1">
             <OutboxBubbles kind="direct" targetId={matchId} />
           </div>
+          {typing.theyType && <TypingBubble />}
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -516,11 +616,24 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
             )}
           </AnimatePresence>
 
+          {editing && (
+            <div className="mb-2 flex items-center gap-2 rounded-[14px] border border-vf-line bg-vf-surface px-3 py-2" data-testid="editing-banner">
+              <PencilIcon className="w-3.5 h-3.5 text-vf-ember shrink-0" />
+              <span className="vf-small text-vf-muted flex-1 truncate">Editing: {editing.content}</span>
+              <button type="button" onClick={cancelEdit} className="w-8 h-8 -mr-1 flex items-center justify-center text-vf-faint hover:text-vf-text" aria-label="Stop editing" data-testid="button-cancel-edit">
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+          {voice.state === "recording" ? (
+            <RecordingBar elapsed={voice.elapsed} onCancel={voice.cancel} onSend={voice.stop} />
+          ) : (
           <form
             className="flex items-end gap-2"
             onSubmit={(e) => { e.preventDefault(); handleSend(); }}
           >
-            {list.length > 0 && (
+            {!editing && <PhotoButton matchId={matchId} otherFirst={otherFirst} disabled={!match} />}
+            {list.length > 0 && !editing && (
               <IconButton
                 label="Help me reply"
                 variant="twin"
@@ -547,16 +660,21 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
               className="flex-1 min-h-[44px] resize-none rounded-[22px] px-4 py-[11px] text-[16px] leading-[22px] bg-vf-surface border border-vf-line text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-text/25"
               data-testid="input-message"
             />
+            {!input.trim() && !editing && voice.available ? (
+              <MicButton onStart={voice.start} disabled={!match || voice.state !== "idle"} />
+            ) : (
             <button
               type="submit"
-              disabled={!input.trim() || sendMessage.isPending}
+              disabled={!input.trim() || sendMessage.isPending || savingEdit}
               className="vf-press shrink-0 w-11 h-11 rounded-full flex items-center justify-center bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] disabled:opacity-40 transition-colors"
-              aria-label="Send"
+              aria-label={editing ? "Save edit" : "Send"}
               data-testid="button-send"
             >
               <ArrowUp className="w-5 h-5" strokeWidth={2.25} />
             </button>
+            )}
           </form>
+          )}
         </div>
       </div>
 

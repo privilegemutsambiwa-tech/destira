@@ -255,8 +255,30 @@ export const directMessages = pgTable("direct_messages", {
   // Admin moderation removal — same shape as groupMessages' isDeletedByAdmin.
   isDeletedByAdmin: boolean("is_deleted_by_admin").default(false),
   originalContent: text("original_content"),
+  // Photos and voice notes (server/dm-extras.ts). content holds a short
+  // label ("Photo", "Voice note") so previews and pushes read naturally.
+  contentType: text("content_type").notNull().default("text"),
+  mediaKey: text("media_key"),
+  mediaMeta: jsonb("media_meta").$type<{ mime?: string; durationMs?: number; viewOnce?: boolean; width?: number; height?: number }>(),
+  // A view-once photo, opened by the recipient: never served again.
+  viewedAt: timestamp("viewed_at"),
+  editedAt: timestamp("edited_at"),
+  // Taken back by the sender: content is cleared for both sides (the
+  // original stays in originalContent for reports, never sent to clients).
+  unsentAt: timestamp("unsent_at"),
+  // Set by the device that wrote it, so an outbox retry can't send twice.
+  clientId: text("client_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// One reaction per member per direct message (a new one replaces the old).
+export const dmReactions = pgTable("dm_reactions", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").notNull().references(() => directMessages.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  emoji: text("emoji").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [uniqueIndex("dm_reactions_message_user_idx").on(t.messageId, t.userId)]);
 
 export const groupMessages = pgTable("group_messages", {
   id: serial("id").primaryKey(),

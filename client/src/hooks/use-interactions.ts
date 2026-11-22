@@ -467,22 +467,28 @@ function myUserId(queryClient: ReturnType<typeof useQueryClient>) {
   return (queryClient.getQueryData(["/api/auth/user"]) as { id?: string } | undefined)?.id;
 }
 
+// `clientId` lets the outbox retry this exact message without the server
+// keeping two copies if the first attempt did arrive.
+type DirectSend = string | { content: string; clientId?: string };
+const sendParts = (v: DirectSend) => (typeof v === "string" ? { content: v } : v);
+
 export function useSendDirectMessage(matchId: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async (v: DirectSend) => {
       const res = await fetch(`/api/messages/${matchId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify(sendParts(v)),
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to send message");
       return res.json();
     },
-    onMutate: (content: string) => {
+    onMutate: (v: DirectSend) => {
       haptic.send();
-      return showPendingMessage(queryClient, ["/api/messages", matchId], (me) => ({ senderId: me, content }));
+      const { content } = sendParts(v);
+      return showPendingMessage(queryClient, ["/api/messages", matchId], (me) => ({ senderId: me, content, contentType: "text", reactions: [] }));
     },
     onError: (_err, _content, context) => context?.undo(),
     onSuccess: (msg, _content, context) => {

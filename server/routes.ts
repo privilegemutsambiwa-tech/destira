@@ -60,6 +60,8 @@ import { registerCrownRoutes, canPayCrown } from "./crown";
 import { registerCrownPerkRoutes, applySpotlight, dropLiftedToday, privateModeHides, introMatchIds } from "./crown-perks";
 import { registerDiscoverPerkRoutes, applyBoosts, dropBoosted, undoOrRewind } from "./discover-perks";
 import { recordShown, startMatchStatsSweep } from "./matching";
+import { registerDmExtraRoutes, presentDirectMessages, findByClientId, cleanClientId, isDmMediaKey, stoppedTyping } from "./dm-extras";
+import { DM_TEXT_MAX } from "@shared/dm";
 import { isCrownPeriod } from "@shared/crown";
 import { DETAILS_SCHEMA, detailFacts, mergeDetails } from "@shared/profile-details";
 import { ADVANCED_PREF_KEYS, MATCH_PREFS_SCHEMA, mergePrefs } from "@shared/match-prefs";
@@ -184,6 +186,7 @@ export async function registerRoutes(
     return (req: any, res: any, next: any) => (req.method === "POST" ? limiter(req, res, next) : next());
   };
   app.use(/^\/api\/messages\/\d+$/, perMember(60 * 1000, 30, "You're sending messages very fast. Take a breath and try again in a minute."));
+  app.use(/^\/api\/messages\/\d+\/media$/, perMember(60 * 1000, 15, "You're sending a lot of photos and voice notes. Try again in a minute."));
   app.use(/^\/api\/groups\/\d+\/messages$/, perMember(60 * 1000, 30, "You're posting very fast. Try again in a minute."));
   app.use(/^\/api\/stories\/\d+\/comments$/, perMember(60 * 1000, 20, "Too many replies at once. Try again in a minute."));
   app.use(/^\/api\/users\/[^/]+\/report$/, perMember(60 * 60 * 1000, 20, "You've sent a lot of reports this hour. Our team is on it; try again later."));
@@ -214,6 +217,8 @@ export async function registerRoutes(
   registerDiscoverPerkRoutes(app, getUserId, withClickReasons);
   // The deck score's daily inputs: reply rates and the popularity cap.
   startMatchStatsSweep();
+  // Chat: reactions, photos, voice notes, typing, edit and unsend.
+  registerDmExtraRoutes(app, getUserId);
   registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group
@@ -1326,6 +1331,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!key || key.includes("..")) return res.sendStatus(400);
     // Verification selfies are for the review team only (server/verification.ts).
     if (isSelfieKey(key)) return res.sendStatus(404);
+    // Chat photos and voice notes go through /api/dm/media/:id (server/dm-extras.ts).
+    if (isDmMediaKey(key)) return res.sendStatus(404);
 
     // Files never change (unique names): let the browser keep them, and hand
     // out the same storage link for a day so it lands on its cached copy.
@@ -2258,7 +2265,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
         storage.getInterviewBetween(userId, otherId),
         storage.getInterestsForUsers([userId, otherId]),
       ]);
-      const recent = msgs.slice(-12).map((m: any) => ({ from: m.senderId === userId ? "me" : "them", text: String(m.content).slice(0, 500) }));
+      const recent = msgs.filter((m: any) => !m.unsentAt).slice(-12).map((m: any) => ({ from: m.senderId === userId ? "me" : "them", text: String(m.content).slice(0, 500) }));
       let twinNotes: string[] = [];
       if (interview?.summary) {
         try {
@@ -2987,7 +2994,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const msgs = await storage.getDirectMessages(matchId);
       // Viewing the thread is what clears its unread count on the chat list.
       storage.markDirectMessagesRead(matchId, userId).catch(() => {});
-      res.json(msgs);
+      res.json(await presentDirectMessages(msgs, userId));
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch messages" });
     }
@@ -3016,14 +3023,28 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     const matchId = parseInt(req.params.matchId);
     const { content } = req.body;
+    if (typeof content !== "string" || !content.trim()) return res.status(400).json({ message: "A message can't be empty" });
+    if (content.length > DM_TEXT_MAX) return res.status(400).json({ message: "That message is too long" });
+    // Set by the outbox, so a retry of a message that did arrive isn't sent twice.
+    const clientId = cleanClientId(req.body?.clientId);
     try {
       const match = await storage.getMatch(matchId);
       if (!match) return res.status(404).json({ message: "Match not found" });
       if (match.user1Id !== userId && match.user2Id !== userId) return res.sendStatus(403);
       if (match.status !== "matched") return res.status(400).json({ message: "Not matched yet" });
       if (await safety.blockIfHeld(res, userId)) return;
-      const msg = await storage.sendDirectMessage(matchId, userId, content);
-      res.status(201).json(msg);
+      const dup = await findByClientId(matchId, clientId);
+      if (dup) return res.status(200).json((await presentDirectMessages([dup], userId))[0]);
+      let msg;
+      try {
+        msg = await storage.sendDirectMessage(matchId, userId, content, { clientId });
+      } catch (e) {
+        msg = await findByClientId(matchId, clientId);
+        if (!msg) throw e;
+        return res.status(200).json((await presentDirectMessages([msg], userId))[0]);
+      }
+      stoppedTyping(matchId, userId);
+      res.status(201).json((await presentDirectMessages([msg], userId))[0]);
       const recipientId = match.user1Id === userId ? match.user2Id : match.user1Id;
       safety.scanText({ senderId: userId, text: content, source: "dm", refId: msg.id, recipientId }).catch(() => {});
       const senderProfile = await storage.getProfile(userId);
@@ -4544,7 +4565,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
                 partnerId: m.otherProfile?.userId ?? null,
                 name: m.otherProfile?.displayName || "Match",
                 avatar: m.otherProfile?.coverPhotoUrl || null,
-                lastMessage: lastMsg?.content || "Start chatting!",
+                lastMessage: lastMsg?.unsentAt ? "Message unsent" : lastMsg?.content || "Start chatting!",
                 lastMessageAt: lastMsg?.createdAt || m.createdAt,
                 unreadCount,
                 href: `/chat/${m.id}`,

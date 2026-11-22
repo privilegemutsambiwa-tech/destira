@@ -236,7 +236,7 @@ export interface IStorage {
   getMediaMessages(groupId: number): Promise<GroupMessage[]>;
 
   getDirectMessages(matchId: number, limit?: number): Promise<DirectMessage[]>;
-  sendDirectMessage(matchId: number, senderId: string, content: string): Promise<DirectMessage>;
+  sendDirectMessage(matchId: number, senderId: string, content: string, extra?: Partial<typeof directMessages.$inferInsert>): Promise<DirectMessage>;
   getDirectMessage(messageId: number): Promise<DirectMessage | undefined>;
   deleteDirectMessageByAdmin(messageId: number): Promise<DirectMessage>;
 
@@ -1689,15 +1689,19 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(groupMessages.createdAt));
   }
 
-  async getDirectMessages(matchId: number, limit: number = 50): Promise<DirectMessage[]> {
-    return db.select().from(directMessages)
+  // The latest `limit` messages, oldest first for rendering. (Taking the
+  // first `limit` in ascending order froze a long conversation at its 50th
+  // message.)
+  async getDirectMessages(matchId: number, limit: number = 200): Promise<DirectMessage[]> {
+    const latest = await db.select().from(directMessages)
       .where(eq(directMessages.matchId, matchId))
-      .orderBy(asc(directMessages.createdAt))
+      .orderBy(desc(directMessages.createdAt), desc(directMessages.id))
       .limit(limit);
+    return latest.reverse();
   }
 
-  async sendDirectMessage(matchId: number, senderId: string, content: string): Promise<DirectMessage> {
-    const [msg] = await db.insert(directMessages).values({ matchId, senderId, content }).returning();
+  async sendDirectMessage(matchId: number, senderId: string, content: string, extra: Partial<typeof directMessages.$inferInsert> = {}): Promise<DirectMessage> {
+    const [msg] = await db.insert(directMessages).values({ ...extra, matchId, senderId, content }).returning();
     return msg;
   }
 
