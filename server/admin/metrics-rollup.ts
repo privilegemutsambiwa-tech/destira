@@ -84,7 +84,7 @@ async function rollFunnelForCohortDay(dateStr: string) {
     db.selectDistinct({ userId: userAnswers.userId }).from(userAnswers).where(inArray(userAnswers.userId, ids)),
     db.select({ n: count() }).from(profiles).where(and(inArray(profiles.userId, ids), isNotNull(profiles.twinPersona))),
     db.selectDistinct({ userId: interviews.requesterId }).from(interviews).where(inArray(interviews.requesterId, ids)),
-    db.selectDistinct({ userId: matches.user1Id }).from(matches).where(and(inArray(matches.user1Id, ids), eq(matches.status, "matched"))),
+    db.selectDistinct({ userId: matches.user1Id }).from(matches).where(and(inArray(matches.user1Id, ids), eq(matches.status, "matched"), eq(matches.kind, "love"))),
   ]);
   await upsert(dateStr, "funnel.basics_complete", Number(basics[0]?.n ?? 0));
   await upsert(dateStr, "funnel.soul_answer", soulAns.length);
@@ -183,7 +183,8 @@ async function rollMatching(dateStr: string) {
   const [likesRow] = await db.select({ total: sum(dailyLikeCounts.count) }).from(dailyLikeCounts).where(eq(dailyLikeCounts.date, dateStr));
   await upsert(dateStr, "match.likes_sent", Number(likesRow?.total ?? 0));
 
-  const asks = await db.select({ id: matches.id, status: matches.status }).from(matches).where(and(gte(matches.createdAt, start), lt(matches.createdAt, end)));
+  // Dating only: a friendship (two waves) is not a like or a match.
+  const asks = await db.select({ id: matches.id, status: matches.status }).from(matches).where(and(gte(matches.createdAt, start), lt(matches.createdAt, end), eq(matches.kind, "love")));
   await upsert(dateStr, "match.asks", asks.length);
   const mutual = asks.filter((a) => a.status === "matched").length;
   await upsert(dateStr, "match.mutual_matches_of_cohort", mutual);
@@ -204,11 +205,11 @@ async function rollMatching(dateStr: string) {
     const withMatch = await db
       .selectDistinct({ userId: matches.user1Id })
       .from(matches)
-      .where(and(inArray(matches.user1Id, oldIds), eq(matches.status, "matched")));
+      .where(and(inArray(matches.user1Id, oldIds), eq(matches.status, "matched"), eq(matches.kind, "love")));
     const withMatch2 = await db
       .selectDistinct({ userId: matches.user2Id })
       .from(matches)
-      .where(and(inArray(matches.user2Id, oldIds), eq(matches.status, "matched")));
+      .where(and(inArray(matches.user2Id, oldIds), eq(matches.status, "matched"), eq(matches.kind, "love")));
     const haveMatch = new Set([...withMatch.map((r) => r.userId), ...withMatch2.map((r) => r.userId)]);
     const zeroPct = Math.round(((oldIds.length - haveMatch.size) / oldIds.length) * 1000) / 10;
     await upsert(dateStr, "match.zero_matches_14d_pct", zeroPct);

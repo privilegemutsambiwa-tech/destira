@@ -1,3 +1,4 @@
+import { LOOKING_FOR_OPTIONS, lookingForOf, type LookingFor } from "@shared/friends";
 import { PUSH_CATEGORIES, PUSH_CATEGORY_INFO, PUSH_DAILY_BUDGET, QUIET_END_HOUR, QUIET_START_HOUR, type NotificationCategory } from "@shared/notify";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
@@ -27,6 +28,33 @@ import { PushTestRow } from "@/components/push-test";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from "@/components/ui/dialog";
+
+// Love, Friends or Both (Part O): three buttons at the top of Discovery.
+function LookingForRow({ value, onChange }: { value: LookingFor; onChange: (v: LookingFor) => void }) {
+  return (
+    <div className="px-1 pt-1 pb-3 border-b border-vf-line mb-1" data-testid="row-looking-for">
+      <div className="text-[15px] text-vf-text">Here for</div>
+      <div className="text-[12.5px] text-vf-faint mt-0.5">Friends is its own space, never romantic.</div>
+      <div className="grid grid-cols-3 gap-2 mt-3" role="radiogroup" aria-label="Here for">
+        {LOOKING_FOR_OPTIONS.map((o) => {
+          const on = o.value === value;
+          return (
+            <button
+              key={o.value}
+              role="radio"
+              aria-checked={on}
+              onClick={() => !on && onChange(o.value)}
+              className={`h-10 rounded-full text-[14px] border transition-colors ${on ? "bg-vf-ember text-vf-ink border-vf-ember font-medium" : "border-vf-line text-vf-muted hover:text-vf-text"}`}
+              data-testid={`looking-for-${o.value}`}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const PUSH_ICON: Record<NotificationCategory, typeof Bell> = {
   matches: Zap,
@@ -2195,9 +2223,18 @@ export default function Settings() {
     {
       id: "discovery",
       label: "Discovery",
-      keywords: "location distance km proximity alerts age range who you see gender events preferences filters dealbreakers faith children marriage verified",
+      keywords: "love friends both here for location distance km proximity alerts age range who you see gender events preferences filters dealbreakers faith children marriage verified",
       content: (
         <div className="vf-card" style={cardStyle}>
+          <LookingForRow
+            value={lookingForOf((profile as any)?.lookingFor)}
+            onChange={async (v) => {
+              if (!profile) return;
+              const seekingNone = !((profile.seekingGenders as string[] | null)?.length);
+              await updateProfile.mutateAsync({ userId: profile.userId, data: v === "friends" && seekingNone ? { lookingFor: v, seekingGenders: ["everyone"] } : { lookingFor: v } as any });
+              toast({ title: v === "friends" ? "Friends only. Your dating profile is hidden." : v === "both" ? "Love and Friends, kept separate." : "Love only. Friends is off." });
+            }}
+          />
           <ChevronRow icon={MapPin} label="How far to look" sublabel={`Within ${profile?.maxDistanceKm ?? 100} km`} onClick={() => setActivePanel("location")} testId="row-location" />
           <ChevronRow icon={Sliders} label="Age range" sublabel={`${profile?.ageMinPreference ?? 18}–${profile?.ageMaxPreference ?? 65} years`} onClick={() => setActivePanel("age-range")} testId="row-age-range" />
           <ChevronRow

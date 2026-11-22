@@ -44,7 +44,7 @@ export async function getFirstDayState(userId: string): Promise<FirstDayState> {
     db.select({ n: count() }).from(eventAttendees).where(and(eq(eventAttendees.userId, userId), inArray(eventAttendees.status, ["going", "waitlisted", "requested"]))),
     // A like they sent, or one they answered (liking back makes them user2 on a
     // matched row) — both are "liked someone".
-    db.select({ n: count() }).from(matches).where(or(eq(matches.user1Id, userId), and(eq(matches.user2Id, userId), eq(matches.status, "matched")))),
+    db.select({ n: count() }).from(matches).where(and(eq(matches.kind, "love"), or(eq(matches.user1Id, userId), and(eq(matches.user2Id, userId), eq(matches.status, "matched"))))),
     db.select({ at: firstDayRewards.claimedAt }).from(firstDayRewards).where(eq(firstDayRewards.userId, userId)),
   ]);
 

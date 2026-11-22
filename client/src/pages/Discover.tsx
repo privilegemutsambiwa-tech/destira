@@ -12,7 +12,8 @@ import { requestPushNudge } from "@/lib/engagement-prompts";
 import { TwinOrbButton } from "@/components/twin-orb";
 import { WhyYouMightClick, type ClickReason } from "@/components/why-click";
 import { LocationAskSheet, hasLocationConsent } from "@/components/location-permission-modal";
-import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2, Star, Zap, RotateCcw } from "lucide-react";
+import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2, Star, Zap, RotateCcw, Users } from "lucide-react";
+import { lookingForOf, wantsFriends } from "@shared/friends";
 import { CrownBadge } from "@/components/crown-badge";
 import { DetailChips } from "@/components/detail-chips";
 import { useDiscoverProfiles, useDiscoverExpandOptions, useStartInterview, useCreateMatch, useFeedStories, useProfileCompletion, UpgradeRequiredError, LikeWaitingError } from "@/hooks/use-interactions";
@@ -23,7 +24,7 @@ import { LIMITS, gateCopy } from "@shared/entitlements";
 import { usePaywall, RefusalSheet } from "@/hooks/use-paywall";
 import { useGate, resetLabel, type GateState } from "@/hooks/use-gate";
 import { apiRequest } from "@/lib/queryClient";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -441,6 +442,8 @@ function DiscoverTopBar({ filter, onScope, name }: { filter: FilterChip; onScope
   const now = new Date();
   const date = now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
   const { data: seats } = useMySeats();
+  const { data: me } = useProfile();
+  const friendsToo = wantsFriends((me as any)?.lookingFor);
   return (
     <header className="mb-5 flex flex-col gap-3" data-testid="discover-top-bar">
       <div className="flex items-start gap-3">
@@ -454,6 +457,16 @@ function DiscoverTopBar({ filter, onScope, name }: { filter: FilterChip; onScope
       </div>
       <div className="flex flex-wrap items-center gap-2" data-testid="filter-chips">
         <ScopePill active={filter === "nearby"} onToggle={onScope} />
+        {friendsToo && (
+          <Link href="/friends">
+            <span
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-vf-mint/40 text-vf-mint text-[13px] cursor-pointer hover:bg-vf-mint/[0.08]"
+              data-testid="chip-friends"
+            >
+              <Users className="w-3.5 h-3.5" /> Friends
+            </span>
+          </Link>
+        )}
         <FirstDayChip />
       </div>
       <TonightSeatStrip seats={seats} />
@@ -749,6 +762,11 @@ export default function Discover() {
   useEffect(() => {
     if (needsEssentials) setLocation("/essentials");
   }, [needsEssentials, setLocation]);
+  // Here for friends only: their deck is Friends (Part O).
+  const friendsOnly = !isOwnProfileLoading && lookingForOf((ownProfile as any)?.lookingFor) === "friends";
+  useEffect(() => {
+    if (friendsOnly) setLocation("/friends");
+  }, [friendsOnly, setLocation]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

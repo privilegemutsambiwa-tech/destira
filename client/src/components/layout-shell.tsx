@@ -14,8 +14,10 @@ import {
   Search,
   CalendarDays,
   Bell,
+  Hand,
   Command as CommandIcon,
 } from "lucide-react";
+import { lookingForOf } from "@shared/friends";
 import { useActivityUnread, useNewSince } from "@/hooks/use-activity";
 import { PLAN_CARDS } from "@shared/entitlements";
 import { VfAvatar } from "./ui-vf";
@@ -57,10 +59,14 @@ export function LayoutShell({ children }: LayoutShellProps) {
   }
 
   const likesBadge = likesData?.totalCount || 0;
+  const friendsOnly = lookingForOf((profile as any)?.lookingFor) === "friends";
 
   const navItems = [
     // `dot`: something new since you last looked (Part I). No counts, no streaks.
-    { href: "/discover", icon: Search, label: "Discover", badge: 0, dot: !!fresh?.discover },
+    // Here for friends only: the first tab is their Friends deck (Part O).
+    friendsOnly
+      ? { href: "/friends", icon: Hand, label: "Friends", badge: 0, dot: false }
+      : { href: "/discover", icon: Search, label: "Discover", badge: 0, dot: !!fresh?.discover },
     { href: "/chats", icon: MessageCircle, label: "Chats", badge: 0, dot: false },
     { href: "/matches", icon: Heart, label: "Likes", badge: likesBadge, dot: false },
     { href: "/lounge", icon: Users, label: "Lounge", badge: 0, dot: !!fresh?.lounge },

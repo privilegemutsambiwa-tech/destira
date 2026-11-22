@@ -64,6 +64,8 @@ import { registerDmExtraRoutes, presentDirectMessages, findByClientId, cleanClie
 import { DM_TEXT_MAX } from "@shared/dm";
 import { registerDateRoutes, startDateSweeps } from "./dates";
 import { registerActivityRoutes } from "./activity";
+import { loveBlockedReason, registerFriendRoutes } from "./friends";
+import { LOOKING_FOR_VALUES } from "@shared/friends";
 import { startReminderSweeps } from "./reminders";
 import { openerFacts, fallbackOpeners } from "./openers";
 import { isCrownPeriod } from "@shared/crown";
@@ -231,6 +233,8 @@ export async function registerRoutes(
   registerActivityRoutes(app, getUserId);
   startReminderSweeps();
   push.startPushDigests();
+  // Destira Friends: its own deck, waves, friendships (Part O).
+  registerFriendRoutes(app, getUserId);
   registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group
@@ -675,6 +679,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
   function withoutServerOwned<T extends Record<string, any>>(body: T): T {
     const out: Record<string, any> = { ...(body ?? {}) };
     for (const k of SERVER_OWNED_PROFILE_FIELDS) delete out[k];
+    // Love, Friends or Both only; anything else is ignored.
+    if ("lookingFor" in out && !LOOKING_FOR_VALUES.includes(out.lookingFor)) delete out.lookingFor;
     return out as T;
   }
 
@@ -1575,6 +1581,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (blockedByTarget) return res.status(403).json({ message: "Cannot connect with this user" });
       const userBlockedTarget = await storage.isBlocked(userId, targetId);
       if (userBlockedTarget) return res.status(403).json({ message: "You have blocked this user" });
+      // Friends is never romantic: no likes to or from someone here for friends only.
+      const notDating = await loveBlockedReason(userId, targetId);
+      if (notDating) return res.status(403).json({ message: notDating });
 
       const existing = await storage.getActiveMatchBetweenUsers(userId, targetId);
       // They liked the caller first and the caller just liked them back from
@@ -4575,11 +4584,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       // filter="all" case, roughly doubling this endpoint's latency for no
       // reason. Each is wrapped so Promise.all can run them concurrently.
       const loadMatchThreads = async (): Promise<any[]> => {
-        if (!(filter === "all" || filter === "match" || filter === "matches")) return [];
+        if (!(filter === "all" || filter === "match" || filter === "matches" || filter === "friends")) return [];
         const userMatches = await storage.getMatchesWithProfiles(userId);
+        // "Matches" is dating only; "Friends" is friendships only (Part O).
+        const wantKind = filter === "friends" ? "friends" : filter === "all" ? null : "love";
         const matchThreads = await Promise.all(
           userMatches
-            .filter((m: any) => m.status === "matched")
+            .filter((m: any) => m.status === "matched" && (!wantKind || (m.kind ?? "love") === wantKind))
             .map(async (m: any) => {
               // getDirectMessages orders oldest-first for rendering the
               // conversation — getLastDirectMessage is the DESC/LIMIT-1 query
@@ -4594,6 +4605,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
               return {
                 id: `match_${m.id}`,
                 type: "match",
+                kind: m.kind ?? "love",
                 matchId: m.id,
                 partnerId: m.otherProfile?.userId ?? null,
                 name: m.otherProfile?.displayName || "Match",
@@ -4754,7 +4766,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (!userId) return res.sendStatus(401);
     try {
       const userMatches = await storage.getMatchesWithProfiles(userId);
-      const outgoingRaw = userMatches.filter((m: any) => m.isRequester && m.status !== "unmatched");
+      // Dating asks only: a friendship (two waves) is not an ask.
+      const outgoingRaw = userMatches.filter((m: any) => m.isRequester && m.status !== "unmatched" && m.kind !== "friends");
 
       // Defensively collapse to one row per recipient — legacy data (or a race
       // before /api/matches' active-match check) can leave more than one

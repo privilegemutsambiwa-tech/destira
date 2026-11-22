@@ -22,6 +22,8 @@ export const profiles = pgTable("profiles", {
   dateOfBirth: date("date_of_birth"), // the 18+ gate; `age` is derived for display
   seekingGenders: text("seeking_genders").array(), // who they want to meet (multi)
   datingIntent: text("dating_intent"), // relationship | see | friends-first | unsure
+  // Love, Friends or Both (shared/friends.ts). Missing = love.
+  lookingFor: text("looking_for"),
   location: text("location"),
   personalityProfile: jsonb("personality_profile"),
   twinPersona: text("twin_persona"),
@@ -165,6 +167,9 @@ export const matches = pgTable("matches", {
   isSuper: boolean("is_super").default(false),
   // The one "your chat went quiet" push this chat will ever get (server/dates.ts).
   quietNudgedAt: timestamp("quiet_nudged_at"),
+  // "love" (a like that became mutual) or "friends" (two waves). Friends
+  // chats live in their own section and never count as dating matches.
+  kind: text("kind").notNull().default("love"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -984,6 +989,27 @@ export const discoverPasses = pgTable("discover_passes", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [
   uniqueIndex("discover_passes_user_target_idx").on(t.userId, t.targetId),
+]);
+
+// Friends (Part O): a wave is the Friends side's like. Two waves make a
+// friendship (a `matches` row with kind "friends"). "Not now" on the
+// Friends deck is its own table so it never touches the dating side.
+export const friendWaves = pgTable("friend_waves", {
+  id: serial("id").primaryKey(),
+  fromId: varchar("from_id").notNull().references(() => users.id),
+  toId: varchar("to_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("friend_waves_pair_idx").on(t.fromId, t.toId),
+  index("friend_waves_to_idx").on(t.toId),
+]);
+export const friendPasses = pgTable("friend_passes", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  targetId: varchar("target_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("friend_passes_user_target_idx").on(t.userId, t.targetId),
 ]);
 
 // A pass brought back after the free few-second undo (Spark: 1 a day).

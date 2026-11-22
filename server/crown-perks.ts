@@ -14,6 +14,7 @@ import { storage } from "./storage";
 import * as gate from "./gate";
 import * as push from "./push";
 import * as safety from "./safety";
+import { loveBlockedReason } from "./friends";
 import { activeCrownIds, forgetCrownCache, isCrown, privateCrownIds } from "./crown";
 
 /** Spotlights a viewer sees in a day, at most; each Crown member once. */
@@ -220,6 +221,9 @@ export function registerCrownPerkRoutes(app: Express, getUserId: (req: Request) 
       if ((await storage.isBlocked(targetId, userId)) || (await storage.isBlocked(userId, targetId))) {
         return res.status(403).json({ message: "Cannot connect with this user" });
       }
+      // Never an introduction to, or from, someone here for friends only.
+      const notDating = await loveBlockedReason(userId, targetId);
+      if (notDating) return res.status(403).json({ message: notDating });
       const existing = await storage.getActiveMatchBetweenUsers(userId, targetId);
       if (existing) {
         return res.status(409).json({

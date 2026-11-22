@@ -31,6 +31,7 @@ import { ADVANCED_PREF_KEYS, effectivePrefs } from "@shared/match-prefs";
 import { matchScoreExpr } from "./matching";
 import type { PhotoRole } from "@shared/schema";
 import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lt, lte, inArray, notInArray, isNotNull, isNull, type SQL } from "drizzle-orm";
+import { wantsLove } from "@shared/friends";
 
 export class PhotoNotFoundError extends Error {
   constructor() { super("Photo not found"); }
@@ -413,7 +414,7 @@ export class DatabaseStorage implements IStorage {
   // user_photos is only consulted for PUBLIC profiles — a private profile keeps
   // exactly the coverPhotoUrl column it already had, so its hidden gallery is
   // never exposed through this path.
-  private async resolveProfilePhotos(
+  async resolveProfilePhotos(
     entries: Array<{ userId: string; isPublic: boolean | null; coverPhotoUrl: string | null; profileImageUrl: string | null }>,
   ): Promise<Map<string, string | null>> {
     const out = new Map<string, string | null>();
@@ -472,6 +473,11 @@ export class DatabaseStorage implements IStorage {
     // can't have candidates matched against them, so they get an empty feed
     // rather than being shown everyone.
     if (!requesterGender || requesterSeekingGenders.length === 0) {
+      return { profiles: [], nextCursor: null };
+    }
+    // Here for friends only: the dating deck stays empty (Part O). Their
+    // deck is /friends.
+    if (!wantsLove(requesterProfile?.lookingFor)) {
       return { profiles: [], nextCursor: null };
     }
 
@@ -558,6 +564,8 @@ export class DatabaseStorage implements IStorage {
       eq(profiles.moderationStatus, "active"),
       isNotNull(profiles.gender),
       isNotNull(profiles.seekingGenders),
+      // Someone here for friends only is never in a dating deck.
+      sql`coalesce(${profiles.lookingFor}, 'love') <> 'friends'`,
       ...hardPrefs,
     );
 
@@ -848,6 +856,7 @@ export class DatabaseStorage implements IStorage {
           eq(profiles.moderationStatus, "active"),
           isNotNull(profiles.gender),
           isNotNull(profiles.seekingGenders),
+          sql`coalesce(${profiles.lookingFor}, 'love') <> 'friends'`,
           excludedArray.length > 0 ? notInArray(profiles.userId, excludedArray) : undefined,
         ),
       );

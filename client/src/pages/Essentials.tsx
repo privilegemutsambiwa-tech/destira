@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { LOOKING_FOR_OPTIONS } from "@shared/friends";
 import { Loader2, ArrowLeft, Check } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -22,7 +23,9 @@ import { FAITH_OPTIONS, MARRIAGE_OPTIONS, WANTS_CHILDREN_OPTIONS } from "@shared
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 
-const STEPS = ["gender", "seeking", "intent", "basics", "age", "area"] as const;
+// "mode": Love, Friends or Both (Part O). Friends-only skips the dating steps.
+const STEPS = ["gender", "mode", "seeking", "intent", "basics", "age", "area"] as const;
+const DATING_ONLY_STEPS: readonly string[] = ["seeking", "intent"];
 type Step = (typeof STEPS)[number];
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -85,6 +88,7 @@ export default function Essentials() {
   const [selfDescribe, setSelfDescribe] = useState("");
   const [seeking, setSeeking] = useState<string[]>([]);
   const [intent, setIntent] = useState<string>("");
+  const [mode, setMode] = useState<string>("");
   const [ageMinText, setAgeMinText] = useState(String(MIN_AGE));
   const [ageMaxText, setAgeMaxText] = useState("35");
   const [ageTouched, setAgeTouched] = useState(false);
@@ -110,6 +114,7 @@ export default function Essentials() {
     if (profile.genderSelfDescribe) setSelfDescribe(profile.genderSelfDescribe);
     if (Array.isArray(profile.seekingGenders)) setSeeking(profile.seekingGenders);
     if (profile.datingIntent) setIntent(profile.datingIntent);
+    if ((profile as any).lookingFor) setMode((profile as any).lookingFor);
     if (profile.ageMinPreference || profile.ageMaxPreference) {
       const min = profile.ageMinPreference ?? MIN_AGE;
       const max = profile.ageMaxPreference ?? 35;
@@ -161,17 +166,32 @@ export default function Essentials() {
     }
   };
 
-  const next = () => {
-    if (idx + 1 >= STEPS.length) {
+  const skips = (i: number, m = mode) => m === "friends" && DATING_ONLY_STEPS.includes(STEPS[i]);
+  const next = (m = mode) => {
+    let to = idx + 1;
+    while (to < STEPS.length && skips(to, m)) to++;
+    if (to >= STEPS.length) {
       // Came in through "Save my seat" on a shared event: land them on that
       // event (where the seat gets saved) before the questions, not after.
       const rsvpEventId = peekPendingRsvp();
       setLocation(rsvpEventId ? `/events/${rsvpEventId}` : "/onboarding");
     } else {
-      setIdx((i) => i + 1);
+      setIdx(to);
     }
   };
-  const back = () => setIdx((i) => Math.max(0, i - 1));
+  const back = () => {
+    let to = idx - 1;
+    while (to > 0 && skips(to)) to--;
+    setIdx(Math.max(0, to));
+  };
+  const pickMode = async (v: string) => {
+    setMode(v);
+    // Friends-only has no dating preferences; "everyone" keeps the rest of
+    // the app (which expects a value) happy and never puts them in a
+    // dating deck (server/storage.ts leaves friends-only out).
+    await save(v === "friends" && !seeking.length ? { lookingFor: v, seekingGenders: ["everyone"] } : { lookingFor: v });
+    next(v);
+  };
 
   const pickGender = async (v: string) => {
     setGender(v);
@@ -271,6 +291,28 @@ export default function Essentials() {
         </div>
       )}
 
+      {step === "mode" && (
+        <div>
+          <div className={EYEBROW}>Destira is for both</div>
+          <h1 className="font-serif font-normal text-[28px] leading-[1.15] text-vf-text mt-3 mb-1">
+            What are you here for?
+          </h1>
+          <p className="text-[13px] text-vf-faint mb-6">Friends is its own space, never romantic. Change it any time in Settings.</p>
+          <div className="flex flex-col gap-2.5">
+            {LOOKING_FOR_OPTIONS.map((o) => (
+              <OptionRow
+                key={o.value}
+                label={o.label}
+                sublabel={o.note}
+                selected={mode === o.value}
+                onClick={() => pickMode(o.value)}
+                testId={`essentials-mode-${o.value}`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {step === "seeking" && (
         <div>
           <div className={EYEBROW}>Who you'd like to meet</div>
@@ -324,7 +366,7 @@ export default function Essentials() {
               />
             ))}
           </div>
-          <button onClick={next} className="mt-5 text-[13px] text-vf-faint hover:text-vf-text" data-testid="button-intent-skip">
+          <button onClick={() => next()} className="mt-5 text-[13px] text-vf-faint hover:text-vf-text" data-testid="button-intent-skip">
             Skip
           </button>
         </div>
@@ -382,7 +424,7 @@ export default function Essentials() {
             >
               Continue
             </button>
-            <button onClick={next} className="text-[13px] text-vf-faint hover:text-vf-text" data-testid="button-basics-skip">
+            <button onClick={() => next()} className="text-[13px] text-vf-faint hover:text-vf-text" data-testid="button-basics-skip">
               Skip
             </button>
           </div>
@@ -533,7 +575,7 @@ export default function Essentials() {
             >
               {idx + 1 >= STEPS.length ? "Done" : "Continue"}
             </button>
-            <button onClick={next} className="text-[13px] text-vf-faint hover:text-vf-text" data-testid="button-area-skip">
+            <button onClick={() => next()} className="text-[13px] text-vf-faint hover:text-vf-text" data-testid="button-area-skip">
               Skip
             </button>
           </div>

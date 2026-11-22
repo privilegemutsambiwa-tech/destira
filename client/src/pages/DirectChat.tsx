@@ -414,7 +414,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
               )}
             </span>
             <span className="block vf-label text-vf-faint truncate mt-0.5">
-              {typing.theyType ? "typing…" : firstReply ? `${otherFirst} replied` : otherMeta || "Matched"}
+              {typing.theyType ? "typing…" : firstReply ? `${otherFirst} replied` : match?.kind === "friends" ? ["Friends", otherMeta].filter(Boolean).join(" · ") : otherMeta || "Matched"}
             </span>
           </span>
         </button>

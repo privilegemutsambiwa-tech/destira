@@ -5,6 +5,7 @@ import { useProfile } from "@/hooks/use-profiles";
 import { Link, useLocation, useSearch } from "wouter";
 import { ChevronRight } from "lucide-react";
 import { EmptyState as VfEmptyState, PageHeader, SearchField, SegmentedControl, TwinGlyph, VfAvatar, VfButton, VfSkeleton } from "@/components/ui-vf";
+import { wantsFriends } from "@shared/friends";
 
 function formatRelativeTime(dateStr: string): string {
   const now = Date.now();
@@ -21,11 +22,11 @@ function formatRelativeTime(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-type FilterType = "all" | "matches" | "ai_twin" | "story_replies";
+type FilterType = "all" | "matches" | "friends" | "ai_twin" | "story_replies";
 
 function initialFilterFromSearch(search: string): FilterType {
   const value = new URLSearchParams(search).get("filter");
-  return value === "matches" || value === "ai_twin" || value === "story_replies" ? value : "all";
+  return value === "matches" || value === "friends" || value === "ai_twin" || value === "story_replies" ? value : "all";
 }
 
 export default function Interviews() {
@@ -59,6 +60,8 @@ export default function Interviews() {
   const filters: { label: string; value: FilterType }[] = [
     { label: "All", value: "all" },
     { label: "Matches", value: "matches" },
+    // Friendships live in their own section (Part O), for anyone with Friends on.
+    ...(wantsFriends((profile as any)?.lookingFor) ? [{ label: "Friends", value: "friends" as FilterType }] : []),
     { label: "Twin", value: "ai_twin" },
     { label: "Story replies", value: "story_replies" },
   ];
@@ -156,7 +159,12 @@ export default function Interviews() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className={`font-display text-[18px] leading-tight truncate ${unread ? "text-vf-text" : "text-vf-soft"}`}>{thread.name}</span>
+                      <span className="flex items-baseline gap-2 min-w-0">
+                        <span className={`font-display text-[18px] leading-tight truncate ${unread ? "text-vf-text" : "text-vf-soft"}`}>{thread.name}</span>
+                        {thread.kind === "friends" && (
+                          <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-vf-mint" data-testid={`label-friend-${thread.id}`}>Friend</span>
+                        )}
+                      </span>
                       {thread.lastMessageAt && (
                         <span className={`font-mono text-[11px] shrink-0 ${unread ? "text-vf-ember" : "text-vf-faint"}`}>
                           {formatRelativeTime(thread.lastMessageAt)}
