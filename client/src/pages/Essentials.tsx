@@ -18,10 +18,11 @@ import {
   ageFromDob,
   ageFieldError,
 } from "@shared/essentials";
+import { FAITH_OPTIONS, MARRIAGE_OPTIONS, WANTS_CHILDREN_OPTIONS } from "@shared/profile-details";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 
-const STEPS = ["gender", "seeking", "intent", "age", "area"] as const;
+const STEPS = ["gender", "seeking", "intent", "basics", "age", "area"] as const;
 type Step = (typeof STEPS)[number];
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -91,6 +92,10 @@ export default function Essentials() {
   const [areaQuery, setAreaQuery] = useState("");
   const [areaResults, setAreaResults] = useState<{ label: string; lat: number | null; lng: number | null }[]>([]);
   const [saving, setSaving] = useState(false);
+  // Faith, children, marriage plans (shared/profile-details.ts): optional.
+  const [faith, setFaith] = useState("");
+  const [wantsChildren, setWantsChildren] = useState("");
+  const [marriage, setMarriage] = useState("");
   const seeded = useRef(false);
 
   const ownAge = useMemo(() => {
@@ -117,6 +122,10 @@ export default function Essentials() {
       setAgeMaxText(String(d.max));
     }
     if (profile.location) setArea(profile.location);
+    const det = (profile as any).details ?? {};
+    if (det.faith) setFaith(det.faith);
+    if (det.wantsChildren) setWantsChildren(det.wantsChildren);
+    if (det.marriage) setMarriage(det.marriage);
     seeded.current = true;
   }, [profile, ownAge]);
 
@@ -318,6 +327,65 @@ export default function Essentials() {
           <button onClick={next} className="mt-5 text-[13px] text-vf-faint hover:text-vf-text" data-testid="button-intent-skip">
             Skip
           </button>
+        </div>
+      )}
+
+      {step === "basics" && (
+        <div>
+          <div className={EYEBROW}>Optional</div>
+          <h1 className="font-serif font-normal text-[28px] leading-[1.15] text-vf-text mt-3 mb-1">
+            Faith, children, marriage
+          </h1>
+          <p className="text-[13px] text-vf-faint mb-5">
+            What most people here choose on. Answer any, all or none; change them later in your profile.
+          </p>
+          {(
+            [
+              ["Faith", FAITH_OPTIONS, faith, setFaith, "faith"],
+              ["Children", WANTS_CHILDREN_OPTIONS, wantsChildren, setWantsChildren, "children"],
+              ["Marriage", MARRIAGE_OPTIONS, marriage, setMarriage, "marriage"],
+            ] as const
+          ).map(([title, options, value, set, key]) => (
+            <div key={key} className="mb-5">
+              <div className="text-[14px] text-vf-text mb-2">{title}</div>
+              <div className="flex flex-wrap gap-2">
+                {options.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => set(value === o.value ? "" : o.value)}
+                    aria-pressed={value === o.value}
+                    className={`min-h-[40px] px-3.5 rounded-full text-[14px] transition-colors ${
+                      value === o.value ? "border-2 border-vf-ember bg-vf-ember/10 text-vf-text" : "border border-vf-line text-vf-muted hover:text-vf-text"
+                    }`}
+                    data-testid={`essentials-${key}-${o.value}`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="mt-2 flex items-center gap-4">
+            <button
+              onClick={async () => {
+                const details: Record<string, string> = {};
+                if (faith) details.faith = faith;
+                if (wantsChildren) details.wantsChildren = wantsChildren;
+                if (marriage) details.marriage = marriage;
+                if (Object.keys(details).length) await save({ details });
+                next();
+              }}
+              disabled={saving}
+              className="flex-1 h-12 rounded-full bg-vf-ember text-vf-ink font-medium text-[14px] disabled:opacity-50"
+              data-testid="button-basics-continue"
+            >
+              Continue
+            </button>
+            <button onClick={next} className="text-[13px] text-vf-faint hover:text-vf-text" data-testid="button-basics-skip">
+              Skip
+            </button>
+          </div>
         </div>
       )}
 

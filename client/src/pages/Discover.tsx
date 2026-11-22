@@ -13,6 +13,7 @@ import { WhyYouMightClick, type ClickReason } from "@/components/why-click";
 import { LocationAskSheet, hasLocationConsent } from "@/components/location-permission-modal";
 import { Brain, X, Loader2, MapPin, Heart, Plus, Check, ArrowRight, ChevronLeft, ChevronRight, Flag, Maximize2 } from "lucide-react";
 import { CrownBadge } from "@/components/crown-badge";
+import { DetailChips } from "@/components/detail-chips";
 import { useDiscoverProfiles, useDiscoverExpandOptions, useStartInterview, useCreateMatch, useFeedStories, useProfileCompletion, UpgradeRequiredError, LikeWaitingError } from "@/hooks/use-interactions";
 import { useTwinReadiness } from "@/hooks/use-onboarding";
 import { ScreenNotes, NOTE_PRIORITY, type NoteSpec, EmptyState, VfButton } from "@/components/ui-vf";
@@ -1220,6 +1221,8 @@ export default function Discover() {
                     </span>
                   </div>
                 )}
+                {/* Faith, children, marriage plans: the first three details. */}
+                <DetailChips details={(currentProfile as any).details} onPhoto max={3} className="mt-2.5" />
               </div>
             </div>
 

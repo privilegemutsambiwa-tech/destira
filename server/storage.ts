@@ -26,6 +26,7 @@ import { getStoryEventCard, type StoryEventCard } from "./event-seats";
 import { coerceTraits, applyTraitSignals } from "./personality";
 import { localDayKey, userTimezone } from "./gate";
 import { privateCrownIds } from "./crown";
+import { basicsAnswered, type ProfileDetails } from "@shared/profile-details";
 import type { PhotoRole } from "@shared/schema";
 import { eq, or, and, ne, asc, desc, ilike, sql, count, gt, gte, lt, lte, inArray, notInArray, isNotNull, isNull } from "drizzle-orm";
 
@@ -578,6 +579,7 @@ export class DatabaseStorage implements IStorage {
     personalityProfile: profiles.personalityProfile,
     twinPersona: profiles.twinPersona,
     prompts: profiles.prompts,
+    details: profiles.details,
     isVerified: profiles.isVerified,
     onboardingCompleted: profiles.onboardingCompleted,
     isPublic: profiles.isPublic,
@@ -980,6 +982,7 @@ export class DatabaseStorage implements IStorage {
         personalityProfile: profiles.personalityProfile,
         twinPersona: profiles.twinPersona,
         prompts: profiles.prompts,
+        details: profiles.details,
         coverPhotoUrl: profiles.coverPhotoUrl,
         isVerified: profiles.isVerified,
         verificationStatus: profiles.verificationStatus,
@@ -2146,12 +2149,17 @@ export class DatabaseStorage implements IStorage {
     const profile = await this.getProfile(userId);
     const photos = await this.getUserPhotos(userId);
 
+    // Rebuilt on the things that get replies (docs/destira-3-upgrade-prompt.md
+    // Part C5): photos, verified, a prompt answered, faith/children/marriage.
+    const prompts = Array.isArray(profile?.prompts) ? (profile!.prompts as { a?: string }[]) : [];
+    const answeredPrompt = prompts.some((p) => typeof p?.a === "string" && p.a.trim().length > 0);
     const tasks = [
-      { key: "bio", label: "Say something in your words", benefit: "Your twin sounds more like you", completed: !!profile?.bio && profile.bio.length > 5, weight: 20 },
-      { key: "photos", label: "Add two more photos", benefit: "Two more photos and your twin has more to work with", completed: photos.length >= 3, weight: 25 },
-      { key: "onboarding", label: "Finish Soul-Mapping", benefit: "This is what your twin learns from", completed: !!profile?.onboardingCompleted, weight: 25 },
-      { key: "verify", label: "Get verified", benefit: "One less thing for people to wonder about", completed: !!profile?.isVerified, weight: 15 },
-      { key: "personality", label: "Answer a few more questions", benefit: "Sharper reads, both directions", completed: !!profile?.aboutSummary, weight: 15 },
+      { key: "photos", label: photos.length === 0 ? "Add three photos" : photos.length === 1 ? "Add two more photos" : "Add one more photo", benefit: "Profiles with 3 or more photos get more likes", completed: photos.length >= 3, weight: 25 },
+      { key: "verify", label: "Get verified", benefit: "One less thing for people to wonder about", completed: !!profile?.isVerified, weight: 20 },
+      { key: "details", label: "Add faith, children and marriage plans", benefit: "What most people here choose on, and three taps", completed: basicsAnswered(profile?.details as ProfileDetails | null) >= 3, weight: 20 },
+      { key: "prompt", label: "Answer a prompt", benefit: "Something to start a conversation with", completed: answeredPrompt, weight: 15 },
+      { key: "bio", label: "Say something in your words", benefit: "Your twin sounds more like you", completed: !!(profile?.aboutMe || profile?.bio) && ((profile?.aboutMe || profile?.bio) ?? "").length > 5, weight: 10 },
+      { key: "onboarding", label: "Finish Soul-Mapping", benefit: "This is what your twin learns from", completed: !!profile?.onboardingCompleted, weight: 10 },
     ];
 
     const totalWeight = tasks.reduce((sum, t) => sum + t.weight, 0);

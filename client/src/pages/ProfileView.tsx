@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, Flag, Heart, Loader2, Pencil } from "lucide-react";
 import { CrownBadge } from "@/components/crown-badge";
 import { IntroduceButton } from "@/components/crown-intro";
+import { DetailChips } from "@/components/detail-chips";
 import { LayoutShell } from "@/components/layout-shell";
 import { WhyYouMightClick, useClickReasons } from "@/components/why-click";
 import { ResonanceGlyph, TwinGlyph, VfButton } from "@/components/ui-vf";
@@ -424,6 +425,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
               <CrownBadge userId={userId} size={30} />
             </span>
           </h1>
+          <DetailChips details={(profile as any).details} className="mt-3 justify-center lg:justify-start" />
           {preview && (
             <div className="mt-3.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
               What a visitor would do from here — chat with your twin, report, block

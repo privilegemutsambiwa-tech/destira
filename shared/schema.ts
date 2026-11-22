@@ -7,6 +7,7 @@ export * from "./models/auth";
 export * from "./models/chat";
 
 import { users } from "./models/auth";
+import type { ProfileDetails } from "./profile-details";
 
 export const profiles = pgTable("profiles", {
   id: serial("id").primaryKey(),
@@ -62,6 +63,9 @@ export const profiles = pgTable("profiles", {
   ageMaxPreference: integer("age_max_preference").default(65),
   timezone: text("timezone"), // IANA tz captured client-side; used for honest "resets at midnight" copy
   prompts: jsonb("prompts"), // ProfilePrompt[] — see profilePromptsSchema
+  // Faith, children, marriage plans, languages and other details, all
+  // optional (shared/profile-details.ts). Saves merge into it.
+  details: jsonb("details").$type<ProfileDetails>(),
   // What the twin may disclose in an interview. { categoryKey: 'open'|'acknowledge'|'closed' }.
   // Missing/absent => 'closed'. See shared/disclosure.ts.
   disclosureSettings: jsonb("disclosure_settings").$type<Record<string, string>>(),

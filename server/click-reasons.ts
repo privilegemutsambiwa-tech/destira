@@ -7,6 +7,7 @@ import { and, gte, inArray } from "drizzle-orm";
 import { db } from "./db";
 import { storage } from "./storage";
 import { profiles, userActivityDaily } from "@shared/schema";
+import { sharedDetailLines, type ProfileDetails } from "@shared/profile-details";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
@@ -22,7 +23,7 @@ const INTENT_LINE: Record<string, string> = {
   "friends-first": "You both want to start as friends",
 };
 
-export type ClickReason = { kind: "interests" | "city" | "intent" | "active" | "new"; text: string };
+export type ClickReason = { kind: "interests" | "city" | "intent" | "details" | "active" | "new"; text: string };
 
 /** Adds `reasons` (at most three, strongest first) to each candidate. */
 export async function withClickReasons<T extends { userId: string; location?: string | null; interests?: string[]; createdAt?: Date | string | null }>(
@@ -35,7 +36,7 @@ export async function withClickReasons<T extends { userId: string; location?: st
   const [me, myInterestsMap, intentRows, activeRows] = await Promise.all([
     storage.getProfile(viewerId),
     storage.getInterestsForUsers([viewerId]),
-    db.select({ id: profiles.userId, datingIntent: profiles.datingIntent }).from(profiles).where(inArray(profiles.userId, [viewerId, ...ids])),
+    db.select({ id: profiles.userId, datingIntent: profiles.datingIntent, details: profiles.details }).from(profiles).where(inArray(profiles.userId, [viewerId, ...ids])),
     db.selectDistinct({ userId: userActivityDaily.userId })
       .from(userActivityDaily)
       .where(and(inArray(userActivityDaily.userId, ids), gte(userActivityDaily.date, weekAgo))),
@@ -44,6 +45,8 @@ export async function withClickReasons<T extends { userId: string; location?: st
   const myCity = norm(me?.location);
   const intents = new Map(intentRows.map((r) => [r.id, r.datingIntent]));
   const myIntent = intents.get(viewerId) ?? null;
+  const details = new Map(intentRows.map((r) => [r.id, r.details as ProfileDetails | null]));
+  const myDetails = details.get(viewerId) ?? null;
   const active = new Set(activeRows.map((r) => r.userId));
 
   return candidates.map((c) => {
@@ -53,6 +56,11 @@ export async function withClickReasons<T extends { userId: string; location?: st
     const theirIntent = intents.get(c.userId);
     if (myIntent && theirIntent === myIntent && INTENT_LINE[myIntent]) {
       reasons.push({ kind: "intent", text: INTENT_LINE[myIntent] });
+    }
+    // Faith, children, marriage plans, languages: only when both filled in
+    // the same thing (shared/profile-details.ts).
+    for (const line of sharedDetailLines(myDetails, details.get(c.userId) ?? null).slice(0, 2)) {
+      reasons.push({ kind: "details", text: line });
     }
     if (myCity && norm(c.location) === myCity) reasons.push({ kind: "city", text: `You're both in ${c.location}` });
     if (active.has(c.userId)) reasons.push({ kind: "active", text: "Active this week" });

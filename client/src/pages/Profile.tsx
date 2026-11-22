@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, X, LogOut, Camera, ChevronRight, Eye, Images, MessageSquareQuote, Pencil, Settings as SettingsIcon, Gift, Gem } from "lucide-react";
+import { Loader2, Plus, X, LogOut, Camera, ChevronRight, Eye, Images, MessageSquareQuote, Pencil, Settings as SettingsIcon, Gift, Gem, ListChecks } from "lucide-react";
+import { detailChips } from "@shared/profile-details";
 import { CrownBadge } from "@/components/crown-badge";
 import { AddStoryButton, OwnStoryViewer, type OwnStory } from "@/components/story-viewer";
 import { RefineWithAI } from "@/components/refine-with-ai";
@@ -390,6 +391,11 @@ export default function Profile() {
       return;
     }
     if (nextTask.key === "verify") return setLocation("/settings");
+    if (nextTask.key === "details") return setLocation("/profile/details");
+    if (nextTask.key === "prompt") {
+      document.getElementById("profile-prompts")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     setLocation("/onboarding");
   };
   const saveBio = async () => {
@@ -567,6 +573,13 @@ export default function Profile() {
           {/* Everything about you, as rows. */}
           <nav className="rounded-[20px] border border-vf-line bg-vf-surface2 overflow-hidden divide-y divide-vf-line" aria-label="Your profile" data-testid="profile-rows">
             <ProfileRow icon={<Pencil className="w-4 h-4" />} label="Edit profile" sub="Name, words, where you are" onClick={() => setShowEditDialog(true)} testId="button-edit-profile" />
+            <ProfileRow
+              icon={<ListChecks className="w-4 h-4" />}
+              label="About you"
+              sub={detailChips(profile.details).slice(0, 3).join(" · ") || "Faith, children, marriage plans, languages"}
+              onClick={() => setLocation("/profile/details")}
+              testId="row-about-you"
+            />
             <ProfileRow icon={<Images className="w-4 h-4" />} label="Photos" sub={`${photoCount} photo${photoCount === 1 ? "" : "s"}${photoCount < 3 ? " · profiles with 3+ get more likes" : ""}`} onClick={() => setLocation("/photos")} testId="button-photos" />
             <ProfileRow icon={<MessageSquareQuote className="w-4 h-4" />} label="Prompts" sub={`${prompts.length} of 3 answered`} onClick={() => document.getElementById("profile-prompts")?.scrollIntoView({ behavior: "smooth", block: "start" })} testId="row-prompts" />
             <ProfileRow icon={<TwinGlyph size={16} />} label="Your twin" sub="What it says about you, and what it won't" onClick={() => setLocation("/twin-disclosure?from=/profile")} testId="row-your-twin" />

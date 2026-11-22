@@ -59,6 +59,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { registerCrownRoutes, canPayCrown } from "./crown";
 import { registerCrownPerkRoutes, applySpotlight, dropLiftedToday, privateModeHides, introMatchIds } from "./crown-perks";
 import { isCrownPeriod } from "@shared/crown";
+import { DETAILS_SCHEMA, detailFacts, mergeDetails } from "@shared/profile-details";
 import * as emailTemplates from "./email/templates";
 import { setAdminLockoutHook } from "./admin/auth";
 import { trackActivity } from "./admin/activity";
@@ -155,7 +156,7 @@ async function notifyMatch(match: { id: number; user1Id: string; user2Id: string
 // Profile text that reaches everyone (bio, about me, prompt answers): flag
 // numbers, money asks and scam lines for the Risk queue (server/safety/).
 function scanProfileText(userId: string, body: any) {
-  const parts = [body?.bio, body?.aboutMe, body?.prompts ? JSON.stringify(body.prompts) : null].filter((v) => typeof v === "string" && v.trim());
+  const parts = [body?.bio, body?.aboutMe, body?.prompts ? JSON.stringify(body.prompts) : null, body?.details?.job, body?.details?.country].filter((v) => typeof v === "string" && v.trim());
   if (parts.length) safety.scanText({ senderId: userId, text: parts.join("\n"), source: "profile" }).catch(() => {});
 }
 
@@ -618,6 +619,18 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     return out as T;
   }
 
+  // Profile details (shared/profile-details.ts): checked against the schema,
+  // then merged into what's saved, so a one-field save keeps the others.
+  // Returns an error message, or null after replacing body.details.
+  async function mergeDetailsInto(userId: string, body: Record<string, any>): Promise<string | null> {
+    if (!("details" in body)) return null;
+    const parsed = DETAILS_SCHEMA.safeParse(body.details ?? {});
+    if (!parsed.success) return "One of those details isn't something we can save.";
+    const existing = await storage.getProfile(userId);
+    body.details = mergeDetails(existing?.details, parsed.data);
+    return null;
+  }
+
   app.post("/api/profiles", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
@@ -633,6 +646,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const existing = await storage.getProfile(userId);
       const ageError = validateAgePreferences(req.body, existing);
       if (ageError) return res.status(400).json({ message: ageError });
+      const detailsError = await mergeDetailsInto(userId, req.body);
+      if (detailsError) return res.status(400).json({ message: detailsError });
       const isCompletingOnboarding = req.body.onboardingCompleted && req.body.personalityProfile;
       const onboardingCount = isCompletingOnboarding
         ? Object.values(req.body.personalityProfile as Record<string, string>).filter(
@@ -717,6 +732,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     if (req.params.userId !== userId) return res.sendStatus(403);
     try {
       const safeUpdate = withoutServerOwned(req.body);
+      const detailsError = await mergeDetailsInto(userId, safeUpdate);
+      if (detailsError) return res.status(400).json({ message: detailsError });
       if (typeof safeUpdate.dateOfBirth === "string" && safeUpdate.dateOfBirth) {
         const derived = ageFromDob(safeUpdate.dateOfBirth);
         if (derived == null) return res.status(400).json({ message: "Enter a valid date of birth." });
@@ -1884,6 +1901,13 @@ ${PRIVACY_GUARDRAIL}`;
         : targetProfile.location
           ? `\n\nGeneral area: ${String(targetProfile.location).split(",").pop()?.trim() || targetProfile.location}`
           : "";
+
+    // Profile details they filled in (faith, children, marriage plans...),
+    // minus any whose category they've closed to their twin.
+    const detailLines = detailFacts(targetProfile.details)
+      .filter((d) => d.cats.every((c) => settings[c] !== "closed"))
+      .map((d) => `- ${d.text}`);
+    if (detailLines.length) factsSection += `\n\nProfile details (from their own profile):\n${detailLines.join("\n")}`;
 
     const boundaries = disclosure.forbiddenTopicsSection(settings, directive, firstName);
 
