@@ -114,6 +114,7 @@ export const FEATURES = [
   "start_interview",
   "read_transcript",
   "see_who_asked",
+  "advanced_filters", // faith, children and marriage filters and dealbreakers (shared/match-prefs.ts)
   "join_group",
   "create_group",
   "host_event",
@@ -131,6 +132,7 @@ export const FEATURE_MIN_TIER: Record<Feature, Tier> = {
   start_interview: "free",
   read_transcript: "flame", // full transcript
   see_who_asked: "spark",
+  advanced_filters: "spark",
   join_group: "free",
   create_group: "flame",
   host_event: "flame",
@@ -174,6 +176,7 @@ export const PLAN_CARDS: PlanCard[] = [
     pitch: "You can finally see who asked to meet you, not just that someone did.",
     gets: [
       "Names and profiles of everyone who asked you",
+      "Filters and dealbreakers for faith, children and marriage plans",
       `${LIMITS.spark.dailyLikes} likes a day, unlimited passes`,
       `${LIMITS.spark.weeklyInterviews} interviews a week`,
       `Up to ${LIMITS.spark.groupsMax} rooms in the Lounge`,
@@ -312,6 +315,7 @@ const ACTION: Record<Feature, string> = {
   start_interview: "Starting another interview",
   read_transcript: "Reading the full transcript",
   see_who_asked: "Seeing who asked to meet you",
+  advanced_filters: "Filtering by faith, children and marriage plans",
   join_group: "Joining another room",
   create_group: "Creating a room",
   host_event: "Hosting an event",

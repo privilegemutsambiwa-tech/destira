@@ -4,8 +4,9 @@ import {
   ArrowLeft, User, Brain, Shield, Bell, Wrench, Crown, HelpCircle,
   AlertTriangle, ChevronRight, LogOut, Trash2, PauseCircle, Eye, EyeOff,
   Volume2, MapPin, MessageSquare, Zap, Check, Lock, Mail, Sliders, FileText, Heart,
-  ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2, Users, Megaphone
+  ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2, Users, Megaphone, SlidersHorizontal
 } from "lucide-react";
+import { filtersSummary } from "@shared/match-prefs";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme, type ThemePreference } from "@/hooks/use-theme";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -2165,7 +2166,7 @@ export default function Settings() {
     {
       id: "discovery",
       label: "Discovery",
-      keywords: "location distance km proximity alerts age range who you see gender events preferences",
+      keywords: "location distance km proximity alerts age range who you see gender events preferences filters dealbreakers faith children marriage verified",
       content: (
         <div className="vf-card" style={cardStyle}>
           <ChevronRow icon={MapPin} label="How far to look" sublabel={`Within ${profile?.maxDistanceKm ?? 100} km`} onClick={() => setActivePanel("location")} testId="row-location" />
@@ -2183,6 +2184,7 @@ export default function Settings() {
             onClick={() => setActivePanel("seeking-genders")}
             testId="row-seeking-genders"
           />
+          <ChevronRow icon={SlidersHorizontal} label="Filters" sublabel={filtersSummary((profile as any)?.matchPrefs)} onClick={() => setLocation("/settings/filters")} testId="row-filters" />
           <ChevronRow icon={Zap} label="Proximity alerts" sublabel="When someone worth knowing is at the same place" onClick={() => setActivePanel("proximity")} testId="row-proximity" />
           <ChevronRow icon={CalendarDays} label="Event preferences" sublabel="What shows up in your Events feed" onClick={() => setLocation("/settings/events?from=/settings")} testId="row-event-preferences" />
         </div>

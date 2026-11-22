@@ -84,6 +84,7 @@ const PlansPay = screen(() => import("@/pages/PlansPay"));
 const GroupChatPage = screen(() => import("@/pages/GroupChat"));
 const Crown = screen(() => import("@/pages/Crown"));
 const ProfileDetails = screen(() => import("@/pages/ProfileDetails"));
+const Filters = screen(() => import("@/pages/Filters"));
 const GameRoomLobby = screen(() => import("@/pages/GameRoomLobby"));
 const GameRoomScreen = screen(() => import("@/pages/GameRoomScreen"));
 const GroupInfoPage = screen(() => import("@/pages/GroupInfo"));
@@ -303,6 +304,9 @@ function Router() {
       </Route>
       <Route path="/events">
         <ProtectedRoute component={Events} />
+      </Route>
+      <Route path="/settings/filters">
+        <ProtectedRoute component={Filters} />
       </Route>
       <Route path="/settings/events">
         <ProtectedRoute component={EventPreferences} />

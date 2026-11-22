@@ -60,6 +60,7 @@ import { registerCrownRoutes, canPayCrown } from "./crown";
 import { registerCrownPerkRoutes, applySpotlight, dropLiftedToday, privateModeHides, introMatchIds } from "./crown-perks";
 import { isCrownPeriod } from "@shared/crown";
 import { DETAILS_SCHEMA, detailFacts, mergeDetails } from "@shared/profile-details";
+import { ADVANCED_PREF_KEYS, MATCH_PREFS_SCHEMA, mergePrefs } from "@shared/match-prefs";
 import * as emailTemplates from "./email/templates";
 import { setAdminLockoutHook } from "./admin/auth";
 import { trackActivity } from "./admin/activity";
@@ -259,6 +260,34 @@ export async function registerRoutes(
     const profile = await storage.getProfile(userId);
     if (!profile) return res.status(404).json({ message: "Profile not found" });
     res.json(stripRawLocation(profile));
+  });
+
+  // Filters and dealbreakers (shared/match-prefs.ts). Faith, children and
+  // marriage need Spark; after a downgrade they stay saved but stop
+  // applying until the plan is back (storage uses effectivePrefs).
+  app.get("/api/match-prefs", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const profile = await storage.getProfile(userId);
+    const g = await gate.checkGate(userId, "advanced_filters");
+    res.json({ prefs: profile?.matchPrefs ?? {}, advanced: g.ok, gate: g.ok ? null : gate.gateBody(g, "advanced_filters") });
+  });
+
+  app.put("/api/match-prefs", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.sendStatus(401);
+    const parsed = MATCH_PREFS_SCHEMA.safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ message: "That filter isn't one we know." });
+    const profile = await storage.getProfile(userId);
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+    const turningOnAdvanced = ADVANCED_PREF_KEYS.some((k) => parsed.data[k]);
+    if (turningOnAdvanced) {
+      const g = await gate.checkGate(userId, "advanced_filters");
+      if (!g.ok) return res.status(403).json(gate.gateBody(g, "advanced_filters"));
+    }
+    const prefs = mergePrefs(profile.matchPrefs, parsed.data);
+    await storage.updateProfile(userId, { matchPrefs: prefs } as any);
+    res.json({ prefs });
   });
 
   app.get("/api/profiles/discover", async (req, res) => {
@@ -612,6 +641,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     "moderationStatus", "moderationStatusReason", "moderationStatusAt",
     "superMatchesRemaining", "boostsRemaining",
     "profileCompletionScore", "twinQuestionsAnswered",
+    "matchPrefs", // only via /api/match-prefs, which checks the plan
   ] as const;
   function withoutServerOwned<T extends Record<string, any>>(body: T): T {
     const out: Record<string, any> = { ...(body ?? {}) };

@@ -228,6 +228,7 @@ export async function checkGate(
     read_transcript: limits.transcriptLines == null,
     host_event: limits.canHostEvent,
     see_story_engagers: limits.seeStoryEngagers,
+    advanced_filters: tierRank(tier) >= tierRank(FEATURE_MIN_TIER.advanced_filters),
   };
   if (feature in boolMap) {
     const allowed = boolMap[feature]!;

@@ -8,6 +8,7 @@ export * from "./models/chat";
 
 import { users } from "./models/auth";
 import type { ProfileDetails } from "./profile-details";
+import type { MatchPrefs } from "./match-prefs";
 
 export const profiles = pgTable("profiles", {
   id: serial("id").primaryKey(),
@@ -66,6 +67,8 @@ export const profiles = pgTable("profiles", {
   // Faith, children, marriage plans, languages and other details, all
   // optional (shared/profile-details.ts). Saves merge into it.
   details: jsonb("details").$type<ProfileDetails>(),
+  // Who they want to see beyond age/distance/gender (shared/match-prefs.ts).
+  matchPrefs: jsonb("match_prefs").$type<MatchPrefs>(),
   // What the twin may disclose in an interview. { categoryKey: 'open'|'acknowledge'|'closed' }.
   // Missing/absent => 'closed'. See shared/disclosure.ts.
   disclosureSettings: jsonb("disclosure_settings").$type<Record<string, string>>(),
