@@ -62,6 +62,8 @@ import { registerDiscoverPerkRoutes, applyBoosts, dropBoosted, undoOrRewind } fr
 import { recordShown, startMatchStatsSweep } from "./matching";
 import { registerDmExtraRoutes, presentDirectMessages, findByClientId, cleanClientId, isDmMediaKey, stoppedTyping } from "./dm-extras";
 import { DM_TEXT_MAX } from "@shared/dm";
+import { registerDateRoutes, startDateSweeps } from "./dates";
+import { openerFacts, fallbackOpeners } from "./openers";
 import { isCrownPeriod } from "@shared/crown";
 import { DETAILS_SCHEMA, detailFacts, mergeDetails } from "@shared/profile-details";
 import { ADVANCED_PREF_KEYS, MATCH_PREFS_SCHEMA, mergePrefs } from "@shared/match-prefs";
@@ -219,6 +221,9 @@ export async function registerRoutes(
   startMatchStatsSweep();
   // Chat: reactions, photos, voice notes, typing, edit and unsend.
   registerDmExtraRoutes(app, getUserId);
+  // Let's meet, the after-date check-in and the quiet-chat nudge.
+  registerDateRoutes(app, getUserId);
+  startDateSweeps();
   registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group
@@ -2242,6 +2247,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
     }
   });
 
+  const openerCache = new Map<string, { options: string[]; until: number }>();
   // "Help me reply" and first-message openers in a direct chat
   // (docs/destira-upgrade-prompt.md §7.9). Three short drafts in the
   // member's own voice, from the real conversation, both profiles and, when
@@ -2273,28 +2279,48 @@ Only include structured_updates fields if the conversation clearly reveals them.
           if (Array.isArray(lines)) twinNotes = lines.map((l: any) => String(l.text)).slice(0, 5);
         } catch {}
       }
+      const opening = recent.length === 0;
+      // An empty chat asks for openers by itself, so the same three are
+      // reused for a few hours instead of a new AI call on every visit.
+      const cacheKey = `${matchId}:${userId}`;
+      const cached = opening ? openerCache.get(cacheKey) : undefined;
+      if (cached && cached.until > Date.now()) return res.json({ options: cached.options });
+      const facts = opening
+        ? await openerFacts(me, them, interestMap.get(userId) ?? [], interestMap.get(otherId) ?? [])
+        : null;
       const context = {
         me: { name: me?.displayName, about: me?.aboutMe || me?.bio, interests: interestMap.get(userId) ?? [] },
         them: { name: them?.displayName, about: them?.aboutMe || them?.bio, city: them?.location, interests: interestMap.get(otherId) ?? [] },
+        ...(facts ? { theirPromptAnswers: facts.promptAnswers, eventsTheyreGoingTo: facts.goingTo, whatWeShare: [...facts.shared, ...facts.sharedInterests.map((i) => `both into ${i}`)] } : {}),
         whatTheirTwinToldMe: twinNotes,
         conversation: recent,
       };
-      const opening = recent.length === 0;
       const completion = await completeText(
         [
           {
             role: "system",
-            content: `You help someone on a dating app write ${opening ? "a first message to a new match" : "their next reply"}. Write exactly three different short options (under 160 characters each) in "me"'s voice: warm, specific, natural, a little playful, no pickup lines, no emojis unless the conversation already uses them. Use only facts in the context; never invent details about either person. ${opening ? "Each should open with something real from their profile, shared interests or what their twin said, and end with an easy question." : "Reply to what they last said."} Return JSON: {"options":["...","...","..."]}.`,
+            content: `You help someone on a dating app write ${opening ? "a first message to a new match" : "their next reply"}. Write exactly three different short options (under 160 characters each) in "me"'s voice: warm, specific, natural, a little playful, no pickup lines, no emojis unless the conversation already uses them. Use only facts in the context; never invent details about either person. ${opening ? "Each should open with something real and different: one from their prompt answers if they have any, one from an event they're going to if any, one from something you share; otherwise their profile, interests or what their twin said. End each with an easy question." : "Reply to what they last said."} Return JSON: {"options":["...","...","..."]}.`,
           },
           { role: "user", content: JSON.stringify(context) },
         ],
         { json: true, maxTokens: 400 },
-      );
+      ).catch((e) => {
+        // Openers still come from the profile when the AI is down.
+        if (!opening) throw e;
+        console.error("Chat suggest AI error (using profile openers):", e);
+        return { text: "" };
+      });
       let options: string[] = [];
       try {
         const parsed = JSON.parse(completion.text || "{}");
         if (Array.isArray(parsed?.options)) options = parsed.options.map((o: any) => String(o).trim()).filter(Boolean).slice(0, 3);
       } catch {}
+      // No AI answer: openers written from the same facts.
+      if (opening && options.length < 3 && facts) options = fallbackOpeners(facts, them?.displayName || "there", them?.location);
+      if (opening && options.length) {
+        if (openerCache.size > 5000) openerCache.clear();
+        openerCache.set(cacheKey, { options, until: Date.now() + 6 * 60 * 60 * 1000 });
+      }
       res.json({ options });
     } catch (e) {
       console.error("Chat suggest error:", e);

@@ -1,5 +1,6 @@
 // Direct-message extras shared by the server (server/dm-extras.ts) and the
 // chat screen: reactions, edit and unsend, photos and voice notes.
+import type { DatePlanView } from "./date-plan";
 
 /** Edit or unsend: only the sender, only this long after sending. */
 export const DM_EDIT_WINDOW_MS = 10 * 60 * 1000;
@@ -17,7 +18,7 @@ export const PHOTO_MAX_BYTES = 8 * 1024 * 1024;
 
 export const DM_TEXT_MAX = 4000;
 
-export type DmContentType = "text" | "photo" | "voice";
+export type DmContentType = "text" | "photo" | "voice" | "date";
 
 /** What the chat gets for each message (never the stored key or original). */
 export interface DmMessageView {
@@ -38,6 +39,8 @@ export interface DmMessageView {
   viewed: boolean;
   durationMs: number | null;
   reactions: { userId: string; emoji: string }[];
+  /** A "Let's meet" card (contentType date). */
+  plan: DatePlanView | null;
 }
 
 export function canStillChange(createdAt: string | Date | null | undefined, now = Date.now()): boolean {

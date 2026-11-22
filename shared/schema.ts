@@ -163,6 +163,8 @@ export const matches = pgTable("matches", {
   // A super like: the receiver sees it first and it's marked as one
   // (server/discover-perks.ts).
   isSuper: boolean("is_super").default(false),
+  // The one "your chat went quiet" push this chat will ever get (server/dates.ts).
+  quietNudgedAt: timestamp("quiet_nudged_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -279,6 +281,35 @@ export const dmReactions = pgTable("dm_reactions", {
   emoji: text("emoji").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [uniqueIndex("dm_reactions_message_user_idx").on(t.messageId, t.userId)]);
+
+// "Let's meet" (server/dates.ts, shared/date-plan.ts). One open proposal per
+// chat; a new one replaces it. The card lives in the chat as a direct
+// message with contentType 'date' (messageId).
+export const datePlans = pgTable("date_plans", {
+  id: serial("id").primaryKey(),
+  matchId: integer("match_id").notNull().references(() => matches.id),
+  proposerId: varchar("proposer_id").notNull().references(() => users.id),
+  kind: text("kind").notNull(), // coffee | lunch | walk | event
+  placeName: text("place_name").notNull(),
+  placeDetail: text("place_detail"),
+  eventId: integer("event_id"),
+  times: jsonb("times").$type<string[]>().notNull(),
+  startsAt: timestamp("starts_at"),
+  status: text("status").notNull().default("proposed"), // proposed | confirmed | declined | cancelled | replaced
+  messageId: integer("message_id"),
+  respondedAt: timestamp("responded_at"),
+  checkinPushedAt: timestamp("checkin_pushed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [index("date_plans_match_idx").on(t.matchId), index("date_plans_message_idx").on(t.messageId)]);
+
+// The private "How did it go?" after a date. Never shown to the other person.
+export const dateCheckins = pgTable("date_checkins", {
+  id: serial("id").primaryKey(),
+  planId: integer("plan_id").notNull().references(() => datePlans.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  answer: text("answer").notNull(), // great | okay | not_for_me | report
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [uniqueIndex("date_checkins_plan_user_idx").on(t.planId, t.userId)]);
 
 export const groupMessages = pgTable("group_messages", {
   id: serial("id").primaryKey(),

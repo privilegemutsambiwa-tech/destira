@@ -19,7 +19,8 @@ import { RISK_LABEL } from "@shared/safety";
 import { enqueue, enqueueReaction, isConnectionError, newClientId, useOutbox } from "@/lib/outbox";
 import { DmSpecialBody, MessageActions, ReactionChips, TypingBubble, useTyping } from "@/components/dm-message";
 import { MicButton, PhotoButton, RecordingBar, useVoiceNote } from "@/components/dm-composer-extras";
-import { Pencil as PencilIcon, X as XIcon } from "lucide-react";
+import { CalendarHeart, Pencil as PencilIcon, X as XIcon } from "lucide-react";
+import { DateCard, DateCheckin, LetsMeetSheet } from "@/components/date-plan";
 import type { DmMessageView } from "@shared/dm";
 import { OutboxBubbles } from "@/components/outbox-bubbles";
 import { IconButton, TwinGlyph, VfAvatar, VfButton, VfSheet } from "@/components/ui-vf";
@@ -172,6 +173,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
   const [savingEdit, setSavingEdit] = useState(false);
   const voice = useVoiceNote(matchId);
   const queued = useOutbox("direct", matchId);
+  const [planning, setPlanning] = useState(false);
 
   const submitReport = async () => {
     if (!reportTarget) return;
@@ -282,6 +284,14 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
       haptic.success();
     }
   }, [list, user?.id, matchId]);
+
+  // An empty chat: three openers from their profile, without asking.
+  const askedOpeners = useRef(false);
+  useEffect(() => {
+    if (isLoading || !match || list.length > 0 || askedOpeners.current || suggestions.options || suggestions.loading) return;
+    askedOpeners.current = true;
+    void suggestions.ask();
+  }, [isLoading, match, list.length, suggestions]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -408,6 +418,9 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
             </span>
           </span>
         </button>
+        <IconButton label={`Plan a date with ${otherFirst}`} onClick={() => setPlanning(true)} disabled={!match} data-testid="button-lets-meet">
+          <CalendarHeart className="w-5 h-5" />
+        </IconButton>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <IconButton label="More" data-testid="button-chat-menu">
@@ -479,12 +492,16 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
                         onContextMenu={(e) => { e.preventDefault(); setShownTimeId(msg.id); }}
                         data-testid={`message-${msg.id}`}
                       >
-                        <DmSpecialBody
-                          msg={msg}
-                          isMe={isMe}
-                          corner={corner}
-                          onChanged={() => queryClient.invalidateQueries({ queryKey: ["/api/messages", matchId] })}
-                        />
+                        {msg.contentType === "date" && msg.plan ? (
+                          <DateCard plan={msg.plan} isMe={isMe} otherFirst={otherFirst} onSuggestAnother={() => setPlanning(true)} />
+                        ) : (
+                          <DmSpecialBody
+                            msg={msg}
+                            isMe={isMe}
+                            corner={corner}
+                            onChanged={() => queryClient.invalidateQueries({ queryKey: ["/api/messages", matchId] })}
+                          />
+                        )}
                       </div>
                     ) : (
                       <button
@@ -566,6 +583,17 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
               setReportTarget({ userId: other.userId, messageId });
             }}
           />
+          {match && (
+            <DateCheckin
+              matchId={matchId}
+              otherFirst={otherFirst}
+              onReport={() => {
+                if (!other?.userId) return;
+                setReportReason("About our date: ");
+                setReportTarget({ userId: other.userId });
+              }}
+            />
+          )}
           <div className="mt-3 flex flex-col gap-1">
             <OutboxBubbles kind="direct" targetId={matchId} />
           </div>
@@ -706,6 +734,8 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <LetsMeetSheet matchId={matchId} otherFirst={otherFirst} open={planning} onOpenChange={setPlanning} />
 
       <VfSheet
         open={!!confirm}

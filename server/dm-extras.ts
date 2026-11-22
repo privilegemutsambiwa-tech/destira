@@ -14,6 +14,7 @@ import { storage } from "./storage";
 import * as safety from "./safety";
 import * as push from "./push";
 import { putObject, getObjectBuffer } from "./storage/objectStorage";
+import { plansForMessages } from "./dates";
 import { directMessages, dmReactions, type DirectMessage } from "@shared/schema";
 import {
   DM_EDIT_WINDOW_MS, DM_REACTIONS, DM_TEXT_MAX, PHOTO_MAX_BYTES, VOICE_MAX_BYTES, VOICE_MAX_MS,
@@ -53,6 +54,7 @@ export async function presentDirectMessages(rows: DirectMessage[], viewerId: str
     ? await db.select({ messageId: dmReactions.messageId, userId: dmReactions.userId, emoji: dmReactions.emoji })
         .from(dmReactions).where(inArray(dmReactions.messageId, ids))
     : [];
+  const plans = await plansForMessages(rows);
   const byMessage = new Map<number, { userId: string; emoji: string }[]>();
   for (const r of reactions) {
     const list = byMessage.get(r.messageId) ?? [];
@@ -81,6 +83,7 @@ export async function presentDirectMessages(rows: DirectMessage[], viewerId: str
       viewed: viewOnce && !!m.viewedAt,
       durationMs: typeof meta.durationMs === "number" ? meta.durationMs : null,
       reactions: unsent ? [] : byMessage.get(m.id) ?? [],
+      plan: plans.get(m.id) ?? null,
     };
   });
 }
@@ -315,6 +318,7 @@ export function registerDmExtraRoutes(app: Express, getUserId: (req: any) => str
     try {
       const m = await loadOwnMessage(res, parseInt(req.params.messageId), userId);
       if (!m) return;
+      if (m.contentType === "date") return res.status(400).json({ message: "Cancel the plan on its card instead" });
       const [updated] = await db.update(directMessages)
         .set({ unsentAt: sql`now()`, content: "", originalContent: sql`coalesce(${directMessages.originalContent}, ${directMessages.content})` })
         .where(and(eq(directMessages.id, m.id), editWindowSql)).returning();
