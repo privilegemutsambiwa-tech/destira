@@ -12,7 +12,7 @@ import { crownSettings, forgetCrownCache, isActiveRow, seatsTaken, setCrownSetti
 import { introStats } from "../crown-perks";
 import { getObjectBuffer, keyFromUploadUrl } from "../storage/objectStorage";
 import { storage } from "../storage";
-import { sendPush } from "../push";
+import { notify as notifyMember } from "../push";
 
 const DAY_MS = 86_400_000;
 
@@ -26,8 +26,7 @@ async function streamKey(res: Response, key: string | null) {
 }
 
 async function notify(userId: string, title: string, body: string, url: string) {
-  await storage.createNotification(userId, "crown", title, body).catch(() => {});
-  sendPush(userId, { title, body, url, tag: "crown" }).catch(() => {});
+  await notifyMember(userId, "account", { type: "crown", title, body, url, tag: "crown" }).catch(() => {});
 }
 
 export async function pendingCrownApplications(): Promise<number> {

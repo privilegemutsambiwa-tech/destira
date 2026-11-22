@@ -63,6 +63,8 @@ import { recordShown, startMatchStatsSweep } from "./matching";
 import { registerDmExtraRoutes, presentDirectMessages, findByClientId, cleanClientId, isDmMediaKey, stoppedTyping } from "./dm-extras";
 import { DM_TEXT_MAX } from "@shared/dm";
 import { registerDateRoutes, startDateSweeps } from "./dates";
+import { registerActivityRoutes } from "./activity";
+import { startReminderSweeps } from "./reminders";
 import { openerFacts, fallbackOpeners } from "./openers";
 import { isCrownPeriod } from "@shared/crown";
 import { DETAILS_SCHEMA, detailFacts, mergeDetails } from "@shared/profile-details";
@@ -150,8 +152,8 @@ async function notifyMatch(match: { id: number; user1Id: string; user2Id: string
     const name1 = p1?.displayName || "Someone";
     const name2 = p2?.displayName || "Someone";
     await Promise.all([
-      storage.createNotification(match.user1Id, "match", "It's a match!", `You and ${name2} matched.`),
-      storage.createNotification(match.user2Id, "match", "It's a match!", `You and ${name1} matched.`),
+      storage.createNotification(match.user1Id, "match", "It's a match!", `You and ${name2} matched.`, `/chat/${match.id}`),
+      storage.createNotification(match.user2Id, "match", "It's a match!", `You and ${name1} matched.`, `/chat/${match.id}`),
     ]);
     push.sendCategorizedPush(match.user1Id, "matches", { title: "It's a match!", body: `You and ${name2} matched.`, url: "/matches", tag: `match-${match.id}` }).catch(() => {});
     push.sendCategorizedPush(match.user2Id, "matches", { title: "It's a match!", body: `You and ${name1} matched.`, url: "/matches", tag: `match-${match.id}` }).catch(() => {});
@@ -224,6 +226,11 @@ export async function registerRoutes(
   // Let's meet, the after-date check-in and the quiet-chat nudge.
   registerDateRoutes(app, getUserId);
   startDateSweeps();
+  // The bell, "new since you last looked", and the reminders behind them
+  // (unread message, event tomorrow / in 2 hours), plus the morning digest.
+  registerActivityRoutes(app, getUserId);
+  startReminderSweeps();
+  push.startPushDigests();
   registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group

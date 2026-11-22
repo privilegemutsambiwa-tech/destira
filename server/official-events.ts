@@ -181,7 +181,7 @@ export async function rescheduleOfficialEvent(eventId: number, startsAt: Date): 
   const audience = await goingUserIds(eventId);
   if (audience.length > 0) {
     await db.insert(twinNotifications).values(
-      audience.map((userId) => ({ userId, type: "event_moved", title: `"${old.title}" has a new date`, body: `It's now on ${when}. You're still going.` })),
+      audience.map((userId) => ({ userId, type: "event_moved", title: `"${old.title}" has a new date`, body: `It's now on ${when}. You're still going.`, url: `/events/${eventId}` })),
     );
     for (const userId of audience) {
       sendCategorizedPush(userId, "events", {
@@ -292,6 +292,7 @@ export async function setEventLead(eventId: number, userId: string): Promise<Eve
   await db.insert(twinNotifications).values({
     userId,
     type: "event_lead_approved",
+    url: `/events/${eventId}`,
     title: `You're leading "${updated.title}"`,
     body: "Thanks for stepping up. Open the event chat to start planning with everyone who's coming.",
   });
@@ -428,6 +429,7 @@ export async function sweepOfficialEvents(now = new Date()): Promise<number> {
           type: "event_cancelled",
           title: `"${event.title}" was called off`,
           body: `${reason} Thanks for signing up. We'll bring it back for another date.`,
+          url: `/events/${event.id}`,
         })),
       );
       for (const userId of audience) {

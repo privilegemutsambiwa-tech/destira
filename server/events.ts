@@ -17,6 +17,7 @@ import {
 import { users } from "@shared/models/auth";
 import { eq, and, ne, or, ilike, inArray, asc, desc, gte, lte, count, isNull } from "drizzle-orm";
 import { storage } from "./storage";
+import { notifyLikersGoing } from "./reminders";
 
 export class EventNotFoundError extends Error {
   constructor() { super("Event not found"); }
@@ -482,6 +483,7 @@ async function cancelEventInternal(eventId: number, reason: string): Promise<Eve
         type: "event_cancelled",
         title: `"${updated.title}" was called off`,
         body: reason,
+        url: `/events/${eventId}`,
       })),
     );
   }
@@ -693,6 +695,9 @@ export async function attendEvent(
       await storage.joinGroup(result.chatGroupId, userId, nickname);
     }
   }
+
+  // Anyone already going who liked this member hears about it (Part I).
+  if (result.status === "going") notifyLikersGoing(eventId, userId).catch(() => {});
 
   return { status: result.status, waitlistPosition: result.waitlistPosition };
 }
@@ -962,6 +967,7 @@ export async function reviewHostVideo(
   await db.insert(twinNotifications).values({
     userId: event.hostUserId,
     type: approved ? "host_video_approved" : "host_video_rejected",
+    url: `/events/${event.id}`,
     title: approved
       ? `Your video for "${event.title}" is live`
       : `Your video for "${event.title}" wasn't approved`,

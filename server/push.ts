@@ -14,8 +14,11 @@ import webpush from "web-push";
 import { initializeApp, cert, getApps, type App } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import { db } from "./db";
-import { pushSubscriptions, deviceTokens, profiles } from "@shared/schema";
-import { eq, inArray } from "drizzle-orm";
+import { pushSubscriptions, deviceTokens, profiles, pushLog, twinNotifications, type PushLogRow } from "@shared/schema";
+import { and, asc, count, eq, gte, inArray } from "drizzle-orm";
+import {
+  EXEMPT_CATEGORIES, PUSH_CATEGORIES, PUSH_DAILY_BUDGET, BURST_WINDOW_MS, isQuietHour, localClock, type NotificationCategory,
+} from "@shared/notify";
 
 let ready = false;
 try {
@@ -63,22 +66,154 @@ export interface PushPayload {
   tag?: string;
 }
 
-export type NotificationCategory = "matches" | "messages" | "stories" | "interviews" | "events";
+export type { NotificationCategory };
 
 // Missing key => on, matching the Settings toggles' default-enabled behavior
 // (a user who never opened the toggle keeps getting notified).
-async function categoryEnabled(userId: string, category: NotificationCategory): Promise<boolean> {
-  const [row] = await db.select({ prefs: profiles.notificationPrefs }).from(profiles).where(eq(profiles.userId, userId));
-  const v = row?.prefs?.[category];
-  return v !== false;
+async function memberPushState(userId: string): Promise<{ prefs: Record<string, boolean>; tz: string | null }> {
+  const [row] = await db.select({ prefs: profiles.notificationPrefs, tz: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));
+  return { prefs: row?.prefs ?? {}, tz: row?.tz ?? null };
 }
 
-// The one place a category-gated push goes out — every send-site funnels
-// through here instead of calling sendPush directly, so a new notification
-// type can't accidentally skip the user's preference.
-export async function sendCategorizedPush(userId: string, category: NotificationCategory, payload: PushPayload): Promise<void> {
-  if (!(await categoryEnabled(userId, category))) return;
+export type PushOutcome = "sent" | "held" | "over_budget" | "off" | "duplicate";
+export interface PushOptions {
+  /** Once-only: a second push with the same key for this member is dropped. */
+  dedupeKey?: string;
+  /** For tests and sweeps that reason about a specific moment. */
+  now?: Date;
+}
+
+const NON_EXEMPT: string[] = PUSH_CATEGORIES.filter((c) => !EXEMPT_CATEGORIES.has(c));
+NON_EXEMPT.push("digest");
+
+async function nonExemptSentToday(userId: string, day: string): Promise<number> {
+  const [r] = await db.select({ n: count() }).from(pushLog).where(and(
+    eq(pushLog.userId, userId), eq(pushLog.localDay, day), eq(pushLog.status, "sent"), inArray(pushLog.category, NON_EXEMPT),
+  ));
+  return Number(r?.n ?? 0);
+}
+
+async function sentWithinBurst(userId: string, now: Date): Promise<boolean> {
+  const [recent] = await db.select({ id: pushLog.id }).from(pushLog).where(and(
+    eq(pushLog.userId, userId), eq(pushLog.status, "sent"), inArray(pushLog.category, NON_EXEMPT),
+    gte(pushLog.createdAt, new Date(now.getTime() - BURST_WINDOW_MS)),
+  )).limit(1);
+  return !!recent;
+}
+
+// The one place a category-gated push goes out. Every send-site funnels
+// through here, so a new notification type can't skip the member's switch,
+// the daily budget, quiet hours or the burst rule:
+//   - switched off                    -> nothing
+//   - matches/messages                -> straight out, any hour, not counted
+//   - 21:00-08:00 their time          -> held, folded into one push at 08:00
+//   - within 15 min of the last one   -> held, folded into one a little later
+//   - already 4 today                 -> not pushed (it's still in the bell)
+export async function sendCategorizedPush(userId: string, category: NotificationCategory, payload: PushPayload, opts: PushOptions = {}): Promise<PushOutcome> {
+  const now = opts.now ?? new Date();
+  const { prefs, tz } = await memberPushState(userId);
+  const { hour, day } = localClock(tz, now);
+  const row = { userId, category, title: payload.title, body: payload.body, url: payload.url ?? null, tag: payload.tag ?? null, localDay: day, createdAt: now };
+
+  let id: number | null = null;
+  if (opts.dedupeKey) {
+    const [claimed] = await db.insert(pushLog).values({ ...row, dedupeKey: opts.dedupeKey, status: "pending" })
+      .onConflictDoNothing().returning({ id: pushLog.id });
+    if (!claimed) return "duplicate";
+    id = claimed.id;
+  }
+  const record = async (status: Exclude<PushOutcome, "duplicate">) => {
+    if (id != null) await db.update(pushLog).set({ status }).where(eq(pushLog.id, id));
+    else await db.insert(pushLog).values({ ...row, status });
+    return status;
+  };
+
+  if (prefs[category] === false) return record("off");
+  if (EXEMPT_CATEGORIES.has(category)) {
+    await sendPush(userId, payload);
+    return record("sent");
+  }
+  if (isQuietHour(hour)) return record("held");
+  if ((await nonExemptSentToday(userId, day)) >= PUSH_DAILY_BUDGET) return record("over_budget");
+  if (await sentWithinBurst(userId, now)) return record("held");
+  // Counted before it goes out, so two at once can't both slip under the budget.
+  await record("sent");
   await sendPush(userId, payload);
+  return "sent";
+}
+
+/**
+ * Held pushes go out once the member's morning arrives (or the burst window
+ * passes): one held item as itself, two or more folded into a single push
+ * that opens the bell. Either way it counts as one against the day's budget.
+ */
+export async function runPushDigests(opts: { now?: Date } = {}): Promise<number> {
+  const now = opts.now ?? new Date();
+  const held = await db.select().from(pushLog).where(eq(pushLog.status, "held")).orderBy(asc(pushLog.createdAt));
+  const byUser = new Map<string, PushLogRow[]>();
+  for (const r of held) byUser.set(r.userId, [...(byUser.get(r.userId) ?? []), r]);
+  let sent = 0;
+  for (const [userId, rows] of Array.from(byUser.entries())) {
+    const { prefs, tz } = await memberPushState(userId);
+    const { hour, day } = localClock(tz, now);
+    if (isQuietHour(hour)) continue;
+    if (await sentWithinBurst(userId, now)) continue;
+    const ids = rows.map((r) => r.id);
+    const claimed = await db.update(pushLog).set({ status: "digested" })
+      .where(and(inArray(pushLog.id, ids), eq(pushLog.status, "held"))).returning({ id: pushLog.id });
+    if (claimed.length !== ids.length) continue;
+    // Switched off since it was held: those are dropped.
+    const live = rows.filter((r) => prefs[r.category] !== false);
+    if (!live.length) continue;
+    if ((await nonExemptSentToday(userId, day)) >= PUSH_DAILY_BUDGET) continue;
+    const one = live.length === 1 ? live[0] : null;
+    const payload: PushPayload = one
+      ? { title: one.title, body: one.body, url: one.url ?? undefined, tag: one.tag ?? undefined }
+      : {
+          title: `${live.length} things since you last looked`,
+          body: live.slice(0, 3).map((r) => r.title).join(" · "),
+          url: "/notifications",
+          tag: "digest",
+        };
+    await db.insert(pushLog).values({
+      userId, category: one ? one.category : "digest", title: payload.title, body: payload.body,
+      url: payload.url ?? null, tag: payload.tag ?? null, status: "sent", localDay: day, createdAt: now,
+    });
+    await sendPush(userId, payload);
+    sent++;
+  }
+  return sent;
+}
+
+/**
+ * The bell and the push together, for moments that belong in both: one
+ * inbox row (with the screen it opens), then the push through the budget.
+ * With a dedupeKey the claim comes first, so a reminder can't land twice.
+ */
+export async function notify(
+  userId: string,
+  category: NotificationCategory,
+  n: { type: string; title: string; body: string; url: string; tag?: string },
+  opts: PushOptions = {},
+): Promise<PushOutcome> {
+  const push = () => sendCategorizedPush(userId, category, { title: n.title, body: n.body, url: n.url, tag: n.tag }, opts);
+  const inbox = () => db.insert(twinNotifications).values({ userId, type: n.type, title: n.title, body: n.body, url: n.url });
+  if (opts.dedupeKey) {
+    const outcome = await push();
+    if (outcome !== "duplicate") await inbox();
+    return outcome;
+  }
+  await inbox();
+  return push();
+}
+
+let digestTimer: NodeJS.Timeout | null = null;
+/** Every 5 minutes: fold and send whatever was held. */
+export function startPushDigests(): void {
+  if (digestTimer) return;
+  const tick = () => runPushDigests().catch((e) => console.error("[push] digest sweep failed:", e));
+  setTimeout(tick, 60_000);
+  digestTimer = setInterval(tick, 5 * 60_000);
 }
 
 // Best-effort, to every browser and phone the member has. Prunes dead

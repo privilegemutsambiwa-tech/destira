@@ -1,5 +1,6 @@
 ﻿import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { LayoutShell } from "@/components/layout-shell";
+import { useMarkSeen } from "@/hooks/use-activity";
 import { FirstDayChip } from "@/components/first-day-card";
 import { MatchCelebration } from "@/components/match-celebration";
 import { DecisionDock } from "@/components/decision-dock";
@@ -624,6 +625,7 @@ function BoostControl({ perks, onBoost, busy }: { perks?: DiscoverPerks; onBoost
 }
 
 export default function Discover() {
+  useMarkSeen("discover");
   // Anyone liked or passed leaves the deck the instant you act, and stays out:
   // the device remembers the decision (lib/discover-decisions) until the
   // server has it, and the server excludes them for good after that (a

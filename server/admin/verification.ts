@@ -11,7 +11,7 @@ import { poseText, REJECT_REASONS } from "@shared/verification";
 import { adminRoute } from "./auth";
 import { auditAdmin } from "./audit";
 import { deleteObject, getObjectBuffer, keyFromUploadUrl } from "../storage/objectStorage";
-import { sendPush } from "../push";
+import { notify } from "../push";
 import { storage } from "../storage";
 
 async function streamKey(res: Response, key: string | null) {
@@ -121,8 +121,7 @@ export function registerAdminVerificationRoutes(app: Express) {
       await auditAdmin(req, adminUserId, "verification.approve", { targetType: "verification_request", targetId: id, details: { userId: out.request.userId } });
       const title = "You're verified";
       const body = "Your verified mark is now on your profile. People can see you're really you.";
-      await storage.createNotification(out.request.userId, "verification", title, body).catch(() => {});
-      sendPush(out.request.userId, { title, body, url: "/profile", tag: "verification" }).catch(() => {});
+      await notify(out.request.userId, "account", { type: "verification", title, body, url: "/profile", tag: "verification" }).catch(() => {});
       res.json({ ok: true });
     } catch (e) {
       console.error("[admin] verification approve error:", e);
@@ -141,8 +140,7 @@ export function registerAdminVerificationRoutes(app: Express) {
       if (out.request.selfieKey) await deleteObject(out.request.selfieKey).catch(() => {});
       await auditAdmin(req, adminUserId, "verification.reject", { targetType: "verification_request", targetId: id, details: { userId: out.request.userId, reason } });
       const title = "Let's try your selfie again";
-      await storage.createNotification(out.request.userId, "verification", title, reason).catch(() => {});
-      sendPush(out.request.userId, { title, body: reason, url: "/settings#verify", tag: "verification" }).catch(() => {});
+      await notify(out.request.userId, "account", { type: "verification", title, body: reason, url: "/settings#verify", tag: "verification" }).catch(() => {});
       res.json({ ok: true });
     } catch (e) {
       console.error("[admin] verification reject error:", e);

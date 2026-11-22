@@ -460,9 +460,43 @@ export const twinNotifications = pgTable("twin_notifications", {
   type: text("type").notNull(),
   title: text("title").notNull(),
   body: text("body").notNull(),
+  // Where tapping it goes (same URLs as push). Older rows fall back by type.
+  url: text("url"),
   read: boolean("read").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Every push decision, one row each (Part I): what was sent, held for the
+// morning or folded into a digest, refused by the daily budget or switched
+// off. Also the once-only claim for reminders via (user, dedupe_key).
+export const pushLog = pgTable("push_log", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  category: text("category").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  url: text("url"),
+  tag: text("tag"),
+  dedupeKey: text("dedupe_key"),
+  status: text("status").notNull(), // sent | held | digested | over_budget | off
+  localDay: text("local_day").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("push_log_user_day_idx").on(t.userId, t.localDay),
+  uniqueIndex("push_log_user_key_idx").on(t.userId, t.dedupeKey),
+]);
+export type PushLogRow = typeof pushLog.$inferSelect;
+
+// When a member last opened Discover, Lounge or Events, for the small
+// "new since you last looked" marker (Part I). No streaks, no counts.
+export const surfaceSeen = pgTable("surface_seen", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  surface: text("surface").notNull(), // discover | lounge | events
+  seenAt: timestamp("seen_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("surface_seen_user_surface_idx").on(t.userId, t.surface),
+]);
 
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),

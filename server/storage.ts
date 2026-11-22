@@ -253,7 +253,7 @@ export interface IStorage {
   getTwinMemory(userId: string, limit?: number): Promise<TwinMemoryEntry[]>;
   updateTwinTrainingOptOut(userId: string, useForTraining: boolean): Promise<void>;
 
-  createNotification(userId: string, type: string, title: string, body: string): Promise<TwinNotification>;
+  createNotification(userId: string, type: string, title: string, body: string, url?: string): Promise<TwinNotification>;
   getNotifications(userId: string): Promise<TwinNotification[]>;
   markNotificationRead(id: number, userId: string): Promise<void>;
   getUnreadNotificationCount(userId: string): Promise<number>;
@@ -1941,8 +1941,8 @@ export class DatabaseStorage implements IStorage {
       .where(eq(twinMemory.userId, userId));
   }
 
-  async createNotification(userId: string, type: string, title: string, body: string): Promise<TwinNotification> {
-    const [notif] = await db.insert(twinNotifications).values({ userId, type, title, body }).returning();
+  async createNotification(userId: string, type: string, title: string, body: string, url?: string): Promise<TwinNotification> {
+    const [notif] = await db.insert(twinNotifications).values({ userId, type, title, body, url: url ?? null }).returning();
     return notif;
   }
 

@@ -2,6 +2,7 @@
 // line, your tickets first (§5.7), then this week as large cards and later
 // weeks as a compact list. Search and preferences live in the top bar; host
 // is a quiet secondary action.
+import { useMarkSeen } from "@/hooks/use-activity";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -154,6 +155,7 @@ function CardSkeletons() {
 }
 
 export default function Events() {
+  useMarkSeen("events");
   const search = useSearch();
   const [, setLocation] = useLocation();
   const { user } = useAuth();

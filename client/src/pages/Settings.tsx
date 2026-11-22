@@ -1,10 +1,11 @@
+import { PUSH_CATEGORIES, PUSH_CATEGORY_INFO, PUSH_DAILY_BUDGET, QUIET_END_HOUR, QUIET_START_HOUR, type NotificationCategory } from "@shared/notify";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, User, Brain, Shield, Bell, Wrench, Crown, HelpCircle,
   AlertTriangle, ChevronRight, LogOut, Trash2, PauseCircle, Eye, EyeOff,
   Volume2, MapPin, MessageSquare, Zap, Check, Lock, Mail, Sliders, FileText, Heart,
-  ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2, Users, Megaphone, SlidersHorizontal
+  ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2, Users, Megaphone, SlidersHorizontal, Sparkles, BadgeCheck, Clock
 } from "lucide-react";
 import { filtersSummary } from "@shared/match-prefs";
 import { useAuth } from "@/hooks/use-auth";
@@ -26,6 +27,20 @@ import { PushTestRow } from "@/components/push-test";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from "@/components/ui/dialog";
+
+const PUSH_ICON: Record<NotificationCategory, typeof Bell> = {
+  matches: Zap,
+  messages: MessageSquare,
+  unread: Clock,
+  events: CalendarDays,
+  event_reminders: Bell,
+  event_likes: Heart,
+  stories: Eye,
+  interviews: Brain,
+  twin: Sparkles,
+  plan: Crown,
+  account: BadgeCheck,
+};
 
 // Theme-aware — these resolve through the CSS custom properties in
 // index.css (dark on bare :root, light under :root[data-theme="light"] /
@@ -2009,6 +2024,11 @@ export default function Settings() {
     if (requested === "verify" || (typeof window !== "undefined" && window.location.hash === "#verify")) {
       setActivePanel("verify");
     }
+    // The bell's "Choose what you hear about" opens Notifications.
+    if (typeof window !== "undefined" && window.location.hash === "#notifications") {
+      setActiveSection("notifications");
+      setTimeout(() => document.getElementById("settings-section-notifications")?.scrollIntoView({ block: "start" }), 50);
+    }
   }, []);
 
   const handleTogglePublic = async () => {
@@ -2137,15 +2157,24 @@ export default function Settings() {
     {
       id: "notifications",
       label: "Notifications",
-      keywords: "push notifications matches messages stories interviews events email digest tips news test",
+      keywords: "push notifications bell activity matches messages unread reminders stories interviews events twin plan account quiet hours email digest tips news test",
       content: (
         <div className="flex flex-col gap-4">
           <div className="vf-card" style={cardStyle}>
-            <ToggleRow icon={Zap} label="New matches" sublabel="When a like becomes mutual" value={notifEnabled("matches")} onChange={(v) => handleToggleNotifPref("matches", v)} testId="toggle-notif-matches" />
-            <ToggleRow icon={MessageSquare} label="Messages" sublabel="New messages in your chats" value={notifEnabled("messages")} onChange={(v) => handleToggleNotifPref("messages", v)} testId="toggle-notif-messages" />
-            <ToggleRow icon={Bell} label="Stories" sublabel="When people you know post a moment" value={notifEnabled("stories")} onChange={(v) => handleToggleNotifPref("stories", v)} testId="toggle-notif-stories" />
-            <ToggleRow icon={Brain} label="Twin interviews" sublabel="When someone asks your twin about you" value={notifEnabled("interviews")} onChange={(v) => handleToggleNotifPref("interviews", v)} testId="toggle-notif-interviews" />
-            <ToggleRow icon={CalendarDays} label="Events near you" sublabel="When something you'd like is on nearby" value={notifEnabled("events")} onChange={(v) => handleToggleNotifPref("events", v)} testId="toggle-notif-events" />
+            {PUSH_CATEGORIES.map((key) => (
+              <ToggleRow
+                key={key}
+                icon={PUSH_ICON[key]}
+                label={PUSH_CATEGORY_INFO[key].label}
+                sublabel={PUSH_CATEGORY_INFO[key].hint}
+                value={notifEnabled(key)}
+                onChange={(v) => handleToggleNotifPref(key, v)}
+                testId={`toggle-notif-${key}`}
+              />
+            ))}
+            <p className="text-[12.5px] leading-[1.5] px-1 pt-3 pb-1" style={{ color: MUTED }} data-testid="text-push-budget">
+              Matches and messages come straight away. Everything else is at most {PUSH_DAILY_BUDGET} a day and never between {QUIET_START_HOUR}:00 and {String(QUIET_END_HOUR).padStart(2, "0")}:00 your time. Anything that waits arrives together, as one.
+            </p>
             <PushTestRow Row={ChevronRow} />
           </div>
           <div className="vf-card" style={cardStyle}>
@@ -2330,7 +2359,7 @@ export default function Settings() {
           renders its own distinct strip instead of a plain vf-card. */}
       <div className="lg:hidden" style={{ maxWidth: "480px", margin: "0 auto", paddingBottom: "40px" }}>
         {sections.map((s) => (
-          <div key={s.id}>
+          <div key={s.id} id={`settings-section-${s.id}`} style={{ scrollMarginTop: "64px" }}>
             <div style={s.danger ? { ...SECTION_HEADER_STYLE, color: "#EF4444" } : SECTION_HEADER_STYLE}>{s.label}</div>
             <div style={{ margin: "0 16px" }}>{s.content}</div>
           </div>

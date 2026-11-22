@@ -1,6 +1,7 @@
 // Lounge home (docs/destira-upgrade-prompt.md §7.13): "Your rooms" first as
 // sideways cards (cover, unread, a live game), then "Find a room": search,
 // chips and a grid of rooms with who's in them and one button to join.
+import { useMarkSeen } from "@/hooks/use-activity";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { motion, useReducedMotion } from "framer-motion";
@@ -86,6 +87,7 @@ function LivePill({ game, onDark = false }: { game: { kind: string; playing: num
 }
 
 export default function Lounge() {
+  useMarkSeen("lounge");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [showCreate, setShowCreate] = useState(false);

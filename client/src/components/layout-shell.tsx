@@ -13,8 +13,10 @@ import {
   LogOut,
   Search,
   CalendarDays,
+  Bell,
   Command as CommandIcon,
 } from "lucide-react";
+import { useActivityUnread, useNewSince } from "@/hooks/use-activity";
 import { PLAN_CARDS } from "@shared/entitlements";
 import { VfAvatar } from "./ui-vf";
 import { TwinOrbMini } from "./twin-orb";
@@ -47,6 +49,8 @@ export function LayoutShell({ children }: LayoutShellProps) {
     staleTime: 5 * 60 * 1000,
   });
   useCaptureTimezone();
+  const { data: unread } = useActivityUnread(!!user);
+  const { data: fresh } = useNewSince(!!user);
 
   if (!user) {
     return <>{children}</>;
@@ -55,13 +59,16 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const likesBadge = likesData?.totalCount || 0;
 
   const navItems = [
-    { href: "/discover", icon: Search, label: "Discover", badge: 0 },
-    { href: "/chats", icon: MessageCircle, label: "Chats", badge: 0 },
-    { href: "/matches", icon: Heart, label: "Likes", badge: likesBadge },
-    { href: "/lounge", icon: Users, label: "Lounge", badge: 0 },
-    { href: "/events", icon: CalendarDays, label: "Events", badge: 0 },
-    { href: "/profile", icon: User, label: "Profile", badge: 0 },
+    // `dot`: something new since you last looked (Part I). No counts, no streaks.
+    { href: "/discover", icon: Search, label: "Discover", badge: 0, dot: !!fresh?.discover },
+    { href: "/chats", icon: MessageCircle, label: "Chats", badge: 0, dot: false },
+    { href: "/matches", icon: Heart, label: "Likes", badge: likesBadge, dot: false },
+    { href: "/lounge", icon: Users, label: "Lounge", badge: 0, dot: !!fresh?.lounge },
+    { href: "/events", icon: CalendarDays, label: "Events", badge: 0, dot: !!fresh?.events },
+    { href: "/profile", icon: User, label: "Profile", badge: 0, dot: false },
   ];
+  const unreadCount = unread?.count ?? 0;
+  const bellLabel = unreadCount > 0 ? `Activity, ${unreadCount} unread` : "Activity";
 
   const score = readiness?.pct ?? 0;
   const remaining = readiness ? readiness.totalCount - readiness.answeredCount : 0;
@@ -101,6 +108,24 @@ export function LayoutShell({ children }: LayoutShellProps) {
           <div className="flex items-center cursor-pointer text-vf-text" data-testid="link-logo-mobile">
             <DestiraLockup orientation="horizontal" size={28} />
           </div>
+        </Link>
+        <Link href="/notifications">
+          <span
+            role="link"
+            className={`absolute right-2 w-11 h-11 cursor-pointer inline-flex items-center justify-center rounded-full ${isActive("/notifications") ? "text-vf-text" : "text-vf-faint"} hover:text-vf-text`}
+            style={{ bottom: "6px" }}
+            aria-label={bellLabel}
+            data-testid="button-bell-mobile"
+          >
+            <span className="relative">
+              <Bell className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1.5 min-w-[14px] h-[14px] px-[3px] rounded-full bg-vf-ember text-vf-ink font-mono text-[9px] leading-[14px] text-center" data-testid="badge-bell-mobile">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </span>
+          </span>
         </Link>
       </header>
 
@@ -146,7 +171,12 @@ export function LayoutShell({ children }: LayoutShellProps) {
                     data-testid={`nav-${item.label.toLowerCase()}`}
                   >
                     <span className="flex items-center gap-3">
-                      <item.icon className="w-5 h-5 shrink-0" />
+                      <span className="relative">
+                        <item.icon className="w-5 h-5 shrink-0" />
+                        {item.dot && item.badge === 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-vf-ember ring-2 ring-vf-ink" aria-label="New since you last looked" data-testid={`dot-${item.label.toLowerCase()}`} />
+                      )}
+                      </span>
                       <span className={`${railLabel} text-[14.5px]`}>{item.label}</span>
                     </span>
                     {item.badge > 0 && (
@@ -158,6 +188,27 @@ export function LayoutShell({ children }: LayoutShellProps) {
                 </Link>
               );
             })}
+            <Link href="/notifications">
+              <div
+                className={`relative flex items-center justify-center lg:justify-between gap-2 px-0 lg:px-4 h-11 rounded-xl cursor-pointer transition-colors ${
+                  isActive("/notifications") ? "bg-vf-text/[0.08] text-vf-text font-medium" : "text-vf-faint hover:text-vf-text hover:bg-vf-text/[0.04]"
+                }`}
+                title={bellLabel}
+                aria-label={bellLabel}
+                aria-current={isActive("/notifications") ? "page" : undefined}
+                data-testid="nav-activity"
+              >
+                <span className="flex items-center gap-3">
+                  <Bell className="w-5 h-5 shrink-0" />
+                  <span className={`${railLabel} text-[14.5px]`}>Activity</span>
+                </span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-2 lg:static font-mono text-[10.5px] min-w-[18px] text-center px-1.5 py-0.5 rounded-full bg-vf-ember text-vf-ink" data-testid="badge-bell-rail">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </div>
+            </Link>
           </nav>
 
           <div className="flex flex-col gap-3">
@@ -236,6 +287,9 @@ export function LayoutShell({ children }: LayoutShellProps) {
                   >
                     <span className="relative">
                       <item.icon className="w-5 h-5" />
+                      {item.dot && item.badge === 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-vf-ember ring-2 ring-vf-ink" aria-label="New since you last looked" data-testid={`dot-${item.label.toLowerCase()}`} />
+                      )}
                       {item.badge > 0 && (
                         <span className="absolute -top-1 -right-1.5 min-w-[14px] h-[14px] px-[3px] rounded-full bg-vf-ember text-vf-ink font-mono text-[9px] leading-[14px] text-center">
                           {item.badge}

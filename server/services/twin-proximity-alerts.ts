@@ -37,7 +37,7 @@ import {
 } from "@shared/schema";
 import { and, eq, or, gte, count, ne, isNull, isNotNull, lt } from "drizzle-orm";
 import { haversineKm } from "../events-fit";
-import { sendPush } from "../push";
+import { sendCategorizedPush } from "../push";
 
 const FRESHNESS_MS = 12 * 60 * 1000;
 const GLOBAL_COOLDOWN_MS = 6 * 60 * 60 * 1000;
@@ -352,8 +352,9 @@ export async function runProximityForReporter(reporterId: string): Promise<{ sen
       type: "proximity",
       title: "Your twin",
       body,
+      url: "/notifications",
     });
-    sendPush(recipient.userId, {
+    sendCategorizedPush(recipient.userId, "twin", {
       title: "Your twin",
       body: `${body}`,
       url: "/notifications",

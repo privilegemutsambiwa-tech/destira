@@ -154,13 +154,12 @@ export async function runTwinEventAlerts(eventId: number): Promise<{ sent: numbe
       type: "twin_event_flag",
       title: "Your twin flagged an event",
       body: message,
+      url: `/events/${eventId}`,
     });
-    // Same gate that already protects every other push category (Settings ->
-    // Notifications -> Events) — this alert already passed its own, much
-    // stricter dedupe/quiet-hours/weekly-cap gates above, so a push here is
-    // additive reach for someone who has the app closed, not a new source of
-    // nagging.
-    sendCategorizedPush(prefs.userId, "events", {
+    // Settings -> Notifications -> Twin alerts. This alert already passed its
+    // own, much stricter dedupe/quiet-hours/weekly-cap gates above; the push
+    // also counts against the daily budget like every other non-exempt one.
+    sendCategorizedPush(prefs.userId, "twin", {
       title: "Your twin flagged an event",
       body: message,
       url: `/events/${eventId}`,

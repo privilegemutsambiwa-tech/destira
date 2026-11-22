@@ -20,7 +20,7 @@ import * as T from "./member-email/templates";
 import { storage } from "./storage";
 import { activeCrownIds } from "./crown";
 import { CROWN_NAME, CROWN_PERIOD_LABEL, CROWN_PRICE_CENTS } from "@shared/crown";
-import { sendPush } from "./push";
+import { notify } from "./push";
 
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
@@ -212,8 +212,7 @@ export async function runBillingNoticeSweep(now = new Date()): Promise<{ sent: n
     // A trial is a taste; the renew link opens the plans so they can pick.
     const path = crown ? "/crown" : isTrial ? "/plans" : `/plans/pay?tier=${tier}&period=${period}`;
     const { title, body } = noticeText(stage, name, isTrial);
-    await storage.createNotification(s.userId, "plan", title, body).catch(() => {});
-    sendPush(s.userId, { title, body, url: path, tag: "plan" }).catch(() => {});
+    await notify(s.userId, "plan", { type: "plan", title, body, url: path, tag: "plan" }).catch(() => {});
 
     const trialPeriod: BillingPeriod = "weekly";
     const linePeriod = isTrial ? trialPeriod : period;
