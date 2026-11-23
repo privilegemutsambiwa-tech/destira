@@ -71,6 +71,7 @@ import { registerBoardRoutes } from "./friends/board";
 import { registerVouchRoutes } from "./friends/vouches";
 import { registerWingmanRoutes } from "./friends/wingman";
 import { registerEventDoorRoutes, startClicksSweep } from "./event-door";
+import { registerEventExtraRoutes } from "./event-extras";
 import { LOOKING_FOR_VALUES } from "@shared/friends";
 import { startReminderSweeps } from "./reminders";
 import { openerFacts, fallbackOpeners } from "./openers";
@@ -255,6 +256,8 @@ export async function registerRoutes(
   // Events in person: door check-in by QR, then "Who did you click with?" (Part J).
   registerEventDoorRoutes(app, getUserId);
   startClicksSweep();
+  // Event calendar files, host ratings and venue partners (Part J).
+  registerEventExtraRoutes(app, getUserId);
   registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group

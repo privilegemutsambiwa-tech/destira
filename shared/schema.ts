@@ -1305,6 +1305,9 @@ export const places = pgTable("places", {
   createdByUserId: varchar("created_by_user_id").references(() => users.id), // user-declared "I'm at…" places
   verifiedAt: timestamp("verified_at"),
   verifiedBy: varchar("verified_by").references(() => users.id),
+  // Venue partners (Part J): what Destira members get here, set in the admin console.
+  partnerOffer: text("partner_offer"),
+  partnerSince: timestamp("partner_since"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -1573,6 +1576,18 @@ export const eventClicks = pgTable("event_clicks", {
   kind: text("kind").notNull(), // love | friends
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [uniqueIndex("event_clicks_pair_idx").on(t.eventId, t.fromId, t.toId)]);
+
+// People who were there rate the event, not each other (Part J). The note
+// goes to the host only, without a name.
+export const eventRatings = pgTable("event_ratings", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => events.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  stars: integer("stars").notNull(), // 1-5
+  note: text("note"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("event_ratings_pair_idx").on(t.eventId, t.userId)]);
 
 export const insertTwinProfilesStructuredSchema = createInsertSchema(twinProfilesStructured).omit({
   id: true,

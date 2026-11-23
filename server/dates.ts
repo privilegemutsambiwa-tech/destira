@@ -13,6 +13,7 @@ import * as safety from "./safety";
 import * as push from "./push";
 import { harareDay } from "./matching";
 import { dateCheckins, datePlans, directMessages, events, matches, places, profiles, type DirectMessage } from "@shared/schema";
+import { partnerOffersByName } from "./event-extras";
 import {
   CHECKIN_ANSWERS, DATE_KINDS, DATE_MAX_DAYS_AHEAD, DATE_MAX_TIMES,
   dateTimeLabel, planTitle, type CheckinAnswer, type DateKind, type DatePlanView,
@@ -59,7 +60,7 @@ const WALKS = [
 ];
 const MEET_TYPES = ["mall", "cafe", "venue"];
 
-type Spot = { name: string; detail: string; suburb: string; city: string; distKm: number | null };
+type Spot = { name: string; detail: string; suburb: string; city: string; distKm: number | null; offer: string | null };
 
 function km(aLat: number, aLng: number, bLat: number, bLng: number): number {
   const r = (d: number) => (d * Math.PI) / 180;
@@ -92,8 +93,13 @@ export async function suggestSpots(viewerId: string, otherId: string, kind: Date
     : a.distKm != null ? -1 : b.distKm != null ? 1
     : b.townHit - a.townHit || (a.city === "Harare" ? -1 : 0) - (b.city === "Harare" ? -1 : 0));
   const seen = new Set<string>();
-  return scored.filter((s) => (seen.has(s.name) ? false : (seen.add(s.name), true))).slice(0, 6)
-    .map(({ name, detail, suburb, city, distKm }) => ({ name, detail, suburb, city, distKm: distKm != null ? Math.round(distKm * 10) / 10 : null }));
+  const uniq = scored.filter((s) => (seen.has(s.name) ? false : (seen.add(s.name), true)));
+  // Venue partners (Part J) near enough go first, up to two of them.
+  const offers = await partnerOffersByName(uniq.slice(0, 40).map((s) => s.name));
+  const near = (s: typeof uniq[number]) => s.distKm == null || s.distKm <= 10;
+  const partners = uniq.filter((s) => offers.has(s.name) && near(s)).slice(0, 2);
+  return [...partners, ...uniq.filter((s) => !partners.includes(s))].slice(0, 6)
+    .map(({ name, detail, suburb, city, distKm }) => ({ name, detail, suburb, city, distKm: distKm != null ? Math.round(distKm * 10) / 10 : null, offer: offers.get(name) ?? null }));
 }
 
 async function upcomingEvents(limit = 6) {

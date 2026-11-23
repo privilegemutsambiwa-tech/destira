@@ -24,6 +24,7 @@ import AdminOfficialStatus from "./AdminOfficialStatus";
 import AdminEmailConfig from "./AdminEmailConfig";
 import AdminTeam from "./AdminTeam";
 import AdminAccount from "./AdminAccount";
+import AdminPartners from "./AdminPartners";
 
 // A dedicated QueryClient — deliberately not the member app's queryClient
 // (client/src/lib/queryClient.ts). Admin data must never share a cache key
@@ -87,6 +88,7 @@ function AdminApp() {
         <Route path="/console/crown" component={AdminCrown} />
         <Route path="/console/growth" component={AdminGrowth} />
         <Route path="/console/status" component={AdminOfficialStatus} />
+        <Route path="/console/partners" component={AdminPartners} />
         <Route path="/console/email" component={AdminEmailConfig} />
         {(role === "owner" || role === "admin") && <Route path="/console/team" component={AdminTeam} />}
         {(role === "owner" || role === "admin") && <Route path="/console/account" component={AdminAccount} />}

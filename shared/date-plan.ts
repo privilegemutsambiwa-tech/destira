@@ -61,10 +61,10 @@ export function planTitle(p: Pick<DatePlanView, "kind" | "placeName">): string {
 /** How long the calendar entry runs. */
 const DURATION_MIN: Record<DateKind, number> = { coffee: 90, lunch: 120, walk: 90, event: 180 };
 
-const icsStamp = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+export const icsStamp = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 // RFC 5545: escape \ ; , and newlines, then fold lines at 75 octets.
-const icsText = (s: string) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
-function fold(line: string): string {
+export const icsText = (s: string) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+export function fold(line: string): string {
   const bytes = new TextEncoder().encode(line);
   if (bytes.length <= 75) return line;
   const out: string[] = [];

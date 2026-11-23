@@ -4,6 +4,9 @@
 // seats and on the event page; on the day it also shows on Discover.
 import { useLocation } from "wouter";
 import { Browser } from "@capacitor/browser";
+import { Share } from "@capacitor/share";
+import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { isNativeApp } from "@/lib/native";
 import { CalendarPlus } from "lucide-react";
 import type { EventItem, MySeat } from "@/hooks/use-events";
 import { cn } from "@/lib/utils";
@@ -58,9 +61,32 @@ export function calendarUrl(event: EventItem) {
   return `https://calendar.google.com/calendar/render?${q.toString()}`;
 }
 
-export function addToCalendar(event: EventItem) {
-  const url = calendarUrl(event);
-  Browser.open({ url }).catch(() => window.open(url, "_blank", "noopener"));
+/** A calendar file (Part J) with reminders the day before and 2 hours
+ *  before; any calendar app takes it. Google's add-event link if it fails. */
+export async function addToCalendar(event: EventItem) {
+  try {
+    const res = await fetch(`/api/events/${event.id}/calendar.ics`, { credentials: "include" });
+    if (!res.ok) throw new Error(String(res.status));
+    const ics = await res.text();
+    const filename = `destira-event-${event.id}.ics`;
+    if (isNativeApp()) {
+      // The share sheet hands the file to the phone's calendar app.
+      const written = await Filesystem.writeFile({ path: filename, data: ics, directory: Directory.Cache, encoding: Encoding.UTF8 });
+      await Share.share({ files: [written.uri], dialogTitle: "Add to calendar" }).catch(() => {});
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  } catch {
+    const url = calendarUrl(event);
+    Browser.open({ url }).catch(() => window.open(url, "_blank", "noopener"));
+  }
 }
 
 export function SeatTicket({

@@ -69,6 +69,7 @@ const Lounge = screen(() => import("@/pages/Lounge"));
 const Events = screen(() => import("@/pages/Events"));
 const EventDetail = screen(() => import("@/pages/EventDetail"));
 const EventDoor = screen(() => import("@/pages/EventDoor"));
+const HostProfile = screen(() => import("@/pages/HostProfile"));
 const EventPreferences = screen(() => import("@/pages/EventPreferences"));
 const HostEvent = screen(() => import("@/pages/HostEvent"));
 const PhotoManager = screen(() => import("@/pages/PhotoManager"));
@@ -346,6 +347,9 @@ function Router() {
       </Route>
       <Route path="/events/host">
         <ProtectedRoute component={HostEvent} />
+      </Route>
+      <Route path="/hosts/:userId">
+        {(params) => <ProtectedRoute component={HostProfile} params={params} />}
       </Route>
       <Route path="/events/:id/door">
         {(params) => <ProtectedRoute component={EventDoor} params={params} />}

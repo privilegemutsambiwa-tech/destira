@@ -122,7 +122,7 @@ export async function checkIn(e: Event, hostId: string, body: { a?: unknown; t?:
 // ── who did you click with ─────────────────────────────────────────────
 
 /** Who was there: checked in (once the host used check-in at all) or going, and the host. */
-async function wasThere(e: Event): Promise<Set<string>> {
+export async function wasThere(e: Event): Promise<Set<string>> {
   const rows = await db.select({ userId: eventAttendees.userId, at: eventAttendees.checkedInAt }).from(eventAttendees)
     .where(and(eq(eventAttendees.eventId, e.id), eq(eventAttendees.status, "going")));
   const usedDoor = rows.some((r) => r.at);

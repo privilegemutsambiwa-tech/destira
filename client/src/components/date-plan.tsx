@@ -38,7 +38,7 @@ const toIso = (day: { y: number; m: number; d: number }, hhmm: string) => {
 
 const KIND_ICON: Record<DateKind, typeof Coffee> = { coffee: Coffee, lunch: UtensilsCrossed, walk: Footprints, event: Ticket };
 
-type Ideas = { spots: { name: string; detail: string; distKm: number | null }[]; events: { id: number; title: string; where: string; startsAt: string }[] };
+type Ideas = { spots: { name: string; detail: string; distKm: number | null; offer?: string | null }[]; events: { id: number; title: string; where: string; startsAt: string }[] };
 
 // ── the planner ──────────────────────────────────────────────────────
 
@@ -168,6 +168,7 @@ export function LetsMeetSheet({ matchId, otherFirst, open, onOpenChange }: { mat
                     <span className="min-w-0">
                       <span className="block text-[15px] text-vf-text truncate">{s.name}</span>
                       <span className="block vf-small text-vf-muted">{s.detail}{s.distKm != null ? ` · about ${s.distKm < 1 ? "1" : Math.round(s.distKm)} km from you both` : ""}</span>
+                      {s.offer && <span className="block text-[12px] text-vf-gold mt-0.5" data-testid={`spot-offer-${s.name}`}>Destira partner · {s.offer}</span>}
                     </span>
                   </button>
                 ))}

@@ -55,10 +55,17 @@ export async function metPeople(userId: string): Promise<Map<string, string>> {
     const past = await db.select({ id: events.id, title: events.title, host: events.hostUserId }).from(events)
       .where(and(inArray(events.id, eids), sql`${events.startsAt} <= now()`));
     if (past.length) {
-      const others = await db.select({ userId: eventAttendees.userId, eventId: eventAttendees.eventId }).from(eventAttendees)
+      const all = await db.select({ userId: eventAttendees.userId, eventId: eventAttendees.eventId, at: eventAttendees.checkedInAt }).from(eventAttendees)
         .where(and(inArray(eventAttendees.eventId, past.map((e) => e.id)), eq(eventAttendees.status, "going")));
-      for (const e of past) add(e.host, `Met at ${e.title}`);
-      for (const o of others) add(o.userId, `Met at ${past.find((e) => e.id === o.eventId)?.title ?? "an event"}`);
+      for (const e of past) {
+        // Where the host used the door, "met" means both were checked in (the host always was there).
+        const here = all.filter((o) => o.eventId === e.id);
+        const usedDoor = here.some((o) => o.at);
+        const there = usedDoor ? here.filter((o) => o.at) : here;
+        if (e.host !== userId && !there.some((o) => o.userId === userId)) continue;
+        add(e.host, `Met at ${e.title}`);
+        for (const o of there) add(o.userId, `Met at ${e.title}`);
+      }
     }
   }
 

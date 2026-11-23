@@ -98,6 +98,7 @@ const NAV = [
   { href: "/console/crown", label: "Crown", badgeKey: "crownApplications" as const },
   { href: "/console/events/official", label: "Official events" },
   { href: "/console/status", label: "Destira status" },
+  { href: "/console/partners", label: "Venue partners" },
   { href: "/console/feedback", label: "Feedback", badgeKey: "openFeedback" as const },
   { href: "/console/metrics", label: "Metrics" },
   { href: "/console/revenue", label: "Revenue" },

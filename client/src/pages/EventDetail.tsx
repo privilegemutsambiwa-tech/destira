@@ -15,6 +15,7 @@ import { useProfile } from "@/hooks/use-profiles";
 import { Loader2, ArrowLeft, Pencil, Flag, X, Share2, ImageIcon, CalendarPlus } from "lucide-react";
 import { SeatTicket, addToCalendar } from "@/components/seat-ticket";
 import { DoorPassCard, EventClicksCard, HostDoorLink } from "@/components/event-door";
+import { EventHostCard, EventRatingCard } from "@/components/event-extras";
 import { AvatarStack, goingLine } from "@/components/event-row";
 import { renderStatusCard, shareStatusBlob, logShare } from "@/lib/status-card";
 import { isNativeApp, nativeShareLink } from "@/lib/native";
@@ -508,6 +509,7 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                 </>
               )}
             </dl>
+            <EventHostCard eventId={event.id} />
 
             {(event.myStatus === "going" || (resources && resources.length > 0)) && (
               <div>
@@ -580,6 +582,7 @@ export default function EventDetail({ params }: { params: { id: string } }) {
           {mySeat && event.status !== "cancelled" && <SeatTicket seat={mySeat} />}
           {!isHost && event.myStatus === "going" && event.status === "published" && <DoorPassCard eventId={event.id} />}
           <EventClicksCard eventId={event.id} />
+          <EventRatingCard eventId={event.id} title={event.title} />
           <div className="rounded-[20px] border border-vf-line bg-vf-surface2 p-5 flex flex-col gap-4">
             <div>
               <div className="font-mono text-[11px] tracking-[0.14em] text-vf-ember">
