@@ -14,6 +14,7 @@ import { peekPendingRsvp, clearPendingRsvp } from "@/lib/pending-rsvp";
 import { useProfile } from "@/hooks/use-profiles";
 import { Loader2, ArrowLeft, Pencil, Flag, X, Share2, ImageIcon, CalendarPlus } from "lucide-react";
 import { SeatTicket, addToCalendar } from "@/components/seat-ticket";
+import { DoorPassCard, EventClicksCard, HostDoorLink } from "@/components/event-door";
 import { AvatarStack, goingLine } from "@/components/event-row";
 import { renderStatusCard, shareStatusBlob, logShare } from "@/lib/status-card";
 import { isNativeApp, nativeShareLink } from "@/lib/native";
@@ -577,6 +578,8 @@ export default function EventDetail({ params }: { params: { id: string } }) {
           {/* Right: sticky action card */}
           <div className="md:sticky md:top-6 self-start flex flex-col gap-4 min-w-0">
           {mySeat && event.status !== "cancelled" && <SeatTicket seat={mySeat} />}
+          {!isHost && event.myStatus === "going" && event.status === "published" && <DoorPassCard eventId={event.id} />}
+          <EventClicksCard eventId={event.id} />
           <div className="rounded-[20px] border border-vf-line bg-vf-surface2 p-5 flex flex-col gap-4">
             <div>
               <div className="font-mono text-[11px] tracking-[0.14em] text-vf-ember">
@@ -682,6 +685,7 @@ export default function EventDetail({ params }: { params: { id: string } }) {
             {isHost && event.status !== "cancelled" && (
               <div className="border-t border-vf-line pt-4 flex flex-col gap-3">
                 <div className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-faint">You're hosting</div>
+                {event.status === "published" && <HostDoorLink eventId={event.id} />}
 
                 {!editing && !cancelOpen && (
                   <div className="flex flex-col gap-2">

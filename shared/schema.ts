@@ -170,6 +170,8 @@ export const matches = pgTable("matches", {
   // "love" (a like that became mutual) or "friends" (two waves). Friends
   // chats live in their own section and never count as dating matches.
   kind: text("kind").notNull().default("love"),
+  // How they met, when it was in person: "You both met at Saturday's Braai".
+  originNote: text("origin_note"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -1357,6 +1359,8 @@ export const events = pgTable("events", {
   hostVideoRejectReason: text("host_video_reject_reason"),
   minAttendees: integer("min_attendees"),    // forced to 4 for private_residence
   infoScore: integer("info_score").notNull().default(0), // computed — Events v3 Conversation Two
+  // When attendees were asked "Who did you click with?" (Part J), so it's once.
+  clicksAskedAt: timestamp("clicks_asked_at"),
   // Who the host is willing to seat. "quota" splits seatCount into two
   // gender-segmented buckets (menSlots/womenSlots) instead of one shared count.
   genderPolicy: text("gender_policy").notNull().default("mixed"), // mixed | men_only | women_only | quota
@@ -1552,9 +1556,23 @@ export const eventAttendees = pgTable("event_attendees", {
   status: text("status").notNull().default("going"),
   createdAt: timestamp("created_at").defaultNow(),
   decidedAt: timestamp("decided_at"),
+  // Scanned in at the door by the host (Part J), so "went" is real.
+  checkedInAt: timestamp("checked_in_at"),
+  checkedInBy: varchar("checked_in_by"),
 }, (table) => [
   uniqueIndex("event_attendees_event_user_idx").on(table.eventId, table.userId),
 ]);
+
+// "Who did you click with?" after an event (Part J): private picks between
+// people who were there; a mutual pick becomes one chat.
+export const eventClicks = pgTable("event_clicks", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => events.id),
+  fromId: varchar("from_id").notNull().references(() => users.id),
+  toId: varchar("to_id").notNull().references(() => users.id),
+  kind: text("kind").notNull(), // love | friends
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("event_clicks_pair_idx").on(t.eventId, t.fromId, t.toId)]);
 
 export const insertTwinProfilesStructuredSchema = createInsertSchema(twinProfilesStructured).omit({
   id: true,

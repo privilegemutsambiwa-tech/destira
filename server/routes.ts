@@ -70,6 +70,7 @@ import { registerCircleRoutes } from "./friends/circles";
 import { registerBoardRoutes } from "./friends/board";
 import { registerVouchRoutes } from "./friends/vouches";
 import { registerWingmanRoutes } from "./friends/wingman";
+import { registerEventDoorRoutes, startClicksSweep } from "./event-door";
 import { LOOKING_FOR_VALUES } from "@shared/friends";
 import { startReminderSweeps } from "./reminders";
 import { openerFacts, fallbackOpeners } from "./openers";
@@ -251,6 +252,9 @@ export async function registerRoutes(
   registerVouchRoutes(app, getUserId);
   // Wingman: circle friends suggest someone from Discover, and say why (Part O6).
   registerWingmanRoutes(app, getUserId);
+  // Events in person: door check-in by QR, then "Who did you click with?" (Part J).
+  registerEventDoorRoutes(app, getUserId);
+  startClicksSweep();
   registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group

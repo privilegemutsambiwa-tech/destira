@@ -353,6 +353,7 @@ export async function pick(tableId: number, fromId: string, toId: string, kind: 
   if (!back) return { status: "picked" as const };
 
   const both: TablePickKind = kind === "love" && back.kind === "love" ? "love" : "friends";
+  const note = `You both met at a Sunday Table at ${table.placeName}`;
   const made = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${[fromId, toId].sort().join(":")}))`);
     const [existing] = await tx.select({ id: matches.id, status: matches.status }).from(matches).where(
@@ -361,10 +362,10 @@ export async function pick(tableId: number, fromId: string, toId: string, kind: 
     if (existing?.status === "matched") return { id: existing.id, fresh: false };
     if (existing) {
       // A pending like between them: this is the yes it was waiting for.
-      await tx.update(matches).set({ status: "matched", kind: both }).where(eq(matches.id, existing.id));
+      await tx.update(matches).set({ status: "matched", kind: both, originNote: note }).where(eq(matches.id, existing.id));
       return { id: existing.id, fresh: true };
     }
-    const [m] = await tx.insert(matches).values({ user1Id: toId, user2Id: fromId, status: "matched", kind: both }).returning({ id: matches.id });
+    const [m] = await tx.insert(matches).values({ user1Id: toId, user2Id: fromId, status: "matched", kind: both, originNote: note }).returning({ id: matches.id });
     return { id: m.id, fresh: true };
   });
   if (made.fresh) {

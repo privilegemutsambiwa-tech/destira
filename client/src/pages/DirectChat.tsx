@@ -556,7 +556,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
               </div>
               <p className="vf-h2 text-vf-text">Say hello to {otherFirst}.</p>
               <p className="vf-small text-vf-muted mt-1.5 max-w-[34ch] mx-auto">
-                You both said yes. Keep the first message short and about them.
+                {(match as any)?.originNote ? `${(match as any).originNote}. ` : "You both said yes. "}Keep the first message short and about them.
               </p>
               {!suggestions.options && (
                 <VfButton
