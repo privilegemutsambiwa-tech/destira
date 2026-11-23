@@ -1,7 +1,7 @@
 import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { AlertTriangle, ArrowRight, CalendarHeart, ChevronDown, Download, Flag, Heart, HeartHandshake, Lock, MapPin, MessageCircle, PartyPopper, RotateCcw, ShieldCheck, SlidersHorizontal, Smartphone, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarHeart, ChevronDown, Download, Flag, Hand, Heart, HeartHandshake, Lock, MapPin, MessageCircle, PartyPopper, RotateCcw, ShieldCheck, SlidersHorizontal, Smartphone, Sparkles, Users } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { DestiraLockup } from "@/components/brand/logo";
 import type { Photo } from "@/lib/photos";
@@ -297,6 +297,12 @@ const HEADLINES: Record<string, { lead: string; accent: string; sub: string }> =
     accent: "at real events.",
     sub: "Dinners, hikes, game nights and more, hosted by Destira and its members. Your AI twin points out who's going that you'd actually get on with.",
   },
+  // Destira Friends ads (Part O): new in town, looking for people, not a date.
+  friends: {
+    lead: "New in Harare?",
+    accent: "Find your people.",
+    sub: "Make real friends near you. Wave at people who want new friends too, and every Sunday sit down to lunch with five people you'd get on with. Free to join.",
+  },
   serious: {
     lead: "For people who are",
     accent: "done with games.",
@@ -326,6 +332,7 @@ function useHeadline() {
 
 const OFFERS = [
   { icon: Users, label: "Meet new people", short: "Meet people" },
+  { icon: Hand, label: "Make friends", short: "Friends" },
   { icon: Heart, label: "Find a partner", short: "Find a partner" },
   { icon: HeartHandshake, label: "Build something real", short: "Something real" },
   { icon: MessageCircle, label: "Join groups", short: "Groups" },
@@ -429,6 +436,20 @@ function WhatYoullFind({ pick }: { pick: (...ns: number[]) => Photo[] }) {
             </div>
           </Reveal>
         ))}
+        <Reveal delay={4 * 90} className="md:col-span-2">
+          <div className="h-full rounded-[24px] border border-vf-mint/30 bg-vf-mint/[0.05] p-6 md:p-7 md:flex md:items-center md:gap-8" data-testid="find-friends">
+            <span className="w-11 h-11 shrink-0 rounded-full bg-vf-mint/15 text-vf-mint flex items-center justify-center">
+              <Hand className="w-5 h-5" />
+            </span>
+            <div className="mt-5 md:mt-0">
+              <div className="text-[20px] font-semibold text-vf-text">Make friends, not just matches</div>
+              <p className="mt-2 text-[15.5px] leading-[1.6] text-vf-muted">
+                New in town, or just want more people around you? Destira Friends is its own space, never romantic: wave at people near you who want new friends too.
+                And every Sunday, join a table of six for lunch, close to your age and near where you live. Here for love as well? Pick both.
+              </p>
+            </div>
+          </div>
+        </Reveal>
       </div>
       <Reveal delay={120}>
         <div className="mt-10 flex flex-col items-center text-center">

@@ -89,6 +89,12 @@ export default function Essentials() {
   const [seeking, setSeeking] = useState<string[]>([]);
   const [intent, setIntent] = useState<string>("");
   const [mode, setMode] = useState<string>("");
+  // Came from a Destira Friends ad (?v=friends): show Friends first.
+  const [modeOptions] = useState(() => {
+    let v = "";
+    try { v = sessionStorage.getItem("destira.v") ?? ""; } catch { /* storage blocked */ }
+    return v === "friends" ? [...LOOKING_FOR_OPTIONS].sort((x, y) => (y.value === "friends" ? 1 : 0) - (x.value === "friends" ? 1 : 0)) : [...LOOKING_FOR_OPTIONS];
+  });
   const [ageMinText, setAgeMinText] = useState(String(MIN_AGE));
   const [ageMaxText, setAgeMaxText] = useState("35");
   const [ageTouched, setAgeTouched] = useState(false);
@@ -299,7 +305,7 @@ export default function Essentials() {
           </h1>
           <p className="text-[13px] text-vf-faint mb-6">Friends is its own space, never romantic. Change it any time in Settings.</p>
           <div className="flex flex-col gap-2.5">
-            {LOOKING_FOR_OPTIONS.map((o) => (
+            {modeOptions.map((o) => (
               <OptionRow
                 key={o.value}
                 label={o.label}

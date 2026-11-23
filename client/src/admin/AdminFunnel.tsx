@@ -24,6 +24,7 @@ const HEADLINE_NAME: Record<string, string> = {
   twin: "?v=twin",
   events: "?v=events",
   serious: "?v=serious",
+  friends: "?v=friends",
   unknown: "Not recorded (before this was tracked)",
 };
 const SOURCE_NAME: Record<string, string> = {
