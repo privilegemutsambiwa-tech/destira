@@ -67,6 +67,7 @@ import { registerActivityRoutes } from "./activity";
 import { loveBlockedReason, registerFriendRoutes } from "./friends";
 import { registerTableRoutes, startTableSweeps } from "./friends/tables";
 import { registerCircleRoutes } from "./friends/circles";
+import { registerBoardRoutes } from "./friends/board";
 import { LOOKING_FOR_VALUES } from "@shared/friends";
 import { startReminderSweeps } from "./reminders";
 import { openerFacts, fallbackOpeners } from "./openers";
@@ -242,6 +243,8 @@ export async function registerRoutes(
   startTableSweeps();
   // Friend circles: up to 8, invitations only, plans and a shared album (Part O3).
   registerCircleRoutes(app, getUserId);
+  // Plans board, "Who's in?": small plans for the week at public places (Part O4).
+  registerBoardRoutes(app, getUserId);
   registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group
@@ -3309,8 +3312,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     try {
       const group = await storage.getGroup(groupId);
       if (!group) return res.status(404).json({ message: "Group not found" });
-      // Circles and Sunday Table chats are for people who've met: no links.
-      if (group.type === "circle" || group.type === "table") return res.status(403).json({ message: "Invite people from the circle's page instead." });
+      // Circles, Sunday Table and plan chats are for the people in them: no links.
+      if (group.type === "circle" || group.type === "table" || group.type === "plan") return res.status(403).json({ message: "Invite people from the circle's page instead." });
       const member = await storage.getGroupMember(groupId, userId);
       const isOwner = group.ownerId === userId;
       const isAdmin = member?.role === "owner" || member?.role === "admin";
@@ -3362,7 +3365,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if (isMember) return res.status(409).json({ message: "Already a member", groupId: link.groupId });
 
       const inviteGroup = await storage.getGroup(link.groupId);
-      if (!inviteGroup || inviteGroup.type === "circle" || inviteGroup.type === "table") return res.status(404).json({ message: "Invalid or expired invite link" });
+      if (!inviteGroup || inviteGroup.type === "circle" || inviteGroup.type === "table" || inviteGroup.type === "plan") return res.status(404).json({ message: "Invalid or expired invite link" });
 
       if (typeof inviteGroup.maxMembers === "number") {
         const currentCount = (await storage.getGroupMembers(link.groupId)).length;

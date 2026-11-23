@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, ChevronRight, CircleDot, Hand, Loader2, MapPin, MessageCircle, Users, Utensils, X } from "lucide-react";
+import { BadgeCheck, ChevronRight, CircleDot, ClipboardList, Hand, Loader2, MapPin, MessageCircle, Users, Utensils, X } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { VfAvatar } from "@/components/ui-vf";
 import { useToast } from "@/hooks/use-toast";
@@ -158,6 +158,20 @@ export default function FriendsPage() {
               <div className="flex-1 min-w-0">
                 <div className="text-[14.5px] text-vf-text">Your circles</div>
                 <div className="text-[12.5px] text-vf-faint mt-0.5">Small groups of friends, with plans and a shared album</div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-vf-faint" />
+            </div>
+          </Link>
+        )}
+        {data?.on && (
+          <Link href="/plans-board">
+            <div className="mt-2.5 rounded-2xl border border-vf-line hover:border-vf-ember/50 p-4 flex items-center gap-3 cursor-pointer" data-testid="link-plans-board">
+              <div className="w-10 h-10 rounded-full bg-vf-text/[0.06] text-vf-text flex items-center justify-center shrink-0">
+                <ClipboardList className="w-[18px] h-[18px]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[14.5px] text-vf-text">Who's in?</div>
+                <div className="text-[12.5px] text-vf-faint mt-0.5">Small plans this week: gym, a match, coffee. Tap "I'm in"</div>
               </div>
               <ChevronRight className="w-4 h-4 text-vf-faint" />
             </div>

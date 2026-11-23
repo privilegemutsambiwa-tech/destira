@@ -1102,6 +1102,37 @@ export const circlePlanIns = pgTable("circle_plan_ins", {
 }, (t) => [uniqueIndex("circle_plan_ins_pair_idx").on(t.planId, t.userId)]);
 export type Circle = typeof circles.$inferSelect;
 
+// Plans board, "Who's in?" (Part O4): casual plans for the next 7 days at a
+// public place from `places`, with a seat cap. People ask to join; the host
+// says yes or no. A hidden chat opens for the host and whoever they let in.
+export const boardPlans = pgTable("board_plans", {
+  id: serial("id").primaryKey(),
+  hostId: varchar("host_id").notNull().references(() => users.id),
+  title: text("title").notNull(),
+  startsAt: timestamp("starts_at").notNull(),
+  placeId: integer("place_id").notNull().references(() => places.id),
+  seats: integer("seats").notNull(),
+  who: text("who").notNull().default("anyone"), // anyone | women | men
+  chatGroupId: integer("chat_group_id"),
+  cancelledAt: timestamp("cancelled_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("board_plans_starts_idx").on(t.startsAt),
+  index("board_plans_host_idx").on(t.hostId),
+]);
+export const boardPlanRequests = pgTable("board_plan_requests", {
+  id: serial("id").primaryKey(),
+  planId: integer("plan_id").notNull().references(() => boardPlans.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  status: text("status").notNull().default("pending"), // pending | approved | declined
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  decidedAt: timestamp("decided_at"),
+}, (t) => [
+  uniqueIndex("board_plan_requests_pair_idx").on(t.planId, t.userId),
+  index("board_plan_requests_user_idx").on(t.userId),
+]);
+export type BoardPlan = typeof boardPlans.$inferSelect;
+
 // A pass brought back after the free few-second undo (Spark: 1 a day).
 export const discoverRewinds = pgTable("discover_rewinds", {
   id: serial("id").primaryKey(),
