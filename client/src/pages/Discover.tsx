@@ -39,6 +39,7 @@ import { recordPass, sendWaitingDecisions, undoPass as takeBackPass, useDecidedI
 import type { Feature } from "@shared/entitlements";
 import type { User } from "@shared/models/auth";
 import { dataSaverOn, photoForSaver } from "@/lib/data-saver";
+import { WingmanStrip } from "@/components/wingman";
 
 function formatDistance(km: number): string {
   if (km < 1) return "Less than 1km away";
@@ -992,6 +993,7 @@ export default function Discover() {
       <LayoutShell>
         <div className="max-w-[640px] mx-auto">
           {topBar}
+          <WingmanStrip />
           <div className="rounded-[24px] border border-vf-line bg-vf-surface" data-testid="discover-likes-exhausted">
             <EmptyState
               title={`That's today's ${likesGate.limit != null ? `${likesGate.limit} ` : ""}likes.`}
@@ -1027,6 +1029,7 @@ export default function Discover() {
         <div className="max-w-[640px] mx-auto">
           {filter === "nearby" && <BackToEveryone onBack={() => setFilter("all")} />}
           {topBar}
+          <WingmanStrip />
           <div className="rounded-[24px] border border-vf-line bg-vf-surface" data-testid="discover-empty">
             <EmptyState
               title={filter === "nearby" ? "Nobody within 20 km right now." : evaluatedIds.size > 0 ? "That's everyone for now." : "No one here yet."}
@@ -1297,6 +1300,7 @@ export default function Discover() {
       <div className="max-w-[640px] md:max-w-3xl lg:max-w-5xl mx-auto">
         {filter === "nearby" && <BackToEveryone onBack={() => setFilter("all")} />}
         {topBar}
+        <WingmanStrip />
 
         {/* The card and its action bar share a box, so the bar only rides the
             bottom of the screen while the card is on it. */}

@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { overlap, distanceKm } from "@/lib/profile-derived";
 import { useVouchesFor } from "@/hooks/use-vouches";
+import { WingmanNote, WingmanSuggest } from "@/components/wingman";
 import { PhotoLightbox } from "@/components/photo-lightbox";
 import { withFrom, getFromRoute } from "@/lib/from-route";
 import { MatchCelebration } from "@/components/match-celebration";
@@ -875,6 +876,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
       <div className="flex flex-col gap-8">
         {Header}
         {StatusStrip}
+        {!preview && <WingmanNote candidateId={userId} />}
         {PreviewTruths}
 
         {/* desktop: two columns */}
@@ -909,6 +911,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
             <IntroduceButton targetId={userId} name={name} />
           </div>
         )}
+        {!preview && <WingmanSuggest candidateId={userId} name={name} />}
         {SafetyRow}
         {ActionBar}
       </div>

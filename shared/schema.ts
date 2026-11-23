@@ -1149,6 +1149,24 @@ export const vouches = pgTable("vouches", {
   uniqueIndex("vouches_pair_idx").on(t.fromId, t.toId),
   index("vouches_to_idx").on(t.toId, t.status),
 ]);
+export type Vouch = typeof vouches.$inferSelect;
+
+// Wingman (Part O6): a circle friend suggests someone from Discover to you,
+// with a few words on why. The person suggested is never told.
+export const wingmanSuggestions = pgTable("wingman_suggestions", {
+  id: serial("id").primaryKey(),
+  fromId: varchar("from_id").notNull().references(() => users.id),
+  toId: varchar("to_id").notNull().references(() => users.id),
+  candidateId: varchar("candidate_id").notNull().references(() => users.id),
+  circleName: text("circle_name").notNull(), // the circle they share, as it was named then
+  note: text("note").notNull(),
+  status: text("status").notNull().default("pending"), // pending | seen | dismissed
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("wingman_triple_idx").on(t.fromId, t.toId, t.candidateId),
+  index("wingman_to_idx").on(t.toId, t.status),
+  index("wingman_from_idx").on(t.fromId, t.createdAt),
+]);
 
 // A pass brought back after the free few-second undo (Spark: 1 a day).
 export const discoverRewinds = pgTable("discover_rewinds", {
