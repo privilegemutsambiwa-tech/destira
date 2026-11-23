@@ -10,6 +10,7 @@ import {
 import { ArrowLeft, Loader2, Save } from "lucide-react";
 import { useGroup, useUpdateGroup, useUpdateGroupSettings } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
+import { SlowModeSetting } from "@/components/room-moderation";
 import { useToast } from "@/hooks/use-toast";
 
 export default function GroupSettings({ params }: { params?: { groupId?: string } }) {
@@ -181,6 +182,8 @@ export default function GroupSettings({ params }: { params?: { groupId?: string 
         >
           <p className="text-xs font-semibold uppercase mb-3" style={{ color: "var(--vf-muted)", letterSpacing: "0.5px" }}>Permissions</p>
           <div className="space-y-4">
+            <SlowModeSetting groupId={groupId} value={group?.slowModeSeconds ?? 0} />
+            <div style={{ height: "1px", background: "var(--vf-line)" }} />
             {[
               { label: "Members can send messages", value: canMembersSendMessages, onChange: setCanMembersSendMessages, testId: "switch-members-send" },
               { label: "Members can edit group info", value: canMembersEditInfo, onChange: setCanMembersEditInfo, testId: "switch-members-edit-info" },

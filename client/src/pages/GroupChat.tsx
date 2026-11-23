@@ -20,11 +20,13 @@ import {
   useGroup, useEnrichedGroupMessages, useSendGroupMessage,
   useCreatePoll, usePollByMessage, useVotePoll, useGameByMessage,
   useAddReaction, useRemoveReaction, useDeleteOwnMessage,
-  useDeleteGroupMessage, useJoinGroup, useLeaveGroup,
+  useJoinGroup, useLeaveGroup,
   useStarMessage, useUnstarMessage, useCreateChatRequest,
   useMarkGroupSeen, useGroupMessageReadInfo, useGroups, useGroupMembers
 } from "@/hooks/use-interactions";
 import { MentionPicker } from "@/components/mention-picker";
+import { useQueryClient } from "@tanstack/react-query";
+import { PausedNotice, RemoveMessageSheet, RoomRulesCard, SlowModeLine, removedLine, usePostingState, useSlowMode } from "@/components/room-moderation";
 import { gameName } from "@/lib/game-names";
 import { IconButton } from "@/components/ui-vf";
 import { useAuth } from "@/hooks/use-auth";
@@ -377,7 +379,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   const { data: messages, isLoading: msgsLoading } = useEnrichedGroupMessages(groupId);
   const sendMessage = useSendGroupMessage(groupId);
   const deleteOwnMsg = useDeleteOwnMessage(groupId);
-  const deleteGroupMsg = useDeleteGroupMessage(groupId);
+  const queryClient = useQueryClient();
   const addReaction = useAddReaction(groupId);
   const removeReaction = useRemoveReaction(groupId);
   const joinGroup = useJoinGroup();
@@ -410,6 +412,9 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
     | undefined;
   const isAdmin = group?.myRole === "owner" || group?.myRole === "admin";
   const { data: roomMembers } = useGroupMembers(groupId);
+  const { data: posting } = usePostingState(groupId, !!isMember);
+  const slow = useSlowMode(posting);
+  const [removeTarget, setRemoveTarget] = useState<any>(null);
 
   useEffect(() => {
     if (highlightMsgId && messages) {
@@ -442,7 +447,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || slow.left > 0) return;
     const text = input;
     setInput("");
     const payload: any = { content: text, contentType: "text" };
@@ -457,11 +462,15 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
     }
     try {
       await sendMessage.mutateAsync(payload);
+      slow.sent();
     } catch (error: any) {
       if (isConnectionError(error)) {
         enqueue("group", groupId, text, payload.replyToMessageId);
         return;
       }
+      // Not sent (slow mode, a pause, the rules): keep what they wrote.
+      setInput((cur) => cur || text);
+      queryClient.invalidateQueries({ queryKey: [`/api/groups/${groupId}/posting`] });
       toast({ title: "Couldn't send that", description: error?.message || "Must join group first.", variant: "destructive" });
     }
   };
@@ -508,16 +517,6 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
     try {
       await deleteOwnMsg.mutateAsync(messageId);
       toast({ title: "Message deleted" });
-    } catch {
-      toast({ title: "Error", description: "Failed to delete.", variant: "destructive" });
-    }
-    setActiveMessageId(null);
-  };
-
-  const handleAdminDelete = async (messageId: number) => {
-    try {
-      await deleteGroupMsg.mutateAsync(messageId);
-      toast({ title: "Message deleted by admin" });
     } catch {
       toast({ title: "Error", description: "Failed to delete.", variant: "destructive" });
     }
@@ -743,7 +742,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                             </div>
                           )}
                           {isDeleted ? (
-                            "[Message deleted]"
+                            removedLine(msg)
                           ) : msg.contentType === "image" && msg.mediaUrl ? (
                             <img src={msg.mediaUrl} alt="shared" className="rounded-lg max-w-[250px] max-h-[300px] object-cover" data-testid={`image-${msg.id}`} />
                           ) : msg.contentType === "video" && msg.mediaUrl ? (
@@ -862,8 +861,8 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                               }] : []),
                               ...(isAdmin && !isMe ? [{
                                 icon: <Trash2 className="w-4 h-4 mr-2" />,
-                                label: "Admin Delete",
-                                onClick: () => handleAdminDelete(msg.id),
+                                label: "Remove with a reason",
+                                onClick: () => { setRemoveTarget(msg); setActiveMessageId(null); },
                                 testId: `action-admin-delete-${msg.id}`,
                                 danger: true,
                               }] : []),
@@ -955,6 +954,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
           </div>
         )}
         {isMember && <MentionPicker members={roomMembers as any} meId={user?.id} input={input} onPick={setInput} />}
+        {isMember && posting?.rulesAccepted && !posting.mutedUntil && <SlowModeLine seconds={slow.seconds} left={slow.left} />}
         <div className="p-3">
           {groupLoading ? (
             // Group membership hasn't loaded yet — showing the join button
@@ -981,6 +981,10 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
               {joinGroup.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Users className="w-5 h-5" />}
               {group?.privacyMode === "request-to-join" ? "Request to Join" : "Join Group to Chat"}
             </button>
+          ) : posting && !posting.rulesAccepted && posting.rulesText ? (
+            <RoomRulesCard groupId={groupId} rules={posting.rulesText} />
+          ) : posting?.mutedUntil ? (
+            <PausedNotice until={posting.mutedUntil} />
           ) : (
             <form
               className="flex items-center gap-2"
@@ -1029,15 +1033,15 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
               />
               <button
                 type="submit"
-                disabled={!input.trim() || sendMessage.isPending}
+                disabled={!input.trim() || sendMessage.isPending || slow.left > 0}
                 className="flex items-center justify-center btn-press shrink-0"
                 style={{
                   width: "40px",
                   height: "40px",
                   borderRadius: "50%",
-                  background: input.trim() ? EMBER : ELEVATED,
+                  background: input.trim() && !slow.left ? EMBER : ELEVATED,
                   border: "none",
-                  color: input.trim() ? "hsl(var(--vf-ink))" : MUTED,
+                  color: input.trim() && !slow.left ? "hsl(var(--vf-ink))" : MUTED,
                   transition: "all 0.2s ease",
                 }}
                 data-testid="button-send-group"
@@ -1056,6 +1060,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
       <PhotoSourceSheet open={showPhotoSource} onClose={() => setShowPhotoSource(false)} onFile={handleImageUpload} title="Send a photo" />
       <PollComposerDialog groupId={groupId} open={showPollDialog} onClose={() => setShowPollDialog(false)} />
       <MessageInfoDialog groupId={groupId} messageId={messageInfoId} onClose={() => setMessageInfoId(null)} />
+      <RemoveMessageSheet groupId={groupId} message={removeTarget} onClose={() => setRemoveTarget(null)} />
       {paywall.sheet}
 
       <Dialog open={!!reportTarget} onOpenChange={(v) => { if (!v) { setReportTarget(null); setReportReason(""); } }}>

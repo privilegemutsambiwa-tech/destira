@@ -221,6 +221,8 @@ export const groups = pgTable("groups", {
   // An event's auto-created attendee room. Excluded from the public
   // Lounge tab/search — it's scoped to that one event, not browsable.
   isEventChat: boolean("is_event_chat").default(false),
+  // Slow mode: members (not admins) wait this long between messages. 0 = off.
+  slowModeSeconds: integer("slow_mode_seconds").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -234,6 +236,12 @@ export const groupMembers = pgTable("group_members", {
   isMuted: boolean("is_muted").default(false),
   joinedAt: timestamp("joined_at").defaultNow(),
   lastSeenMessageId: integer("last_seen_message_id"),
+  // A moderator paused this member's posting until then (isMuted above is
+  // the member's own notification mute for the room).
+  mutedUntil: timestamp("muted_until"),
+  mutedBy: varchar("muted_by"),
+  // When they agreed to the room rules (asked before their first message).
+  rulesAcceptedAt: timestamp("rules_accepted_at"),
 });
 
 export const groupJoinRequests = pgTable("group_join_requests", {
@@ -331,6 +339,8 @@ export const groupMessages = pgTable("group_messages", {
   deletedForEveryone: boolean("deleted_for_everyone").default(false),
   isStarred: boolean("is_starred").default(false),
   originalContent: text("original_content"),
+  // Why a moderator removed it, shown in its place.
+  removedReason: text("removed_reason"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

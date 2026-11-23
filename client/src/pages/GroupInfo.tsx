@@ -13,7 +13,7 @@ import {
 import {
   ArrowLeft, Crown, Shield, Loader2, Users, Globe, Lock, UserPlus,
   Link2, Copy, Check, X, Trash2, Pencil, Image as ImageIcon, Star,
-  Search, BellOff, Bell, Settings, ChevronRight, Share2, Camera, MoreHorizontal, UserMinus, ShieldCheck, ShieldOff
+  Search, BellOff, Bell, Settings, ChevronRight, Share2, Camera, MoreHorizontal, UserMinus, ShieldCheck, ShieldOff, Hourglass
 } from "lucide-react";
 import {
   useGroup, useGroupMembers, useGroupMedia, useUpdateGroup,
@@ -30,6 +30,7 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { PhotoSourceSheet } from "@/components/photo-source-sheet";
 import { PhotoLightbox } from "@/components/photo-lightbox";
 import { publicOrigin } from "@/lib/app-api";
+import { PAUSE_OPTIONS, pauseMember, pausedUntilLabel } from "@/components/room-moderation";
 
 const PRIVACY_LABELS: Record<string, { icon: any; label: string }> = {
   "open": { icon: Globe, label: "Open" },
@@ -128,7 +129,8 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
 
   const [photoTarget, setPhotoTarget] = useState<"icon" | "banner" | null>(null);
   const [lightbox, setLightbox] = useState<{ photos: { url: string }[]; index: number } | null>(null);
-  const [memberAction, setMemberAction] = useState<{ member: any; action: "promote" | "demote" | "remove" | null } | null>(null);
+  const [memberAction, setMemberAction] = useState<{ member: any; action: MemberAction | null } | null>(null);
+  const [pauseBusy, setPauseBusy] = useState(false);
   const queryClient = useQueryClient();
 
   const toggleMute = useToggleMute(groupId);
@@ -715,12 +717,15 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                           )}
                         </div>
                         <span className="text-xs capitalize" style={{ color: MUTED }}>{member.role}</span>
+                        {isAdmin && pausedUntilLabel(member.mutedUntil) && (
+                          <span className="text-xs ml-1.5" style={{ color: EMBER }} data-testid={`paused-member-${member.userId}`}>· {pausedUntilLabel(member.mutedUntil)}</span>
+                        )}
                       </div>
                     </div>
                     {/* One quiet menu button instead of always-visible Admin/Remove
                         buttons — nothing destructive or privilege-changing is a
                         single tap away, and every choice is confirmed first. */}
-                    {isOwner && member.userId !== user?.id && member.role !== "owner" && (
+                    {(isOwner || (isAdmin && member.role === "member")) && member.userId !== user?.id && member.role !== "owner" && (
                       <button
                         onClick={() => setMemberAction({ member, action: null })}
                         className="w-8 h-8 rounded-full flex items-center justify-center btn-press shrink-0 transition-colors hover:brightness-125"
@@ -1082,7 +1087,23 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
 
       <MemberActionDialog
         target={memberAction}
-        busy={updateRole.isPending || removeMember.isPending}
+        busy={updateRole.isPending || removeMember.isPending || pauseBusy}
+        canManage={isOwner}
+        onPause={async (minutes) => {
+          if (!memberAction) return;
+          setPauseBusy(true);
+          try {
+            await pauseMember(groupId, memberAction.member.userId, minutes);
+            await queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId, "members"] });
+            const label = PAUSE_OPTIONS.find((o) => o.minutes === minutes)?.label;
+            toast({ title: minutes ? `Paused for ${label}. They've been told.` : "They can post again." });
+            setMemberAction(null);
+          } catch (e: any) {
+            toast({ title: e.message, variant: "destructive" });
+          } finally {
+            setPauseBusy(false);
+          }
+        }}
         onClose={() => setMemberAction(null)}
         onPick={(action) => setMemberAction((cur) => (cur ? { ...cur, action } : cur))}
         onConfirm={async () => {
@@ -1090,7 +1111,8 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
           const { member, action } = memberAction;
           if (action === "promote") await handlePromote(member.userId, "admin");
           else if (action === "demote") await handlePromote(member.userId, "member");
-          else await handleRemove(member.userId);
+          else if (action === "remove") await handleRemove(member.userId);
+          else return;
           setMemberAction(null);
         }}
       />
@@ -1100,12 +1122,17 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
 
 // Two steps on purpose: pick what to do, then confirm it in plain words. A
 // stray tap can open this menu but can never promote or remove anyone.
-function MemberActionDialog({ target, busy, onClose, onPick, onConfirm }: {
-  target: { member: any; action: "promote" | "demote" | "remove" | null } | null;
+type MemberAction = "promote" | "demote" | "remove" | "pause" | "unpause";
+
+function MemberActionDialog({ target, busy, canManage, onClose, onPick, onConfirm, onPause }: {
+  target: { member: any; action: MemberAction | null } | null;
   busy: boolean;
+  /** The owner: roles and removal too. Admins only pause members. */
+  canManage: boolean;
   onClose: () => void;
-  onPick: (action: "promote" | "demote" | "remove") => void;
+  onPick: (action: MemberAction) => void;
   onConfirm: () => void;
+  onPause: (minutes: number) => void;
 }) {
   // Keep showing the last member while the dialog animates closed — with
   // `target` already null the content would blank out mid-fade.
@@ -1136,13 +1163,33 @@ function MemberActionDialog({ target, busy, onClose, onPick, onConfirm }: {
       confirm: "Remove from group",
       danger: true,
     },
+    pause: {
+      title: `Pause ${name}'s messages?`,
+      body: "They can still read the room, but can't post until it ends. They'll be told, without your name.",
+      confirm: "",
+      danger: false,
+    },
+    unpause: {
+      title: `Let ${name} post again?`,
+      body: "Their pause ends now.",
+      confirm: "Let them post",
+      danger: false,
+    },
   } as const;
+  const paused = !!pausedUntilLabel(member?.mutedUntil);
 
-  const rows: { key: "promote" | "demote" | "remove"; icon: any; label: string; hint: string; danger?: boolean }[] = [
-    isAdminNow
-      ? { key: "demote", icon: ShieldOff, label: "Remove admin role", hint: "Keep them as a regular member" }
-      : { key: "promote", icon: ShieldCheck, label: "Make admin", hint: "Let them manage members and settings" },
-    { key: "remove", icon: UserMinus, label: "Remove from group", hint: "They lose access to this room", danger: true },
+  const rows: { key: MemberAction; icon: any; label: string; hint: string; danger?: boolean }[] = [
+    paused
+      ? { key: "unpause", icon: Hourglass, label: "Let them post again", hint: pausedUntilLabel(member?.mutedUntil) ?? "" }
+      : { key: "pause", icon: Hourglass, label: "Pause their messages", hint: "1 hour, 1 day or 1 week. They can still read." },
+    ...(canManage
+      ? [
+          isAdminNow
+            ? { key: "demote" as const, icon: ShieldOff, label: "Remove admin role", hint: "Keep them as a regular member" }
+            : { key: "promote" as const, icon: ShieldCheck, label: "Make admin", hint: "Let them manage members and settings" },
+          { key: "remove" as const, icon: UserMinus, label: "Remove from group", hint: "They lose access to this room", danger: true },
+        ]
+      : []),
   ];
 
   return (
@@ -1195,6 +1242,22 @@ function MemberActionDialog({ target, busy, onClose, onPick, onConfirm }: {
               <DialogTitle style={{ ...SERIF, color: TEXT, fontSize: "20px" }}>{copy[action].title}</DialogTitle>
               <DialogDescription style={{ color: MUTED }}>{copy[action].body}</DialogDescription>
             </DialogHeader>
+            {action === "pause" && (
+              <div className="space-y-2">
+                {PAUSE_OPTIONS.map((o) => (
+                  <button
+                    key={o.minutes}
+                    onClick={() => onPause(o.minutes)}
+                    disabled={busy}
+                    className="w-full p-3 text-sm font-semibold text-left disabled:opacity-60"
+                    style={{ borderRadius: 12, border: `1px solid ${LINE}`, color: TEXT, background: "rgba(255,255,255,0.03)" }}
+                    data-testid={`pause-${o.minutes}`}
+                  >
+                    For {o.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <DialogFooter className="gap-2">
               <button
                 className="px-4 py-2 text-sm font-medium disabled:opacity-50"
@@ -1205,7 +1268,7 @@ function MemberActionDialog({ target, busy, onClose, onPick, onConfirm }: {
               >
                 Cancel
               </button>
-              <button
+              {action !== "pause" && <button
                 className="px-4 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-60"
                 style={{
                   background: copy[action].danger ? "#EF4444" : EMBER,
@@ -1213,13 +1276,13 @@ function MemberActionDialog({ target, busy, onClose, onPick, onConfirm }: {
                   borderRadius: "10px",
                   border: "none",
                 }}
-                onClick={onConfirm}
+                onClick={action === "unpause" ? () => onPause(0) : onConfirm}
                 disabled={busy}
                 data-testid="button-member-action-confirm"
               >
                 {busy && <Loader2 className="w-4 h-4 animate-spin" />}
                 {copy[action].confirm}
-              </button>
+              </button>}
             </DialogFooter>
           </>
         )}

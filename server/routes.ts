@@ -71,6 +71,7 @@ import { registerBoardRoutes } from "./friends/board";
 import { registerVouchRoutes } from "./friends/vouches";
 import { registerWingmanRoutes } from "./friends/wingman";
 import { notifyRoomMessage, registerLoungeDiscoveryRoutes } from "./lounge-discovery";
+import { denyIfCantPost, registerLoungeModerationRoutes } from "./lounge-moderation";
 import { registerEventDoorRoutes, startClicksSweep } from "./event-door";
 import { registerEventExtraRoutes } from "./event-extras";
 import { LOOKING_FOR_VALUES } from "@shared/friends";
@@ -255,6 +256,7 @@ export async function registerRoutes(
   // Wingman: circle friends suggest someone from Discover, and say why (Part O6).
   registerWingmanRoutes(app, getUserId);
   registerLoungeDiscoveryRoutes(app, getUserId);
+  registerLoungeModerationRoutes(app, getUserId);
   // Events in person: door check-in by QR, then "Who did you click with?" (Part J).
   registerEventDoorRoutes(app, getUserId);
   startClicksSweep();
@@ -3579,7 +3581,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     try {
       // Members only, and only what was sent after they joined.
       const msgs = await storage.getVisibleGroupMessages(groupId, userId);
-      res.json(msgs);
+      // What a removed or unsent message said stays on the server.
+      res.json(msgs.map((m) => ({ ...m, originalContent: null })));
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch messages" });
     }
@@ -3607,6 +3610,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       if ((contentType === "image" || contentType === "video") && group?.mediaPermission === "admin_only" && member.role === "member") {
         return res.status(403).json({ message: "Only admins can post media in this group" });
       }
+      if (await denyIfCantPost(res, group, member)) return;
 
       let displayNickname = member.nickname;
       if (!displayNickname) {
@@ -4287,6 +4291,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       for (const p of senderProfiles) profilesMap[p.userId] = p;
       const enriched = msgs.map(m => ({
         ...m,
+        originalContent: null,
         reactions: reactionsByMsg[m.id] || [],
         isStarred: starredMsgIds.has(m.id),
         subscriptionTier: profilesMap[m.userId]?.subscriptionTier || "free",

@@ -54,3 +54,36 @@ export interface LoungeDiscover {
   /** The viewer's own area, first word of their location ("Borrowdale"), if any. */
   myArea: string | null;
 }
+
+// Moderator tools (Part J, chunk 2).
+export const SLOW_MODE_OPTIONS = [
+  { seconds: 0, label: "Off" },
+  { seconds: 10, label: "10 seconds" },
+  { seconds: 30, label: "30 seconds" },
+  { seconds: 60, label: "1 minute" },
+  { seconds: 300, label: "5 minutes" },
+  { seconds: 900, label: "15 minutes" },
+] as const;
+export const slowModeLabel = (s: number) => SLOW_MODE_OPTIONS.find((o) => o.seconds === s)?.label ?? `${s} seconds`;
+
+export const MEMBER_MUTE_OPTIONS = [
+  { minutes: 60, label: "1 hour" },
+  { minutes: 24 * 60, label: "1 day" },
+  { minutes: 7 * 24 * 60, label: "1 week" },
+] as const;
+
+export const REMOVE_REASONS = ["Off topic", "Rude or hurtful", "Spam or selling", "Someone's private information", "Against the room rules"] as const;
+export const REMOVE_REASON_MAX = 120;
+
+/** What the composer needs to know about posting in a room. */
+export interface RoomPostingState {
+  role: string;
+  slowModeSeconds: number;
+  /** Seconds until this member may send again under slow mode (0 = now). */
+  waitSeconds: number;
+  /** A moderator paused this member's posting until then. */
+  mutedUntil: string | null;
+  rulesText: string | null;
+  /** False when the room has rules this member hasn't agreed to yet. */
+  rulesAccepted: boolean;
+}

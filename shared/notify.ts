@@ -22,7 +22,7 @@ export const PUSH_CATEGORY_INFO: Record<NotificationCategory, { label: string; h
   board: { label: "Plans board", hint: "Someone wants in on your plan, or you're in on theirs" },
   vouches: { label: "Vouches", hint: "When someone you met vouches for you" },
   wingman: { label: "Wingman", hint: "A friend from your circle thinks you'd like someone" },
-  lounge: { label: "Lounge mentions", hint: "Someone @mentions you or replies to you in a room you haven't muted" },
+  lounge: { label: "Lounge", hint: "Mentions and replies in rooms you haven't muted, and notes from a room's moderators" },
   stories: { label: "Story replies", hint: "Someone replied to your story" },
   interviews: { label: "Twin interviews", hint: "Someone is interviewing your twin" },
   twin: { label: "Twin alerts", hint: "Your twin spotted someone or an event for you" },
