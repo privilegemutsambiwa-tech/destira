@@ -68,6 +68,7 @@ import { loveBlockedReason, registerFriendRoutes } from "./friends";
 import { registerTableRoutes, startTableSweeps } from "./friends/tables";
 import { registerCircleRoutes } from "./friends/circles";
 import { registerBoardRoutes } from "./friends/board";
+import { registerVouchRoutes } from "./friends/vouches";
 import { LOOKING_FOR_VALUES } from "@shared/friends";
 import { startReminderSweeps } from "./reminders";
 import { openerFacts, fallbackOpeners } from "./openers";
@@ -245,6 +246,8 @@ export async function registerRoutes(
   registerCircleRoutes(app, getUserId);
   // Plans board, "Who's in?": small plans for the week at public places (Part O4).
   registerBoardRoutes(app, getUserId);
+  // Vouches from people you've met; you choose up to 3 for your profile (Part O5).
+  registerVouchRoutes(app, getUserId);
   registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group

@@ -97,6 +97,7 @@ const Tables = screen(() => import("@/pages/Tables"));
 const Circles = screen(() => import("@/pages/Circles"));
 const Circle = screen(() => import("@/pages/Circle"));
 const PlansBoard = screen(() => import("@/pages/PlansBoard"));
+const Vouches = screen(() => import("@/pages/Vouches"));
 const PublicEvent = screen(() => import("@/pages/PublicEvent"));
 
 // The screens people move between all the time, fetched quietly once someone
@@ -310,6 +311,9 @@ function Router() {
       </Route>
       <Route path="/events">
         <ProtectedRoute component={Events} />
+      </Route>
+      <Route path="/vouches">
+        <ProtectedRoute component={Vouches} />
       </Route>
       <Route path="/plans-board">
         <ProtectedRoute component={PlansBoard} />

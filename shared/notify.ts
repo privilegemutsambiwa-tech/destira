@@ -5,7 +5,7 @@
 
 export const PUSH_CATEGORIES = [
   "matches", "messages", "unread", "events", "event_reminders", "event_likes",
-  "tables", "circles", "board", "stories", "interviews", "twin", "plan", "account",
+  "tables", "circles", "board", "vouches", "stories", "interviews", "twin", "plan", "account",
 ] as const;
 export type NotificationCategory = (typeof PUSH_CATEGORIES)[number];
 
@@ -20,6 +20,7 @@ export const PUSH_CATEGORY_INFO: Record<NotificationCategory, { label: string; h
   tables: { label: "Sunday Table", hint: "Your table, the place on Saturday, and who wants to meet again" },
   circles: { label: "Friend circles", hint: "Circle invitations and new plans" },
   board: { label: "Plans board", hint: "Someone wants in on your plan, or you're in on theirs" },
+  vouches: { label: "Vouches", hint: "When someone you met vouches for you" },
   stories: { label: "Story replies", hint: "Someone replied to your story" },
   interviews: { label: "Twin interviews", hint: "Someone is interviewing your twin" },
   twin: { label: "Twin alerts", hint: "Your twin spotted someone or an event for you" },
@@ -76,6 +77,7 @@ export function fallbackUrl(type: string): string {
   if (type === "table") return "/tables";
   if (type === "circle") return "/circles";
   if (type === "board") return "/plans-board";
+  if (type === "vouch") return "/vouches";
   if (type === "friend") return "/chats?filter=friends";
   if (type === "disclosure") return "/twin-disclosure";
   return "/";

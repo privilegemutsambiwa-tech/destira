@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, ChevronRight, CircleDot, ClipboardList, Hand, Loader2, MapPin, MessageCircle, Users, Utensils, X } from "lucide-react";
+import { BadgeCheck, ChevronRight, CircleDot, ClipboardList, Hand, Quote, Loader2, MapPin, MessageCircle, Users, Utensils, X } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { VfAvatar } from "@/components/ui-vf";
 import { useToast } from "@/hooks/use-toast";
@@ -172,6 +172,20 @@ export default function FriendsPage() {
               <div className="flex-1 min-w-0">
                 <div className="text-[14.5px] text-vf-text">Who's in?</div>
                 <div className="text-[12.5px] text-vf-faint mt-0.5">Small plans this week: gym, a match, coffee. Tap "I'm in"</div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-vf-faint" />
+            </div>
+          </Link>
+        )}
+        {data?.on && (
+          <Link href="/vouches">
+            <div className="mt-2.5 rounded-2xl border border-vf-line hover:border-vf-mint/50 p-4 flex items-center gap-3 cursor-pointer" data-testid="link-vouches">
+              <div className="w-10 h-10 rounded-full bg-vf-mint/[0.12] text-vf-mint flex items-center justify-center shrink-0">
+                <Quote className="w-[18px] h-[18px]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[14.5px] text-vf-text">Vouches</div>
+                <div className="text-[12.5px] text-vf-faint mt-0.5">Vouch for people you've met, and see who vouched for you</div>
               </div>
               <ChevronRight className="w-4 h-4 text-vf-faint" />
             </div>

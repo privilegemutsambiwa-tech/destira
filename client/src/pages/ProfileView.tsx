@@ -8,7 +8,7 @@ import { IntroduceButton } from "@/components/crown-intro";
 import { DetailChips } from "@/components/detail-chips";
 import { LayoutShell } from "@/components/layout-shell";
 import { WhyYouMightClick, useClickReasons } from "@/components/why-click";
-import { ResonanceGlyph, TwinGlyph, VfButton } from "@/components/ui-vf";
+import { ResonanceGlyph, TwinGlyph, VfAvatar, VfButton } from "@/components/ui-vf";
 import { RefineWithAI } from "@/components/refine-with-ai";
 import { useProfile, usePhotos, usePublicAnswers, useProfileGroups, useUpdateProfile } from "@/hooks/use-profiles";
 import { useTwinReadiness, useSaveOnboardingAnswer } from "@/hooks/use-onboarding";
@@ -26,7 +26,8 @@ import {
 } from "@/hooks/use-interactions";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { vouches, overlap, distanceKm } from "@/lib/profile-derived";
+import { overlap, distanceKm } from "@/lib/profile-derived";
+import { useVouchesFor } from "@/hooks/use-vouches";
 import { PhotoLightbox } from "@/components/photo-lightbox";
 import { withFrom, getFromRoute } from "@/lib/from-route";
 import { MatchCelebration } from "@/components/match-celebration";
@@ -128,6 +129,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const { data: transcriptGate } = useGate("read_transcript");
   const { data: twinTalk } = useTwinTalkSummary(userId);
   const { data: reasonsData } = useClickReasons(userId, !preview);
+  const { data: vouchList = [] } = useVouchesFor(userId);
   const paywall = usePaywall();
   const createMatch = useCreateMatch();
   const [celebrating, setCelebrating] = useState<{ matchId: number } | null>(null);
@@ -215,7 +217,6 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
 
   const reasons = reasonsData?.reasons ?? [];
   const transcript = twinTalk?.exists && twinTalk.lines?.length ? { lines: twinTalk.lines, total: twinTalk.total ?? twinTalk.lines.length } : null;
-  const vouchList = vouches(userId);
   const overlapChips = overlap(mine, profile, groups.filter((g: any) => g.viewerIsMember));
   const bioText = profile.aboutMe || profile.bio || "";
 
@@ -703,12 +704,12 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     <section>
       <div className={`${EYEBROW} mb-3`}>Vouched by</div>
       <div className="flex flex-col">
-        {vouchList.map((v, i) => (
-          <div key={i} className="flex gap-3 py-4 border-b border-vf-line last:border-b-0">
-            <div className="shrink-0 w-9 bg-vf-surface2 overflow-hidden" style={{ aspectRatio: "4 / 5", borderRadius: "7px" }} />
+        {vouchList.map((v) => (
+          <div key={v.id} className="flex gap-3 py-4 border-b border-vf-line last:border-b-0" data-testid={`profile-vouch-${v.id}`}>
+            <div className="shrink-0"><VfAvatar size={36} src={v.from.photoUrl ?? undefined} name={v.from.name} seed={v.from.userId} /></div>
             <div>
               <p className="text-[14.5px] text-vf-soft" style={{ lineHeight: 1.55 }}>&ldquo;{v.body}&rdquo;</p>
-              <div className="text-[12.5px] text-vf-faint mt-1.5">{v.authorFirstName}</div>
+              <div className="text-[12.5px] text-vf-faint mt-1.5">{v.from.name} · {v.metLabel}</div>
             </div>
           </div>
         ))}

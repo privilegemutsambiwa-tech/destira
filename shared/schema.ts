@@ -1133,6 +1133,23 @@ export const boardPlanRequests = pgTable("board_plan_requests", {
 ]);
 export type BoardPlan = typeof boardPlans.$inferSelect;
 
+// Vouches (Part O5): a few words from someone who has met you through
+// Destira (a shared Sunday Table, event or circle). Nothing shows on your
+// profile until you choose it; at most 3 show at a time.
+export const vouches = pgTable("vouches", {
+  id: serial("id").primaryKey(),
+  fromId: varchar("from_id").notNull().references(() => users.id),
+  toId: varchar("to_id").notNull().references(() => users.id),
+  body: text("body").notNull(),
+  metLabel: text("met_label").notNull(), // "Met at a Sunday Table", "Met at Saturday's Braai"…
+  status: text("status").notNull().default("pending"), // pending | shown | hidden
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("vouches_pair_idx").on(t.fromId, t.toId),
+  index("vouches_to_idx").on(t.toId, t.status),
+]);
+
 // A pass brought back after the free few-second undo (Spark: 1 a day).
 export const discoverRewinds = pgTable("discover_rewinds", {
   id: serial("id").primaryKey(),

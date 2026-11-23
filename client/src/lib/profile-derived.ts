@@ -8,8 +8,7 @@
 // (see useTwinTalkSummary), summarizing an actual interview transcript.
 //   - resonanceRead:  real when the profile carries numeric traits; a stable
 //                     derived read otherwise (no invented pairwise score).
-//   - vouches:        MOCK — the `vouches` table does not exist yet. Returns []
-//                     so the block simply doesn't render.
+//   - vouches:        real now: GET /api/vouches/for/:userId (useVouchesFor).
 //   - overlap:        REAL only — shared groups + genuinely matching preference
 //                     fields. Never an invented chip.
 
@@ -71,17 +70,6 @@ export function resonanceRead(profile: any): ResonanceRead {
   const score = Math.round(axes.reduce((s, a) => s + a.value, 0) / axes.length);
   const summary = SUMMARIES[hash((profile?.userId ?? "x") + "s") % SUMMARIES.length];
   return { score, axes, summary };
-}
-
-export interface Vouch {
-  authorFirstName: string;
-  body: string;
-}
-
-/** MOCK. The `vouches` table doesn't exist yet — returns [] so the block does
- *  not render. Swap this for a real query when it does (handoff §4.1). */
-export function vouches(_userId: string): Vouch[] {
-  return [];
 }
 
 /** REAL signals only: shared group names + genuinely matching preference

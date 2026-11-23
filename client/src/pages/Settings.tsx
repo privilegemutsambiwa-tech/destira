@@ -6,7 +6,7 @@ import {
   ArrowLeft, User, Brain, Shield, Bell, Wrench, Crown, HelpCircle,
   AlertTriangle, ChevronRight, LogOut, Trash2, PauseCircle, Eye, EyeOff,
   Volume2, MapPin, MessageSquare, Zap, Check, Lock, Mail, Sliders, FileText, Heart,
-  ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2, Users, Megaphone, SlidersHorizontal, Sparkles, BadgeCheck, Clock, Utensils, CircleDot, ClipboardList
+  ChevronDown, ChevronUp, X, Plus, Download, UserX, CreditCard, BookOpen, Phone, CalendarDays, Loader2, Users, Megaphone, SlidersHorizontal, Sparkles, BadgeCheck, Clock, Utensils, CircleDot, ClipboardList, Quote
 } from "lucide-react";
 import { filtersSummary } from "@shared/match-prefs";
 import { useAuth } from "@/hooks/use-auth";
@@ -66,6 +66,7 @@ const PUSH_ICON: Record<NotificationCategory, typeof Bell> = {
   tables: Utensils,
   circles: CircleDot,
   board: ClipboardList,
+  vouches: Quote,
   stories: Eye,
   interviews: Brain,
   twin: Sparkles,
