@@ -1060,6 +1060,48 @@ export const tablePicks = pgTable("table_picks", {
 export type SundayTable = typeof sundayTables.$inferSelect;
 export type TableSignup = typeof tableSignups.$inferSelect;
 
+// Friend circles (Part O3): small private groups (up to 8) that live on a
+// hidden, invite-only `groups` row for their chat, polls and photos. Only
+// people you've really met (a match, a shared table or event) can be invited.
+export const circles = pgTable("circles", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => groups.id),
+  name: text("name").notNull(),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  source: text("source").notNull().default("invite"), // table | event | invite
+  sourceId: integer("source_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("circles_group_idx").on(t.groupId)]);
+export const circleInvites = pgTable("circle_invites", {
+  id: serial("id").primaryKey(),
+  circleId: integer("circle_id").notNull().references(() => circles.id),
+  fromId: varchar("from_id").notNull().references(() => users.id),
+  toId: varchar("to_id").notNull().references(() => users.id),
+  status: text("status").notNull().default("pending"), // pending | accepted | declined
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("circle_invites_pair_idx").on(t.circleId, t.toId),
+  index("circle_invites_to_idx").on(t.toId, t.status),
+]);
+// "Saturday: Mukuvisi walk?" Plans inside a circle; members tap "I'm in".
+export const circlePlans = pgTable("circle_plans", {
+  id: serial("id").primaryKey(),
+  circleId: integer("circle_id").notNull().references(() => circles.id),
+  authorId: varchar("author_id").notNull().references(() => users.id),
+  title: text("title").notNull(),
+  startsAt: timestamp("starts_at").notNull(),
+  place: text("place"),
+  cancelledAt: timestamp("cancelled_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [index("circle_plans_circle_idx").on(t.circleId, t.startsAt)]);
+export const circlePlanIns = pgTable("circle_plan_ins", {
+  id: serial("id").primaryKey(),
+  planId: integer("plan_id").notNull().references(() => circlePlans.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("circle_plan_ins_pair_idx").on(t.planId, t.userId)]);
+export type Circle = typeof circles.$inferSelect;
+
 // A pass brought back after the free few-second undo (Spark: 1 a day).
 export const discoverRewinds = pgTable("discover_rewinds", {
   id: serial("id").primaryKey(),

@@ -174,10 +174,39 @@ function Picks({ t }: { t: TableView }) {
           );
         })}
       </div>
+      <KeepTogether tableId={t.id} />
       {t.picks.canLove.length > 0 && (
         <p className="text-[12px] text-vf-faint mt-2">"More" means more than friends. It only shows where you're both here for Love and would date each other.</p>
       )}
     </section>
+  );
+}
+
+/** After lunch: turn the table into a friend circle (everyone is invited). */
+function KeepTogether({ tableId }: { tableId: number }) {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true);
+    try {
+      const c = await send("POST", "/api/circles", { fromTableId: tableId });
+      setLocation(`/circles/${c.id}`);
+    } catch (e: any) {
+      toast({ title: e.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      onClick={go}
+      disabled={busy}
+      className="mt-4 w-full h-11 rounded-full border border-vf-line text-vf-text text-[14px] inline-flex items-center justify-center gap-2 disabled:opacity-50"
+      data-testid="button-keep-table"
+    >
+      <Users className="w-4 h-4" /> Keep this table together as a circle
+    </button>
   );
 }
 

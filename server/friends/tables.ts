@@ -10,7 +10,7 @@ import type { Express, Request } from "express";
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import {
-  matches, places, profiles, sundayTables, tablePicks, tableSignups, twinProfilesStructured, type SundayTable,
+  groups, matches, places, profiles, sundayTables, tablePicks, tableSignups, twinProfilesStructured, type SundayTable,
 } from "@shared/schema";
 import { ageFromDob } from "@shared/essentials";
 import { wantsFriends, wantsLove } from "@shared/friends";
@@ -391,7 +391,7 @@ async function ensureChat(table: SundayTable): Promise<number> {
   const group = await storage.createGroupFull({
     name: `Sunday Table · ${table.placeName}`,
     description: `${table.vibe} Lunch on Sunday at 13:00. Everyone pays for their own food.`,
-    type: "event",
+    type: "table",
     ownerId: ids[0],
     privacyMode: "invite-only",
     isEventChat: true,
@@ -400,6 +400,8 @@ async function ensureChat(table: SundayTable): Promise<number> {
     const p = await storage.getProfile(userId);
     await storage.joinGroup(group.id, userId, p?.groupNickname || (p?.displayName || "Guest").split(/\s+/)[0]);
   }
+  // Only the six who were seated: nobody adds people in, by hand or by link.
+  await db.update(groups).set({ canMembersAddOthers: false, maxMembers: ids.length }).where(eq(groups.id, group.id));
   await db.update(sundayTables).set({ chatGroupId: group.id }).where(eq(sundayTables.id, table.id));
   return group.id;
 }

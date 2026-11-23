@@ -11,7 +11,7 @@
 
 import { db } from "./db";
 import { subscriptions, profiles, interviews, groupMembers, groups, dailyLikeCounts, storyComments, chatRequests, discoverPasses } from "@shared/schema";
-import { and, eq, gte, count, asc } from "drizzle-orm";
+import { and, eq, gte, count, asc, sql } from "drizzle-orm";
 import { LIMITS, tierRank, FEATURE_MIN_TIER, gateCopy, type Tier, type Feature } from "@shared/entitlements";
 
 /** "at midnight" / "at 6:00 PM" / "in 3 days" from an ISO instant — mirrors
@@ -139,10 +139,13 @@ async function usage(userId: string, feature: Feature): Promise<number> {
         .where(and(eq(interviews.requesterId, userId), gte(interviews.createdAt, weekAgo)))
         .then((r) => Number(r[0]?.n ?? 0));
     case "join_group":
+      // Lounge rooms only: event chats, Sunday Table chats and friend
+      // circles are hidden rooms and never count against the cap.
       return db
         .select({ n: count() })
         .from(groupMembers)
-        .where(eq(groupMembers.userId, userId))
+        .innerJoin(groups, eq(groups.id, groupMembers.groupId))
+        .where(and(eq(groupMembers.userId, userId), sql`coalesce(${groups.isEventChat}, false) = false`))
         .then((r) => Number(r[0]?.n ?? 0));
     case "create_group":
       return db
