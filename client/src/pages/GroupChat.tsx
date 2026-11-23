@@ -22,8 +22,9 @@ import {
   useAddReaction, useRemoveReaction, useDeleteOwnMessage,
   useDeleteGroupMessage, useJoinGroup, useLeaveGroup,
   useStarMessage, useUnstarMessage, useCreateChatRequest,
-  useMarkGroupSeen, useGroupMessageReadInfo, useGroups
+  useMarkGroupSeen, useGroupMessageReadInfo, useGroups, useGroupMembers
 } from "@/hooks/use-interactions";
+import { MentionPicker } from "@/components/mention-picker";
 import { gameName } from "@/lib/game-names";
 import { IconButton } from "@/components/ui-vf";
 import { useAuth } from "@/hooks/use-auth";
@@ -408,6 +409,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
     | null
     | undefined;
   const isAdmin = group?.myRole === "owner" || group?.myRole === "admin";
+  const { data: roomMembers } = useGroupMembers(groupId);
 
   useEffect(() => {
     if (highlightMsgId && messages) {
@@ -952,6 +954,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
             </button>
           </div>
         )}
+        {isMember && <MentionPicker members={roomMembers as any} meId={user?.id} input={input} onPick={setInput} />}
         <div className="p-3">
           {groupLoading ? (
             // Group membership hasn't loaded yet — showing the join button

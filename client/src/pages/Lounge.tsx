@@ -2,7 +2,7 @@
 // sideways cards (cover, unread, a live game), then "Find a room": search,
 // chips and a grid of rooms with who's in them and one button to join.
 import { useMarkSeen } from "@/hooks/use-activity";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { motion, useReducedMotion } from "framer-motion";
 import { LayoutShell } from "@/components/layout-shell";
@@ -11,7 +11,8 @@ import { BadgeCheck, BellOff, Loader2, Lock, Plus, UserPlus } from "lucide-react
 import { useGroups, useCreateGroup, useJoinGroup } from "@/hooks/use-interactions";
 import { useToast } from "@/hooks/use-toast";
 import { usePaywall } from "@/hooks/use-paywall";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { LOUNGE_TOPICS, type LoungeDiscover } from "@shared/lounge";
 import { warmLounge } from "@/lib/lounge-warmup";
 import { avatarColor } from "@/lib/avatar-color";
 import { gameName } from "@/lib/game-names";
@@ -31,7 +32,18 @@ const FILTER_OPTIONS = [
   { value: "official", label: "Official" },
   { value: "popular", label: "Popular" },
   { value: "new", label: "New" },
+  ...LOUNGE_TOPICS.map((t) => ({ value: `topic:${t.key}`, label: t.label })),
+  { value: "area", label: "By area" },
 ];
+/** Chips the server filters; the topic and area ones are sorted out here. */
+const SERVER_FILTERS = new Set(["all", "official", "popular", "new"]);
+
+const names = (people: { name: string }[]) =>
+  people.length === 1
+    ? people[0].name
+    : people.length === 2
+      ? `${people[0].name} and ${people[1].name}`
+      : `${people[0].name}, ${people[1].name} and ${people.length - 2} more`;
 
 const coverOf = (g: any): string | null => g.bannerUrl || g.groupPhotoUrl || g.iconUrl || null;
 
@@ -91,8 +103,11 @@ export default function Lounge() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
-  const { data: groups, isLoading } = useGroups(searchQuery || undefined, activeFilter);
+  const serverFilter = SERVER_FILTERS.has(activeFilter) ? activeFilter : "all";
+  const { data: groups, isLoading } = useGroups(searchQuery || undefined, serverFilter);
   const { data: everything } = useGroups(undefined, "all");
+  const { data: discover } = useQuery<LoungeDiscover>({ queryKey: ["/api/lounge/discover"], staleTime: 60_000 });
+  const byId = useMemo(() => new Map<number, any>((everything || []).map((g: any) => [g.id, g])), [everything]);
   const [, setLocation] = useLocation();
   const open = (id: number | string) => setLocation(`/lounge/group/${id}`);
 
@@ -116,11 +131,36 @@ export default function Lounge() {
   }, [mine, warmQc]);
   const searching = !!searchQuery.trim();
   const found = useMemo(() => {
-    const list = (groups || []).filter((g: any) => searching || !g.isMember);
+    let list = (groups || []).filter((g: any) => searching || !g.isMember);
+    if (activeFilter.startsWith("topic:")) {
+      const key = activeFilter.slice(6);
+      return list.filter((g: any) => (discover?.topics[g.id] as string[] | undefined)?.includes(key));
+    }
+    if (activeFilter === "area") {
+      // Rooms for a place, grouped by it; your own area first.
+      const area = discover?.myArea?.toLowerCase();
+      const isMine = (g: any) => Number(!!area && String(g.locationLabel).toLowerCase().includes(area));
+      list = list.filter((g: any) => g.locationLabel);
+      return [...list].sort(
+        (a: any, b: any) =>
+          isMine(b) - isMine(a) ||
+          String(a.locationLabel).localeCompare(String(b.locationLabel)) ||
+          (b.memberCount || 0) - (a.memberCount || 0),
+      );
+    }
     if (activeFilter !== "all") return list;
     // Destira's own rooms first (always good, always joinable), then the busiest.
     return [...list].sort((a: any, b: any) => Number(!!b.isOfficial) - Number(!!a.isOfficial) || (b.memberCount || 0) - (a.memberCount || 0));
-  }, [groups, searching, activeFilter]);
+  }, [groups, searching, activeFilter, discover]);
+  const browsing = !searching && activeFilter === "all";
+  const trending = useMemo(
+    () => (discover?.trending ?? []).map((t) => ({ t, room: byId.get(t.groupId) })).filter((x) => x.room),
+    [discover, byId],
+  );
+  const matchRooms = useMemo(
+    () => (discover?.matchRooms ?? []).map((m) => ({ m, room: byId.get(m.groupId) })).filter((x) => x.room),
+    [discover, byId],
+  );
 
   return (
     <LayoutShell>
@@ -154,6 +194,38 @@ export default function Lounge() {
             <div className="-mx-4 px-4 flex gap-3 overflow-x-auto snap-x snap-mandatory pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {mine.map((room: any) => (
                 <YourRoomCard key={room.id} room={room} onOpen={() => open(room.id)} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {browsing && matchRooms.length > 0 && (
+          <section className="mb-8" data-testid="section-match-rooms">
+            <div className="vf-label text-vf-text mb-3">Your matches are here</div>
+            <div className="-mx-4 px-4 flex gap-3 overflow-x-auto snap-x pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {matchRooms.map(({ m, room }, i) => (
+                <div key={room.id} className="snap-start shrink-0 w-[260px] flex">
+                  <RoomCard
+                    room={room}
+                    index={i}
+                    onOpen={() => open(room.id)}
+                    note={`${names(m.people)} ${m.people.length === 1 ? "is" : "are"} in this room`}
+                    testId={`match-room-${room.id}`}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {browsing && trending.length > 0 && (
+          <section className="mb-8" data-testid="section-trending">
+            <div className="vf-label text-vf-text mb-3">Busy this week</div>
+            <div className="-mx-4 px-4 flex gap-3 overflow-x-auto snap-x pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {trending.map(({ t, room }, i) => (
+                <div key={room.id} className="snap-start shrink-0 w-[260px] flex">
+                  <RoomCard room={room} index={i} onOpen={() => open(room.id)} note={`${t.messages} messages this week`} testId={`trending-${room.id}`} />
+                </div>
               ))}
             </div>
           </section>
@@ -195,14 +267,21 @@ export default function Lounge() {
           ) : found.length === 0 ? (
             <EmptyState
               testId="text-no-groups"
-              title={searching ? "No rooms match that." : "You're in every room here."}
-              body={searching ? "Try another word, or start the room you're looking for." : "Start a new one for the thing you'd like to talk about."}
+              title={searching ? "No rooms match that." : activeFilter === "all" ? "You're in every room here." : "No rooms here yet."}
+              body={searching ? "Try another word, or start the room you're looking for." : activeFilter === "all" ? "Start a new one for the thing you'd like to talk about." : "Start the first one."}
               action={<VfButton variant="secondary" onClick={() => setShowCreate(true)}>New room</VfButton>}
             />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="text-section-discover">
               {found.map((room: any, i: number) => (
-                <RoomCard key={room.id} room={room} index={i} onOpen={() => open(room.id)} />
+                <Fragment key={room.id}>
+                  {activeFilter === "area" && room.locationLabel !== found[i - 1]?.locationLabel && (
+                    <div className={`col-span-full vf-label text-vf-faint ${i ? "mt-3" : ""}`} data-testid="area-heading">
+                      {room.locationLabel}
+                    </div>
+                  )}
+                  <RoomCard room={room} index={i} onOpen={() => open(room.id)} />
+                </Fragment>
               ))}
             </div>
           )}
@@ -249,7 +328,7 @@ function YourRoomCard({ room, onOpen }: { room: any; onOpen: () => void }) {
   );
 }
 
-function RoomCard({ room, onOpen, index }: { room: any; onOpen: () => void; index: number }) {
+function RoomCard({ room, onOpen, index, note, testId }: { room: any; onOpen: () => void; index: number; note?: string; testId?: string }) {
   const reduce = useReducedMotion();
   const members: number = room.memberCount || 0;
   return (
@@ -261,8 +340,8 @@ function RoomCard({ room, onOpen, index }: { room: any; onOpen: () => void; inde
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(e) => e.key === "Enter" && onOpen()}
-      className="group vf-lift rounded-[22px] overflow-hidden border border-vf-line bg-vf-surface2 cursor-pointer hover:border-vf-text/20 flex flex-col"
-      data-testid={`card-group-${room.id}`}
+      className="group vf-lift w-full rounded-[22px] overflow-hidden border border-vf-line bg-vf-surface2 cursor-pointer hover:border-vf-text/20 flex flex-col"
+      data-testid={testId ?? `card-group-${room.id}`}
     >
       <div className="relative aspect-[16/9]">
         <RoomCover room={room} className="absolute inset-0 w-full h-full" initialSize={52} />
@@ -284,7 +363,11 @@ function RoomCard({ room, onOpen, index }: { room: any; onOpen: () => void; inde
       <div className="p-4 flex flex-col gap-3 flex-1">
         <div className="min-w-0">
           <div className="font-display text-[20px] leading-tight text-vf-text truncate" data-testid={`text-group-name-${room.id}`}>{room.name}</div>
-          <p className="vf-small text-vf-muted line-clamp-1 mt-0.5">{room.description || "A new room. Say hello."}</p>
+          {note ? (
+            <p className="vf-small text-vf-ember line-clamp-1 mt-0.5" data-testid="room-note">{note}</p>
+          ) : (
+            <p className="vf-small text-vf-muted line-clamp-1 mt-0.5">{room.description || "A new room. Say hello."}</p>
+          )}
         </div>
         <div className="mt-auto flex items-center gap-2.5">
           <Faces faces={room.faces} />
@@ -353,16 +436,27 @@ function CreateRoomSheet({ open, onOpenChange }: { open: boolean; onOpenChange: 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [privacyMode, setPrivacyMode] = useState("open");
+  const [topic, setTopic] = useState<string | null>(null);
+  const [area, setArea] = useState("");
   const createGroup = useCreateGroup();
   const { toast } = useToast();
+  const qc = useQueryClient();
 
   const handleCreate = async () => {
     if (!name.trim()) return;
     try {
-      await createGroup.mutateAsync({ name, description, privacyMode });
+      await createGroup.mutateAsync({
+        name, description, privacyMode,
+        categoryTags: topic ? [topic] : undefined,
+        locationLabel: area.trim() || undefined,
+      });
+      qc.invalidateQueries({ queryKey: ["/api/lounge/groups"] });
+      qc.invalidateQueries({ queryKey: ["/api/lounge/discover"] });
       toast({ title: "Room made", description: `"${name}" is ready.` });
       setName("");
       setDescription("");
+      setTopic(null);
+      setArea("");
       onOpenChange(false);
     } catch (err) {
       toast({ title: "Couldn't make the room", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
@@ -391,6 +485,29 @@ function CreateRoomSheet({ open, onOpenChange }: { open: boolean; onOpenChange: 
         <label className="block">
           <span className="vf-label text-vf-faint mb-2 block">What it's about</span>
           <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="One line people will read first" className={field} data-testid="input-group-description" />
+        </label>
+        <div>
+          <span className="vf-label text-vf-faint mb-2 block">Topic (optional)</span>
+          <div className="flex flex-wrap gap-2">
+            {LOUNGE_TOPICS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTopic(topic === t.key ? null : t.key)}
+                aria-pressed={topic === t.key}
+                className={`vf-press px-3.5 min-h-[34px] text-[13px] rounded-full border transition-colors ${
+                  topic === t.key ? "bg-vf-text border-transparent text-vf-ink" : "bg-vf-surface border-vf-line text-vf-text"
+                }`}
+                data-testid={`create-topic-${t.key}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="block">
+          <span className="vf-label text-vf-faint mb-2 block">Area (optional)</span>
+          <input value={area} onChange={(e) => setArea(e.target.value.slice(0, 60))} placeholder="Avondale, or Harare" className={field} data-testid="input-group-area" />
         </label>
         <div>
           <span className="vf-label text-vf-faint mb-2 block">Who can join</span>

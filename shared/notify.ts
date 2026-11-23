@@ -5,7 +5,7 @@
 
 export const PUSH_CATEGORIES = [
   "matches", "messages", "unread", "events", "event_reminders", "event_likes",
-  "tables", "circles", "board", "vouches", "wingman", "stories", "interviews", "twin", "plan", "account",
+  "tables", "circles", "board", "vouches", "wingman", "lounge", "stories", "interviews", "twin", "plan", "account",
 ] as const;
 export type NotificationCategory = (typeof PUSH_CATEGORIES)[number];
 
@@ -22,6 +22,7 @@ export const PUSH_CATEGORY_INFO: Record<NotificationCategory, { label: string; h
   board: { label: "Plans board", hint: "Someone wants in on your plan, or you're in on theirs" },
   vouches: { label: "Vouches", hint: "When someone you met vouches for you" },
   wingman: { label: "Wingman", hint: "A friend from your circle thinks you'd like someone" },
+  lounge: { label: "Lounge mentions", hint: "Someone @mentions you or replies to you in a room you haven't muted" },
   stories: { label: "Story replies", hint: "Someone replied to your story" },
   interviews: { label: "Twin interviews", hint: "Someone is interviewing your twin" },
   twin: { label: "Twin alerts", hint: "Your twin spotted someone or an event for you" },

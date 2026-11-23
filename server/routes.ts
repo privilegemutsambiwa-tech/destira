@@ -70,6 +70,7 @@ import { registerCircleRoutes } from "./friends/circles";
 import { registerBoardRoutes } from "./friends/board";
 import { registerVouchRoutes } from "./friends/vouches";
 import { registerWingmanRoutes } from "./friends/wingman";
+import { notifyRoomMessage, registerLoungeDiscoveryRoutes } from "./lounge-discovery";
 import { registerEventDoorRoutes, startClicksSweep } from "./event-door";
 import { registerEventExtraRoutes } from "./event-extras";
 import { LOOKING_FOR_VALUES } from "@shared/friends";
@@ -253,6 +254,7 @@ export async function registerRoutes(
   registerVouchRoutes(app, getUserId);
   // Wingman: circle friends suggest someone from Discover, and say why (Part O6).
   registerWingmanRoutes(app, getUserId);
+  registerLoungeDiscoveryRoutes(app, getUserId);
   // Events in person: door check-in by QR, then "Who did you click with?" (Part J).
   registerEventDoorRoutes(app, getUserId);
   startClicksSweep();
@@ -3152,11 +3154,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const userId = getUserId(req);
     if (!userId) return res.sendStatus(401);
     if (await gate.denyIfGated(res, userId, "create_group")) return;
-    const { name, description, type, iconUrl, categoryTags, privacyMode, mediaEnabled, stickersEnabled, postingPermission, inviteDirectJoinEnabled } = req.body;
+    const { name, description, type, iconUrl, categoryTags, privacyMode, mediaEnabled, stickersEnabled, postingPermission, inviteDirectJoinEnabled, locationLabel } = req.body;
     try {
       const group = await storage.createGroupFull({
         name, description: description || "", type: type || "custom",
         ownerId: userId, iconUrl, categoryTags, privacyMode,
+        locationLabel: typeof locationLabel === "string" && locationLabel.trim() ? locationLabel.trim().slice(0, 60) : undefined,
         mediaEnabled, stickersEnabled, postingPermission, inviteDirectJoinEnabled,
       });
       const creatorProfile = await storage.getProfile(userId);
@@ -3616,6 +3619,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       });
       res.status(201).json(msg);
       safety.scanText({ senderId: userId, text: content, source: "group", refId: msg.id, recipientId: `group:${groupId}` }).catch(() => {});
+      notifyRoomMessage(groupId, userId, msg).catch((e) => console.error("[lounge] mention notify failed:", e));
     } catch (e) {
       res.status(500).json({ message: "Failed to send message" });
     }

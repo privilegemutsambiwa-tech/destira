@@ -528,7 +528,7 @@ export function useGroup(id: number) {
 export function useCreateGroup() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { name: string; description: string; type?: string; privacyMode?: string; categoryTags?: string[] }) => {
+    mutationFn: async (data: { name: string; description: string; type?: string; privacyMode?: string; categoryTags?: string[]; locationLabel?: string }) => {
       const res = await fetch("/api/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
