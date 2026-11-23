@@ -65,6 +65,7 @@ import { DM_TEXT_MAX } from "@shared/dm";
 import { registerDateRoutes, startDateSweeps } from "./dates";
 import { registerActivityRoutes } from "./activity";
 import { loveBlockedReason, registerFriendRoutes } from "./friends";
+import { registerTableRoutes, startTableSweeps } from "./friends/tables";
 import { LOOKING_FOR_VALUES } from "@shared/friends";
 import { startReminderSweeps } from "./reminders";
 import { openerFacts, fallbackOpeners } from "./openers";
@@ -235,6 +236,9 @@ export async function registerRoutes(
   push.startPushDigests();
   // Destira Friends: its own deck, waves, friendships (Part O).
   registerFriendRoutes(app, getUserId);
+  // The Sunday Table: six people, one lunch, every week (Part O2).
+  registerTableRoutes(app, getUserId);
+  startTableSweeps();
   registerVerificationRoutes(app, getUserId, upload);
 
   // Reactions and polls are keyed off a bare group-message id with no group

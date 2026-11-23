@@ -1012,6 +1012,54 @@ export const friendPasses = pgTable("friend_passes", {
   uniqueIndex("friend_passes_user_target_idx").on(t.userId, t.targetId),
 ]);
 
+// The Sunday Table (Part O2). One sign-up per member per weekend (the
+// Sunday, YYYY-MM-DD Harare); the Friday run seats them at a table.
+export const tableSignups = pgTable("table_signups", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  weekend: text("weekend").notNull(),
+  mix: text("mix").notNull().default("mixed"), // mixed | women | men
+  status: text("status").notNull().default("waiting"), // waiting | seated | unseated
+  tableId: integer("table_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("table_signups_user_weekend_idx").on(t.userId, t.weekend),
+  index("table_signups_weekend_idx").on(t.weekend, t.status),
+]);
+export const sundayTables = pgTable("sunday_tables", {
+  id: serial("id").primaryKey(),
+  weekend: text("weekend").notNull(),
+  startsAt: timestamp("starts_at").notNull(),
+  mix: text("mix").notNull(),
+  vibe: text("vibe").notNull(),
+  ageMin: integer("age_min"),
+  ageMax: integer("age_max"),
+  area: text("area"),
+  placeName: text("place_name").notNull(),
+  placeDetail: text("place_detail"),
+  chatGroupId: integer("chat_group_id"),
+  // Once-only pushes: the place on Saturday, "who'd you see again?" after.
+  placeSentAt: timestamp("place_sent_at"),
+  picksSentAt: timestamp("picks_sent_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("sunday_tables_weekend_idx").on(t.weekend),
+]);
+// Private "see again" picks. Mutual picks become one friendship, or a
+// dating match when both picked "love".
+export const tablePicks = pgTable("table_picks", {
+  id: serial("id").primaryKey(),
+  tableId: integer("table_id").notNull(),
+  fromId: varchar("from_id").notNull().references(() => users.id),
+  toId: varchar("to_id").notNull().references(() => users.id),
+  kind: text("kind").notNull(), // friends | love
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("table_picks_pair_idx").on(t.tableId, t.fromId, t.toId),
+]);
+export type SundayTable = typeof sundayTables.$inferSelect;
+export type TableSignup = typeof tableSignups.$inferSelect;
+
 // A pass brought back after the free few-second undo (Spark: 1 a day).
 export const discoverRewinds = pgTable("discover_rewinds", {
   id: serial("id").primaryKey(),

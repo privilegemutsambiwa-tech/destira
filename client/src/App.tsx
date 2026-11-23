@@ -93,6 +93,7 @@ const JoinGroup = screen(() => import("@/pages/JoinGroup"));
 const Settings = screen(() => import("@/pages/Settings"));
 const Notifications = screen(() => import("@/pages/Notifications"));
 const Friends = screen(() => import("@/pages/Friends"));
+const Tables = screen(() => import("@/pages/Tables"));
 const PublicEvent = screen(() => import("@/pages/PublicEvent"));
 
 // The screens people move between all the time, fetched quietly once someone
@@ -306,6 +307,9 @@ function Router() {
       </Route>
       <Route path="/events">
         <ProtectedRoute component={Events} />
+      </Route>
+      <Route path="/tables">
+        <ProtectedRoute component={Tables} />
       </Route>
       <Route path="/friends">
         <ProtectedRoute component={Friends} />
