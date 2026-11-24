@@ -10,6 +10,7 @@ import { useActiveGames, useCreateGame, useGroup } from "@/hooks/use-interaction
 import { useToast } from "@/hooks/use-toast";
 import { haptic } from "@/lib/haptics";
 import { GameComposerDialog } from "@/components/game-composer-dialog";
+import { GameNightsSection } from "@/components/game-nights";
 import { GAME_ORDER, GAME_THEMES, STAGE, instantSetup, themeFor, tileBackground } from "@/components/games/game-theme";
 
 function timeAgo(iso: string | null | undefined): string {
@@ -137,6 +138,8 @@ export default function GameRoomLobby({ params }: { params?: { groupId?: string 
             </div>
           </section>
         ) : null}
+
+        <GameNightsSection groupId={groupId} />
 
         {/* Game of the day */}
         <section className={games.length ? "" : "pt-2"}>

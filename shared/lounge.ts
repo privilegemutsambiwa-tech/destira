@@ -87,3 +87,32 @@ export interface RoomPostingState {
   /** False when the room has rules this member hasn't agreed to yet. */
   rulesAccepted: boolean;
 }
+
+// Game nights and voice notes (Part J, chunk 3).
+export const GAME_NIGHT_MIN_LEAD_MS = 10 * 60_000;
+export const GAME_NIGHT_MAX_AHEAD_MS = 30 * 24 * 3600e3;
+export const GAME_NIGHT_REMIND_MS = 30 * 60_000;
+export const GAME_NIGHT_UPCOMING_MAX = 3;
+export const GAME_NIGHT_NOTE_MAX = 140;
+/** A started game night stays "on now" in the room this long. */
+export const GAME_NIGHT_ON_MS = 2 * 3600e3;
+
+export interface GameNightView {
+  id: number;
+  kind: string;
+  label: string;
+  note: string | null;
+  startsAt: string;
+  status: "scheduled" | "starting" | "started" | "cancelled";
+  gameId: number | null;
+  hostName: string;
+  going: number;
+  imIn: boolean;
+  canCancel: boolean;
+}
+export interface GameNightsForRoom {
+  nights: GameNightView[];
+  canSchedule: boolean;
+  /** Games a night can be (the ones that need no setup). */
+  kinds: { kind: string; label: string }[];
+}

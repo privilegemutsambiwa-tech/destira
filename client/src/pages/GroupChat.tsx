@@ -26,6 +26,9 @@ import {
 } from "@/hooks/use-interactions";
 import { MentionPicker } from "@/components/mention-picker";
 import { useQueryClient } from "@tanstack/react-query";
+import { GameNightBanner } from "@/components/game-nights";
+import { RoomVoiceBubble, useRoomVoice } from "@/components/room-voice";
+import { MicButton, RecordingBar } from "@/components/dm-composer-extras";
 import { PausedNotice, RemoveMessageSheet, RoomRulesCard, SlowModeLine, removedLine, usePostingState, useSlowMode } from "@/components/room-moderation";
 import { gameName } from "@/lib/game-names";
 import { IconButton } from "@/components/ui-vf";
@@ -415,6 +418,8 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
   const { data: posting } = usePostingState(groupId, !!isMember);
   const slow = useSlowMode(posting);
   const [removeTarget, setRemoveTarget] = useState<any>(null);
+  const voice = useRoomVoice(groupId, () => replyTo?.id ?? null, () => { setReplyTo(null); slow.sent(); });
+  const mediaAllowed = isAdmin || group?.mediaPermission !== "admin_only";
 
   useEffect(() => {
     if (highlightMsgId && messages) {
@@ -610,6 +615,8 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
         </button>
       )}
 
+      {isMember && <GameNightBanner groupId={groupId} liveGameShown={!!liveGame} />}
+
       <div className="flex-1 overflow-y-auto p-4 space-y-1" onClick={() => setActiveMessageId(null)}>
         {msgsLoading ? (
           <div className="flex justify-center p-12">
@@ -751,6 +758,8 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                             <PollBubble messageId={msg.id} groupId={groupId} />
                           ) : msg.contentType === "game" ? (
                             <GameBubble messageId={msg.id} groupId={groupId} />
+                          ) : msg.contentType === "voice" ? (
+                            <RoomVoiceBubble msg={msg} isMe={isMe} />
                           ) : parseDestiraLink(msg.content) ? (
                             <LinkPreviewCard content={msg.content} />
                           ) : (
@@ -985,6 +994,8 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
             <RoomRulesCard groupId={groupId} rules={posting.rulesText} />
           ) : posting?.mutedUntil ? (
             <PausedNotice until={posting.mutedUntil} />
+          ) : voice.state !== "idle" ? (
+            <RecordingBar elapsed={voice.elapsed} onCancel={voice.cancel} onSend={voice.stop} />
           ) : (
             <form
               className="flex items-center gap-2"
@@ -1031,6 +1042,9 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                 }}
                 data-testid="input-group-message"
               />
+              {!input.trim() && voice.available && mediaAllowed ? (
+                <MicButton onStart={voice.start} disabled={voice.sending || slow.left > 0} />
+              ) : (
               <button
                 type="submit"
                 disabled={!input.trim() || sendMessage.isPending || slow.left > 0}
@@ -1052,6 +1066,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                   <Send className="w-4 h-4" />
                 )}
               </button>
+              )}
             </form>
           )}
         </div>

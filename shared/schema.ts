@@ -341,6 +341,10 @@ export const groupMessages = pgTable("group_messages", {
   originalContent: text("original_content"),
   // Why a moderator removed it, shown in its place.
   removedReason: text("removed_reason"),
+  // A voice note: where the audio is kept (served only to members through
+  // /api/groups/:id/voice/:messageId, never /uploads) and how long it is.
+  mediaKey: text("media_key"),
+  durationMs: integer("duration_ms"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -440,6 +444,35 @@ export const groupGameParticipants = pgTable("group_game_participants", {
 }, (t) => [
   uniqueIndex("group_game_participants_game_user_idx").on(t.gameId, t.userId),
 ]);
+
+// A room's scheduled game night (Part J): an admin picks a game and a time,
+// members say "I'm in", everyone gets a reminder 30 minutes before, and at
+// the start the game opens with everyone who said yes already in it.
+export const gameNights = pgTable("game_nights", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => groups.id),
+  hostId: varchar("host_id").notNull().references(() => users.id),
+  kind: text("kind").notNull(), // a GROUP_GAME_KINDS value that needs no setup
+  setup: jsonb("setup").notNull().default({}),
+  note: text("note"),
+  startsAt: timestamp("starts_at").notNull(),
+  status: text("status").notNull().default("scheduled"), // scheduled | starting | started | cancelled
+  gameId: integer("game_id"),
+  remindedAt: timestamp("reminded_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [
+  index("game_nights_group_idx").on(t.groupId, t.status),
+]);
+
+export const gameNightRsvps = pgTable("game_night_rsvps", {
+  id: serial("id").primaryKey(),
+  gameNightId: integer("game_night_id").notNull().references(() => gameNights.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [
+  uniqueIndex("game_night_rsvps_pair_idx").on(t.gameNightId, t.userId),
+]);
+export type GameNight = typeof gameNights.$inferSelect;
 
 // A game room's own small text thread — deliberately simpler than
 // groupMessages (no polls/images/reactions/replies): this is where the

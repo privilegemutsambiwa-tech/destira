@@ -72,6 +72,8 @@ import { registerVouchRoutes } from "./friends/vouches";
 import { registerWingmanRoutes } from "./friends/wingman";
 import { notifyRoomMessage, registerLoungeDiscoveryRoutes } from "./lounge-discovery";
 import { denyIfCantPost, registerLoungeModerationRoutes } from "./lounge-moderation";
+import { registerGameNightRoutes, startGameNightSweep } from "./game-nights";
+import { registerRoomVoiceRoutes } from "./room-voice";
 import { registerEventDoorRoutes, startClicksSweep } from "./event-door";
 import { registerEventExtraRoutes } from "./event-extras";
 import { LOOKING_FOR_VALUES } from "@shared/friends";
@@ -257,6 +259,10 @@ export async function registerRoutes(
   registerWingmanRoutes(app, getUserId);
   registerLoungeDiscoveryRoutes(app, getUserId);
   registerLoungeModerationRoutes(app, getUserId);
+  // Lounge: scheduled game nights and voice notes in rooms (Part J).
+  registerGameNightRoutes(app, getUserId);
+  startGameNightSweep();
+  registerRoomVoiceRoutes(app, getUserId);
   // Events in person: door check-in by QR, then "Who did you click with?" (Part J).
   registerEventDoorRoutes(app, getUserId);
   startClicksSweep();
@@ -3582,7 +3588,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       // Members only, and only what was sent after they joined.
       const msgs = await storage.getVisibleGroupMessages(groupId, userId);
       // What a removed or unsent message said stays on the server.
-      res.json(msgs.map((m) => ({ ...m, originalContent: null })));
+      res.json(msgs.map((m) => ({ ...m, originalContent: null, mediaKey: null })));
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch messages" });
     }
@@ -4292,6 +4298,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       const enriched = msgs.map(m => ({
         ...m,
         originalContent: null,
+        mediaKey: null,
         reactions: reactionsByMsg[m.id] || [],
         isStarred: starredMsgIds.has(m.id),
         subscriptionTier: profilesMap[m.userId]?.subscriptionTier || "free",
