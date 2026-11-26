@@ -20,6 +20,8 @@ import { withFrom } from "@/lib/from-route";
 import { EmptyState, UnderlineTabs, VfAvatar, VfButton, VfSkeleton } from "@/components/ui-vf";
 import { avatarColor } from "@/lib/avatar-color";
 import { haptic } from "@/lib/haptics";
+import { PurchaseSheet } from "@/components/purchase-sheet";
+import { SINGLE_LABEL, SINGLE_PRICE_CENTS, singlePrice } from "@shared/single-purchases";
 
 type TabType = "waiting" | "asked";
 
@@ -208,7 +210,7 @@ function LikeCard({
 }
 
 /** Free members: the count is real, the faces wait (§7.11). */
-function MaskedLikes({ count, onPlans }: { count: number; onPlans: () => void }) {
+function MaskedLikes({ count, onPlans, onBuy }: { count: number; onPlans: () => void; onBuy: () => void }) {
   const tiles = Math.min(Math.max(count, 2), 6);
   return (
     <div data-testid="masked-asks">
@@ -236,6 +238,9 @@ function MaskedLikes({ count, onPlans }: { count: number; onPlans: () => void })
         <VfButton variant="premium" size="sm" className="mt-4" onClick={onPlans} data-testid="button-see-who-asked">
           See Spark
         </VfButton>
+        <button type="button" onClick={onBuy} className="block mt-3 vf-small text-vf-muted underline underline-offset-2 hover:text-vf-text" data-testid="button-buy-likes-pass">
+          Or just see them for 24 hours, {singlePrice("likes_pass")}
+        </button>
       </div>
     </div>
   );
@@ -296,6 +301,7 @@ export default function Matches() {
   // Crown introductions: a like with a note, shown with who sent it on every
   // plan (server/crown-perks.ts).
   const qc = useQueryClient();
+  const [buyingPass, setBuyingPass] = useState(false);
   const { data: intros = [] } = useQuery<Intro[]>({ queryKey: ["/api/crown/intros/incoming"] });
 
   const waitingCount = likes.length + pendingRequests.length + intros.length;
@@ -435,8 +441,13 @@ export default function Matches() {
             )}
             {incoming?.seeWhoAsked === false && likes.some((l: any) => l.masked) && (
               <div className={likes.some((l: any) => !l.masked) ? "mt-4" : undefined}>
-                <MaskedLikes count={likes.filter((l: any) => l.masked).length} onPlans={() => setLocation(withFrom("/plans?feature=see_who_asked", "/matches"))} />
+                <MaskedLikes count={likes.filter((l: any) => l.masked).length} onPlans={() => setLocation(withFrom("/plans?feature=see_who_asked", "/matches"))} onBuy={() => setBuyingPass(true)} />
               </div>
+            )}
+            {incoming?.likesPassUntil && (
+              <p className="mt-3 vf-small text-vf-faint" data-testid="likes-pass-until">
+                You can see who liked you until {new Date(incoming.likesPassUntil).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}.
+              </p>
             )}
             {pendingRequests.length > 0 && (
               <div className="mt-6">
@@ -530,6 +541,22 @@ export default function Matches() {
           onClose={() => setCelebrating(null)}
         />
       )}
+      <PurchaseSheet
+        open={buyingPass}
+        onOpenChange={setBuyingPass}
+        kind="likes_pass"
+        refId={1}
+        title="See who liked you"
+        label={SINGLE_LABEL.likes_pass}
+        cents={SINGLE_PRICE_CENTS.likes_pass}
+        note="Everyone who likes you, with names and photos, for the next 24 hours. Nothing renews."
+        onPaid={() => {
+          setBuyingPass(false);
+          qc.invalidateQueries({ queryKey: ["/api/likes/incoming"] });
+          qc.invalidateQueries({ queryKey: ["/api/gate", "see_who_asked"] });
+          toast({ title: "Here they are", description: "You can see who liked you for the next 24 hours." });
+        }}
+      />
     </LayoutShell>
   );
 }

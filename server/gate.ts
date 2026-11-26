@@ -181,6 +181,12 @@ export async function passesToday(userId: string): Promise<number> {
     .then((r) => Number(r[0]?.n ?? 0));
 }
 
+/** When a bought "see who liked you" pass ends (shared/single-purchases.ts), if any. */
+export async function likesPassUntil(userId: string): Promise<Date | null> {
+  const [p] = await db.select({ until: profiles.seeLikesUntil }).from(profiles).where(eq(profiles.userId, userId));
+  return p?.until ?? null;
+}
+
 async function oldestInterviewInWindow(userId: string, since: Date): Promise<Date | undefined> {
   const [row] = await db
     .select({ createdAt: interviews.createdAt })
@@ -224,6 +230,12 @@ export async function checkGate(
   const tier = await getEffectiveTier(userId);
   const limits = LIMITS[tier];
   const dailyReset = feature === "daily_likes" || feature === "daily_passes";
+
+  // A bought 24-hour pass (server/single-purchases.ts) opens "see who liked you".
+  if (feature === "see_who_asked" && !limits.seeWhoAsked) {
+    const until = await likesPassUntil(userId);
+    if (until && until.getTime() > Date.now()) return { ok: true, tier, limit: null };
+  }
 
   const boolMap: Partial<Record<Feature, boolean>> = {
     see_who_asked: limits.seeWhoAsked,

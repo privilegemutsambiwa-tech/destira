@@ -59,10 +59,16 @@ export function RefusalSheet({
   feature,
   gate,
   onClose,
+  buy,
+  noPlan,
 }: {
   feature: Feature;
   gate: GateState;
   onClose: () => void;
+  /** A single one to buy instead of a plan (Part G3), e.g. one super like. */
+  buy?: { label: string; onBuy: () => void };
+  /** No plan above this one gives more: offer only `buy`. */
+  noPlan?: boolean;
 }) {
   const [, setLocation] = useLocation();
   const copy = gateCopy(feature, {
@@ -93,6 +99,7 @@ export function RefusalSheet({
         </div>
         <p className="text-[15px] leading-[1.55] text-vf-text">{line}</p>
 
+        {!noPlan && (<>
         <button
           onClick={() => {
             onClose();
@@ -108,6 +115,16 @@ export function RefusalSheet({
             Or {copy.requiredWeekly} a week. EcoCash, OneMoney, InnBucks or card; nothing renews by itself.
           </p>
         ) : null}
+        </>)}
+        {buy && (
+          <button
+            onClick={() => { onClose(); buy.onBuy(); }}
+            className={`${noPlan ? "mt-5 bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)]" : "mt-3 border border-vf-line text-vf-text hover:bg-vf-ink"} w-full h-12 rounded-full font-semibold text-[14px] btn-press transition-colors`}
+            data-testid={`refusal-buy-${feature}`}
+          >
+            {buy.label}
+          </button>
+        )}
         <button
           onClick={onClose}
           className="mt-2.5 w-full h-11 text-[14px] font-medium text-vf-faint hover:text-vf-text transition-colors"

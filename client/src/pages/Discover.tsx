@@ -40,6 +40,8 @@ import type { Feature } from "@shared/entitlements";
 import type { User } from "@shared/models/auth";
 import { dataSaverOn, photoForSaver } from "@/lib/data-saver";
 import { WingmanStrip } from "@/components/wingman";
+import { PurchaseSheet } from "@/components/purchase-sheet";
+import { SINGLE_LABEL, SINGLE_PRICE_CENTS, singlePrice } from "@shared/single-purchases";
 
 function formatDistance(km: number): string {
   if (km < 1) return "Less than 1km away";
@@ -602,7 +604,7 @@ type DiscoverPerks = {
 
 /** Only for members who have a boost to use or one running. Says what it
  *  really did: minutes left and how many decks it reached. */
-function BoostControl({ perks, onBoost, busy }: { perks?: DiscoverPerks; onBoost: () => void; busy: boolean }) {
+function BoostControl({ perks, onBoost, onBuy, busy }: { perks?: DiscoverPerks; onBoost: () => void; onBuy: () => void; busy: boolean }) {
   const [, tick] = useState(0);
   const active = perks?.boost.active;
   useEffect(() => {
@@ -622,7 +624,20 @@ function BoostControl({ perks, onBoost, busy }: { perks?: DiscoverPerks; onBoost
       </div>
     );
   }
-  if (perks.boost.left <= 0) return null;
+  if (perks.boost.left <= 0) {
+    return (
+      <div className="flex justify-center mt-3">
+        <button
+          onClick={onBuy}
+          className="inline-flex items-center gap-1 h-8 px-3 rounded-full border border-vf-line text-vf-muted text-[12.5px] font-medium hover:text-vf-text hover:bg-vf-ember/5"
+          data-testid="button-buy-boost"
+        >
+          <Zap className="w-3.5 h-3.5" strokeWidth={1.8} />
+          Boost for 30 minutes · {singlePrice("boost")}
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="flex justify-center mt-3">
     <button
@@ -691,6 +706,8 @@ export default function Discover() {
   const [rewinding, setRewinding] = useState(false);
   const [superLiking, setSuperLiking] = useState(false);
   const [boosting, setBoosting] = useState(false);
+  // Out of super likes or boosts: buy one (Part G3), then it's used straight away.
+  const [buying, setBuying] = useState<"super_like" | "boost" | null>(null);
   // Cards a rewind brought back that this session's pages never had.
   const [extraCards, setExtraCards] = useState<Record<string, any>>({});
   const [confirm, setConfirm] = useState<"block" | "report" | null>(null);
@@ -870,6 +887,22 @@ export default function Discover() {
   }, [storiesByUserId]);
 
   const refusePerk = (feature: Feature, body: any) => {
+    if ((feature === "super_like" || feature === "boost") && body?.upgradeRequired) {
+      setPerkSheet({
+        feature,
+        gate: {
+          ok: false,
+          tier: body?.currentTier ?? "free",
+          limit: null,
+          resetAt: body?.resetAt,
+          line: body?.message,
+          action: body?.action,
+          requiredTierName: body?.requiredTierName,
+          requiredPrice: body?.requiredPrice,
+        },
+      });
+      return;
+    }
     if (body?.requiredTierName) {
       setPerkSheet({
         feature,
@@ -1512,7 +1545,7 @@ export default function Discover() {
         />
         </div>
 
-        <BoostControl perks={perks} onBoost={handleBoost} busy={boosting} />
+        <BoostControl perks={perks} onBoost={handleBoost} onBuy={() => setBuying("boost")} busy={boosting} />
         <div className="flex items-center justify-between px-1 mt-2 mb-8">
           <p className="vf-small text-vf-faint">
             {eligibleForFilter.length - profiles.length + 1} of {eligibleForFilter.length}
@@ -1691,7 +1724,39 @@ export default function Discover() {
       )}
 
       {paywall.sheet}
-      {perkSheet && <RefusalSheet feature={perkSheet.feature} gate={perkSheet.gate} onClose={() => setPerkSheet(null)} />}
+      {perkSheet && (
+        <RefusalSheet
+          feature={perkSheet.feature}
+          gate={perkSheet.gate}
+          onClose={() => setPerkSheet(null)}
+          noPlan={!perkSheet.gate.requiredTierName}
+          buy={perkSheet.feature === "super_like" || perkSheet.feature === "boost"
+            ? {
+                label: perkSheet.feature === "super_like" ? `Or buy one super like · ${singlePrice("super_like")}` : `Or buy one boost · ${singlePrice("boost")}`,
+                onBuy: () => setBuying(perkSheet.feature as "super_like" | "boost"),
+              }
+            : undefined}
+        />
+      )}
+      <PurchaseSheet
+        open={!!buying}
+        onOpenChange={(o) => { if (!o) setBuying(null); }}
+        kind={buying ?? "super_like"}
+        refId={1}
+        title={buying === "boost" ? "Boost" : "Super like"}
+        label={SINGLE_LABEL[buying ?? "super_like"]}
+        cents={SINGLE_PRICE_CENTS[buying ?? "super_like"]}
+        note={buying === "boost"
+          ? "30 minutes at the front of decks near you, starting once it's paid."
+          : `Sent to ${(currentProfile?.displayName || "them").split(/\s+/)[0]} once it's paid. They'll see you first.`}
+        onPaid={() => {
+          const k = buying;
+          setBuying(null);
+          qc.invalidateQueries({ queryKey: ["/api/discover/perks"] });
+          if (k === "boost") handleBoost();
+          else if (k === "super_like") handleSuperLike();
+        }}
+      />
       {celebration}
     </LayoutShell>
   );

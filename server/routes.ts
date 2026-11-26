@@ -62,6 +62,7 @@ import { registerMatchmakerRoutes } from "./crown-matchmaker";
 import { registerCrownTableRoutes } from "./crown-table";
 import { registerPurchaseRoutes, purchaseReturnTo } from "./purchases";
 import { registerDateVoucherRoutes, startDateVoucherSweep } from "./date-vouchers";
+import { registerSinglePurchases, activeLikesPass } from "./single-purchases";
 import { registerDiscoverPerkRoutes, applyBoosts, dropBoosted, undoOrRewind } from "./discover-perks";
 import { recordShown, startMatchStatsSweep } from "./matching";
 import { registerDmExtraRoutes, presentDirectMessages, findByClientId, cleanClientId, isDmMediaKey, stoppedTyping } from "./dm-extras";
@@ -238,6 +239,8 @@ export async function registerRoutes(
   registerCrownTableRoutes(app, getUserId);
   registerPurchaseRoutes(app, getUserId);
   registerDateVoucherRoutes(app, getUserId);
+  // One super like, one boost, 24 hours of "see who liked you" (Part G3).
+  registerSinglePurchases();
   // Rewind, super like and boost (server/discover-perks.ts).
   registerDiscoverPerkRoutes(app, getUserId, withClickReasons);
   // The deck score's daily inputs: reply rates and the popularity cap.
@@ -4805,7 +4808,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         };
       });
 
-      res.json({ likes, totalCount: pending.length, seeWhoAsked: canSee });
+      res.json({ likes, totalCount: pending.length, seeWhoAsked: canSee, likesPassUntil: await activeLikesPass(userId) });
     } catch (e) {
       console.error("Likes incoming error:", e);
       res.status(500).json({ message: "Failed to fetch incoming likes" });

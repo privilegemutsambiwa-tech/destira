@@ -16,6 +16,8 @@ export interface PurchaseKind {
   onPaid(tx: any, pay: { id: number; userId: string; purchaseRef: number | null; amount: number }): Promise<void>;
   /** Where the member goes after paying (e.g. back to the chat). */
   returnTo(ref: number): Promise<string>;
+  /** Bought again and again (a super like): each paid one frees the way for the next. */
+  repeatable?: boolean;
 }
 
 const kinds = new Map<string, PurchaseKind>();

@@ -48,6 +48,8 @@ export const profiles = pgTable("profiles", {
   profileCompletionScore: integer("profile_completion_score").default(0),
   superMatchesRemaining: integer("super_matches_remaining").default(0),
   boostsRemaining: integer("boosts_remaining").default(0),
+  /** A bought 24-hour "see who liked you" pass runs until this (server/single-purchases.ts). */
+  seeLikesUntil: timestamp("see_likes_until"),
   twinQuestionsAnswered: integer("twin_questions_answered").default(0),
   locationLat: decimal("location_lat", { precision: 9, scale: 6 }),
   locationLng: decimal("location_lng", { precision: 9, scale: 6 }),

@@ -3,7 +3,7 @@
 // The price always comes from the kind's quote on the server, never the
 // client. Status is polled through the usual GET /api/payments/:id.
 import type { Express, Request } from "express";
-import { eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { db } from "./db";
 import { payments } from "@shared/schema";
 import { PAYMENT_METHODS } from "@shared/schema";
@@ -20,7 +20,14 @@ export async function initiatePurchase(userId: string, kind: string, ref: number
   const q = await k.quote(userId, ref);
   if ("error" in q) return q;
   // One row per (member, thing, method), reused on retries like plan payments.
-  const key = `${userId}:purchase:${kind}:${ref}:${method}`;
+  // A repeatable kind counts the ones already paid into the key, so a retry
+  // still reuses the pending row but the next purchase gets a new one.
+  let key = `${userId}:purchase:${kind}:${ref}:${method}`;
+  if (k.repeatable) {
+    const [r] = await db.select({ n: count() }).from(payments)
+      .where(and(eq(payments.userId, userId), eq(payments.purchaseKind, kind), eq(payments.status, "paid")));
+    key += `:${Number(r?.n ?? 0)}`;
+  }
   const [existing] = await db.select().from(payments).where(eq(payments.idempotencyKey, key));
   if (existing?.status === "paid") return { error: 409, message: "That's paid for already." } as const;
   const fresh = existing?.createdAt && existing.createdAt.getTime() > Date.now() - 15 * 60e3;
