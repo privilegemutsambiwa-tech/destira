@@ -36,7 +36,7 @@ export const CROWN_PERKS: { title: string; detail: string; status: "live" | "soo
   { title: "Crown Spotlight", detail: "Shown near the top for people who fit you, once a day each, never past anyone's filters.", status: "live" },
   { title: "Direct introductions", detail: "Send a short note with a like, 3 a day. They choose; declining is silent.", status: "live" },
   { title: "Private mode", detail: "Only people you've liked can see you. Turn it on or off here any time.", status: "live" },
-  { title: "Your own matchmaker", detail: "A monthly chat with someone on our team, and hand-picked introductions.", status: "soon" },
+  { title: "Your own matchmaker", detail: "Someone on our team looks after you: a monthly chat, and up to 4 hand-picked introductions a month. Names are shared only when you both say yes.", status: "live" },
   { title: "Crown Table", detail: "A private monthly dinner with other Crown members, and a seat kept for you at official events.", status: "soon" },
 ];
 

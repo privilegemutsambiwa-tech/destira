@@ -19,6 +19,7 @@ import { registerAdminRiskRoutes } from "./risk";
 import { registerAdminFunnelRoutes } from "./funnel";
 import { registerAdminRevenueRoutes } from "./revenue";
 import { registerAdminCrownRoutes } from "./crown";
+import { registerAdminMatchmakerRoutes } from "./matchmaker";
 
 export function registerAdminConsole(app: Express) {
   mountAdminSession(app);
@@ -39,4 +40,5 @@ export function registerAdminConsole(app: Express) {
   registerAdminFunnelRoutes(app);
   registerAdminRevenueRoutes(app);
   registerAdminCrownRoutes(app);
+  registerAdminMatchmakerRoutes(app);
 }

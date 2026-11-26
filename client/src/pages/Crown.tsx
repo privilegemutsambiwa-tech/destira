@@ -1,7 +1,7 @@
 // Destira Crown: what it is, seats left (the real count), and the member's
 // own way in: verify -> apply -> approved by the team -> pay (PlansPay).
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Crown as CrownIcon, Loader2, ShieldCheck } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
@@ -295,6 +295,15 @@ function PerksPanel() {
           Open someone's profile and tap "Introduce yourself" to send a like with a short note. They choose; you won't be told if they decline.
         </p>
       </div>
+      <Link href="/introductions">
+        <span className="flex items-center justify-between gap-3 cursor-pointer" data-testid="link-matchmaker">
+          <span>
+            <span className="block text-[14.5px] text-vf-text">Your matchmaker</span>
+            <span className="block text-[13px] text-vf-muted mt-0.5 leading-[1.45]">Hand-picked introductions, and this month's chat.</span>
+          </span>
+          <span className="text-[13px] font-medium shrink-0" style={{ color: GOLD }}>Open</span>
+        </span>
+      </Link>
     </div>
   );
 }

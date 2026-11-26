@@ -101,6 +101,7 @@ const Circle = screen(() => import("@/pages/Circle"));
 const PlansBoard = screen(() => import("@/pages/PlansBoard"));
 const Vouches = screen(() => import("@/pages/Vouches"));
 const Wingman = screen(() => import("@/pages/Wingman"));
+const Introductions = screen(() => import("@/pages/Introductions"));
 const PublicEvent = screen(() => import("@/pages/PublicEvent"));
 
 // The screens people move between all the time, fetched quietly once someone
@@ -317,6 +318,9 @@ function Router() {
       </Route>
       <Route path="/wingman">
         <ProtectedRoute component={Wingman} />
+      </Route>
+      <Route path="/introductions">
+        <ProtectedRoute component={Introductions} />
       </Route>
       <Route path="/vouches">
         <ProtectedRoute component={Vouches} />

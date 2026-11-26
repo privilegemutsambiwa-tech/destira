@@ -963,6 +963,8 @@ export const crownMembers = pgTable(
     activeUntil: timestamp("active_until"),
     /** Private mode: only people they've liked can see them (server/crown-perks.ts). */
     privateMode: boolean("private_mode").notNull().default(false),
+    /** The console admin (users.id) who looks after this member's introductions. */
+    matchmakerId: varchar("matchmaker_id"),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
   (t) => [index("crown_members_status_idx").on(t.status)],
@@ -1002,6 +1004,55 @@ export const crownIntros = pgTable(
     index("crown_intros_to_idx").on(t.toUserId),
   ],
 );
+
+// Crown matchmaker (server/crown-matchmaker.ts): a team member proposes an
+// introduction between a Crown member and someone who fits them. Nameless on
+// both sides until both say yes; then it's a love match.
+//   proposed -> crown_accepted -> matched
+//            -> declined (by the Crown member)   -> passed (by the other person)
+// Unanswered for MATCHMAKER_ANSWER_DAYS at either step reads as expired.
+export const matchmakerIntros = pgTable(
+  "matchmaker_intros",
+  {
+    id: serial("id").primaryKey(),
+    crownUserId: varchar("crown_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    candidateId: varchar("candidate_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    proposedBy: varchar("proposed_by").notNull(),
+    /** The matchmaker's "why", shown to both. */
+    note: text("note").notNull(),
+    status: text("status").notNull().default("proposed"),
+    crownAnsweredAt: timestamp("crown_answered_at"),
+    candidateAnsweredAt: timestamp("candidate_answered_at"),
+    matchId: integer("match_id"),
+    createdAt: timestamp("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("matchmaker_intros_pair_idx").on(t.crownUserId, t.candidateId),
+    index("matchmaker_intros_crown_idx").on(t.crownUserId, t.createdAt),
+    index("matchmaker_intros_candidate_idx").on(t.candidateId, t.status),
+  ],
+);
+
+// A Crown member asking for this month's chat with their matchmaker.
+// requested -> scheduled (the team's reply, shown to the member) -> done.
+export const matchmakerChats = pgTable(
+  "matchmaker_chats",
+  {
+    id: serial("id").primaryKey(),
+    crownUserId: varchar("crown_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    /** What the member said: what they're looking for, when suits them. */
+    message: text("message").notNull(),
+    status: text("status").notNull().default("requested"),
+    /** The team's answer (a time, how they'll call). The member sees it. */
+    reply: text("reply"),
+    handledBy: varchar("handled_by"),
+    requestedAt: timestamp("requested_at").notNull(),
+    repliedAt: timestamp("replied_at"),
+    doneAt: timestamp("done_at"),
+  },
+  (t) => [index("matchmaker_chats_crown_idx").on(t.crownUserId, t.requestedAt)],
+);
+export type MatchmakerIntro = typeof matchmakerIntros.$inferSelect;
 
 // Each tap on a share action (an event or invite, as a link or a Status
 // card) — so the console can show shares next to the signups they bring.
