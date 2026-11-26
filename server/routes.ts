@@ -3,7 +3,8 @@ import { createServer, type Server } from "http";
 import { storage, PhotoNotFoundError, PhotoTooSmallError, genderMatchesSeeking, type DiscoverCursor } from "./storage";
 import { setupAuth, registerAuthRoutes, authStorage, createSessionUser, hashPassword, verifyPassword } from "./replit_integrations/auth";
 import { z } from "zod";
-import { ai, AI_MODEL, completeText, stripAiWrapper } from "./ai";
+import { completeText, streamText, stripAiWrapper, tidyText } from "./ai";
+import { cannedAboutMe, cannedAiSummary, cannedBio, cannedProfileSummaries, cannedReplies, transcriptRecap } from "./ai-fallbacks";
 import { estimatePersonalityFromAnswers } from "./personality";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
@@ -64,6 +65,7 @@ import { registerPurchaseRoutes, purchaseReturnTo } from "./purchases";
 import { registerDateVoucherRoutes, startDateVoucherSweep } from "./date-vouchers";
 import { registerSinglePurchases, activeLikesPass } from "./single-purchases";
 import { registerEventTicketRoutes, startEventTicketSweep } from "./event-tickets";
+import { registerTwinCoachRoutes } from "./twin-coach";
 import { registerDiscoverPerkRoutes, applyBoosts, dropBoosted, undoOrRewind } from "./discover-perks";
 import { recordShown, startMatchStatsSweep } from "./matching";
 import { registerDmExtraRoutes, presentDirectMessages, findByClientId, cleanClientId, isDmMediaKey, stoppedTyping } from "./dm-extras";
@@ -86,13 +88,12 @@ import { LOOKING_FOR_VALUES } from "@shared/friends";
 import { startReminderSweeps } from "./reminders";
 import { openerFacts, fallbackOpeners } from "./openers";
 import { isCrownPeriod } from "@shared/crown";
-import { DETAILS_SCHEMA, detailFacts, mergeDetails } from "@shared/profile-details";
+import { DETAILS_SCHEMA, mergeDetails } from "@shared/profile-details";
 import { ADVANCED_PREF_KEYS, MATCH_PREFS_SCHEMA, mergePrefs } from "@shared/match-prefs";
 import * as emailTemplates from "./email/templates";
 import { setAdminLockoutHook } from "./admin/auth";
 import { trackActivity } from "./admin/activity";
 import { requestOutcomeMiddleware, recordClientCrash } from "./admin/error-rate";
-import { logLlmCall } from "./admin/llm-log";
 import { runNightlyRollup, backfillRecentMetrics } from "./admin/metrics-rollup";
 import { sendDailyDigest, sendWeeklyDigest } from "./email/digest";
 import { REPORT_CATEGORIES, FEEDBACK_CATEGORIES } from "@shared/admin";
@@ -244,6 +245,8 @@ export async function registerRoutes(
   registerSinglePurchases();
   // Paid event tickets (Part G4).
   registerEventTicketRoutes(app, getUserId);
+  // The dating coach in Twin chat (Twin Part F2).
+  registerTwinCoachRoutes(app, getUserId, (id) => checkAIRateLimit(id));
   // Rewind, super like and boost (server/discover-perks.ts).
   registerDiscoverPerkRoutes(app, getUserId, withClickReasons);
   // The deck score's daily inputs: reply rates and the popularity cap.
@@ -446,7 +449,7 @@ export async function registerRoutes(
           { role: "system", content: `You are an expert personality profiler for a dating app called Destira. Based on the user's answers to soul-mapping questions, create a rich, warm, first-person AI Twin persona description. Write in first person as "I'm [the user]'s AI Twin." Include key values, interests, communication style, what they look for in a partner, and personality traits. Keep it to 2-3 paragraphs.` },
           { role: "user", content: JSON.stringify(answers) },
         ],
-        { maxTokens: 8192 },
+        { maxTokens: 900, feature: "twin_persona", userId },
       );
       const twinPersona = response.text || "A thoughtful person who values authentic connections.";
       res.json({ twinPersona });
@@ -469,13 +472,19 @@ export async function registerRoutes(
           { role: "system", content: `You are polishing a dating app bio for someone named ${profile?.displayName || "the user"}. Keep their authentic voice and core ideas but make it sparkle — tighten the prose, remove filler, add warmth. Return ONLY the polished bio text, no explanations, no quotes. Max 300 characters.` },
           { role: "user", content: bio },
         ],
-        { maxTokens: 512 },
+        { maxTokens: 300, feature: "profile_draft_bio", userId },
       );
       const polished = (response.text || bio).trim().slice(0, 300);
       res.json({ polished });
     } catch (e) {
-      console.error("Polish bio error:", e);
-      res.status(500).json({ message: "Failed to polish bio" });
+      // No AI: a draft from their own answers, for them to edit.
+      console.error("Polish bio error (using a draft from their answers):", (e as Error).message);
+      try {
+        const [profile, structured] = await Promise.all([storage.getProfile(userId), storage.getTwinProfileStructured(userId)]);
+        res.json({ polished: cannedBio(profile, structured), fallback: true });
+      } catch {
+        res.status(500).json({ message: "Failed to polish bio" });
+      }
     }
   });
 
@@ -511,21 +520,15 @@ export async function registerRoutes(
           { role: "system", content: systemPrompt },
           { role: "user", content: `---\n${text}\n---` },
         ],
-        { maxTokens: 512 },
+        { maxTokens: 300, feature: "profile_refine_text", userId },
       );
 
       const refinedText = stripAiWrapper(response.text || text).slice(0, 400) || text;
-      logLlmCall({
-        callType: "profile_refine_text",
-        userId,
-        usageMetadata: response.usage,
-        fallbackInputText: text,
-        fallbackOutputText: refinedText,
-      }).catch(() => {});
       res.json({ ok: true, refinedText });
     } catch (e) {
-      console.error("Refine text error:", e);
-      res.status(500).json({ message: "Failed to refine text" });
+      // No AI: tidy the spacing, capitals and full stops, same words.
+      console.error("Refine text error (tidying instead):", (e as Error).message);
+      res.json({ ok: true, refinedText: tidyText(text).slice(0, 400), fallback: true });
     }
   });
 
@@ -580,8 +583,16 @@ export async function registerRoutes(
           { role: "system", content: `Generate two warm, genuine summaries for a dating profile using all available context (bio, personality answers, Twin memory facts, and conversation themes). Return JSON with: {"aboutSummary": "A 3-4 sentence warm, witty 'About Me' summary that captures their authentic personality and what makes them interesting as a partner", "personalitySummary": "A 3-4 sentence personality passage based on their traits, values, and how they show up in relationships"}. Draw from the memory facts and conversation themes to make it specific and real — avoid generic platitudes.` },
           { role: "user", content: JSON.stringify(contextData) },
         ],
-        { json: true, maxTokens: 8192 },
-      );
+        { json: true, maxTokens: 800, feature: "profile_summaries", userId },
+      ).catch((e) => {
+        console.error("Summary generation AI error (using a draft from their answers):", e.message);
+        return null;
+      });
+      if (!response) {
+        // Not saved: a canned draft shouldn't overwrite anything.
+        const structured = await storage.getTwinProfileStructured(userId);
+        return res.json({ ...cannedProfileSummaries(profile, structured), fallback: true });
+      }
       const summaries = JSON.parse(response.text || "{}");
       await storage.updateProfile(userId, {
         aboutSummary: summaries.aboutSummary,
@@ -664,7 +675,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
             },
             { role: "user", content: JSON.stringify({ answers, twinPersona: profile.twinPersona }) },
           ],
-          { json: true, maxTokens: 8192 },
+          { json: true, maxTokens: 800, feature: "onboarding_structured", userId },
         );
         const extracted = JSON.parse(extraction.text || "{}");
         const structuredUpdates: Partial<TwinProfileStructured> = {
@@ -1768,15 +1779,24 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
             },
             { role: "user", content: JSON.stringify({ targetName: targetProfile?.displayName, transcript: history }) },
           ],
-          { json: true, maxTokens: 600 },
-        );
-        try {
-          const parsed = JSON.parse(completion.text || "{}");
-          lines = Array.isArray(parsed?.lines) ? parsed.lines.slice(0, 5) : [];
-        } catch {
-          lines = [];
+          { json: true, maxTokens: 600, feature: "interview_recap", userId },
+        ).catch((e) => {
+          console.error("Twin talk recap AI error (quoting the transcript):", e.message);
+          return null;
+        });
+        if (completion) {
+          try {
+            const parsed = JSON.parse(completion.text || "{}");
+            lines = Array.isArray(parsed?.lines) ? parsed.lines.slice(0, 5) : [];
+          } catch {
+            lines = [];
+          }
+          // Cached per pair: the recap is written once, not on every view.
+          storage.updateInterviewSummary(interview.id, JSON.stringify({ lines })).catch(() => {});
+        } else {
+          // Not cached, so the real recap replaces it once the AI is back.
+          lines = transcriptRecap(history);
         }
-        storage.updateInterviewSummary(interview.id, JSON.stringify({ lines })).catch(() => {});
       }
 
       // The transcript cap is enforced here, not just hidden in the page — a
@@ -2024,9 +2044,7 @@ ${PRIVACY_GUARDRAIL}`;
 
     // Profile details they filled in (faith, children, marriage plans...),
     // minus any whose category they've closed to their twin.
-    const detailLines = detailFacts(targetProfile.details)
-      .filter((d) => d.cats.every((c) => settings[c] !== "closed"))
-      .map((d) => `- ${d.text}`);
+    const detailLines = disclosure.disclosableDetailLines(targetProfile.details, settings).map((t) => `- ${t}`);
     if (detailLines.length) factsSection += `\n\nProfile details (from their own profile):\n${detailLines.join("\n")}`;
 
     const boundaries = disclosure.forbiddenTopicsSection(settings, directive, firstName);
@@ -2095,7 +2113,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
           },
           { role: "user", content: JSON.stringify(lastFew) },
         ],
-        { json: true, maxTokens: 8192 },
+        { json: true, maxTokens: 1200, feature: "twin_memory", userId },
       );
 
       const result = JSON.parse(completion.text || "{}");
@@ -2172,18 +2190,19 @@ Only include structured_updates fields if the conversation clearly reveals them.
         `What would ${first}'s friends say ${first} is like?`,
       ];
       const systemPrompt = await buildInterviewSystemPrompt(me);
+      let failed = 0;
       const answers = await Promise.all(
         questions.map(async (q) => {
           try {
-            const completion = await completeText([{ role: "system", content: systemPrompt }, { role: "user", content: q }], { maxTokens: 300 });
+            const completion = await completeText([{ role: "system", content: systemPrompt }, { role: "user", content: q }], { maxTokens: 300, feature: "twin_preview", userId });
             const a = await finalizeInterviewReply(completion.text || "", me, q);
-            logLlmCall({ callType: "twin_preview", userId, usageMetadata: completion.usage, fallbackInputText: q, fallbackOutputText: a }).catch(() => {});
             const answer = a.trim() || null;
             // The disclosure layer swapped the reply for the refusal line —
             // flagged so the screen can explain it instead of showing a bare
             // "That's X's to tell you" as someone's first look at their twin.
             return { question: q, answer, withheld: answer === disclosureRefusal(first) };
           } catch {
+            failed++;
             return { question: q, answer: null, withheld: false };
           }
         }),
@@ -2197,7 +2216,9 @@ Only include structured_updates fields if the conversation clearly reveals them.
       } catch {
         /* the suggestion is optional */
       }
-      res.json({ answers, suggestion });
+      // `unavailable`: the twin couldn't be reached, as opposed to having
+      // nothing to say yet. The screen words the two differently.
+      res.json({ answers, suggestion, unavailable: failed === questions.length });
     } catch (e) {
       console.error("Twin preview error:", e);
       res.status(500).json({ message: "Couldn't reach your twin right now" });
@@ -2245,29 +2266,18 @@ Only include structured_updates fields if the conversation clearly reveals them.
           content: h.content,
         }));
 
-        const stream = await ai.chat.completions.create({
-          model: AI_MODEL,
-          messages: [{ role: "system", content: systemPrompt }, ...chatHistory],
-          // 1-3 sentences per the prompt — a small cap keeps worst-case
-          // latency bounded instead of leaving it open to a much longer
-          // generation with no real benefit for a chat reply this short.
-          max_tokens: 300,
-          stream: true,
-        });
+        // 1-3 sentences per the prompt — a small cap keeps worst-case
+        // latency bounded instead of leaving it open to a much longer
+        // generation with no real benefit for a chat reply this short.
+        const streamed = await streamText(
+          [{ role: "system", content: systemPrompt }, ...chatHistory],
+          { maxTokens: 300, feature: "interview_chat", userId },
+          (delta) => res.write(`data: ${JSON.stringify({ type: "delta", content: delta })}\n\n`),
+        );
 
-        let fullResponse = "";
-        for await (const chunk of stream) {
-          const delta = chunk.choices[0]?.delta?.content || "";
-          if (delta) {
-            fullResponse += delta;
-            res.write(`data: ${JSON.stringify({ type: "delta", content: delta })}\n\n`);
-          }
-        }
-
-        fullResponse = await finalizeInterviewReply(fullResponse, targetProfile, message);
+        const fullResponse = await finalizeInterviewReply(streamed.text, targetProfile, message);
         history.push({ role: "assistant", content: fullResponse, ts: new Date().toISOString() });
         await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
-        logLlmCall({ callType: "interview_chat", userId, fallbackInputText: message, fallbackOutputText: fullResponse }).catch(() => {});
 
         res.write(`data: ${JSON.stringify({ type: "done", content: fullResponse })}\n\n`);
         res.end();
@@ -2279,20 +2289,13 @@ Only include structured_updates fields if the conversation clearly reveals them.
 
         const completion = await completeText(
           [{ role: "system", content: systemPrompt }, ...chatHistory],
-          { maxTokens: 300 },
+          { maxTokens: 300, feature: "interview_chat", userId },
         );
 
         let aiResponse = completion.text || "I'd love to tell you more about that in person!";
         aiResponse = await finalizeInterviewReply(aiResponse, targetProfile, message);
         history.push({ role: "assistant", content: aiResponse, ts: new Date().toISOString() });
         await storage.updateInterviewTranscript(interviewId, JSON.stringify(history));
-        logLlmCall({
-          callType: "interview_chat",
-          userId,
-          usageMetadata: completion.usage,
-          fallbackInputText: message,
-          fallbackOutputText: aiResponse,
-        }).catch(() => {});
         res.json({ response: aiResponse });
       }
     } catch (e) {
@@ -2368,16 +2371,20 @@ Only include structured_updates fields if the conversation clearly reveals them.
           },
           { role: "user", content: JSON.stringify(context) },
         ],
-        { json: true, maxTokens: 400 },
+        { json: true, maxTokens: 400, feature: opening ? "chat_openers" : "chat_reply", userId },
       ).catch((e) => {
-        // Openers still come from the profile when the AI is down.
-        if (!opening) throw e;
-        console.error("Chat suggest AI error (using profile openers):", e);
-        return { text: "" };
+        // Openers still come from the profile when the AI is down; replies
+        // from a few safe, general ones.
+        console.error("Chat suggest AI error (using canned options):", e.message);
+        return null;
       });
+      if (!completion && !opening) {
+        const lastTheirs = [...recent].reverse().find((m) => m.from === "them")?.text;
+        return res.json({ options: cannedReplies(lastTheirs), fallback: true });
+      }
       let options: string[] = [];
       try {
-        const parsed = JSON.parse(completion.text || "{}");
+        const parsed = JSON.parse(completion?.text || "{}");
         if (Array.isArray(parsed?.options)) options = parsed.options.map((o: any) => String(o).trim()).filter(Boolean).slice(0, 3);
       } catch {}
       // No AI answer: openers written from the same facts.
@@ -2431,29 +2438,16 @@ Only include structured_updates fields if the conversation clearly reveals them.
           { role: "user" as const, content: message },
         ];
 
-        const stream = await ai.chat.completions.create({
-          model: AI_MODEL,
-          messages: [{ role: "system", content: systemPrompt }, ...chatMsgs],
-          max_tokens: 300,
-          presence_penalty: 0.3,
-          frequency_penalty: 0.3,
-          stream: true,
-        });
+        const streamed = await streamText(
+          [{ role: "system", content: systemPrompt }, ...chatMsgs],
+          { maxTokens: 300, presencePenalty: 0.3, frequencyPenalty: 0.3, feature: "twin_chat", userId },
+          (delta) => res.write(`data: ${JSON.stringify({ type: "delta", content: delta })}\n\n`),
+        );
 
-        let fullResponse = "";
-        for await (const chunk of stream) {
-          const delta = chunk.choices[0]?.delta?.content || "";
-          if (delta) {
-            fullResponse += delta;
-            res.write(`data: ${JSON.stringify({ type: "delta", content: delta })}\n\n`);
-          }
-        }
-
-        fullResponse = detectPII(fullResponse);
+        const fullResponse = detectPII(streamed.text);
         await storage.addTwinMemory(userId, fullResponse, "assistant");
 
         extractMemoryAfterChat(userId, [{ role: "user", content: message }, { role: "assistant", content: fullResponse }]).catch(() => {});
-        logLlmCall({ callType: "twin_chat", userId, fallbackInputText: message, fallbackOutputText: fullResponse }).catch(() => {});
 
         res.write(`data: ${JSON.stringify({ type: "done", content: fullResponse })}\n\n`);
         res.end();
@@ -2468,7 +2462,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
 
         const completion = await completeText(
           [{ role: "system", content: systemPrompt }, ...chatMsgs],
-          { maxTokens: 300, presencePenalty: 0.3, frequencyPenalty: 0.3 },
+          { maxTokens: 300, presencePenalty: 0.3, frequencyPenalty: 0.3, feature: "twin_chat", userId },
         );
 
         let aiResponse = completion.text || "I hear you. Tell me more about what's on your mind.";
@@ -2476,13 +2470,6 @@ Only include structured_updates fields if the conversation clearly reveals them.
         await storage.addTwinMemory(userId, aiResponse, "assistant");
 
         extractMemoryAfterChat(userId, [{ role: "user", content: message }, { role: "assistant", content: aiResponse }]).catch(() => {});
-        logLlmCall({
-          callType: "twin_chat",
-          userId,
-          usageMetadata: completion.usage,
-          fallbackInputText: message,
-          fallbackOutputText: aiResponse,
-        }).catch(() => {});
 
         res.json({ response: aiResponse });
       }
@@ -2668,8 +2655,12 @@ Only include structured_updates fields if the conversation clearly reveals them.
           { role: "system", content: `Generate an attractive, emotionally intelligent, and dating-appropriate "About Me" section (2-3 paragraphs) for a Destira user. Base this solely on the provided profile data and question answers. Highlight their positive traits, interests, and what they seek in a partner. Ensure it is engaging and encourages connection. Strictly adhere to the privacy guardrail. Do not include any PII, exact locations, or sensitive information.\n\n${PRIVACY_GUARDRAIL}` },
           { role: "user", content: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName, structured: structured || {}, answers: answers.slice(0, 20).map(a => a.answerText) }) },
         ],
-        { maxTokens: 8192 },
-      );
+        { maxTokens: 700, feature: "profile_about_me", userId },
+      ).catch((e) => {
+        console.error("About me AI error (using a draft from their answers):", e.message);
+        return null;
+      });
+      if (!completion) return res.json({ aboutMeText: cannedAboutMe(profile, structured), version: Date.now(), fallback: true });
 
       let aboutMeText = completion.text || "";
       aboutMeText = detectPII(aboutMeText);
@@ -2694,8 +2685,12 @@ Only include structured_updates fields if the conversation clearly reveals them.
           { role: "system", content: `Generate a concise (2-4 lines) and elegant AI summary for a Destira user's profile. This summary should capture their core personality, key values, and relationship style, designed to entice potential matches. Base it solely on the provided structured profile. Strictly adhere to the privacy guardrail. Do not include any PII or sensitive content.\n\n${PRIVACY_GUARDRAIL}` },
           { role: "user", content: JSON.stringify({ bio: profile.bio, personality: profile.personalityProfile, displayName: profile.displayName, structured: structured || {} }) },
         ],
-        { maxTokens: 8192 },
-      );
+        { maxTokens: 300, feature: "profile_ai_summary", userId },
+      ).catch((e) => {
+        console.error("AI summary error (using a summary from their answers):", e.message);
+        return null;
+      });
+      if (!completion) return res.json({ aiSummaryText: cannedAiSummary(profile, structured), version: Date.now(), fallback: true });
 
       let aiSummaryText = completion.text || "";
       aiSummaryText = detectPII(aiSummaryText);
@@ -2813,7 +2808,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
               },
               { role: "user", content: JSON.stringify(answers) },
             ],
-            { maxTokens: 8192 },
+            { maxTokens: 900, feature: "twin_persona", userId },
           )
             .then((r) => storage.updateProfile(userId, { twinPersona: r.text || "" }))
             .then(() => extractStructuredFromOnboarding(userId, answers))
@@ -3016,8 +3011,13 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
           },
           { role: "user", content: JSON.stringify({ bio: profile.bio, personality, twinPersona: profile.twinPersona, answers: answers.map(a => a.answerText) }) },
         ],
-        { json: true, maxTokens: 8192 },
-      );
+        { json: true, maxTokens: 800, feature: "twin_extract_profile", userId },
+      ).catch((e) => {
+        console.error("Profile extraction AI error (keeping what's there):", e.message);
+        return null;
+      });
+      // No AI: leave the structured profile as it is rather than blank it.
+      if (!completion) return res.json({ ...((await storage.getTwinProfileStructured(userId)) ?? {}), fallback: true });
 
       const result = JSON.parse(completion.text || "{}");
       const updated = await storage.upsertTwinProfileStructured(userId, {

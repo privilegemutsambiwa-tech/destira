@@ -60,7 +60,7 @@ export async function estimatePersonalityFromAnswers(
       // reasoning before the JSON even with response_format json_object,
       // truncating mid-object often enough to matter (matches
       // extractMemoryAfterChat's budget for the same reason).
-      { json: true, maxTokens: 2000 },
+      { json: true, maxTokens: 1200, feature: "personality_estimate" },
     );
     return coerceTraits(JSON.parse(completion.text || "{}"));
   } catch (e) {

@@ -229,7 +229,7 @@ export function detailFacts(d: ProfileDetails | null | undefined): { text: strin
   }
   if (said(d.hasChildren)) f.push({ text: `Children: ${label(HAS_CHILDREN_OPTIONS, d.hasChildren)}`, cats: ["children", "family"] });
   if (said(d.wantsChildren)) f.push({ text: `Wants children: ${label(WANTS_CHILDREN_OPTIONS, d.wantsChildren)}`, cats: ["children"] });
-  if (said(d.marriage)) f.push({ text: `Marriage: ${label(MARRIAGE_OPTIONS, d.marriage)}`, cats: [] });
+  if (said(d.marriage)) f.push({ text: `Marriage: ${label(MARRIAGE_OPTIONS, d.marriage)}`, cats: ["relationship_history"] });
   if (d.languages?.length) f.push({ text: `Languages: ${d.languages.map((l) => LANG_NAME[l]).join(", ")}`, cats: [] });
   if (said(d.education)) f.push({ text: `Education: ${label(EDUCATION_OPTIONS, d.education)}`, cats: [] });
   if (d.job) f.push({ text: `Work: ${d.job}`, cats: ["money"] });

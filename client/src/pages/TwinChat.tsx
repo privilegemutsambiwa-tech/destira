@@ -23,6 +23,7 @@ import { useProfile, usePhotos } from "@/hooks/use-profiles";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
+import { CoachBar, CoachCard, WriterCard, type CoachResult } from "@/components/twin-coach";
 
 type MessageStatus = "sending" | "sent" | "delivered";
 
@@ -33,6 +34,8 @@ interface ChatMessage {
   status: MessageStatus;
   timestamp: Date;
   quickReplies?: string[];
+  /** A dating-coach answer: shown in the chat, never saved to twin memory. */
+  coach?: CoachResult;
 }
 
 // One a day, the same for everyone that day: a gentle way in when the
@@ -536,6 +539,22 @@ export default function TwinChat() {
     handleSend(reply);
   };
 
+  // The coach's answer goes into the chat after a short line saying what
+  // was asked. Neither is sent to the twin or kept after you leave.
+  const handleCoachResult = (r: CoachResult) => {
+    const now = Date.now();
+    const asked =
+      r.mode === "date"
+        ? `Plan a first date${r.plan.withName ? ` with ${r.plan.withName}` : ""}`
+        : `${r.mode === "reply" ? "Help me reply to" : "Is this a scam?"}\n“${r.pasted.length > 280 ? `${r.pasted.slice(0, 279)}…` : r.pasted}”`;
+    setMessages((prev) => [
+      ...prev,
+      { id: `coach-q-${now}`, role: "user", content: asked, status: "delivered", timestamp: new Date() },
+      { id: `coach-a-${now}`, role: "assistant", content: "", status: "delivered", timestamp: new Date(), coach: r },
+    ]);
+    setTimeout(scrollToBottom, 50);
+  };
+
   return (
     <div className="h-dvh flex flex-col bg-vf-ink">
       {/* This is the one place in the app that's unambiguously "inside the
@@ -622,6 +641,9 @@ export default function TwinChat() {
       <div className="flex-1 flex min-h-0">
         <div className="flex-1 flex flex-col min-w-0">
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="max-w-xl mx-auto">
+              <WriterCard />
+            </div>
             {messages.length === 0 && !isTyping && (
               <div className="text-center py-12 px-2" data-testid="twin-empty">
                 {/* The most intimate screen (§7.12): calm, nearly bare, the
@@ -672,7 +694,7 @@ export default function TwinChat() {
                     className={`flex ${isMe ? "justify-end" : "justify-start"}`}
                     data-testid={`message-${msg.id}`}
                   >
-                    <div className="max-w-[80%]">
+                    <div className={msg.coach ? "w-full max-w-[min(92%,520px)]" : "max-w-[80%]"}>
                       {!isMe && (
                         <div className="flex items-center gap-1.5 ml-3 mb-1">
                           <TwinAvatar url={twinAvatarUrl} size={14} />
@@ -686,7 +708,7 @@ export default function TwinChat() {
                             : "rounded-[20px] rounded-bl-[6px] border border-vf-mint/25 bg-vf-mint/[0.08] text-vf-text"
                         }`}
                       >
-                        {msg.content}
+                        {msg.coach ? <CoachCard result={msg.coach} /> : msg.content}
                       </div>
                       <div
                         className={`flex items-center gap-1 mt-1 ${
@@ -730,6 +752,7 @@ export default function TwinChat() {
           </div>
 
           <div className="p-4 border-t border-vf-line bg-vf-ink shrink-0">
+            <CoachBar disabled={isStreaming} onResult={handleCoachResult} />
             <form
               className="flex gap-2 max-w-4xl mx-auto"
               onSubmit={(e) => {

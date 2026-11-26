@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, Plus, X, LogOut, Camera, ChevronRight, Eye, Images, MessageSquareQuote, Pencil, Settings as SettingsIcon, Gift, Gem, ListChecks } from "lucide-react";
 import { detailChips } from "@shared/profile-details";
+import { PROMPT_BANK, WRITER_DRAFT_KEY, type WriterDraft } from "@shared/twin-writer";
 import { CrownBadge } from "@/components/crown-badge";
 import { AddStoryButton, OwnStoryViewer, type OwnStory } from "@/components/story-viewer";
 import { RefineWithAI } from "@/components/refine-with-ai";
@@ -31,17 +32,6 @@ import { avatarColor } from "@/lib/avatar-color";
 const MIN_PHOTOS_BEFORE_NUDGE = 3;
 
 const NUDGE_KEY = "vf_referral_nudge_dismissed";
-
-const PROMPT_BANK = [
-  "The last thing that made me change my mind",
-  "A small thing I'd never compromise on",
-  "What I'm actually looking for here",
-  "Something I could talk about for an hour",
-  "The way to my good side",
-  "A quiet Sunday, done right",
-  "What my closest friend would warn you about",
-  "I get unreasonably excited about",
-];
 
 /** Shown once the user is clearly enjoying it (readiness > 60) and hasn't
  *  referred anyone yet. Dismissal persists. */
@@ -283,6 +273,27 @@ export default function Profile() {
   const [bioDrafting, setBioDrafting] = useState(false);
 
   const [promptEditor, setPromptEditor] = useState<{ index: number; q: string; a: string } | null>(null);
+  // A draft from the twin's profile writer (Twin chat) opens in the editor
+  // here, unsaved: it only reaches the profile when they press Save.
+  useEffect(() => {
+    if (!profile) return;
+    let draft: WriterDraft | null = null;
+    try {
+      draft = JSON.parse(sessionStorage.getItem(WRITER_DRAFT_KEY) || "null");
+      sessionStorage.removeItem(WRITER_DRAFT_KEY);
+    } catch {}
+    if (!draft?.text) return;
+    const scrollTo = (id: string) => setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+    if (draft.kind === "bio") {
+      setBioValue(draft.text);
+      setBioOpen(true);
+      scrollTo("profile-bio");
+    } else {
+      const count = Array.isArray(profile.prompts) ? profile.prompts.length : 0;
+      setPromptEditor({ index: Math.min(count, 2), q: draft.q, a: draft.text });
+      scrollTo("profile-prompts");
+    }
+  }, [!!profile]);
 
   const { data: photos } = useQuery<any[]>({
     queryKey: ["/api/photos", user?.id],

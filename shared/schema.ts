@@ -2414,6 +2414,8 @@ export const llmCallLog = pgTable(
     tokensIn: integer("tokens_in"),
     tokensOut: integer("tokens_out"),
     costUsd: decimal("cost_usd", { precision: 10, scale: 6 }),
+    latencyMs: integer("latency_ms"),
+    outcome: text("outcome").default("ok"), // ok | error (the feature used its fallback)
     createdAt: timestamp("created_at").defaultNow(),
   },
   (t) => [index("llm_call_log_type_created_idx").on(t.callType, t.createdAt)],

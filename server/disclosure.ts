@@ -10,6 +10,7 @@
 //      not logged and sent.
 
 import { completeText } from "./ai";
+import { detailFacts, type ProfileDetails } from "@shared/profile-details";
 import {
   DISCLOSURE_CATEGORIES,
   DISCLOSURE_CATEGORY_KEYS,
@@ -87,6 +88,15 @@ export function withheldStructuredFields(settings: DisclosureSettings): Set<stri
     if (cats.some((c) => settings[c] === "closed")) out.add(field);
   }
   return out;
+}
+
+/** The Part C profile details (faith, children, marriage plans, work...) the
+ *  twin may be told: only what the member filled in, never "prefer not to
+ *  say", and none whose category they've closed. */
+export function disclosableDetailLines(details: ProfileDetails | null | undefined, settings: DisclosureSettings): string[] {
+  return detailFacts(details)
+    .filter((d) => d.cats.every((c) => settings[c] !== "closed"))
+    .map((d) => d.text);
 }
 
 // ── layer 2: the forbidden-topics prompt block ──────────────────────────
@@ -199,16 +209,16 @@ export function scrubReply(
 const CLOSED_KEYWORDS: Record<string, string[]> = {
   // "ex" alone used to false-positive on "next", "expect", "exactly" — every
   // one of those triggered the extra judge call for no reason.
-  relationship_history: ["exes", "past relationship", "last relationship", "previous partner", "divorce", "breakup"],
-  children: ["kids", "children", "have a child", "want kids", "become a parent"],
-  religion: ["religion", "church", "mosque", "christian", "muslim", "faith", "believe in god", "pray"],
+  relationship_history: ["exes", "past relationship", "last relationship", "previous partner", "divorce", "breakup", "marry", "married", "marriage", "wedding"],
+  children: ["kids", "children", "have a child", "want kids", "become a parent", "a baby"],
+  religion: ["religion", "religious", "church", "mosque", "christian", "muslim", "faith", "believe in god", "pray", "apostolic", "pentecostal", "catholic", "methodist", "anglican", "sda", "seventh-day", "denomination"],
   politics: ["politic", "vote", "party", "government", "election", "left wing", "right wing"],
   sexuality: ["sexual", "orientation", "straight", "gay", "bi ", "bisexual", "in bed", "kink"],
   health: ["health", "illness", "diagnos", "depress", "anxiety", "therapy", "medication", "disability", "adhd", "autis"],
-  money: ["salary", "income", "earn", "how much do", "job title", "employer", "net worth", "rich", "broke"],
+  money: ["salary", "income", "earn", "how much do", "job", "employer", "net worth", "rich", "broke", "for work", "for a living", "what does she do", "what does he do", "what do they do"],
   family: ["family", "parents", "siblings", "mother", "father", "live with", "who do you live"],
-  substances: ["drink", "alcohol", "smoke", "weed", "drugs", "sober", "party hard"],
-  body: ["weight", "how much do you weigh", "body count", "measurements", "how tall", "figure"],
+  substances: ["drink", "alcohol", "smoke", "smoking", "weed", "drugs", "sober", "party hard", "beer"],
+  body: ["weight", "how much do you weigh", "body count", "measurements", "how tall", "height", "figure"],
   precise_location: ["where do you live", "which suburb", "your address", "where exactly", "what school", "which campus", "where do you work"],
   trauma: ["trauma", "abuse", "assault", "grief", "lost someone", "recovery", "survivor"],
 };
@@ -250,7 +260,7 @@ export async function judgeReply(
         { role: "system", content: sys },
         { role: "user", content: reply.slice(0, 2000) },
       ],
-      { json: true, maxTokens: 20 },
+      { json: true, maxTokens: 20, feature: "disclosure_judge" },
     );
     const parsed = JSON.parse(r.text || "{}");
     return parsed.leak === true;
@@ -277,7 +287,7 @@ export async function classifySensitivity(texts: string[]): Promise<(string[] | 
         { role: "system", content: sys },
         { role: "user", content: texts.map((t, i) => `${i}. ${t}`).join("\n").slice(0, 12000) },
       ],
-      { json: true, maxTokens: 2048 },
+      { json: true, maxTokens: 1200, feature: "disclosure_classify" },
     );
     const parsed = JSON.parse(r.text || "{}");
     const byIndex = new Map<number, string[]>();

@@ -3,7 +3,7 @@
 import type { Express } from "express";
 import { db } from "../db";
 import { reports, feedback, payments, metricDaily, events, llmCallLog, verificationRequests } from "@shared/schema";
-import { eq, count, and, inArray, gte, lt, desc, asc, like, sum } from "drizzle-orm";
+import { eq, count, and, inArray, gte, lt, desc, asc, like, sum, sql } from "drizzle-orm";
 import { adminRoute } from "./auth";
 import { SAFETY_CATEGORIES, REPORT_CATEGORY_LABEL, FEEDBACK_CATEGORY_LABEL } from "@shared/admin";
 import { LIMITS } from "@shared/entitlements";
@@ -149,18 +149,28 @@ export async function tileDetail(tile: string): Promise<TileDetail | null> {
       const start = new Date(`${isoDaysAgo(1)}T00:00:00.000Z`);
       const end = new Date(start.getTime() + 86400000);
       const list = await db
-        .select({ callType: llmCallLog.callType, cost: sum(llmCallLog.costUsd), n: count() })
+        .select({
+          callType: llmCallLog.callType,
+          cost: sum(llmCallLog.costUsd),
+          n: count(),
+          avgMs: sql<number>`avg(${llmCallLog.latencyMs})`,
+          failed: sql<number>`count(*) filter (where ${llmCallLog.outcome} = 'error')`,
+        })
         .from(llmCallLog)
         .where(and(gte(llmCallLog.createdAt, start), lt(llmCallLog.createdAt, end)))
         .groupBy(llmCallLog.callType);
       return {
         title: "AI spend yesterday (estimated)",
-        intro: "Which features used the AI, most expensive first. Estimated from token counts, not billed amounts.",
+        intro: "Which features used the AI, most expensive first, with how long a reply took on average and how often the AI failed and the feature fell back to its canned answer. Cost is estimated from token counts, not billed amounts.",
         rows: list
           .sort((a, b) => Number(b.cost ?? 0) - Number(a.cost ?? 0))
           .map((r) => ({
             title: r.callType.replace(/_/g, " "),
-            subtitle: `$${Number(r.cost ?? 0).toFixed(4)} across ${Number(r.n)} call${Number(r.n) === 1 ? "" : "s"}`,
+            subtitle: [
+              `$${Number(r.cost ?? 0).toFixed(4)} across ${Number(r.n)} call${Number(r.n) === 1 ? "" : "s"}`,
+              r.avgMs != null ? `${(Number(r.avgMs) / 1000).toFixed(1)}s average` : null,
+              Number(r.failed) > 0 ? `${Number(r.failed)} fell back` : null,
+            ].filter(Boolean).join(" · "),
           })),
         empty: "No AI calls were logged yesterday.",
         viewAll: { href: "/console/metrics", label: "Open AI cost metrics" },

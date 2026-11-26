@@ -1,9 +1,7 @@
-// Best-effort LLM spend logging. Wraps the handful of highest-volume call
-// sites (twin chat, interview chat) — NOT every AI call in routes.ts yet
-// (about-me / summary generation, memory extraction, disclosure
-// classify/judge are still unlogged). The aggregate daily number this
-// produces is real; a per-call-type breakdown is a deliberate v2, not built
-// here — see the build report.
+// Best-effort LLM spend logging, one row per call, named by feature. Every
+// call through server/ai.ts that passes `feature` lands here with its
+// latency and whether it worked; the console's AI spend tile breaks it down
+// per feature.
 //
 // Cost is ESTIMATED: from the response's usage when the SDK returns one,
 // else a rough chars/4 approximation, always at the published per-token
@@ -21,6 +19,10 @@ export async function logLlmCall(opts: {
   usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } | null;
   fallbackInputText?: string;
   fallbackOutputText?: string;
+  /** Wall time of the call, start to last token. */
+  latencyMs?: number;
+  /** "ok", or "error" when the provider failed and the feature fell back. */
+  outcome?: "ok" | "error";
 }) {
   try {
     let tokensIn = opts.usageMetadata?.promptTokenCount;
@@ -36,6 +38,8 @@ export async function logLlmCall(opts: {
       tokensIn: tokensIn ?? null,
       tokensOut: tokensOut ?? null,
       costUsd: costUsd.toFixed(6),
+      latencyMs: opts.latencyMs ?? null,
+      outcome: opts.outcome ?? "ok",
     });
   } catch (e) {
     console.error("[llm-log] failed to write:", e);
