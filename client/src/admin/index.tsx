@@ -23,6 +23,7 @@ import AdminCrown from "./AdminCrown";
 import AdminMatchmaker from "./AdminMatchmaker";
 import AdminCrownTable from "./AdminCrownTable";
 import AdminDateOnMe from "./AdminDateOnMe";
+import AdminTickets from "./AdminTickets";
 import AdminOfficialStatus from "./AdminOfficialStatus";
 import AdminEmailConfig from "./AdminEmailConfig";
 import AdminTeam from "./AdminTeam";
@@ -92,6 +93,7 @@ function AdminApp() {
         <Route path="/console/matchmaker" component={AdminMatchmaker} />
         <Route path="/console/crown-table" component={AdminCrownTable} />
         <Route path="/console/date-on-me" component={AdminDateOnMe} />
+        <Route path="/console/tickets" component={AdminTickets} />
         <Route path="/console/growth" component={AdminGrowth} />
         <Route path="/console/status" component={AdminOfficialStatus} />
         <Route path="/console/partners" component={AdminPartners} />

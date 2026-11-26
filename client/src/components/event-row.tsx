@@ -27,7 +27,7 @@ export const BUTTON_CLASSES: Record<ButtonVariant, string> = {
 export function eventActionState(
   event: EventItem,
   isHost: boolean,
-): { label: string; variant: ButtonVariant; kind: "attend" | "cancel" | "manage" | null } {
+): { label: string; variant: ButtonVariant; kind: "attend" | "cancel" | "manage" | "ticket" | null } {
   const { resonance, myStatus, seatModel, seatCount } = event;
   const isFull = seatModel === "capped" && seatCount != null && resonance.goingCount >= seatCount;
 
@@ -41,6 +41,11 @@ export function eventActionState(
     };
   }
   if (myStatus === "requested") return { label: "Requested", variant: "gold-ghost", kind: "cancel" };
+  // Paid tickets (shared/event-tickets.ts): the seat comes with a ticket.
+  if (event.costModel === "ticket" && event.ticketCents != null) {
+    if (isFull) return { label: "Sold out", variant: "ghost", kind: null };
+    return { label: `Ticket · $${(event.ticketCents / 100).toFixed(2)}`, variant: "solid", kind: "ticket" };
+  }
   if (seatModel === "curated") return { label: "Request seat", variant: "gold-outline", kind: "attend" };
   if (isFull) return { label: "Join waitlist", variant: "ghost", kind: "attend" };
   return { label: "Save a seat", variant: "solid", kind: "attend" };
@@ -137,6 +142,7 @@ export function EventRow({ event, groupName, isHost, pending, onOpen, onAttend, 
     state.kind === "attend" ? onAttend :
     state.kind === "cancel" ? onCancel :
     state.kind === "manage" ? onManage :
+    state.kind === "ticket" ? onOpen :
     undefined;
 
   const metaParts = [
@@ -172,6 +178,11 @@ export function EventRow({ event, groupName, isHost, pending, onOpen, onAttend, 
         {event.isOfficial && <div className="mb-1.5"><OfficialBadge sponsorName={event.sponsorName} /></div>}
         <div className="text-[17.5px] text-vf-text truncate">{event.title}</div>
         <div className="text-[13px] text-vf-muted mt-1 truncate">{metaParts.join(" · ")}</div>
+        {event.costModel === "ticket" && event.ticketCents != null && (
+          <div className="font-mono text-[10px] mt-2 uppercase tracking-[0.12em] text-vf-faint truncate" data-testid={`event-ticket-${event.id}`}>
+            {`Ticket · $${(event.ticketCents / 100).toFixed(2)} · paid through Destira, your seat once it's paid`}
+          </div>
+        )}
         {event.costModel === "contribute" && event.contributionAmount != null && (
           <div className="font-mono text-[10px] mt-2 uppercase tracking-[0.12em] text-vf-faint truncate" data-testid={`event-contribution-${event.id}`}>
             {`Contribution · $${event.contributionAmount} · settled in person on the day · Destira never handles it`}
@@ -234,6 +245,7 @@ export function FeaturedEventRow({ event, groupName, isHost, pending, onOpen, on
     state.kind === "attend" ? onAttend :
     state.kind === "cancel" ? onCancel :
     state.kind === "manage" ? onManage :
+    state.kind === "ticket" ? onOpen :
     undefined;
 
   const metaParts = [
@@ -322,6 +334,7 @@ export function EventCard({ event, groupName, isHost, pending, onOpen, onAttend,
     state.kind === "attend" ? onAttend :
     state.kind === "cancel" ? onCancel :
     state.kind === "manage" ? onManage :
+    state.kind === "ticket" ? onOpen :
     undefined;
   const d = new Date(event.startsAt);
   const weekday = d.toLocaleDateString("en-GB", { weekday: "short" }).toUpperCase();
@@ -382,6 +395,11 @@ export function EventCard({ event, groupName, isHost, pending, onOpen, onAttend,
           {event.costModel === "contribute" && event.contributionAmount != null && (
             <div className="font-mono text-[10px] mt-1.5 uppercase tracking-[0.12em] text-vf-faint truncate">
               Contribution ${event.contributionAmount} · paid in person
+            </div>
+          )}
+          {event.costModel === "ticket" && event.ticketCents != null && (
+            <div className="font-mono text-[10px] mt-1.5 uppercase tracking-[0.12em] text-vf-faint truncate">
+              Ticket ${(event.ticketCents / 100).toFixed(2)} · paid through Destira
             </div>
           )}
         </div>

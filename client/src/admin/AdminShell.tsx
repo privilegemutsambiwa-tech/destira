@@ -99,6 +99,7 @@ const NAV = [
   { href: "/console/matchmaker", label: "Matchmaker", badgeKey: "matchmakerChats" as const },
   { href: "/console/crown-table", label: "Crown Table" },
   { href: "/console/date-on-me", label: "Date on me", badgeKey: "dateOnMeRefunds" as const },
+  { href: "/console/tickets", label: "Tickets", badgeKey: "ticketsToAction" as const },
   { href: "/console/events/official", label: "Official events" },
   { href: "/console/status", label: "Destira status" },
   { href: "/console/partners", label: "Venue partners" },
@@ -305,6 +306,7 @@ type OverviewSnapshot = {
   crownApplications: number;
   matchmakerChats: number;
   dateOnMeRefunds: number;
+  ticketsToAction: number;
 };
 
 export function AdminShell({ role, email, children }: { role: string; email?: string | null; children: React.ReactNode }) {
@@ -342,6 +344,7 @@ export function AdminShell({ role, email, children }: { role: string; email?: st
         overview.crownApplications > 0 ? { label: "Crown applications", n: overview.crownApplications } : null,
         overview.matchmakerChats > 0 ? { label: "matchmaker chats asked for", n: overview.matchmakerChats } : null,
         overview.dateOnMeRefunds > 0 ? { label: "Date on me refunds to send", n: overview.dateOnMeRefunds } : null,
+        overview.ticketsToAction > 0 ? { label: "ticket refunds and host payouts", n: overview.ticketsToAction } : null,
       ].filter(Boolean) as { label: string; n: number }[])
     : [];
 

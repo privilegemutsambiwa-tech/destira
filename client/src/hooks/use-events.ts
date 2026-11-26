@@ -52,8 +52,11 @@ export interface EventItem {
   locationTier?: "venue_verified" | "venue_public_unverified" | "private_residence";
   addressLine?: string | null;
   addressWithheld?: boolean;
-  costModel?: "free_hosted" | "contribute" | "pay_own_way";
+  costModel?: "free_hosted" | "contribute" | "pay_own_way" | "ticket";
   contributionAmount?: number | null;
+  /** Paid tickets (shared/event-tickets.ts): the price, and the host's payout wallet (host only). */
+  ticketCents?: number | null;
+  payoutNumber?: string | null;
   contributionNote?: string | null;
   contributionCurrency?: string;
   minAttendees?: number | null;
@@ -175,7 +178,7 @@ export function useEventSearch(params: EventSearchParams, enabled: boolean) {
   });
 }
 
-export type EventCostModel = "free_hosted" | "contribute" | "pay_own_way";
+export type EventCostModel = "free_hosted" | "contribute" | "pay_own_way" | "ticket";
 export type EventLocationTier = "venue_verified" | "venue_public_unverified" | "private_residence";
 
 export interface HostEventInput {
@@ -205,6 +208,8 @@ export interface HostEventInput {
   costModel?: EventCostModel;
   contributionAmount?: number | null;
   contributionNote?: string;
+  ticketCents?: number | null;
+  payoutNumber?: string;
   contactPhone?: string;
   contactWhatsapp?: string;
 }

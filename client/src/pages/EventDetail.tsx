@@ -25,6 +25,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { PurchaseSheet } from "@/components/purchase-sheet";
+import { HOST_PAYOUT_DAYS, TICKET_FEE_PERCENT, ticketPrice, type HostTicketSummary } from "@shared/event-tickets";
 
 function toLocalInput(dateStr: string): string {
   const d = new Date(dateStr);
@@ -176,6 +178,9 @@ export default function EventDetail({ params }: { params: { id: string } }) {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareLink, setShareLink] = useState("");
   const [seatJustSaved, setSeatJustSaved] = useState(false);
+  // Paid tickets (shared/event-tickets.ts): buy one, then the seat is yours.
+  const [buyingTicket, setBuyingTicket] = useState(false);
+  const [ticketBusy, setTicketBusy] = useState(false);
   const { data: myProfile } = useProfile();
   const autoRsvpTried = useRef(false);
   const [makingCard, setMakingCard] = useState(false);
@@ -388,8 +393,29 @@ export default function EventDetail({ params }: { params: { id: string } }) {
   const state = eventActionState(event, isHost);
   const pending = attend.isPending || cancel.isPending;
 
+  const refreshEvent = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/events", event.id] });
+    queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+  };
+  // Someone who already has a ticket (and gave up the seat) takes it back
+  // without paying again; everyone else buys one.
+  const takeTicketSeat = async () => {
+    setTicketBusy(true);
+    try {
+      const res = await fetch(`/api/events/${event.id}/attend`, { method: "POST", credentials: "include" });
+      if (res.status === 402) return setBuyingTicket(true);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return toast({ title: body?.message || "Couldn't save your seat", variant: "destructive" });
+      refreshEvent();
+      toast({ title: body.status === "going" ? "Your seat is back" : "You're on the waitlist", description: "You already have a ticket." });
+    } finally {
+      setTicketBusy(false);
+    }
+  };
+
   const runAction = () => {
-    if (state.kind === "attend") attend.mutate({ eventId: event.id, seatModel: event.seatModel });
+    if (state.kind === "ticket") void takeTicketSeat();
+    else if (state.kind === "attend") attend.mutate({ eventId: event.id, seatModel: event.seatModel });
     else if (state.kind === "cancel") cancel.mutate(event.id);
     // 'manage' has no action here yet — this IS the host's page. Host tooling
     // (promote/decline for curated events) is a separate follow-up.
@@ -596,7 +622,9 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                 <AvatarStack people={event.resonance.notableAttendees} size={24} />
                 <span className="text-[13px] text-vf-text">{goingLine(event)}</span>
               </div>
-              <div className="text-[12px] text-vf-faint mt-1.5">{SEAT_MODEL_COPY[event.seatModel]}</div>
+              <div className="text-[12px] text-vf-faint mt-1.5">
+                {event.costModel === "ticket" && event.seatModel === "capped" ? `${event.seatCount ?? ""} seats, sold as tickets` : SEAT_MODEL_COPY[event.seatModel]}
+              </div>
               {genderPolicyLabel(event) && (
                 <div className="text-[12px] text-vf-faint mt-0.5" data-testid="event-gender-policy">{genderPolicyLabel(event)}</div>
               )}
@@ -607,6 +635,11 @@ export default function EventDetail({ params }: { params: { id: string } }) {
               )}
               {event.costModel === "free_hosted" && (
                 <div className="mt-2 text-[12px] text-vf-faint">The host is covering it.</div>
+              )}
+              {event.costModel === "ticket" && event.ticketCents != null && (
+                <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-vf-faint leading-[1.5]" data-testid="event-ticket-line">
+                  Ticket · {ticketPrice(event.ticketCents)} · paid through Destira · your seat once it's paid · full refund if the event is called off
+                </div>
               )}
             </div>
 
@@ -628,14 +661,38 @@ export default function EventDetail({ params }: { params: { id: string } }) {
             {state.kind !== "manage" && (
               <button
                 onClick={runAction}
-                disabled={pending}
+                disabled={pending || ticketBusy || state.kind == null}
                 className={`w-full px-5 py-3 rounded-full text-[14px] font-semibold btn-press transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${BUTTON_CLASSES[state.variant]}`}
                 style={{ minHeight: 44 }}
                 data-testid="button-event-action"
               >
-                {pending && <Loader2 className="w-4 h-4 animate-spin" />}
+                {(pending || ticketBusy) && <Loader2 className="w-4 h-4 animate-spin" />}
                 {state.label}
               </button>
+            )}
+            {!isHost && event.costModel === "ticket" && event.myStatus === "going" && (
+              <p className="text-[12px] text-vf-faint leading-[1.5]" data-testid="event-ticket-held">
+                You have a ticket. If you give up your seat, the ticket isn't refunded, but you can take a seat back while there's room. If the event is called off, you get it all back.
+              </p>
+            )}
+            {isHost && event.costModel === "ticket" && <HostTicketsCard eventId={event.id} />}
+            {event.costModel === "ticket" && event.ticketCents != null && (
+              <PurchaseSheet
+                open={buyingTicket}
+                onOpenChange={setBuyingTicket}
+                kind="event_ticket"
+                refId={event.id}
+                title="Ticket"
+                label={event.title}
+                cents={event.ticketCents}
+                note="Your seat is saved once it's paid. If the event is called off, you get the full amount back."
+                onPaid={() => {
+                  setBuyingTicket(false);
+                  refreshEvent();
+                  setSeatJustSaved(true);
+                  toast({ title: "You have a ticket", description: "Your seat is saved." });
+                }}
+              />
             )}
             {!isHost && event.myStatus === "going" && event.chatGroupId != null && (
               <button
@@ -962,5 +1019,26 @@ export default function EventDetail({ params }: { params: { id: string } }) {
         </DialogContent>
       </Dialog>
     </LayoutShell>
+  );
+}
+
+/** The host's ticket sales: what's sold, Destira's cut, and their payout. */
+function HostTicketsCard({ eventId }: { eventId: number }) {
+  const { data: t } = useQuery<HostTicketSummary | null>({ queryKey: [`/api/events/${eventId}/tickets`] });
+  if (!t) return null;
+  const due = new Date(t.payoutDueBy).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  return (
+    <div className="rounded-[16px] border border-vf-line p-4" data-testid="host-tickets">
+      <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-vf-faint">Tickets</div>
+      <div className="text-[15px] text-vf-text mt-1.5">
+        {t.sold} sold · {ticketPrice(t.grossCents)}
+      </div>
+      <div className="text-[13px] text-vf-muted mt-1 leading-[1.5]">
+        {t.paidOutAt
+          ? `We sent you ${ticketPrice(t.paidOutCents ?? t.hostCents)} on ${new Date(t.paidOutAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}.`
+          : `You get ${ticketPrice(t.hostCents)} after Destira's ${TICKET_FEE_PERCENT}% (${ticketPrice(t.feeCents)}), sent to ${t.payoutNumberMasked ?? "your EcoCash"} by ${due}, within ${HOST_PAYOUT_DAYS} days of the event.`}
+      </div>
+      {t.refundsDue > 0 && <div className="text-[12.5px] text-vf-faint mt-1">{t.refundsDue} being refunded.</div>}
+    </div>
   );
 }

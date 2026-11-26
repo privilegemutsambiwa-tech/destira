@@ -18,6 +18,7 @@ import {
 import { HostVideoRecorder, type RecordedVideo } from "@/components/host-video-recorder";
 import { PhotoSourceSheet } from "@/components/photo-source-sheet";
 import { EVENT_KINDS, EVENT_VIBES, EVENT_PLACE_TYPES, EVENT_ACCESS_NEEDS } from "@shared/event-taxonomy";
+import { HOST_PAYOUT_DAYS, TICKET_FEE_PERCENT, hostShareCents, normalizePayoutNumber, ticketPrice } from "@shared/event-tickets";
 
 const KNOWN_SUBURBS = [
   "Avondale", "Borrowdale", "Mount Pleasant", "Newlands", "Milton Park",
@@ -49,6 +50,8 @@ type Draft = {
   costModel: EventCostModel;
   contributionAmount: string;
   contributionNote: string;
+  ticketPrice: string;
+  payoutNumber: string;
   contactPhone: string;
   contactWhatsapp: string;
   vibes: string[];
@@ -65,7 +68,7 @@ const EMPTY: Draft = {
   visibility: "public", groupId: null,
   seatModel: "open", seatCount: "",
   genderPolicy: "mixed", menSlots: "", womenSlots: "",
-  costModel: "free_hosted", contributionAmount: "", contributionNote: "",
+  costModel: "free_hosted", contributionAmount: "", contributionNote: "", ticketPrice: "", payoutNumber: "",
   contactPhone: "", contactWhatsapp: "",
   vibes: [], isSober: false, accessibility: [],
   photos: [], video: null,
@@ -192,6 +195,12 @@ export default function HostEvent() {
         if (!n || n <= 0) return "Set how much everyone chips in.";
         if (n > 200) return "Contributions over $200 aren't allowed on Destira.";
       }
+      if (d.costModel === "ticket") {
+        const n = Number(d.ticketPrice);
+        if (!n || n < 1 || n > 200) return "Tickets are $1 to $200.";
+        if (!normalizePayoutNumber(d.payoutNumber)) return "Add the EcoCash number we pay you on (07XX XXX XXX).";
+        if (d.seatModel === "curated") return "A ticketed event can't be request-only: pick open or a set number of seats.";
+      }
       return null;
     }
     return null;
@@ -238,6 +247,8 @@ export default function HostEvent() {
       costModel: d.costModel,
       contributionAmount: d.costModel === "contribute" ? Number(d.contributionAmount) : null,
       contributionNote: d.contributionNote.trim() || undefined,
+      ticketCents: d.costModel === "ticket" ? Math.round(Number(d.ticketPrice) * 100) : null,
+      payoutNumber: d.costModel === "ticket" ? d.payoutNumber.trim() : undefined,
       contactPhone: d.contactPhone.trim() || undefined,
       contactWhatsapp: d.contactWhatsapp.trim() || undefined,
     };
@@ -570,6 +581,7 @@ export default function HostEvent() {
                   ["free_hosted", "I'm covering it"],
                   ["contribute", "Everyone chips in"],
                   ["pay_own_way", "Everyone pays their own"],
+                  ["ticket", "Sell tickets through Destira"],
                 ] as const).map(([v, label]) => (
                   <button
                     key={v}
@@ -592,6 +604,20 @@ export default function HostEvent() {
                   {Number(d.contributionAmount) > 0 && (
                     <p className="font-mono text-[10.5px] uppercase tracking-[0.13em] text-vf-faint">{contributionLine(d.contributionAmount)}</p>
                   )}
+                </div>
+              )}
+              {d.costModel === "ticket" && (
+                <div className="mt-3 flex flex-col gap-2" data-testid="ticket-fields">
+                  <div className="flex items-center gap-2">
+                    <span className="text-vf-faint text-[15px]">$</span>
+                    <input type="number" min={1} max={200} step="0.5" className={`${inputCls} max-w-[120px]`} value={d.ticketPrice} onChange={(e) => set({ ticketPrice: e.target.value })} placeholder="10" data-testid="input-ticket-price" />
+                    <span className="text-[12px] text-vf-faint">USD a ticket</span>
+                  </div>
+                  <input className={inputCls} inputMode="tel" value={d.payoutNumber} onChange={(e) => set({ payoutNumber: e.target.value })} placeholder="Your EcoCash number, for your payout" data-testid="input-payout-number" />
+                  <p className="text-[12.5px] text-vf-faint leading-[1.5]">
+                    People pay Destira through EcoCash, OneMoney, InnBucks or card, and their seat is saved once it's paid.
+                    {Number(d.ticketPrice) > 0 ? ` From each ${ticketPrice(Math.round(Number(d.ticketPrice) * 100))} ticket you get ${ticketPrice(hostShareCents(Math.round(Number(d.ticketPrice) * 100)))};` : " You get each ticket's price"} Destira keeps {TICKET_FEE_PERCENT}%. We send it to your EcoCash within {HOST_PAYOUT_DAYS} days after the event. If you call it off, everyone gets a full refund.
+                  </p>
                 </div>
               )}
               {(d.costModel === "pay_own_way") && (
@@ -674,7 +700,9 @@ export default function HostEvent() {
                     ? "The host is covering it"
                     : d.costModel === "contribute"
                       ? `$${Number(d.contributionAmount) || 0} each, settled in person`
-                      : "Everyone pays their own"}
+                      : d.costModel === "ticket"
+                        ? `Tickets at ${ticketPrice(Math.round((Number(d.ticketPrice) || 0) * 100))}, paid through Destira`
+                        : "Everyone pays their own"}
                 </dd>
                 <dt className="text-vf-faint">Photos</dt>
                 <dd className="text-vf-text">{d.photos.length || "none"}{d.video ? " · video recorded" : ""}</dd>

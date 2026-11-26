@@ -19,6 +19,8 @@ import { eq, and, ne, or, ilike, inArray, asc, desc, gte, lte, count, isNull } f
 import { storage } from "./storage";
 import { notifyLikersGoing } from "./reminders";
 import { isCrown } from "./crown";
+import { heldTicket, sweepEventTickets } from "./event-tickets";
+import { normalizePayoutNumber } from "@shared/event-tickets";
 
 export class EventNotFoundError extends Error {
   constructor() { super("Event not found"); }
@@ -43,6 +45,11 @@ export class PhotoLimitError extends Error {
 export class ContactNotReleasedError extends Error {
   constructor(msg = "Contact details unlock the day before, once you're confirmed as going.") { super(msg); }
 }
+/** A ticketed event: the seat comes with a paid ticket (server/event-tickets.ts). */
+export class TicketRequiredError extends Error {
+  constructor() { super("This event needs a ticket."); }
+}
+
 export class GenderPolicyError extends Error {
   constructor(msg: string) { super(msg); }
 }
@@ -86,6 +93,9 @@ export function serializeEvent<T extends Event>(row: T, ctx: EventViewerCtx) {
     addressWithheld: !addressVisible && !!row.addressLine,
     contactPhone: ctx.isHost ? row.contactPhone : null,
     contactWhatsapp: ctx.isHost ? row.contactWhatsapp : null,
+    payoutNumber: ctx.isHost ? row.payoutNumber : null,
+    hostPayoutNote: null,
+    hostPaidOutBy: null,
     contributionAmount: row.contributionAmount != null ? Number(row.contributionAmount) : null,
     hostVideoUrl: approved ? row.hostVideoUrl : null,
     hostVideoPosterUrl: approved ? row.hostVideoPosterUrl : null,
@@ -422,6 +432,8 @@ export async function createHostedEvent(hostUserId: string, data: HostEventInput
       contributionAmount: data.contributionAmount != null ? String(data.contributionAmount) : null,
       contributionCurrency: "USD",
       contributionNote: data.contributionNote || null,
+      ticketCents: data.costModel === "ticket" ? data.ticketCents ?? null : null,
+      payoutNumber: data.costModel === "ticket" ? normalizePayoutNumber(data.payoutNumber) : null,
       contactPhone: data.contactPhone || null,
       contactWhatsapp: data.contactWhatsapp || null,
       genderPolicy: data.genderPolicy,
@@ -446,9 +458,13 @@ export async function updateEvent(eventId: number, hostUserId: string, data: Par
     hostVideoStatus: _hs, hostVideoRejectReason: _hr,
     // official-event fields — admin-owned; a host must not be able to self-declare "official"
     isOfficial: _io, leadUserId: _lu, sponsorName: _sn, sponsorLogoUrl: _sl, minGoing: _mg,
+    // paid tickets — the price and payout are set once, at creation, and the
+    // payout record is the console's (server/admin/event-tickets.ts)
+    ticketCents: _tc, payoutNumber: _pn, hostPaidOutAt: _hpa, hostPaidOutBy: _hpb, hostPayoutCents: _hpc, hostPayoutNote: _hpn,
     ...safe
   } = data as any;
   const patch: Record<string, unknown> = { ...safe };
+  if ("costModel" in patch && (patch.costModel === "ticket" || event.costModel === "ticket")) delete patch.costModel;
   if (typeof safe.suburb === "string" || typeof safe.city === "string") {
     const centroid = await suburbCentroidFor(
       (safe.suburb as string) ?? event.suburb ?? "",
@@ -467,6 +483,8 @@ async function cancelEventInternal(eventId: number, reason: string): Promise<Eve
     .set({ status: "cancelled", cancelReason: reason, cancelledAt: new Date() })
     .where(eq(events.id, eventId))
     .returning();
+  // Paid tickets come back in full (server/event-tickets.ts).
+  sweepEventTickets(eventId).catch((e) => console.error("[tickets] refund on cancel failed:", e));
 
   const affected = await db
     .select({ userId: eventAttendees.userId })
@@ -631,6 +649,12 @@ export async function attendEvent(
       if (status !== "waitlisted") return { status, chatGroupId: event.chatGroupId };
       const position = await waitlistPosition(tx, eventId, existing.id);
       return { status, waitlistPosition: position, chatGroupId: event.chatGroupId };
+    }
+
+    // A ticketed event's seat comes with a paid ticket; a ticket holder who
+    // gave up their seat can take one back while there's room.
+    if (event.costModel === "ticket" && event.hostUserId !== userId && !(await heldTicket(tx, eventId, userId))) {
+      throw new TicketRequiredError();
     }
 
     let requesterGender: string | null | undefined;

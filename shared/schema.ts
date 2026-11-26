@@ -1455,7 +1455,8 @@ import {
 // Location tier is ALWAYS server-computed from placeId / address / the private
 // toggle — a host can never declare their own tier.
 export const EVENT_LOCATION_TIERS = ["venue_verified", "venue_public_unverified", "private_residence"] as const;
-export const EVENT_COST_MODELS = ["free_hosted", "contribute", "pay_own_way"] as const;
+// "ticket": paid to Destira through Paynow, seat held once paid (shared/event-tickets.ts).
+export const EVENT_COST_MODELS = ["free_hosted", "contribute", "pay_own_way", "ticket"] as const;
 export const HOST_VIDEO_STATUSES = ["none", "processing", "approved", "rejected"] as const;
 export const PRIVATE_RESIDENCE_MIN_ATTENDEES = 4;
 export const MAX_CONTRIBUTION = 200;
@@ -1533,6 +1534,14 @@ export const events = pgTable("events", {
   contributionAmount: decimal("contribution_amount", { precision: 8, scale: 2 }),
   contributionCurrency: text("contribution_currency").notNull().default("USD"),
   contributionNote: text("contribution_note"),
+  // Paid tickets (shared/event-tickets.ts): the price, the host's wallet for
+  // the payout (host and console only), and the payout once it's sent.
+  ticketCents: integer("ticket_cents"),
+  payoutNumber: text("payout_number"),
+  hostPaidOutAt: timestamp("host_paid_out_at"),
+  hostPaidOutBy: varchar("host_paid_out_by"),
+  hostPayoutCents: integer("host_payout_cents"),
+  hostPayoutNote: text("host_payout_note"),
   contactPhone: text("contact_phone"),      // NEVER in any list/detail payload; released via /contact only
   contactWhatsapp: text("contact_whatsapp"), // NEVER in any list/detail payload
   hostVideoUrl: text("host_video_url"),
@@ -1746,6 +1755,28 @@ export const eventAttendees = pgTable("event_attendees", {
   uniqueIndex("event_attendees_event_user_idx").on(table.eventId, table.userId),
 ]);
 
+// Paid event tickets (server/event-tickets.ts). One row per confirmed
+// payment. paid -> (the host cancels, or the seat was gone) refund_due -> refunded
+export const eventTickets = pgTable(
+  "event_tickets",
+  {
+    id: serial("id").primaryKey(),
+    eventId: integer("event_id").notNull().references(() => events.id),
+    userId: varchar("user_id").notNull().references(() => users.id),
+    paymentId: integer("payment_id").notNull().unique(),
+    amountCents: integer("amount_cents").notNull(),
+    feeCents: integer("fee_cents").notNull(),
+    status: text("status").notNull(),
+    refundReason: text("refund_reason"),
+    createdAt: timestamp("created_at").notNull(),
+    refundedAt: timestamp("refunded_at"),
+    refundedBy: varchar("refunded_by"),
+    refundNote: text("refund_note"),
+  },
+  (t) => [index("event_tickets_event_idx").on(t.eventId, t.status), index("event_tickets_user_idx").on(t.userId)],
+);
+export type EventTicket = typeof eventTickets.$inferSelect;
+
 // "Who did you click with?" after an event (Part J): private picks between
 // people who were there; a mutual pick becomes one chat.
 export const eventClicks = pgTable("event_clicks", {
@@ -1917,6 +1948,9 @@ export const hostEventSchema = z
     contributionNote: z.string().trim().max(200).optional().or(z.literal("")),
     contactPhone: z.string().trim().max(40).optional().or(z.literal("")),
     contactWhatsapp: z.string().trim().max(40).optional().or(z.literal("")),
+    // Paid tickets: the price in cents and the EcoCash number to pay the host.
+    ticketCents: z.coerce.number().int().nullable().optional(),
+    payoutNumber: z.string().trim().max(20).optional().or(z.literal("")),
     genderPolicy: eventGenderPolicyEnum.default("mixed"),
     menSlots: z.coerce.number().int().min(1).max(500).nullable().optional(),
     womenSlots: z.coerce.number().int().min(1).max(500).nullable().optional(),
@@ -1940,6 +1974,18 @@ export const hostEventSchema = z
   .refine((d) => d.costModel !== "contribute" || (d.contributionAmount != null && d.contributionAmount > 0), {
     message: "Set how much everyone chips in",
     path: ["contributionAmount"],
+  })
+  .refine((d) => d.costModel !== "ticket" || (d.ticketCents != null && d.ticketCents >= 100 && d.ticketCents <= 20000), {
+    message: "Tickets are $1 to $200",
+    path: ["ticketCents"],
+  })
+  .refine((d) => d.costModel !== "ticket" || /^(?:\+?263|0)?7\d{8}$/.test((d.payoutNumber || "").replace(/[\s-]/g, "")), {
+    message: "Add the EcoCash number we pay you on (07XX XXX XXX)",
+    path: ["payoutNumber"],
+  })
+  .refine((d) => d.costModel !== "ticket" || d.seatModel !== "curated", {
+    message: "Ticketed events can't be request-only: a paid ticket is a seat",
+    path: ["seatModel"],
   });
 
 // POST /api/events/:id/cancel — a reason attendees will see.

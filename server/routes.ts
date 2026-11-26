@@ -63,6 +63,7 @@ import { registerCrownTableRoutes } from "./crown-table";
 import { registerPurchaseRoutes, purchaseReturnTo } from "./purchases";
 import { registerDateVoucherRoutes, startDateVoucherSweep } from "./date-vouchers";
 import { registerSinglePurchases, activeLikesPass } from "./single-purchases";
+import { registerEventTicketRoutes, startEventTicketSweep } from "./event-tickets";
 import { registerDiscoverPerkRoutes, applyBoosts, dropBoosted, undoOrRewind } from "./discover-perks";
 import { recordShown, startMatchStatsSweep } from "./matching";
 import { registerDmExtraRoutes, presentDirectMessages, findByClientId, cleanClientId, isDmMediaKey, stoppedTyping } from "./dm-extras";
@@ -241,6 +242,8 @@ export async function registerRoutes(
   registerDateVoucherRoutes(app, getUserId);
   // One super like, one boost, 24 hours of "see who liked you" (Part G3).
   registerSinglePurchases();
+  // Paid event tickets (Part G4).
+  registerEventTicketRoutes(app, getUserId);
   // Rewind, super like and boost (server/discover-perks.ts).
   registerDiscoverPerkRoutes(app, getUserId, withClickReasons);
   // The deck score's daily inputs: reply rates and the popularity cap.
@@ -274,6 +277,7 @@ export async function registerRoutes(
   registerGameNightRoutes(app, getUserId);
   startGameNightSweep();
   startDateVoucherSweep();
+  startEventTicketSweep();
   registerRoomVoiceRoutes(app, getUserId);
   // Events in person: door check-in by QR, then "Who did you click with?" (Part J).
   registerEventDoorRoutes(app, getUserId);
@@ -6035,6 +6039,7 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     } catch (e) {
       if (e instanceof eventsService.EventNotFoundError) return res.status(404).json({ message: e.message });
       if (e instanceof eventsService.GenderPolicyError) return res.status(403).json({ message: e.message });
+      if (e instanceof eventsService.TicketRequiredError) return res.status(402).json({ code: "ticket_required", message: e.message });
       console.error("Attend event error:", e);
       res.status(500).json({ message: "Failed to join event" });
     }
