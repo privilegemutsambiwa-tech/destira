@@ -9,6 +9,7 @@ import { storage } from "../../storage";
 import { generateOpaqueToken, hashOpaqueToken } from "../../admin/crypto";
 import { sendViaResend, resendConfigured } from "../../email/resend";
 import { publicAppUrl } from "../../public-url";
+import { recordSignIn } from "../../member-sign-ins";
 
 // A profile only counts as onboarded once the mandatory matching fields —
 // gender and who they're seeking — are actually filled in. Used to decide
@@ -152,6 +153,7 @@ export function registerAuthRoutes(app: Express): void {
           console.error("[signup] req.login failed:", err);
           return res.status(500).json({ message: "Account created, but sign-in failed. Please log in." });
         }
+        recordSignIn(req, user.id, "signup");
         // Referral code (?ref=) and where they came from, if the client
         // stamped either before signup.
         await attributeNewSignup(user.id, req, res);
@@ -198,6 +200,7 @@ export function registerAuthRoutes(app: Express): void {
           console.error("[login] req.login failed:", err);
           return res.status(500).json({ message: "Login failed" });
         }
+        recordSignIn(req, user.id, "password");
         res.json(sanitizeUser(user));
       });
     } catch (error) {
@@ -339,6 +342,7 @@ export function registerAuthRoutes(app: Express): void {
           console.error("[google-callback] req.login failed:", err);
           return res.status(500).json({ message: "Signed in with Google, but session setup failed." });
         }
+        recordSignIn(req, user!.id, isNewUser ? "signup" : "google");
         // Google signups used to skip referral attribution entirely.
         if (isNewUser) await attributeNewSignup(user!.id, req, res);
         res.json({ ...sanitizeUser(user!), isOnboarded });

@@ -12,6 +12,7 @@ import { db } from "./db";
 import { referralCodes, referrals, profileViewGrants, subscriptions, profiles } from "@shared/schema";
 import { storage } from "./storage";
 import { and, desc, eq, gt, gte, inArray, or, sql } from "drizzle-orm";
+import { isFreePlanProvider } from "@shared/member-admin";
 
 // Crockford-ish: 32 glyphs, no O/0/I/1 so a code is safe to read aloud.
 const CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -77,8 +78,7 @@ async function isOnPaidPlan(tx: Tx, userId: string): Promise<boolean> {
     sub.tier !== "free" &&
     !!sub.currentPeriodEnd &&
     sub.currentPeriodEnd > new Date() &&
-    sub.provider !== "trial" &&
-    sub.provider !== "referral"
+    !isFreePlanProvider(sub.provider)
   );
 }
 

@@ -91,6 +91,7 @@ function useIsMobile(breakpoint = 768): boolean {
 
 const NAV = [
   { href: "/console", label: "Overview" },
+  { href: "/console/members", label: "Members" },
   { href: "/console/reports", label: "Reports", badgeKey: "openReports" as const },
   { href: "/console/events", label: "Events", badgeKey: "pendingEvents" as const },
   { href: "/console/verification", label: "Verification", badgeKey: "pendingVerifications" as const },

@@ -23,6 +23,7 @@ import { registerAdminMatchmakerRoutes } from "./matchmaker";
 import { registerAdminCrownTableRoutes } from "./crown-table";
 import { registerAdminDateVoucherRoutes } from "./date-vouchers";
 import { registerAdminEventTicketRoutes } from "./event-tickets";
+import { registerMemberAdminRoutes } from "./members";
 
 export function registerAdminConsole(app: Express) {
   mountAdminSession(app);
@@ -47,4 +48,5 @@ export function registerAdminConsole(app: Express) {
   registerAdminCrownTableRoutes(app);
   registerAdminDateVoucherRoutes(app);
   registerAdminEventTicketRoutes(app);
+  registerMemberAdminRoutes(app);
 }

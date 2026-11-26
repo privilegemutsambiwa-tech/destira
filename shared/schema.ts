@@ -593,6 +593,12 @@ export const payments = pgTable("payments", {
   purchaseKind: text("purchase_kind"),
   purchaseRef: integer("purchase_ref"),
   purchaseLabel: text("purchase_label"),
+  // A refund the team sent by hand (Paynow refunds are manual), recorded in
+  // the console's member page. Revenue reports it and takes it off.
+  refundedAt: timestamp("refunded_at"),
+  refundedBy: varchar("refunded_by").references(() => users.id),
+  refundCents: integer("refund_cents"),
+  refundNote: text("refund_note"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -2516,6 +2522,22 @@ export const accountDevices = pgTable(
     lastSeenAt: timestamp("last_seen_at").defaultNow(),
   },
   (t) => [uniqueIndex("account_devices_user_device_idx").on(t.userId, t.deviceId), index("account_devices_device_idx").on(t.deviceId)],
+);
+
+// Member sign-ins, for the console's member page (Part L1): when, how, and
+// roughly from where. Kept 90 days.
+export const memberSignIns = pgTable(
+  "member_sign_ins",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    method: text("method").notNull(), // password | google | signup
+    /** The network only (first three parts of an IPv4 address), never the full address. */
+    network: text("network"),
+    device: text("device"), // "Android app", "Chrome on Windows"...
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [index("member_sign_ins_user_idx").on(t.userId, t.createdAt)],
 );
 
 // A small fingerprint of each profile photo (difference hash), to spot the

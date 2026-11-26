@@ -31,6 +31,7 @@ import { and, eq, gte, lt, sql, count, sum, inArray, isNotNull, ne } from "drizz
 import { DISCLOSURE_CATEGORY_KEYS } from "@shared/disclosure";
 import { LIMITS } from "@shared/entitlements";
 import { SAFETY_CATEGORIES } from "@shared/admin";
+import { isFreePlanProvider } from "@shared/member-admin";
 
 function dayRange(dateStr: string): { start: Date; end: Date } {
   const start = new Date(`${dateStr}T00:00:00.000Z`);
@@ -234,7 +235,8 @@ async function rollMoney(dateStr: string) {
   const byTier: Record<string, number> = { spark: 0, flame: 0, ember: 0 };
   let trials = 0;
   for (const s of live) {
-    if (s.provider === "trial") {
+    // Trials, referral reward days and team grants: nobody paid.
+    if (isFreePlanProvider(s.provider)) {
       trials += 1;
       continue;
     }

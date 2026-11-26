@@ -8,7 +8,7 @@ import { DailyRevenueChart } from "./charts";
 // (server/admin/revenue.ts).
 type Report = {
   days: number;
-  totals: { revenueCents: number; payments: number; payingMembers: number; activePaid: number; activeTrials: number; runRateCents: number };
+  totals: { revenueCents: number; refundedCents: number; refunds: number; payments: number; payingMembers: number; activePaid: number; activeTrials: number; runRateCents: number };
   series: { date: string; cents: number; payments: number }[];
   plans: { tier: string; period: string; trial: boolean; count: number }[];
   renewalsDue: { userId: string; name: string | null; tier: string; period: string; endsAt: string; cancelled: boolean }[];
@@ -38,7 +38,7 @@ export default function AdminRevenue() {
 
   return (
     <div style={{ maxWidth: 1000 }}>
-      <PageHeader title="Revenue" sub="Straight from the payments table, live. Free trials aren't revenue and are counted separately." />
+      <PageHeader title="Revenue" sub="Straight from the payments table, live. Free plans (trials, invite rewards and days the team granted) aren't revenue and are counted separately. Refunds are taken off." />
       <div style={{ display: "flex", gap: 8, marginBottom: 18 }} role="group" aria-label="Period">
         {[7, 30, 90].map((d) => (
           <button
@@ -58,8 +58,8 @@ export default function AdminRevenue() {
       ) : (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 10 }} data-testid="revenue-tiles">
-            <StatTile label={`Revenue, ${days} days`} value={usd(data.totals.revenueCents)} trend={`${data.totals.payments} payment${data.totals.payments === 1 ? "" : "s"} · ${data.totals.payingMembers} member${data.totals.payingMembers === 1 ? "" : "s"}`} testId="tile-revenue" />
-            <StatTile label="Active paid plans" value={data.totals.activePaid} trend={`${data.totals.activeTrials} on a free trial`} testId="tile-active" />
+            <StatTile label={`Revenue, ${days} days`} value={usd(data.totals.revenueCents - data.totals.refundedCents)} trend={`${data.totals.payments} payment${data.totals.payments === 1 ? "" : "s"} · ${data.totals.payingMembers} member${data.totals.payingMembers === 1 ? "" : "s"}${data.totals.refunds ? ` · ${usd(data.totals.refundedCents)} refunded` : ""}`} testId="tile-revenue" />
+            <StatTile label="Active paid plans" value={data.totals.activePaid} trend={`${data.totals.activeTrials} on a free plan`} testId="tile-active" />
             <StatTile label="Monthly run-rate" value={usd(data.totals.runRateCents)} trend="active paid plans, per month" testId="tile-runrate" />
             <StatTile
               label="Renewal rate"
@@ -89,7 +89,7 @@ export default function AdminRevenue() {
                   {["weekly", "monthly", "sixMonth"].map((p) => (
                     <th key={p} style={{ ...th, textAlign: "right" }}>{PERIOD_NAME[p]}</th>
                   ))}
-                  <th style={{ ...th, textAlign: "right" }}>Free trial</th>
+                  <th style={{ ...th, textAlign: "right" }}>Free</th>
                 </tr>
               </thead>
               <tbody>

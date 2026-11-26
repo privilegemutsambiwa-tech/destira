@@ -9,6 +9,10 @@
 //   - renewal rate: of paid periods that ended in the window (and at least
 //     3 days ago), how many were paid again by 3 days after they ended
 //   - payments by method and outcome, and stuck ones (pending > 20 minutes)
+//   - refunds the team recorded (Part L2), taken off the period's revenue
+//
+// Free plans (the signup trial, referral reward days, days the team granted)
+// are never paid plans or revenue: shared/member-admin.ts FREE_PLAN_PROVIDERS.
 import type { Express } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "../db";
@@ -16,6 +20,9 @@ import { adminRoute } from "./auth";
 import { auditAdmin } from "./audit";
 import { PERIOD_PRICE_CENTS } from "@shared/entitlements";
 import { CROWN_PRICE_CENTS } from "@shared/crown";
+import { FREE_PLAN_PROVIDERS } from "@shared/member-admin";
+
+const FREE_PROVIDERS_SQL = sql.join(FREE_PLAN_PROVIDERS.map((p) => sql`${p}`), sql`, `);
 
 const PERIOD_DAYS_SQL = sql`(case period when 'weekly' then 7 when 'sixMonth' then 186 else 31 end)`;
 
@@ -31,7 +38,7 @@ function monthlyValueCents(tier: string, period: string): number {
 const rows = (r: any) => (r?.rows ?? []) as any[];
 
 export async function revenueReport(days: number) {
-  const [daily, plans, due, renewal, byMethod, stuck] = await Promise.all([
+  const [daily, plans, due, renewal, byMethod, stuck, refunds] = await Promise.all([
     db.execute(sql`
       select to_char((created_at + interval '2 hours')::date, 'YYYY-MM-DD') as day,
              sum(amount)::int as cents, count(*)::int as n, count(distinct user_id)::int as members
@@ -45,7 +52,7 @@ export async function revenueReport(days: number) {
                select 1 from crown_members c
                where c.user_id = s.user_id and c.status = 'active' and c.active_until > now()
              ) then 'crown' else s.tier end as tier,
-             s.period, (s.provider = 'trial') as trial, count(*)::int as n
+             s.period, (s.provider in (${FREE_PROVIDERS_SQL})) as trial, count(*)::int as n
       from subscriptions s
       where s.status = 'active' and s.tier <> 'free' and s.current_period_end > now()
       group by 1, 2, 3
@@ -55,7 +62,7 @@ export async function revenueReport(days: number) {
              p.display_name
       from subscriptions s
       left join profiles p on p.user_id = s.user_id
-      where s.status = 'active' and s.tier <> 'free' and s.provider <> 'trial'
+      where s.status = 'active' and s.tier <> 'free' and s.provider not in (${FREE_PROVIDERS_SQL})
         and s.current_period_end > now() and s.current_period_end <= now() + interval '7 days'
       order by s.current_period_end
       limit 100
@@ -86,6 +93,12 @@ export async function revenueReport(days: number) {
         count(*) filter (where created_at < now() - interval '48 hours' and created_at >= now() - interval '30 days')::int as for_a_human
       from payments
       where status = 'pending' and created_at < now() - interval '20 minutes'
+    `),
+    db.execute(sql`
+      select count(*)::int as n, coalesce(sum(refund_cents), 0)::int as cents
+      from payments
+      where refunded_at is not null
+        and refunded_at >= (now() + interval '2 hours')::date - interval '2 hours' - (${days - 1} || ' days')::interval
     `),
   ]);
 
@@ -124,11 +137,14 @@ export async function revenueReport(days: number) {
   }
   const ren = rows(renewal)[0] ?? { due: 0, renewed: 0 };
   const st = rows(stuck)[0] ?? { rechecking: 0, for_a_human: 0 };
+  const rf = rows(refunds)[0] ?? { n: 0, cents: 0 };
 
   return {
     days,
     totals: {
       revenueCents: series.reduce((s, d) => s + d.cents, 0),
+      refundedCents: Number(rf.cents),
+      refunds: Number(rf.n),
       payments: series.reduce((s, d) => s + d.payments, 0),
       payingMembers: Number(members?.n ?? 0),
       activePaid: paidPlans.reduce((s, r) => s + r.count, 0),
