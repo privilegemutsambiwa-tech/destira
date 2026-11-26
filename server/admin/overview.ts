@@ -10,6 +10,7 @@ import { LIMITS } from "@shared/entitlements";
 import { openRiskCount } from "./risk";
 import { pendingCrownApplications } from "./crown";
 import { openMatchmakerChats } from "./matchmaker";
+import { refundsDueCount } from "./date-vouchers";
 import { currentErrorRate, failureSummary, ERROR_WINDOW_MS, ERROR_RETAIN_MS } from "./error-rate";
 
 // One line in a tile's "what's behind this number" panel.
@@ -295,6 +296,7 @@ export function registerAdminOverviewRoutes(app: Express) {
         openRisk: await openRiskCount(),
         crownApplications: await pendingCrownApplications(),
         matchmakerChats: await openMatchmakerChats(),
+        dateOnMeRefunds: await refundsDueCount(),
         openReports: Number(open?.n ?? 0),
         openReportsYesterday,
         investigatingReports: Number(investigating?.n ?? 0),

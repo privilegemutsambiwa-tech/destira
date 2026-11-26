@@ -60,6 +60,8 @@ import { registerCrownRoutes, canPayCrown } from "./crown";
 import { registerCrownPerkRoutes, applySpotlight, dropLiftedToday, privateModeHides, introMatchIds } from "./crown-perks";
 import { registerMatchmakerRoutes } from "./crown-matchmaker";
 import { registerCrownTableRoutes } from "./crown-table";
+import { registerPurchaseRoutes, purchaseReturnTo } from "./purchases";
+import { registerDateVoucherRoutes, startDateVoucherSweep } from "./date-vouchers";
 import { registerDiscoverPerkRoutes, applyBoosts, dropBoosted, undoOrRewind } from "./discover-perks";
 import { recordShown, startMatchStatsSweep } from "./matching";
 import { registerDmExtraRoutes, presentDirectMessages, findByClientId, cleanClientId, isDmMediaKey, stoppedTyping } from "./dm-extras";
@@ -234,6 +236,8 @@ export async function registerRoutes(
   registerCrownPerkRoutes(app, getUserId);
   registerMatchmakerRoutes(app, getUserId);
   registerCrownTableRoutes(app, getUserId);
+  registerPurchaseRoutes(app, getUserId);
+  registerDateVoucherRoutes(app, getUserId);
   // Rewind, super like and boost (server/discover-perks.ts).
   registerDiscoverPerkRoutes(app, getUserId, withClickReasons);
   // The deck score's daily inputs: reply rates and the popularity cap.
@@ -266,6 +270,7 @@ export async function registerRoutes(
   // Lounge: scheduled game nights and voice notes in rooms (Part J).
   registerGameNightRoutes(app, getUserId);
   startGameNightSweep();
+  startDateVoucherSweep();
   registerRoomVoiceRoutes(app, getUserId);
   // Events in person: door check-in by QR, then "Who did you click with?" (Part J).
   registerEventDoorRoutes(app, getUserId);
@@ -4413,6 +4418,8 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
         phoneNumberMasked: row.phoneNumberMasked,
         failureReason: row.failureReason,
         rawStatus: row.rawStatus,
+        purchaseLabel: row.purchaseLabel ?? null,
+        returnTo: row.purchaseKind ? await purchaseReturnTo(row.purchaseKind, row.purchaseRef) : null,
       });
     } catch (e) {
       console.error("Payment status error:", e);

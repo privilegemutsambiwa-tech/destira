@@ -15,6 +15,7 @@ import { sendMetaEvent } from "../meta-capi";
 import { sendReceipt } from "../billing";
 import { activateCrown } from "../crown";
 import { crownPriceCents, isCrownPeriod, type PayPeriod, type PayTier } from "@shared/crown";
+import { purchaseKind } from "../purchase-kinds";
 
 const mock = new MockProvider();
 const paynow = new PaynowProvider();
@@ -293,6 +294,15 @@ export async function activateFromPayment(paymentId: number): Promise<void> {
   const result = await db.transaction(async (tx) => {
     const [pay] = await tx.select().from(payments).where(eq(payments.id, paymentId)).for("update");
     if (!pay || pay.status === "paid") return null;
+    // A one-off purchase (server/purchase-kinds.ts): paid and given together,
+    // never a plan.
+    if (pay.purchaseKind) {
+      const kind = purchaseKind(pay.purchaseKind);
+      await tx.update(payments).set({ status: "paid" }).where(eq(payments.id, paymentId));
+      if (kind) await kind.onPaid(tx, { id: pay.id, userId: pay.userId, purchaseRef: pay.purchaseRef, amount: pay.amount });
+      else console.error(`[payments] paid purchase ${paymentId} has no handler for ${pay.purchaseKind}`);
+      return { userId: pay.userId, tier: `purchase:${pay.purchaseKind}`, amountCents: pay.amount, method: pay.provider, phoneMasked: pay.phoneNumberMasked };
+    }
     // Crown is Ember plus the crown (shared/crown.ts): the plan underneath is
     // Ember, for the Crown period's length, and the crown itself is switched
     // on in the same transaction.

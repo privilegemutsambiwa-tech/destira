@@ -128,13 +128,14 @@ export async function sendReceipt(paymentId: number): Promise<void> {
       T.receiptEmail(ctx, {
         receiptNo: receiptNo(p.id),
         paidOn: memberEmail.fmtDay(p.createdAt ?? new Date()),
-        planName: planName(p.tier!),
-        periodLabel: periodLabel(p.period),
+        planName: p.purchaseLabel ?? planName(p.tier!),
+        periodLabel: p.purchaseKind ? "one-off" : periodLabel(p.period),
         amount: priceLabel(p.amount),
         method: methodLabel(p.provider),
         phoneMasked: p.phoneNumberMasked ?? null,
-        activeUntil: sub?.end ? memberEmail.fmtDay(sub.end) : null,
+        activeUntil: !p.purchaseKind && sub?.end ? memberEmail.fmtDay(sub.end) : null,
         historyHref: `${origin}/settings#payments`,
+        oneOff: !!p.purchaseKind,
       }),
     );
   } catch (e) {
@@ -252,8 +253,8 @@ export function registerBillingRoutes(app: Express, getUserId: (req: Request) =>
           receiptNo: p.status === "paid" ? receiptNo(p.id) : null,
           createdAt: p.createdAt,
           tier: p.tier,
-          planName: p.tier ? planName(p.tier) : null,
-          period: p.period === "threeMonth" ? "threeMonth" : asPeriod(p.period),
+          planName: p.purchaseLabel ?? (p.tier ? planName(p.tier) : null),
+          period: p.purchaseKind ? "once" : p.period === "threeMonth" ? "threeMonth" : asPeriod(p.period),
           amountCents: p.amount,
           status: p.status,
           method: methodLabel(p.provider),

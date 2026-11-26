@@ -79,6 +79,9 @@ export interface PaymentStatusRow {
   phoneNumberMasked: string | null;
   failureReason: string | null;
   rawStatus: string | null;
+  /** One-off purchases (server/purchases.ts): what was bought, and where to go after. */
+  purchaseLabel?: string | null;
+  returnTo?: string | null;
 }
 
 export function usePaymentStatus(id: number | null, enabled: boolean) {

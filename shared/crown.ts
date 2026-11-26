@@ -35,6 +35,7 @@ export const CROWN_PERKS: { title: string; detail: string; status: "live" | "soo
   { title: "Verified, by people", detail: "Every Crown member is checked by the Destira team. That's what the crown means.", status: "live" },
   { title: "Crown Spotlight", detail: "Shown near the top for people who fit you, once a day each, never past anyone's filters.", status: "live" },
   { title: "Direct introductions", detail: "Send a short note with a like, 3 a day. They choose; declining is silent.", status: "live" },
+  { title: "Date on me", detail: "Planning a date at a Destira partner venue? Cover the coffee or dinner ahead, at a member price. Your date sees \"Your date has covered this\". Unused after 30 days, it's refunded.", status: "live" },
   { title: "Private mode", detail: "Only people you've liked can see you. Turn it on or off here any time.", status: "live" },
   { title: "Your own matchmaker", detail: "Someone on our team looks after you: a monthly chat, and up to 4 hand-picked introductions a month. Names are shared only when you both say yes.", status: "live" },
   { title: "Crown Table", detail: "A private monthly dinner at a partner venue with other Crown members and their guests, and a seat kept for you at every official event and Sunday Table.", status: "live" },

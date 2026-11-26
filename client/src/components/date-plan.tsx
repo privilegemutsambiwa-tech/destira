@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { isNativeApp } from "@/lib/native";
 import { haptic } from "@/lib/haptics";
+import { DateOnMe } from "@/components/date-on-me";
 import {
   buildIcs, CHECKIN_LABEL, DATE_KIND_LABEL, DATE_MAX_TIMES, dateTimeLabel, planTitle, shareMyDateText,
   type CheckinAnswer, type DateKind, type DatePlanView,
@@ -364,6 +365,8 @@ export function DateCard({ plan, isMe, otherFirst, onSuggestAnother }: { plan: D
           <button type="button" onClick={() => act("cancel")} className="self-start px-1 vf-small text-vf-faint hover:text-vf-text" data-testid="button-cancel-plan">Cancel the date</button>
         </div>
       )}
+
+      {plan.kind !== "event" && <DateOnMe planId={plan.id} otherFirst={otherFirst} />}
     </div>
   );
 }

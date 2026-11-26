@@ -21,6 +21,7 @@ import { registerAdminRevenueRoutes } from "./revenue";
 import { registerAdminCrownRoutes } from "./crown";
 import { registerAdminMatchmakerRoutes } from "./matchmaker";
 import { registerAdminCrownTableRoutes } from "./crown-table";
+import { registerAdminDateVoucherRoutes } from "./date-vouchers";
 
 export function registerAdminConsole(app: Express) {
   mountAdminSession(app);
@@ -43,4 +44,5 @@ export function registerAdminConsole(app: Express) {
   registerAdminCrownRoutes(app);
   registerAdminMatchmakerRoutes(app);
   registerAdminCrownTableRoutes(app);
+  registerAdminDateVoucherRoutes(app);
 }

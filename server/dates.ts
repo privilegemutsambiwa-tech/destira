@@ -14,6 +14,7 @@ import * as push from "./push";
 import { harareDay } from "./matching";
 import { dateCheckins, datePlans, directMessages, events, matches, places, profiles, type DirectMessage } from "@shared/schema";
 import { partnerOffersByName } from "./event-extras";
+import { sweepDateVouchers } from "./date-vouchers";
 import {
   CHECKIN_ANSWERS, DATE_KINDS, DATE_MAX_DAYS_AHEAD, DATE_MAX_TIMES,
   dateTimeLabel, planTitle, type CheckinAnswer, type DateKind, type DatePlanView,
@@ -348,6 +349,7 @@ export function registerDateRoutes(app: Express, getUserId: (req: any) => string
       if (!p) return res.status(409).json({ message: "This plan has changed. Have a look at the chat." });
       res.json(presentPlan(p));
       notify(p.proposerId, p.matchId, await nameOf(userId), `Can't make ${inSentence(p)}. Maybe another time or place?`);
+      sweepDateVouchers(new Date(), p.id).catch(() => {}); // a Date on me voucher on it is refunded now
     } catch (e) {
       res.status(500).json({ message: "Couldn't decline" });
     }
@@ -367,6 +369,7 @@ export function registerDateRoutes(app: Express, getUserId: (req: any) => string
       await syncCard({ ...p, status: "proposed" }); // the preview goes back to "Date idea"
       res.json(presentPlan(p));
       if (l.p.status === "confirmed") notify(l.otherId, p.matchId, `${await nameOf(userId)} cancelled`, `${planTitle(p as any)}${p.startsAt ? `, ${dateTimeLabel(p.startsAt.toISOString())}` : ""}`);
+      sweepDateVouchers(new Date(), p.id).catch(() => {}); // a Date on me voucher on it is refunded now
     } catch (e) {
       res.status(500).json({ message: "Couldn't cancel" });
     }

@@ -103,6 +103,7 @@ const Vouches = screen(() => import("@/pages/Vouches"));
 const Wingman = screen(() => import("@/pages/Wingman"));
 const Introductions = screen(() => import("@/pages/Introductions"));
 const CrownTable = screen(() => import("@/pages/CrownTable"));
+const Till = screen(() => import("@/pages/Till"));
 const PublicEvent = screen(() => import("@/pages/PublicEvent"));
 
 // The screens people move between all the time, fetched quietly once someone
@@ -258,6 +259,7 @@ function Router() {
       <Route path="/privacy" component={PrivacyPolicy} />
       {DevGallery && <Route path="/dev/gallery" component={DevGallery} />}
       <Route path="/delete-account" component={DeleteAccountInfo} />
+      <Route path="/redeem" component={Till} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/signup" component={Signup} />

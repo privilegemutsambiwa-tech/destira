@@ -141,6 +141,12 @@ export default function PlansPay() {
     if (status?.status === "paid") refreshPlanQueries(qc);
   }, [status?.status, qc]);
 
+  // A one-off purchase (a Date on me voucher, a boost) paid on a hosted card
+  // page comes back here too: send the member back to where they bought it.
+  useEffect(() => {
+    if (status?.returnTo && status.status !== "pending") setLocation(status.returnTo);
+  }, [status?.returnTo, status?.status]);
+
   if (!card || !tier) {
     // Returning from a hosted checkout redirect: we have the payment id but
     // haven't loaded its tier yet — show a brief wait, not a dead end.

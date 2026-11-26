@@ -353,6 +353,8 @@ export interface ReceiptData {
   phoneMasked: string | null;
   activeUntil: string | null;
   historyHref: string;
+  /** A one-off purchase (a voucher, a boost), not a plan. */
+  oneOff?: boolean;
 }
 
 export function receiptEmail(ctx: LayoutCtx, d: ReceiptData): EmailContent {
@@ -361,23 +363,25 @@ export function receiptEmail(ctx: LayoutCtx, d: ReceiptData): EmailContent {
   const rows: { title: string; detail: string }[] = [
     { title: "Receipt", detail: d.receiptNo },
     { title: "Paid on", detail: d.paidOn },
-    { title: "Plan", detail: `${d.planName}, ${d.periodLabel === "6 months" ? "6 months" : `one ${d.periodLabel}`}` },
+    d.oneOff
+      ? { title: "Bought", detail: d.planName }
+      : { title: "Plan", detail: `${d.planName}, ${d.periodLabel === "6 months" ? "6 months" : `one ${d.periodLabel}`}` },
     { title: "Amount", detail: `${d.amount} (USD)` },
     { title: "Paid with", detail: d.phoneMasked ? `${d.method}, ${d.phoneMasked}` : d.method },
   ];
   if (d.activeUntil) rows.push({ title: "Active until", detail: d.activeUntil });
   const body = [
     heading(`Thank you${comma(ctx)}.`),
-    para(`Your payment went through and ${esc(d.planName)} is on. Keep this email as your receipt.`),
+    para(d.oneOff ? `Your payment for ${esc(d.planName)} went through. Keep this email as your receipt.` : `Your payment went through and ${esc(d.planName)} is on. Keep this email as your receipt.`),
     itemList(rows),
     small(
-      `Nothing renews by itself; we'll remind you before it ends. All your payments are in <a href="${esc(d.historyHref)}" style="color:${C.ember}">Settings</a>. A question about a payment? Email support@destira.date.`,
+      `${d.oneOff ? "This was a one-off payment." : "Nothing renews by itself; we'll remind you before it ends."} All your payments are in <a href="${esc(d.historyHref)}" style="color:${C.ember}">Settings</a>. A question about a payment? Email support@destira.date.`,
     ),
   ].join("");
   const text =
-    `Thank you${comma(ctx)}. Your payment went through and ${d.planName} is on. Keep this email as your receipt.\n\n` +
+    `Thank you${comma(ctx)}. ${d.oneOff ? `Your payment for ${d.planName} went through.` : `Your payment went through and ${d.planName} is on.`} Keep this email as your receipt.\n\n` +
     rows.map((r) => `${r.title}: ${r.detail}`).join("\n") +
-    `\n\nNothing renews by itself; we'll remind you before it ends. All your payments: ${d.historyHref}
+    `\n\n${d.oneOff ? "This was a one-off payment." : "Nothing renews by itself; we'll remind you before it ends."} All your payments: ${d.historyHref}
 A question about a payment? Email support@destira.date.`;
   return { subject, preheader, html: layout(ctx, preheader, body), text: text + textFooter(ctx) };
 }

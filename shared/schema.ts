@@ -586,6 +586,11 @@ export const payments = pgTable("payments", {
   // gate-conversion metric ("which paywall is doing the selling") reads this.
   // Null for a cold /plans visit with no feature context.
   sourceFeature: text("source_feature"),
+  // One-off purchases (server/purchases.ts): tier is "purchase", and these
+  // say what was bought. Null for plans.
+  purchaseKind: text("purchase_kind"),
+  purchaseRef: integer("purchase_ref"),
+  purchaseLabel: text("purchase_label"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -1088,6 +1093,47 @@ export const crownDinnerSeats = pgTable(
   (t) => [uniqueIndex("crown_dinner_seats_pair_idx").on(t.dinnerId, t.userId), index("crown_dinner_seats_guest_idx").on(t.dinnerId, t.guestOf)],
 );
 
+// Date on me (server/date-vouchers.ts): a Crown member prepays something at a
+// partner venue for a date they've planned. Destira collects through Paynow,
+// the venue checks the code at the till, Destira pays venues monthly, and a
+// voucher unused after 30 days (or whose date is off) is refunded.
+//   pending_payment -> active -> redeemed -> (paid out)
+//                             -> refund_due -> refunded
+export const dateVouchers = pgTable(
+  "date_vouchers",
+  {
+    id: serial("id").primaryKey(),
+    code: varchar("code", { length: 16 }).notNull().unique(),
+    crownUserId: varchar("crown_user_id").notNull().references(() => users.id),
+    planId: integer("plan_id").notNull().references(() => datePlans.id),
+    matchId: integer("match_id").notNull(),
+    placeId: integer("place_id").notNull().references(() => places.id),
+    itemId: text("item_id").notNull(),
+    itemLabel: text("item_label").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    paymentId: integer("payment_id"),
+    status: text("status").notNull().default("pending_payment"),
+    createdAt: timestamp("created_at").notNull(),
+    paidAt: timestamp("paid_at"),
+    expiresAt: timestamp("expires_at"),
+    redeemedAt: timestamp("redeemed_at"),
+    refundReason: text("refund_reason"),
+    refundedAt: timestamp("refunded_at"),
+    refundedBy: varchar("refunded_by"),
+    refundNote: text("refund_note"),
+    paidOutAt: timestamp("paid_out_at"),
+    paidOutBy: varchar("paid_out_by"),
+    payoutNote: text("payout_note"),
+  },
+  (t) => [
+    index("date_vouchers_plan_idx").on(t.planId),
+    index("date_vouchers_status_idx").on(t.status),
+    index("date_vouchers_place_idx").on(t.placeId, t.status),
+  ],
+);
+export type DateVoucher = typeof dateVouchers.$inferSelect;
+
+
 // Each tap on a share action (an event or invite, as a link or a Status
 // card) — so the console can show shares next to the signups they bring.
 export const shareEvents = pgTable("share_events", {
@@ -1436,6 +1482,10 @@ export const places = pgTable("places", {
   // Venue partners (Part J): what Destira members get here, set in the admin console.
   partnerOffer: text("partner_offer"),
   partnerSince: timestamp("partner_since"),
+  // Date on me (server/date-vouchers.ts): the member-price menu a Crown member
+  // can prepay here, and the staff PIN the till uses to check a code.
+  voucherItems: jsonb("voucher_items").$type<{ id: string; label: string; cents: number }[]>(),
+  tillPinHash: text("till_pin_hash"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

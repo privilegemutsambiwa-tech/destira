@@ -1252,7 +1252,7 @@ type PaymentRow = {
   receiptNo: string | null;
   createdAt: string;
   planName: string | null;
-  period: BillingPeriod | "threeMonth";
+  period: BillingPeriod | "threeMonth" | "once";
   amountCents: number;
   status: "paid" | "failed";
   method: string;
@@ -1357,8 +1357,8 @@ function BillingPanel({ onBack, profile }: { onBack: () => void; profile: any })
                 <div key={p.id} className="py-2" style={{ borderTop: `1px solid ${BORDER}` }} data-testid={`payment-${p.id}`}>
                   <div className="flex justify-between items-center gap-3">
                     <p className="text-sm text-foreground">
-                      Destira {p.planName ?? "plan"}
-                      <span style={{ color: MUTED }}>, {p.period === "sixMonth" ? "6 months" : p.period === "threeMonth" ? "3 months" : `1 ${PERIOD_LABEL[p.period]}`}</span>
+                      {p.period === "once" ? p.planName : <>Destira {p.planName ?? "plan"}</>}
+                      {p.period !== "once" && <span style={{ color: MUTED }}>, {p.period === "sixMonth" ? "6 months" : p.period === "threeMonth" ? "3 months" : `1 ${PERIOD_LABEL[p.period]}`}</span>}
                     </p>
                     <p className="text-sm font-semibold text-foreground">${(p.amountCents / 100).toFixed(2)}</p>
                   </div>
