@@ -37,7 +37,7 @@ export const CROWN_PERKS: { title: string; detail: string; status: "live" | "soo
   { title: "Direct introductions", detail: "Send a short note with a like, 3 a day. They choose; declining is silent.", status: "live" },
   { title: "Private mode", detail: "Only people you've liked can see you. Turn it on or off here any time.", status: "live" },
   { title: "Your own matchmaker", detail: "Someone on our team looks after you: a monthly chat, and up to 4 hand-picked introductions a month. Names are shared only when you both say yes.", status: "live" },
-  { title: "Crown Table", detail: "A private monthly dinner with other Crown members, and a seat kept for you at official events.", status: "soon" },
+  { title: "Crown Table", detail: "A private monthly dinner at a partner venue with other Crown members and their guests, and a seat kept for you at every official event and Sunday Table.", status: "live" },
 ];
 
 // ── one price function for every paid plan (Plans, PlansPay, the server) ──

@@ -18,6 +18,7 @@ import { users } from "@shared/models/auth";
 import { eq, and, ne, or, ilike, inArray, asc, desc, gte, lte, count, isNull } from "drizzle-orm";
 import { storage } from "./storage";
 import { notifyLikersGoing } from "./reminders";
+import { isCrown } from "./crown";
 
 export class EventNotFoundError extends Error {
   constructor() { super("Event not found"); }
@@ -614,6 +615,7 @@ export async function attendEvent(
   eventId: number,
   userId: string,
 ): Promise<{ status: AttendeeStatus; waitlistPosition?: number }> {
+  const crown = await isCrown(userId);
   const result = await db.transaction(async (tx) => {
     const [event] = await tx.select().from(events).where(eq(events.id, eventId)).for("update");
     if (!event) throw new EventNotFoundError();
@@ -666,6 +668,9 @@ export async function attendEvent(
     } else {
       status = seatStatusFor(event.seatModel, Number(goingCount), event.seatCount);
     }
+    // Crown Table (shared/crown-table.ts): a reserved seat at every official
+    // event, so a Crown member is never waitlisted or left waiting on one.
+    if (event.isOfficial && status !== "going" && crown) status = "going";
     const decidedAt = status === "requested" ? null : new Date();
 
     let row: EventAttendee;

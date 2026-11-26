@@ -1054,6 +1054,40 @@ export const matchmakerChats = pgTable(
 );
 export type MatchmakerIntro = typeof matchmakerIntros.$inferSelect;
 
+// Crown Table (server/crown-table.ts): the team's private monthly dinner at a
+// partner venue. Crown members take a seat; each can bring one guest from
+// their matches, who says yes or no. Everyone pays the venue for their food.
+export const crownDinners = pgTable("crown_dinners", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  placeId: integer("place_id").references(() => places.id),
+  venueName: text("venue_name").notNull(),
+  venueDetail: text("venue_detail"),
+  startsAt: timestamp("starts_at").notNull(),
+  /** Everyone at the table, guests included. */
+  seats: integer("seats").notNull(),
+  note: text("note"),
+  status: text("status").notNull().default("scheduled"), // scheduled | cancelled
+  cancelReason: text("cancel_reason"),
+  createdBy: varchar("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull(),
+});
+export type CrownDinner = typeof crownDinners.$inferSelect;
+
+export const crownDinnerSeats = pgTable(
+  "crown_dinner_seats",
+  {
+    id: serial("id").primaryKey(),
+    dinnerId: integer("dinner_id").notNull().references(() => crownDinners.id, { onDelete: "cascade" }),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    /** Set for a guest: the Crown member who asked them. */
+    guestOf: varchar("guest_of"),
+    status: text("status").notNull(), // going | invited | declined | cancelled
+    createdAt: timestamp("created_at").notNull(),
+  },
+  (t) => [uniqueIndex("crown_dinner_seats_pair_idx").on(t.dinnerId, t.userId), index("crown_dinner_seats_guest_idx").on(t.dinnerId, t.guestOf)],
+);
+
 // Each tap on a share action (an event or invite, as a link or a Status
 // card) — so the console can show shares next to the signups they bring.
 export const shareEvents = pgTable("share_events", {

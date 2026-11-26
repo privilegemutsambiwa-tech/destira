@@ -59,6 +59,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { registerCrownRoutes, canPayCrown } from "./crown";
 import { registerCrownPerkRoutes, applySpotlight, dropLiftedToday, privateModeHides, introMatchIds } from "./crown-perks";
 import { registerMatchmakerRoutes } from "./crown-matchmaker";
+import { registerCrownTableRoutes } from "./crown-table";
 import { registerDiscoverPerkRoutes, applyBoosts, dropBoosted, undoOrRewind } from "./discover-perks";
 import { recordShown, startMatchStatsSweep } from "./matching";
 import { registerDmExtraRoutes, presentDirectMessages, findByClientId, cleanClientId, isDmMediaKey, stoppedTyping } from "./dm-extras";
@@ -232,6 +233,7 @@ export async function registerRoutes(
   registerCrownRoutes(app, getUserId);
   registerCrownPerkRoutes(app, getUserId);
   registerMatchmakerRoutes(app, getUserId);
+  registerCrownTableRoutes(app, getUserId);
   // Rewind, super like and boost (server/discover-perks.ts).
   registerDiscoverPerkRoutes(app, getUserId, withClickReasons);
   // The deck score's daily inputs: reply rates and the popularity cap.

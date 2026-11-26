@@ -304,6 +304,15 @@ function PerksPanel() {
           <span className="text-[13px] font-medium shrink-0" style={{ color: GOLD }}>Open</span>
         </span>
       </Link>
+      <Link href="/crown/table">
+        <span className="flex items-center justify-between gap-3 cursor-pointer" data-testid="link-crown-table">
+          <span>
+            <span className="block text-[14.5px] text-vf-text">Crown Table</span>
+            <span className="block text-[13px] text-vf-muted mt-0.5 leading-[1.45]">This month's dinner. Your seat at official events and the Sunday Table is kept.</span>
+          </span>
+          <span className="text-[13px] font-medium shrink-0" style={{ color: GOLD }}>Open</span>
+        </span>
+      </Link>
     </div>
   );
 }

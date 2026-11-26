@@ -97,6 +97,7 @@ const NAV = [
   { href: "/console/risk", label: "Risk", badgeKey: "openRisk" as const },
   { href: "/console/crown", label: "Crown", badgeKey: "crownApplications" as const },
   { href: "/console/matchmaker", label: "Matchmaker", badgeKey: "matchmakerChats" as const },
+  { href: "/console/crown-table", label: "Crown Table" },
   { href: "/console/events/official", label: "Official events" },
   { href: "/console/status", label: "Destira status" },
   { href: "/console/partners", label: "Venue partners" },

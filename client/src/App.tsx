@@ -102,6 +102,7 @@ const PlansBoard = screen(() => import("@/pages/PlansBoard"));
 const Vouches = screen(() => import("@/pages/Vouches"));
 const Wingman = screen(() => import("@/pages/Wingman"));
 const Introductions = screen(() => import("@/pages/Introductions"));
+const CrownTable = screen(() => import("@/pages/CrownTable"));
 const PublicEvent = screen(() => import("@/pages/PublicEvent"));
 
 // The screens people move between all the time, fetched quietly once someone
@@ -394,13 +395,16 @@ function Router() {
       <Route path="/plans/pay/return">
         <ProtectedRoute component={PlansPay} />
       </Route>
+      <Route path="/crown/table">
+        <ProtectedRoute component={CrownTable} />
+      </Route>
+      <Route path="/crown">
+        <ProtectedRoute component={Crown} />
+      </Route>
       <Route path="/billing"><Redirect to="/plans" /></Route>
       <Route path="/upgrade"><Redirect to="/plans" /></Route>
       <Route path="/settings">
         <ProtectedRoute component={Settings} />
-      </Route>
-      <Route path="/crown">
-        <ProtectedRoute component={Crown} />
       </Route>
       <Route path="/join/:token">
         {(params) => <JoinGroup params={params} />}

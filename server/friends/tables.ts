@@ -22,6 +22,7 @@ import type { ProfileDetails } from "@shared/profile-details";
 import { genderMatchesSeeking, storage } from "../storage";
 import { getEffectiveTier } from "../gate";
 import { notify } from "../push";
+import { activeCrownIds } from "../crown";
 
 // ── the matcher (pure, so it can be tested on its own) ─────────────────
 
@@ -110,6 +111,22 @@ export function seat(pool: Seatable[], mixed: boolean): { tables: Seatable[][]; 
   return { tables, unseated: [...unseated, ...left] };
 }
 
+/**
+ * Crown Table: a Crown member left over gets a seat at the table of their mix
+ * they'd sit best at (one over the usual size at most), when any formed.
+ */
+export function seatReserved(out: { tables: Seatable[][]; unseated: Seatable[] }, reserved: Set<string>): { tables: Seatable[][]; unseated: Seatable[] } {
+  const unseated: Seatable[] = [];
+  for (const c of out.unseated) {
+    if (!reserved.has(c.userId)) { unseated.push(c); continue; }
+    const open = out.tables.filter((t) => t.length <= TABLE_SIZE);
+    const fit = (t: Seatable[]) => t.reduce((s, m) => s + pairScore(m, c), 0) / t.length + (spreadOk(t, c) ? 10 : 0);
+    const best = open.sort((a, b) => fit(b) - fit(a) || a.length - b.length)[0];
+    if (best) best.push(c); else unseated.push(c);
+  }
+  return { tables: out.tables, unseated };
+}
+
 /** "A table of 6, aged 26 to 33, who love music and church." */
 export function vibeFor(table: Seatable[]): string {
   const ages = table.map((m) => m.age).filter((a): a is number => a != null);
@@ -163,6 +180,7 @@ const cityOf = (p: { location: string | null }) => {
  */
 export async function formWeekend(weekend: string): Promise<{ tables: number; seated: number; unseated: number }> {
   const t = weekendTimes(weekend);
+  const crown = await activeCrownIds();
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"sunday-table:" + weekend}))`);
     const waiting = await tx.select().from(tableSignups).where(and(eq(tableSignups.weekend, weekend), eq(tableSignups.status, "waiting")));
@@ -197,7 +215,7 @@ export async function formWeekend(weekend: string): Promise<{ tables: number; se
     let tables = 0, seated = 0;
     const seatedIds = new Set<string>();
     for (const mix of ["mixed", "women", "men"] as TableMix[]) {
-      const out = seat(pools[mix], mix === "mixed");
+      const out = seatReserved(seat(pools[mix], mix === "mixed"), crown);
       for (const table of out.tables) {
         const full = table.map((m) => people.get(m.userId)!);
         const place = await placeFor(tx, full);

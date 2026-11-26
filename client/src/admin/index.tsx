@@ -21,6 +21,7 @@ import AdminFunnel from "./AdminFunnel";
 import AdminRevenue from "./AdminRevenue";
 import AdminCrown from "./AdminCrown";
 import AdminMatchmaker from "./AdminMatchmaker";
+import AdminCrownTable from "./AdminCrownTable";
 import AdminOfficialStatus from "./AdminOfficialStatus";
 import AdminEmailConfig from "./AdminEmailConfig";
 import AdminTeam from "./AdminTeam";
@@ -88,6 +89,7 @@ function AdminApp() {
         <Route path="/console/revenue" component={AdminRevenue} />
         <Route path="/console/crown" component={AdminCrown} />
         <Route path="/console/matchmaker" component={AdminMatchmaker} />
+        <Route path="/console/crown-table" component={AdminCrownTable} />
         <Route path="/console/growth" component={AdminGrowth} />
         <Route path="/console/status" component={AdminOfficialStatus} />
         <Route path="/console/partners" component={AdminPartners} />
