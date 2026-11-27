@@ -31,6 +31,9 @@ export default defineConfig({
       TZ: "Africa/Harare",
     },
     setupFiles: ["tests/guard.ts"],
+    // Each database file builds its own in-memory Postgres (several hundred
+    // MB); a few at a time keeps a laptop running the dev server alive.
+    maxWorkers: 3,
     projects: [
       { extends: true, test: { name: "unit", include: ["tests/unit/**/*.test.ts"] } },
       {

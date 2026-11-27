@@ -105,6 +105,7 @@ const NAV = [
   { href: "/console/status", label: "Destira status" },
   { href: "/console/partners", label: "Venue partners" },
   { href: "/console/feedback", label: "Feedback", badgeKey: "openFeedback" as const },
+  { href: "/console/errors", label: "Errors", badgeKey: "newErrors" as const },
   { href: "/console/metrics", label: "Metrics" },
   { href: "/console/revenue", label: "Revenue" },
   { href: "/console/funnel", label: "Funnel" },
@@ -301,6 +302,7 @@ type OverviewSnapshot = {
   safetyReportsOpen: number;
   failedPaymentsToday: number;
   openFeedback: number;
+  newErrors?: number;
   pendingEvents: number;
   pendingVerifications: number;
   openRisk: number;

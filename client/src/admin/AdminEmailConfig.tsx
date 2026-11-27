@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminGet, adminPatch, adminPost } from "./api";
 import { PageHeader, LABEL, MONO, LINE, SURFACE, MUTED, FAINT, TEXT, ALERT, formatDateTime } from "./AdminShell";
+import { ALERT_META } from "@shared/email-alerts";
 
 const inputStyle: React.CSSProperties = { flex: 1, height: 30, borderRadius: 6, border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: TEXT, fontSize: 12.5, padding: "0 8px" };
 const secondaryBtn: React.CSSProperties = { height: 30, padding: "0 10px", borderRadius: 6, border: `1px solid ${LINE}`, background: "transparent", color: MUTED, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" };
@@ -105,7 +106,8 @@ export default function AdminEmailConfig() {
               </div>
               {c.hasThreshold && (
                 <input
-                  placeholder="threshold"
+                  placeholder={ALERT_META[c.alertType as keyof typeof ALERT_META]?.thresholdHint ?? "threshold"}
+                  title={ALERT_META[c.alertType as keyof typeof ALERT_META]?.thresholdHint}
                   defaultValue={c.threshold || ""}
                   onBlur={(e) => e.target.value !== (c.threshold || "") && update(c.alertType, { threshold: e.target.value || null })}
                   style={{ width: 90, height: 30, borderRadius: 6, border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: TEXT, fontSize: 12.5, padding: "0 8px" }}

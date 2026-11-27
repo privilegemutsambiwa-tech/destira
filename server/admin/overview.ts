@@ -12,6 +12,7 @@ import { pendingCrownApplications } from "./crown";
 import { openMatchmakerChats } from "./matchmaker";
 import { refundsDueCount } from "./date-vouchers";
 import { ticketsToActionCount } from "./event-tickets";
+import { newErrorCount } from "./error-log";
 import { currentErrorRate, failureSummary, ERROR_WINDOW_MS, ERROR_RETAIN_MS } from "./error-rate";
 
 // One line in a tile's "what's behind this number" panel.
@@ -309,6 +310,7 @@ export function registerAdminOverviewRoutes(app: Express) {
         matchmakerChats: await openMatchmakerChats(),
         dateOnMeRefunds: await refundsDueCount(),
         ticketsToAction: await ticketsToActionCount(),
+        newErrors: await newErrorCount(),
         openReports: Number(open?.n ?? 0),
         openReportsYesterday,
         investigatingReports: Number(investigating?.n ?? 0),

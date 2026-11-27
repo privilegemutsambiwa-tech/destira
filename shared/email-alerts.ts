@@ -11,6 +11,8 @@ export interface AlertMeta {
    *  instead of one per event. 0 = never dedup (always send). */
   dedupWindowMs: number;
   hasThreshold: boolean;
+  /** What the threshold means, shown in the console's threshold box. */
+  thresholdHint?: string;
 }
 
 export const ALERT_TYPES = [
@@ -24,6 +26,7 @@ export const ALERT_TYPES = [
   "admin_lockout",
   "error_rate_threshold",
   "llm_cost_threshold",
+  "new_error_spike",
 ] as const;
 export type AlertType = (typeof ALERT_TYPES)[number];
 
@@ -38,6 +41,9 @@ export const ALERT_META: Record<AlertType, AlertMeta> = {
   admin_lockout: { label: "Admin login lockout", configurable: true, dedupWindowMs: 15 * 60 * 1000, hasThreshold: false },
   error_rate_threshold: { label: "Error rate above threshold", configurable: true, dedupWindowMs: 30 * 60 * 1000, hasThreshold: true },
   llm_cost_threshold: { label: "LLM spend above threshold", configurable: true, dedupWindowMs: 6 * 60 * 60 * 1000, hasThreshold: true },
+  // One email per error, at most every 6 hours (server/admin/error-log.ts
+  // keeps that per error, so no dedup window here).
+  new_error_spike: { label: "New error spiking", configurable: true, dedupWindowMs: 0, hasThreshold: true, thresholdHint: "times in 15 min (5)" },
 };
 
 // Scheduled digests — same email_alert_config table, own small meta map

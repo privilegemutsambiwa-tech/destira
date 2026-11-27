@@ -9,7 +9,11 @@
 // crash reported by the client's ErrorBoundary (POST /api/client-errors,
 // which itself answers 204). 4xx (wrong password, not found, validation) are
 // the caller's problem, not the platform's, so they don't count.
+//
+// Every failure is also handed to error-log.ts, which keeps it grouped in the
+// database for the console's Errors page and the "new error spiking" alert.
 import { AsyncLocalStorage } from "async_hooks";
+import { logError } from "./error-log";
 
 const WINDOW_MS = 15 * 60 * 1000;
 const RETAIN_MS = 24 * 60 * 60 * 1000;
@@ -70,27 +74,41 @@ function recordOutcome(failed: boolean) {
   if (outcomes.length > 5000) trimOutcomes();
 }
 
-function recordFailure(f: Omit<FailureRecord, "at">) {
+function recordFailure(f: Omit<FailureRecord, "at">, extra: { message?: string; stack?: string | null; source?: string | null } = {}) {
   failures.push({ at: Date.now(), ...f });
   trimFailures();
+  logError({
+    kind: f.kind,
+    method: f.method,
+    route: f.route,
+    status: f.status,
+    message: extra.message ?? f.message,
+    cause: f.cause,
+    stack: extra.stack ?? null,
+    source: extra.source ?? (f.kind === "server" ? "server" : null),
+  });
 }
 
-export function recordClientCrash(info: { url?: string; message?: string }) {
+export function recordClientCrash(info: { url?: string; message?: string; stack?: string | null; source?: string | null }) {
   let path = "unknown page";
   try {
     if (info.url) path = new URL(info.url).pathname;
   } catch {
     /* keep default */
   }
+  const message = String(info.message ?? "Page crashed").slice(0, 300);
   recordOutcome(true);
-  recordFailure({
-    kind: "client",
-    method: "PAGE",
-    route: normalizePath(path),
-    status: 0,
-    message: String(info.message ?? "Page crashed").slice(0, 300),
-    cause: null,
-  });
+  recordFailure(
+    {
+      kind: "client",
+      method: "PAGE",
+      route: normalizePath(path),
+      status: 0,
+      message: info.source ? `[${info.source}] ${message}` : message,
+      cause: null,
+    },
+    { message, stack: info.stack ?? null, source: info.source ?? null },
+  );
 }
 
 function normalizePath(p: string): string {

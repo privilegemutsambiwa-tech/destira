@@ -2553,3 +2553,45 @@ export const photoHashes = pgTable(
   },
   (t) => [index("photo_hashes_user_idx").on(t.userId)],
 );
+
+// The console's error log (Part K3): every server error (500+) and every
+// screen crash, grouped by what broke so a thousand repeats are one row.
+// Survives restarts, unlike the live error rate. Messages and causes only:
+// no request bodies, no member content.
+export const errorGroups = pgTable(
+  "error_groups",
+  {
+    id: serial("id").primaryKey(),
+    fingerprint: varchar("fingerprint", { length: 64 }).notNull(),
+    kind: text("kind").notNull(), // server | client
+    method: text("method").notNull(), // GET/POST… or PAGE for a screen
+    route: text("route").notNull(),
+    status: integer("status").notNull().default(0),
+    message: text("message").notNull(), // the latest
+    cause: text("cause"), // the logged underlying error, latest
+    stack: text("stack"), // screen crashes only, latest
+    source: text("source"), // "server", "web <version>", "app <version>"
+    count: integer("count").notNull().default(0),
+    firstSeenAt: timestamp("first_seen_at").notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+    /** open | resolved | muted. A resolved error that happens again reopens. */
+    state: text("state").notNull().default("open"),
+    resolvedAt: timestamp("resolved_at"),
+    resolvedBy: varchar("resolved_by"),
+    lastAlertAt: timestamp("last_alert_at"),
+  },
+  (t) => [uniqueIndex("error_groups_fingerprint_idx").on(t.fingerprint), index("error_groups_last_seen_idx").on(t.lastSeenAt)],
+);
+export type ErrorGroup = typeof errorGroups.$inferSelect;
+
+// How many times each group happened, by hour: the console's little chart and
+// the spike check. Kept 30 days.
+export const errorGroupHours = pgTable(
+  "error_group_hours",
+  {
+    groupId: integer("group_id").notNull().references(() => errorGroups.id, { onDelete: "cascade" }),
+    hour: timestamp("hour").notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [uniqueIndex("error_group_hours_group_hour_idx").on(t.groupId, t.hour)],
+);

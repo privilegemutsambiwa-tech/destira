@@ -329,7 +329,12 @@ export async function registerRoutes(
       stack,
       componentStack,
     });
-    recordClientCrash({ url, message: source ? `[${source}] ${message}` : message });
+    recordClientCrash({
+      url,
+      message,
+      stack: typeof stack === "string" ? String(stack) + (typeof componentStack === "string" ? "\n\nScreen:" + componentStack : "") : null,
+      source,
+    });
     res.sendStatus(204);
   });
 

@@ -153,7 +153,10 @@ function ErrorPanel({ failedCount, sampleSize }: { failedCount: number; sampleSi
         </div>
       )}
       <p style={{ ...LABEL, color: FAINT, marginTop: 12, textTransform: "none", letterSpacing: 0 }}>
-        {data?.note ?? "Kept in memory since the server last restarted."}
+        {data?.note ?? "Kept in memory since the server last restarted."}{" "}
+        <Link href="/console/errors" style={{ color: MUTED, textDecoration: "underline" }} data-testid="link-all-errors">
+          Every error, kept for 30 days
+        </Link>
       </p>
     </div>
   );
