@@ -37,6 +37,7 @@ import { dataSaverOn } from "@/lib/data-saver";
 import { ProfileViewSkeleton } from "@/components/ui-vf/skeletons";
 import { useBackToClose } from "@/lib/back-button";
 import { haptic } from "@/lib/haptics";
+import { noteBadMoment } from "@/lib/review-prompt";
 
 /** Small mono "Edit" affordance for an editable region in the preview. Quiet
  *  by default (visible-but-unobtrusive on touch, no hover to reveal it),
@@ -277,6 +278,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const doBlock = async () => {
     setConfirm(null);
     try {
+      noteBadMoment();
       await fetch(`/api/users/block/${userId}`, { method: "POST", credentials: "include" });
       toast({ title: `${name} blocked` });
       setLocation("/matches");
@@ -291,6 +293,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     setReportReason("");
     setReportPhotoId(null);
     try {
+      noteBadMoment();
       await fetch(`/api/users/${userId}/report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

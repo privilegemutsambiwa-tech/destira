@@ -5,12 +5,18 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.google.android.play.core.review.ReviewInfo;
+import com.google.android.play.core.review.ReviewManager;
+import com.google.android.play.core.review.ReviewManagerFactory;
 
 /**
  * Small native checks the web code can't make itself (client/src/lib/native.ts).
  * hasFirebase: true only when this build includes google-services.json (the
  * google-services build step turns it into a "google_app_id" string resource).
  * Registering for push without it crashes the app, so the web code asks first.
+ * requestReview: Google Play's in-app rating card (client/src/lib/review-prompt.ts
+ * decides when). Play decides whether it actually shows and never says if the
+ * member rated, so this always resolves.
  */
 @CapacitorPlugin(name = "DestiraNative")
 public class DestiraNativePlugin extends Plugin {
@@ -21,5 +27,20 @@ public class DestiraNativePlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("value", ready);
         call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void requestReview(PluginCall call) {
+        ReviewManager manager = ReviewManagerFactory.create(getContext());
+        manager.requestReviewFlow().addOnCompleteListener(request -> {
+            if (!request.isSuccessful()) {
+                call.resolve();
+                return;
+            }
+            ReviewInfo info = request.getResult();
+            getActivity().runOnUiThread(() ->
+                manager.launchReviewFlow(getActivity(), info).addOnCompleteListener(done -> call.resolve())
+            );
+        });
     }
 }

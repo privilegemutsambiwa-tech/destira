@@ -7,27 +7,59 @@ native side changes: plugins, icons, permissions, `android/`.
 
 ## 1. Store listing text
 
+Refreshed for 1.4 (Part M5). Love first, like the website's hero: the twin
+is how you get there, not the headline.
+
 **App name:** Destira
 
-**Short description** (80 characters max):
+**Short description** (80 characters max; this is 66):
 
-> Your AI twin meets theirs first. Dating for real people, starting in Harare.
+> Find love. Find your forever. Your AI twin breaks the ice for you.
 
 **Full description:**
 
-> Come and find your person.
+> Find love. Find your forever.
 >
-> On Destira, your AI twin does the awkward first part. Answer a few questions and your twin learns how you talk about a free Saturday, what you're looking for and what you'd never compromise on. When someone is curious about you, they ask your twin first, and you ask theirs.
+> Destira is for people in Zimbabwe who want something real. Meet single people who want what you want, start talking when you both like each other, and meet in person when it feels right. Free to join.
+>
+> Your AI twin breaks the ice
+> Answer a few questions and your twin learns how you talk, what you're looking for and what you'd never compromise on. It has the awkward first conversation with other members' twins, then shows you who you'd click with and why. You step in when it's worth it.
 >
 > - Tonight's three: three people picked for you every evening at 7, each with a reason you'd get on.
-> - Interview their twin: ask what you'd want to know before a first coffee. Twins only answer what their person allows.
-> - An honest read: see where you two click and where you differ, before you say hello.
-> - Events and the Lounge: meet people at braais, dinners and campus events, and join rooms for the things you love.
-> - Bring your people: invite a friend and you both get a free week.
+> - Ask their twin: find out what you'd want to know before a first coffee. Twins only answer what their person allows.
+> - Likes and matches: when someone you like likes you back, it's a match and the chat opens.
+> - Chats that feel like you: messages, voice notes, photos, and help planning the first date.
+> - Events: dinners, hikes, game nights and more, hosted by Destira and its members. See who's going that you'd get on with.
+> - The Lounge: rooms for the things you're into. Chat, play games, then meet.
+> - Friends too: wave at people who want new friends, and every Sunday sit down to lunch with five people near you.
+> - Vouches: a few words from people who've met you, on your profile if you choose.
 >
-> You decide what your twin may talk about. You can read everything it has said, and delete your account and data at any time.
+> Safe by design
+> Verify your profile with a selfie. Report or block anyone, and our team reviews every report. You decide what your twin may talk about, you can read everything it has said, and you can delete your account and data at any time.
 >
-> Destira is for adults aged 18 and over.
+> Made in Harare. Destira is for adults aged 18 and over.
+
+**What's new in 1.4** (release notes, 500 characters max):
+
+> Pages now keep their shape while they load, and the back button closes whatever is open before it leaves the screen. The tab bar steps out of the way while you type. Sending a message and liking someone now come with a gentle buzz.
+
+When video dates ship in this release, add a line for them to "What's new"
+and a bullet to the full description; until then neither mentions them.
+
+**Screenshots** (still to capture, 1080 px or more on the short side), with a
+caption on each:
+
+1. Discover card: "Someone is looking for someone like you."
+2. Tonight's three: "Three people picked for you, every evening at 7."
+3. A twin conversation: "Your AI twin breaks the ice."
+4. A profile's "why you might click": "See why you'd get on, before you say hello."
+5. Events: "Meet people at real events."
+6. A chat: "When you both like each other, start talking."
+
+**In-app review:** from 1.4 the app asks for a Play rating once, after a
+member's first match, and never within a day of a block, report, unmatch or
+error (`client/src/lib/review-prompt.ts`). Play decides whether the card
+actually shows; it never shows on a sideloaded APK, only on installs from Play.
 
 **Category:** Dating  
 **Contact email:** support@destira.date  

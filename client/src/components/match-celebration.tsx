@@ -6,6 +6,7 @@ import { duration, ease } from "@/lib/motion";
 import { VfButton } from "@/components/ui-vf";
 import { Users } from "lucide-react";
 import { useBackToClose } from "@/lib/back-button";
+import { maybeAskForReview } from "@/lib/review-prompt";
 import { useProfile, useSuggestedLounges } from "@/hooks/use-profiles";
 
 // A real portrait, not a tiny circle — this is a page about specific
@@ -50,6 +51,9 @@ export function MatchCelebration({
   const { lounges } = useSuggestedLounges(otherUserId);
   // Android back closes the moment instead of leaving the screen under it.
   useBackToClose(true, onClose);
+  // Their first match is when we ask for a Play Store rating: once the
+  // moment has closed and they've landed, never over it.
+  useEffect(() => () => { window.setTimeout(() => void maybeAskForReview(), 1500); }, []);
   // The match is felt as well as seen (docs/destira-upgrade-prompt.md §4.6).
   useEffect(() => {
     haptic.match();

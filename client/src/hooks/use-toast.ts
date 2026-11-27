@@ -1,4 +1,5 @@
 import * as React from "react"
+import { noteBadMoment } from "@/lib/review-prompt"
 
 import type {
   ToastActionElement,
@@ -141,6 +142,8 @@ type Toast = Omit<ToasterToast, "id">
 
 function toast({ ...props }: Toast) {
   const id = genId()
+  // An error the member saw: no "rate us" for a while (lib/review-prompt.ts).
+  if (props.variant === "destructive") noteBadMoment()
 
   const update = (props: ToasterToast) =>
     dispatch({

@@ -28,6 +28,7 @@ import { ease } from "@/lib/motion";
 import { haptic } from "@/lib/haptics";
 import { LiveRegion, spokenMessage, useNewMessageAnnouncement } from "@/lib/a11y";
 import { ChatSkeleton } from "@/components/ui-vf/skeletons";
+import { noteBadMoment } from "@/lib/review-prompt";
 
 // A lower-pressure first step than a cold 1:1 thread: if this pair already
 // shares Lounges, point at them; otherwise suggest ones the other person is
@@ -181,6 +182,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
     if (!reportTarget) return;
     setReportBusy(true);
     try {
+      noteBadMoment();
       await apiRequest("POST", `/api/users/${reportTarget.userId}/report`, {
         reason: reportReason.trim(),
         evidence: reportTarget.messageId != null ? [{ type: "direct_message", id: reportTarget.messageId }] : undefined,
@@ -376,6 +378,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
     if (!other?.userId) return;
     setConfirm(null);
     try {
+      noteBadMoment();
       await apiRequest("POST", `/api/users/block/${other.userId}`, {});
       toast({ title: `${otherFirst} blocked` });
       queryClient.invalidateQueries({ queryKey: ["/api/matches"] });

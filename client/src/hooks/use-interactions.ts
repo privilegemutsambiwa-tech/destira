@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { requestPushNudge } from "@/lib/engagement-prompts";
 import { likeDelivered, likeRefused, likeSending, likeWaiting, worthRetrying } from "@/lib/discover-decisions";
 import { haptic } from "@/lib/haptics";
+import { noteBadMoment } from "@/lib/review-prompt";
 
 export function useIncomingLikes() {
   return useQuery({
@@ -178,7 +179,10 @@ export function useUnmatch() {
       if (!res.ok) throw new Error("Failed to unmatch");
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/matches"] }),
+    onSuccess: () => {
+      noteBadMoment();
+      return queryClient.invalidateQueries({ queryKey: ["/api/matches"] });
+    },
   });
 }
 
