@@ -135,7 +135,7 @@ export function BillingPanel({ onBack, profile }: { onBack: () => void; profile:
                     {p.status === "paid" ? (
                       <span className="text-xs px-2 py-0.5 rounded-full shrink-0" style={{ background: "rgba(16,185,129,0.15)", color: "#10B981" }}>Paid</span>
                     ) : (
-                      <span className="text-xs px-2 py-0.5 rounded-full shrink-0" style={{ background: "rgba(239,68,68,0.12)", color: "#EF4444" }} title="No money was taken">Didn't go through</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full shrink-0" style={{ background: "rgba(239,68,68,0.12)", color: "var(--vf-danger)" }} title="No money was taken">Didn't go through</span>
                     )}
                   </div>
                 </div>
@@ -184,8 +184,8 @@ export function BillingPanel({ onBack, profile }: { onBack: () => void; profile:
           </button>
           <button
             disabled={cancelSub.isPending}
-            className="px-4 py-2 text-sm font-semibold text-foreground vf-btn-primary"
-            style={{ background: "#EF4444", borderRadius: "10px", border: "none" }}
+            className="px-4 py-2 text-sm font-semibold vf-btn-primary"
+            style={{ background: "#C62828", color: "#FFFFFF", borderRadius: "10px", border: "none" }}
             onClick={() => {
               setShowCancelDialog(false);
               cancelSub.mutate(undefined, {

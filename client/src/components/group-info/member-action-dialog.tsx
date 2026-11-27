@@ -111,10 +111,10 @@ export function MemberActionDialog({ target, busy, canManage, onClose, onPick, o
                     className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
                     style={{ background: r.danger ? "rgba(239,68,68,0.12)" : "hsl(var(--vf-ember) / 0.14)" }}
                   >
-                    <r.icon className="w-4 h-4" style={{ color: r.danger ? "#EF4444" : EMBER }} />
+                    <r.icon className="w-4 h-4" style={{ color: r.danger ? "var(--vf-danger)" : EMBER }} />
                   </span>
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold" style={{ color: r.danger ? "#EF4444" : TEXT }}>{r.label}</div>
+                    <div className="text-sm font-semibold" style={{ color: r.danger ? "var(--vf-danger)" : TEXT }}>{r.label}</div>
                     <div className="text-xs mt-0.5" style={{ color: MUTED }}>{r.hint}</div>
                   </div>
                 </button>
@@ -158,7 +158,7 @@ export function MemberActionDialog({ target, busy, canManage, onClose, onPick, o
               {action !== "pause" && <button
                 className="px-4 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-60"
                 style={{
-                  background: copy[action].danger ? "#EF4444" : EMBER,
+                  background: copy[action].danger ? "#C62828" : EMBER,
                   color: copy[action].danger ? "#fff" : INK,
                   borderRadius: "10px",
                   border: "none",

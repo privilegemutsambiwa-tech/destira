@@ -49,6 +49,7 @@ export function InviteLinksCard({ createInvite, handleCreateInvite, inviteLink, 
               />
               <button
                 onClick={() => handleCopyLink(inviteLink.token)}
+                aria-label={copiedLink === inviteLink.token ? "Invite link copied" : "Copy invite link"}
                 className="w-9 h-9 flex items-center justify-center rounded-lg btn-press"
                 style={{ background: ELEVATED, border: `1px solid ${LINE}`, color: TEXT }}
                 data-testid="button-copy-invite-link"

@@ -23,6 +23,7 @@ import { useProfile, usePhotos } from "@/hooks/use-profiles";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
+import { LiveRegion } from "@/lib/a11y";
 import { CoachBar, CoachCard, WriterCard, type CoachResult } from "@/components/twin-coach";
 
 type MessageStatus = "sending" | "sent" | "delivered";
@@ -244,6 +245,8 @@ export default function TwinChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  // The twin's reply, read out once it has finished arriving (K6).
+  const [spokenReply, setSpokenReply] = useState("");
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const { data: memory } = useTwinMemory();
@@ -419,6 +422,7 @@ export default function TwinChat() {
               } else if (event.type === "done") {
                 setIsTyping(false);
                 const finalContent = event.content || streamingMsgRef.current;
+                setSpokenReply(`Your twin: ${finalContent}`);
                 if (!assistantAdded) {
                   setMessages(prev => [
                     ...prev,
@@ -612,6 +616,8 @@ export default function TwinChat() {
           size="icon"
           className="md:hidden"
           onClick={() => setMemoryOpen(!memoryOpen)}
+          aria-label={memoryOpen ? "Hide what your twin remembers" : "Show what your twin remembers"}
+          aria-expanded={memoryOpen}
           data-testid="button-toggle-memory"
         >
           {memoryOpen ? <ChevronUp className="w-4 h-4 text-vf-text" /> : <ChevronDown className="w-4 h-4 text-vf-text" />}
@@ -753,6 +759,7 @@ export default function TwinChat() {
 
           <div className="p-4 border-t border-vf-line bg-vf-ink shrink-0">
             <CoachBar disabled={isStreaming} onResult={handleCoachResult} />
+            <LiveRegion text={spokenReply} />
             <form
               className="flex gap-2 max-w-4xl mx-auto"
               onSubmit={(e) => {
@@ -773,6 +780,7 @@ export default function TwinChat() {
                 size="icon"
                 className="rounded-full bg-vf-mint text-vf-ink hover:bg-[var(--vf-mint-vivid)] disabled:opacity-50"
                 disabled={!input.trim() || isStreaming}
+                aria-label="Send"
                 data-testid="button-send-twin"
               >
                 {isStreaming ? (

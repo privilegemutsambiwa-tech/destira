@@ -12,7 +12,7 @@ export const SURFACE2 = "#14101C";
 export const LINE = "rgba(255,255,255,.09)";
 export const TEXT = "#F5F0EA";
 export const MUTED = "#A79FB4";
-export const FAINT = "#7E7690";
+export const FAINT = "#867E98";
 export const EMBER = "#FF6B4A";
 // The one alert colour, used sparingly, and never the only signal — every use
 // is paired with a text label. Distinct from ember so the two are never

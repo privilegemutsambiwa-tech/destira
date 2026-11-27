@@ -87,8 +87,10 @@ export function AppearanceRow() {
               style={{
                 background: active ? "hsl(var(--vf-ember) / 0.14)" : ELEVATED,
                 border: `1px solid ${active ? "hsl(var(--vf-ember) / 0.4)" : BORDER}`,
-                color: active ? EMBER : TEXT,
+                color: TEXT,
+                fontWeight: active ? 600 : 500,
               }}
+              aria-pressed={active}
               data-testid={`row-appearance-${o.value}`}
             >
               {o.label}

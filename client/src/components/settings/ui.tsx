@@ -2,6 +2,7 @@
 // settings screen is built from.
 
 import { ArrowLeft, ChevronRight } from "lucide-react";
+import { pressable } from "@/lib/a11y";
 
 // Theme-aware — these resolve through the CSS custom properties in
 // index.css (dark on bare :root, light under :root[data-theme="light"] /
@@ -58,9 +59,12 @@ export const SECTION_HEADER_STYLE: React.CSSProperties = {
   padding: "24px 16px 10px",
 };
 
+// The look of a switch. The row around it is the actual control (role
+// "switch", focusable), so this part is hidden from screen readers.
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div
+      aria-hidden="true"
       onClick={(e) => { e.stopPropagation(); onChange(!value); }}
       style={{
         width: "42px", height: "24px", borderRadius: "100px",
@@ -85,7 +89,7 @@ export function ToggleRow({ icon: Icon, label, sublabel, value, onChange, testId
   label: string; sublabel?: string; value: boolean; onChange: (v: boolean) => void; testId?: string;
 }) {
   return (
-    <div className="vf-row" style={ROW_STYLE} onClick={() => onChange(!value)} role="switch" aria-checked={value} data-testid={testId}>
+    <div className="vf-row" style={ROW_STYLE} {...pressable(() => onChange(!value), { role: "switch", checked: value })} aria-label={label} data-testid={testId}>
       <Icon className="w-5 h-5 mr-3 shrink-0" style={{ color: MUTED }} />
       <div className="flex-1 min-w-0 pr-3">
         <p className="text-sm font-medium text-foreground">{label}</p>
@@ -101,10 +105,10 @@ export function ChevronRow({ icon: Icon, label, sublabel, onClick, destructive, 
   label: string; sublabel?: string; onClick: () => void; destructive?: boolean; testId?: string;
 }) {
   return (
-    <div className="vf-row group" style={ROW_STYLE} onClick={onClick} data-testid={testId}>
-      <Icon className="w-5 h-5 mr-3" style={{ color: destructive ? "#EF4444" : MUTED }} />
+    <div className="vf-row group" style={ROW_STYLE} {...pressable(onClick)} data-testid={testId}>
+      <Icon className="w-5 h-5 mr-3" style={{ color: destructive ? "var(--vf-danger)" : MUTED }} />
       <div className="flex-1">
-        <p className="text-sm font-medium" style={{ color: destructive ? "#EF4444" : TEXT }}>{label}</p>
+        <p className="text-sm font-medium" style={{ color: destructive ? "var(--vf-danger)" : TEXT }}>{label}</p>
         {sublabel && <p className="text-xs" style={{ color: MUTED }}>{sublabel}</p>}
       </div>
       <ChevronRight className="w-4 h-4 transition-transform duration-150 group-hover:translate-x-0.5" style={{ color: MUTED }} />
@@ -163,7 +167,7 @@ export function GradientButton({ label, onClick, testId, danger, disabled }: {
       data-testid={testId}
       className="w-full py-3 text-sm vf-btn-primary"
       style={{
-        background: danger ? "#EF4444" : EMBER,
+        background: danger ? "#C62828" : EMBER,
         color: danger ? "#FFFFFF" : INK,
         fontWeight: 600,
         borderRadius: "12px", border: "none",

@@ -308,7 +308,7 @@ export function AgeRangePanel({ onBack, profile }: { onBack: () => void; profile
             value={ageMinText}
             onChange={(e) => setAgeMinText(e.target.value)}
             className="w-20 h-11 rounded-xl text-center text-base outline-none vf-input-focus"
-            style={{ background: ELEVATED, border: `1px solid ${minInvalid ? "#EF4444" : BORDER}`, color: TEXT }}
+            style={{ background: ELEVATED, border: `1px solid ${minInvalid ? "var(--vf-danger)" : BORDER}`, color: TEXT }}
             data-testid="input-age-min"
           />
         </label>
@@ -323,13 +323,13 @@ export function AgeRangePanel({ onBack, profile }: { onBack: () => void; profile
             value={ageMaxText}
             onChange={(e) => setAgeMaxText(e.target.value)}
             className="w-20 h-11 rounded-xl text-center text-base outline-none vf-input-focus"
-            style={{ background: ELEVATED, border: `1px solid ${maxInvalid || rangeInvalid ? "#EF4444" : BORDER}`, color: TEXT }}
+            style={{ background: ELEVATED, border: `1px solid ${maxInvalid || rangeInvalid ? "var(--vf-danger)" : BORDER}`, color: TEXT }}
             data-testid="input-age-max"
           />
         </label>
       </div>
       {ageError ? (
-        <p className="text-xs px-4 pt-3" style={{ color: "#EF4444" }} data-testid="age-range-error">
+        <p className="text-xs px-4 pt-3" style={{ color: "var(--vf-danger)" }} data-testid="age-range-error">
           {ageError}
         </p>
       ) : (

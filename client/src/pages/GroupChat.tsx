@@ -34,6 +34,7 @@ import { gameName } from "@/lib/game-names";
 import { IconButton } from "@/components/ui-vf";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { LiveRegion, spokenMessage, useNewMessageAnnouncement } from "@/lib/a11y";
 import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
 import { usePaywall } from "@/hooks/use-paywall";
 import { apiRequest } from "@/lib/queryClient";
@@ -255,7 +256,7 @@ function PollComposerDialog({ groupId, open, onClose }: { groupId: number; open:
                   data-testid={`input-poll-option-${idx}`}
                 />
                 {options.length > 2 && (
-                  <Button variant="ghost" size="icon" onClick={() => removeOption(idx)} data-testid={`button-remove-option-${idx}`}>
+                  <Button variant="ghost" size="icon" onClick={() => removeOption(idx)} aria-label={`Remove option ${idx + 1}`} data-testid={`button-remove-option-${idx}`}>
                     <X className="w-4 h-4" />
                   </Button>
                 )}
@@ -380,6 +381,12 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
 
   const { data: group, isLoading: groupLoading } = useGroup(groupId);
   const { data: messages, isLoading: msgsLoading } = useEnrichedGroupMessages(groupId);
+  // Screen readers hear new messages from others as they arrive (K6).
+  const announcement = useNewMessageAnnouncement(messages as any[] | undefined, {
+    key: (m) => m.id,
+    mine: (m) => m.userId === user?.id,
+    say: (m) => `${m.nickname || "Someone"}: ${spokenMessage(m)}`,
+  });
   const sendMessage = useSendGroupMessage(groupId);
   const deleteOwnMsg = useDeleteOwnMessage(groupId);
   const queryClient = useQueryClient();
@@ -708,6 +715,14 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                     >
                       <PopoverTrigger asChild>
                         <div
+                          role={isDeleted ? undefined : "button"}
+                          tabIndex={isDeleted ? undefined : 0}
+                          onKeyDown={(e) => {
+                            if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                              e.preventDefault();
+                              (e.currentTarget as HTMLElement).click();
+                            }
+                          }}
                           className={`px-4 py-2.5 text-sm leading-relaxed break-words ${isDeleted ? "" : "cursor-pointer"}`}
                           style={{
                             borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
@@ -881,7 +896,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                                 onClick={action.onClick}
                                 className="flex items-center w-full px-3 py-1.5 text-sm rounded-md btn-press transition-colors text-left"
                                 style={{
-                                  color: action.danger ? "#EF4444" : TEXT,
+                                  color: action.danger ? "var(--vf-danger)" : TEXT,
                                   background: "transparent",
                                 }}
                                 data-testid={action.testId}
@@ -934,6 +949,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
         )}
         <OutboxBubbles kind="group" targetId={groupId} />
         <div ref={messagesEndRef} />
+        <LiveRegion text={announcement} />
       </div>
 
       <div style={{ background: SURFACE2, borderTop: `1px solid ${LINE}` }}>
@@ -1058,6 +1074,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
                   color: input.trim() && !slow.left ? "hsl(var(--vf-ink))" : MUTED,
                   transition: "all 0.2s ease",
                 }}
+                aria-label="Send"
                 data-testid="button-send-group"
               >
                 {sendMessage.isPending ? (

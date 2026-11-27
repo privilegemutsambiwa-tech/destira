@@ -390,8 +390,8 @@ export default function Settings() {
             className="flex items-center gap-2"
             style={{ padding: "11px 16px", borderBottom: "1px solid rgba(239,68,68,0.18)" }}
           >
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "#EF4444" }} />
-            <span style={{ ...MONO_EYEBROW, color: "#EF4444" }}>Think twice: these can't be undone</span>
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--vf-danger)" }} />
+            <span style={{ ...MONO_EYEBROW, color: "var(--vf-danger)" }}>Think twice: these can't be undone</span>
           </div>
           <ChevronRow icon={X} label="Clear your twin's memory" sublabel="Your twin forgets everything it has learned" onClick={() => setActivePanel("clear-memory")} destructive testId="row-clear-memory" />
           <ChevronRow icon={Trash2} label="Delete account" sublabel="Everything, permanently" onClick={() => setShowDeleteDialog(true)} destructive testId="row-delete-account" />
@@ -430,7 +430,7 @@ export default function Settings() {
           ) : (
             matching.map((s) => (
               <div key={s.id}>
-                <div style={s.danger ? { ...SECTION_HEADER_STYLE, color: "#EF4444" } : SECTION_HEADER_STYLE}>{s.label}</div>
+                <div style={s.danger ? { ...SECTION_HEADER_STYLE, color: "var(--vf-danger)" } : SECTION_HEADER_STYLE}>{s.label}</div>
                 <div style={{ margin: "0 16px" }}>{s.content}</div>
               </div>
             ))
@@ -445,7 +445,7 @@ export default function Settings() {
       <div className="lg:hidden" style={{ maxWidth: "480px", margin: "0 auto", paddingBottom: "40px" }}>
         {sections.map((s) => (
           <div key={s.id} id={`settings-section-${s.id}`} style={{ scrollMarginTop: "64px" }}>
-            <div style={s.danger ? { ...SECTION_HEADER_STYLE, color: "#EF4444" } : SECTION_HEADER_STYLE}>{s.label}</div>
+            <div style={s.danger ? { ...SECTION_HEADER_STYLE, color: "var(--vf-danger)" } : SECTION_HEADER_STYLE}>{s.label}</div>
             <div style={{ margin: "0 16px" }}>{s.content}</div>
           </div>
         ))}
@@ -473,7 +473,7 @@ export default function Settings() {
                   fontSize: "13.5px",
                   marginBottom: "2px",
                   background: active ? ELEVATED : undefined,
-                  color: s.danger ? "#EF4444" : active ? TEXT : MUTED,
+                  color: s.danger ? "var(--vf-danger)" : active ? TEXT : MUTED,
                   fontWeight: active ? 500 : 400,
                 }}
                 data-testid={`nav-section-${s.id}`}
@@ -527,7 +527,7 @@ export default function Settings() {
             </DialogDescription>
           </DialogHeader>
           <div style={{ padding: "8px 0" }}>
-            <p className="text-xs mb-2" style={{ color: MUTED }}>Type <strong style={{ color: "#EF4444" }}>DELETE</strong> to confirm</p>
+            <p className="text-xs mb-2" style={{ color: MUTED }}>Type <strong style={{ color: "var(--vf-danger)" }}>DELETE</strong> to confirm</p>
             <input
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
@@ -541,8 +541,8 @@ export default function Settings() {
             <button className="px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-150 hover:bg-[var(--vf-elevated)]" style={{ color: MUTED }} onClick={() => { setShowDeleteDialog(false); setDeleteConfirmText(""); }} data-testid="button-cancel-delete">Cancel</button>
             <button
               disabled={deleteConfirmText !== "DELETE" || deleteMutation.isPending}
-              className="px-4 py-2 text-sm font-semibold text-foreground vf-btn-primary"
-              style={{ background: deleteConfirmText === "DELETE" ? "#EF4444" : BORDER, borderRadius: "10px", border: "none", cursor: deleteConfirmText === "DELETE" ? "pointer" : "not-allowed" }}
+              className="px-4 py-2 text-sm font-semibold vf-btn-primary"
+              style={{ background: deleteConfirmText === "DELETE" ? "#C62828" : BORDER, color: deleteConfirmText === "DELETE" ? "#FFFFFF" : TEXT, borderRadius: "10px", border: "none", cursor: deleteConfirmText === "DELETE" ? "pointer" : "not-allowed" }}
               onClick={() => deleteMutation.mutate()}
               data-testid="button-confirm-delete"
             >

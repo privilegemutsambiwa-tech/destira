@@ -433,8 +433,10 @@ export default function HostEvent() {
                   <span className="text-[14px] text-vf-soft">This is my home / a private address</span>
                   <button
                     type="button"
+                    role="switch"
                     onClick={() => set({ isPrivateAddress: !d.isPrivateAddress })}
-                    aria-pressed={d.isPrivateAddress}
+                    aria-checked={d.isPrivateAddress}
+                    aria-label="This is my home / a private address"
                     className={`w-[42px] h-[24px] rounded-full shrink-0 flex items-center p-[3px] transition-colors ${d.isPrivateAddress ? "bg-vf-gold justify-end" : "bg-vf-text/[0.14] justify-start"}`}
                     data-testid="toggle-private"
                   >
@@ -647,8 +649,10 @@ export default function HostEvent() {
               <span className="text-[14px] text-vf-soft">Sober event</span>
               <button
                 type="button"
+                role="switch"
                 onClick={() => set({ isSober: !d.isSober })}
-                aria-pressed={d.isSober}
+                aria-checked={d.isSober}
+                aria-label="Sober event"
                 className={`w-[42px] h-[24px] rounded-full shrink-0 flex items-center p-[3px] transition-colors ${d.isSober ? "bg-vf-mint justify-end" : "bg-vf-text/[0.14] justify-start"}`}
               >
                 <span className="block w-[18px] h-[18px] rounded-full" style={{ background: d.isSober ? "hsl(var(--vf-ink))" : "#CFC7DA" }} />

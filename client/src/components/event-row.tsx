@@ -176,7 +176,7 @@ export function EventRow({ event, groupName, isHost, pending, onOpen, onAttend, 
 
       <div className="min-w-0">
         {event.isOfficial && <div className="mb-1.5"><OfficialBadge sponsorName={event.sponsorName} /></div>}
-        <div className="text-[17.5px] text-vf-text truncate">{event.title}</div>
+        <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(); }} className="block w-full text-left text-[17.5px] text-vf-text truncate">{event.title}</button>
         <div className="text-[13px] text-vf-muted mt-1 truncate">{metaParts.join(" · ")}</div>
         {event.costModel === "ticket" && event.ticketCents != null && (
           <div className="font-mono text-[10px] mt-2 uppercase tracking-[0.12em] text-vf-faint truncate" data-testid={`event-ticket-${event.id}`}>
@@ -302,7 +302,7 @@ export function FeaturedEventRow({ event, groupName, isHost, pending, onOpen, on
       <div className="pt-9 pb-5 px-5 flex items-end justify-between gap-4 flex-wrap">
         <div className="min-w-0">
           {event.isOfficial && <div className="mb-1.5"><OfficialBadge sponsorName={event.sponsorName} /></div>}
-          <div className="font-serif text-[21px] text-vf-text truncate">{event.title}</div>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(); }} className="block w-full text-left font-serif text-[21px] text-vf-text truncate">{event.title}</button>
           <div className="text-[13px] text-vf-muted mt-1 truncate">{metaParts.join(" · ")}</div>
           {signal && (
             <div className={`font-mono text-[11.5px] mt-1.5 ${signal.color === "mint" ? "text-vf-mint" : "text-vf-gold"}`}>
@@ -388,7 +388,7 @@ export function EventCard({ event, groupName, isHost, pending, onOpen, onAttend,
 
       <div className="p-4 pt-3.5 flex flex-col gap-3 flex-1">
         <div className="min-w-0">
-          <div className="font-display text-[22px] leading-[1.15] text-vf-text line-clamp-2">{event.title}</div>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(); }} className="block w-full text-left font-display text-[22px] leading-[1.15] text-vf-text line-clamp-2">{event.title}</button>
           <div className="vf-small text-vf-muted mt-1 truncate">
             {[where, groupName ? `hosted by ${groupName}` : null].filter(Boolean).join(" · ")}
           </div>

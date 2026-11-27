@@ -115,22 +115,21 @@ export function LayoutShell({ children }: LayoutShellProps) {
             <DestiraLockup orientation="horizontal" size={28} />
           </div>
         </Link>
-        <Link href="/notifications">
-          <span
-            role="link"
-            className={`absolute right-2 w-11 h-11 cursor-pointer inline-flex items-center justify-center rounded-full ${isActive("/notifications") ? "text-vf-text" : "text-vf-faint"} hover:text-vf-text`}
-            style={{ bottom: "6px" }}
-            aria-label={bellLabel}
-            data-testid="button-bell-mobile"
-          >
-            <span className="relative">
-              <Bell className="w-5 h-5" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1.5 min-w-[14px] h-[14px] px-[3px] rounded-full bg-vf-ember text-vf-ink font-mono text-[9px] leading-[14px] text-center" data-testid="badge-bell-mobile">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </span>
+        <Link
+          href="/notifications"
+          className={`absolute right-2 w-11 h-11 cursor-pointer inline-flex items-center justify-center rounded-full ${isActive("/notifications") ? "text-vf-text" : "text-vf-faint"} hover:text-vf-text`}
+          style={{ bottom: "6px" }}
+          aria-label={bellLabel}
+          aria-current={isActive("/notifications") ? "page" : undefined}
+          data-testid="button-bell-mobile"
+        >
+          <span className="relative">
+            <Bell className="w-5 h-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1.5 min-w-[14px] h-[14px] px-[3px] rounded-full bg-vf-ember text-vf-ink font-mono text-[9px] leading-[14px] text-center" data-testid="badge-bell-mobile">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </span>
         </Link>
       </header>

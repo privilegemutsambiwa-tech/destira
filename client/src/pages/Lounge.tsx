@@ -355,7 +355,7 @@ function RoomCard({ room, onOpen, index, note, testId }: { room: any; onOpen: ()
           </span>
         )}
         {room.liveGame && (
-          <span className="absolute bottom-2.5 left-2.5">
+          <span className="absolute bottom-2.5 left-2.5 right-2.5 flex">
             <LivePill game={room.liveGame} onDark />
           </span>
         )}

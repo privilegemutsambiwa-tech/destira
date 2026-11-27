@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Shield, ChevronRight, Trash2, ChevronDown, ChevronUp, Download, UserX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { pressable } from "@/lib/a11y";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { CARD, ELEVATED, BORDER, MUTED, FAINT, TEXT, EMBER, MONO_EYEBROW, ROW_STYLE, Panel, GradientButton } from "./ui";
@@ -126,7 +127,7 @@ export function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
                 width: "60px", height: "60px", borderRadius: "50%", background: "rgba(239,68,68,0.15)",
                 display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px",
               }}>
-                <Trash2 className="w-7 h-7" style={{ color: "#EF4444" }} />
+                <Trash2 className="w-7 h-7" style={{ color: "var(--vf-danger)" }} />
               </div>
               <p className="font-semibold text-foreground mb-1">This is permanent</p>
               <p className="text-sm" style={{ color: MUTED }}>All your profile data, matches, Twin memory, and account will be permanently deleted. This cannot be undone.</p>
@@ -138,7 +139,7 @@ export function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
                 placeholder="DELETE"
                 className="w-full px-3 py-2 text-sm text-foreground vf-input-focus"
-                style={{ background: ELEVATED, border: `1px solid #EF4444`, borderRadius: "10px", outline: "none" }}
+                style={{ background: ELEVATED, border: `1px solid var(--vf-danger)`, borderRadius: "10px", outline: "none" }}
                 data-testid="input-delete-confirm"
               />
             </div>
@@ -164,7 +165,7 @@ export function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
         <div
           className="vf-row"
           style={{ ...ROW_STYLE, cursor: "pointer" }}
-          onClick={() => setShowCollect(v => !v)}
+          {...pressable(() => setShowCollect(v => !v), { expanded: showCollect })}
           data-testid="row-what-we-collect"
         >
           <Shield className="w-5 h-5 mr-3" style={{ color: MUTED }} />
@@ -184,7 +185,7 @@ export function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
             ))}
           </div>
         )}
-        <div className="vf-row" style={ROW_STYLE} onClick={handleExport} data-testid="row-export-data">
+        <div className="vf-row" style={ROW_STYLE} {...pressable(handleExport)} data-testid="row-export-data">
           <Download className="w-5 h-5 mr-3" style={{ color: MUTED }} />
           <div className="flex-1">
             <p className="text-sm font-medium text-foreground">Export My Data</p>
@@ -192,10 +193,10 @@ export function DataPrivacyPanel({ onBack }: { onBack: () => void }) {
           </div>
           <ChevronRight className="w-4 h-4" style={{ color: MUTED }} />
         </div>
-        <div className="vf-row" style={{ ...ROW_STYLE, borderBottom: "none" }} onClick={() => setDeleteStep(1)} data-testid="row-delete-data">
-          <Trash2 className="w-5 h-5 mr-3" style={{ color: "#EF4444" }} />
+        <div className="vf-row" style={{ ...ROW_STYLE, borderBottom: "none" }} {...pressable(() => setDeleteStep(1))} data-testid="row-delete-data">
+          <Trash2 className="w-5 h-5 mr-3" style={{ color: "var(--vf-danger)" }} />
           <div className="flex-1">
-            <p className="text-sm font-medium" style={{ color: "#EF4444" }}>Delete all data</p>
+            <p className="text-sm font-medium" style={{ color: "var(--vf-danger)" }}>Delete all data</p>
             <p className="text-xs" style={{ color: MUTED }}>Permanently erase your account</p>
           </div>
           <ChevronRight className="w-4 h-4" style={{ color: MUTED }} />

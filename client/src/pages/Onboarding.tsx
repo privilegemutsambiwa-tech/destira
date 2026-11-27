@@ -455,8 +455,9 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   return (
     <button
       type="button"
+      role="switch"
       onClick={() => onChange(!on)}
-      aria-pressed={on}
+      aria-checked={on}
       className={`w-[44px] h-[26px] rounded-full shrink-0 flex items-center p-[3px] transition-colors ${
         on ? "bg-vf-ember justify-end" : "bg-vf-text/[0.14] justify-start"
       }`}

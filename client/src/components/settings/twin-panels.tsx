@@ -167,10 +167,10 @@ export function ClearMemoryPanel({ onBack }: { onBack: () => void }) {
       <div className="flex flex-col items-center px-6 pt-8 text-center">
         <div style={{
           width: "80px", height: "80px", borderRadius: "50%",
-          background: ELEVATED, border: `2px solid #EF4444`,
+          background: ELEVATED, border: `2px solid var(--vf-danger)`,
           display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "20px",
         }}>
-          <Brain className="w-10 h-10" style={{ color: "#EF4444" }} />
+          <Brain className="w-10 h-10" style={{ color: "var(--vf-danger)" }} />
         </div>
         <h2 className="text-lg mb-2" style={{ ...SERIF, color: TEXT }}>Clear Twin Memory</h2>
         <p className="text-sm mb-6" style={{ color: MUTED }}>
@@ -180,12 +180,12 @@ export function ClearMemoryPanel({ onBack }: { onBack: () => void }) {
           <GradientButton label="I understand, clear memory" onClick={() => setConfirmed(true)} testId="button-confirm-clear-step1" danger />
         ) : (
           <div className="w-full space-y-3">
-            <p className="text-sm font-semibold" style={{ color: "#EF4444" }}>Are you absolutely sure?</p>
+            <p className="text-sm font-semibold" style={{ color: "var(--vf-danger)" }}>Are you absolutely sure?</p>
             <button
               onClick={() => clearMutation.mutate()}
               disabled={clearMutation.isPending}
               className="w-full py-3 text-sm font-semibold text-foreground vf-btn-primary"
-              style={{ background: "#EF4444", borderRadius: "12px", border: "none", cursor: "pointer" }}
+              style={{ background: "#C62828", color: "#FFFFFF", borderRadius: "12px", border: "none", cursor: "pointer" }}
               data-testid="button-confirm-clear-final"
             >
               {clearMutation.isPending ? "Clearing..." : "Yes, clear all memory"}

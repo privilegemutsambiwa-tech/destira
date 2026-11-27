@@ -1079,13 +1079,14 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
           style={ringStyle}
           onClick={() => setCreatorMode("choose")}
           disabled={isUploading}
+          aria-label="Add a moment"
           data-testid="button-add-story"
         >
           <div style={innerStyle}>
             <Plus className="w-5 h-5" style={{ color: "#A79FB4" }} />
           </div>
         </button>
-        <span className="text-xs" style={{ color: "#A79FB4" }}>Add a moment</span>
+        <span className="text-xs" style={{ color: "#A79FB4" }} aria-hidden="true">Add a moment</span>
       </div>
 
       {creatorMode === "choose" && (
@@ -1106,10 +1107,10 @@ export function AddStoryButton({ onStoryAdded, mode = "dashed", open: controlled
             >
               Add a moment
             </h2>
-            <p className="text-center text-xs mb-1" style={{ color: "#7E7690" }}>
+            <p className="text-center text-xs mb-1" style={{ color: "#867E98" }}>
               Only people in your rooms see this.
             </p>
-            <p className="text-center text-xs mb-6" style={{ color: "#7E7690" }}>
+            <p className="text-center text-xs mb-6" style={{ color: "#867E98" }}>
               Your name shows up if someone opens it.
             </p>
             <div className="grid grid-cols-3 gap-3 mb-5">

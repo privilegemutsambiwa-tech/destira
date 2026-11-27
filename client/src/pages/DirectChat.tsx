@@ -26,6 +26,7 @@ import { OutboxBubbles } from "@/components/outbox-bubbles";
 import { IconButton, TwinGlyph, VfAvatar, VfButton, VfSheet } from "@/components/ui-vf";
 import { ease } from "@/lib/motion";
 import { haptic } from "@/lib/haptics";
+import { LiveRegion, spokenMessage, useNewMessageAnnouncement } from "@/lib/a11y";
 
 // A lower-pressure first step than a cold 1:1 thread: if this pair already
 // shares Lounges, point at them; otherwise suggest ones the other person is
@@ -227,6 +228,12 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
     : null;
 
   const list: any[] = Array.isArray(messages) ? messages : [];
+  // Screen readers hear their new messages as they arrive (K6).
+  const announcement = useNewMessageAnnouncement(list, {
+    key: (m) => m.id,
+    mine: (m) => m.senderId === user?.id,
+    say: (m) => `${otherName}: ${spokenMessage(m)}`,
+  });
   const typing = useTyping(matchId, input, !!match && !editing);
   // A reaction still in the outbox shows on its message straight away.
   const reactionsFor = (msg: DmMessageView) => {
@@ -599,6 +606,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
           </div>
           {typing.theyType && <TypingBubble />}
           <div ref={messagesEndRef} />
+          <LiveRegion text={announcement} />
         </div>
       </div>
 
@@ -684,6 +692,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
                   handleSend();
                 }
               }}
+              aria-label={`Message ${otherFirst}`}
               placeholder={`Message ${otherFirst}`}
               className="flex-1 min-h-[44px] resize-none rounded-[22px] px-4 py-[11px] text-[16px] leading-[22px] bg-vf-surface border border-vf-line text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-text/25"
               data-testid="input-message"

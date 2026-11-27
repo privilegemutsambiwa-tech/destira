@@ -76,12 +76,14 @@ function Chip({
   );
 }
 
-function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button
       type="button"
+      role="switch"
       onClick={() => onChange(!on)}
-      aria-pressed={on}
+      aria-checked={on}
+      aria-label={label}
       className={`w-[42px] h-[24px] rounded-full shrink-0 flex items-center p-[3px] transition-colors ${
         on ? "bg-vf-mint justify-end" : "bg-vf-text/[0.14] justify-start"
       }`}
@@ -257,7 +259,7 @@ export default function EventPreferences() {
           <GroupLabel>Access</GroupLabel>
           <div className="flex items-center justify-between">
             <span className="text-[14px] text-vf-soft">Only sober events</span>
-            <Toggle on={draft.soberOnly} onChange={(v) => patch({ soberOnly: v })} />
+            <Toggle on={draft.soberOnly} onChange={(v) => patch({ soberOnly: v })} label="Only sober events" />
           </div>
           <div className="flex flex-wrap gap-2">
             {EVENT_ACCESS_NEEDS.map((a) => (
@@ -274,7 +276,7 @@ export default function EventPreferences() {
         <section className="vf-card rounded-[18px] border border-vf-mint/20 bg-vf-mint/[0.04] p-4 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint">Twin alert</div>
-            <Toggle on={draft.notifyOnGoodMatch} onChange={(v) => patch({ notifyOnGoodMatch: v })} />
+            <Toggle on={draft.notifyOnGoodMatch} onChange={(v) => patch({ notifyOnGoodMatch: v })} label="Twin alert" />
           </div>
           {draft.notifyOnGoodMatch && (
             <>

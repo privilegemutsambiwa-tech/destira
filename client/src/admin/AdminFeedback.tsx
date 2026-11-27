@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminGet, adminPatch } from "./api";
+import { pressable } from "@/lib/a11y";
 import { PageHeader, LABEL, MONO, LINE, SURFACE, MUTED, FAINT, TEXT, formatDateTime } from "./AdminShell";
 import { FEEDBACK_CATEGORY_LABEL } from "@shared/admin";
 
@@ -8,7 +9,7 @@ function CopyableId({ id, label }: { id: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <span
-      onClick={() => navigator.clipboard?.writeText(id).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); })}
+      {...pressable(() => navigator.clipboard?.writeText(id).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }))}
       title="Click to copy"
       style={{ ...MONO, fontSize: 11, color: FAINT, cursor: "pointer" }}
       data-testid="copyable-id"

@@ -53,7 +53,7 @@ export function StoryEngagersSheet({ storyId, kind, onClose }: StoryEngagersShee
       >
         <div className="flex items-center justify-between mb-5">
           <h2 style={{ fontFamily: '"Instrument Serif", serif', fontWeight: 400, color: "#F5F0EA", fontSize: "22px" }}>
-            {title} <span style={{ color: "#7E7690" }}>{count}</span>
+            {title} <span style={{ color: "#867E98" }}>{count}</span>
           </h2>
           <button aria-label="Close"
             className="w-8 h-8 flex items-center justify-center rounded-full"
@@ -92,7 +92,7 @@ export function StoryEngagersSheet({ storyId, kind, onClose }: StoryEngagersShee
             </button>
           </div>
         ) : engagers.length === 0 ? (
-          <p className="text-sm text-center py-8" style={{ color: "#7E7690" }}>
+          <p className="text-sm text-center py-8" style={{ color: "#867E98" }}>
             {kind === "viewers" ? "No one has viewed this yet." : "No likes yet."}
           </p>
         ) : (

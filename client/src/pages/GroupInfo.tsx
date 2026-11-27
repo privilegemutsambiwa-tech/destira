@@ -12,6 +12,7 @@ import {
   useToggleMute, useAddGroupMember, useSearchUsers, useSearchGroupMessages
 } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
+import { pressable } from "@/lib/a11y";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { avatarColor } from "@/lib/avatar-color";
@@ -341,10 +342,13 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
           <div
             className="relative w-full"
             style={{ aspectRatio: "21 / 9", background: SURFACE2, borderBottom: `1px solid ${LINE}`, cursor: bannerPhotoUrl ? "zoom-in" : isAdmin ? "pointer" : "default" }}
-            onClick={() => {
-              if (bannerPhotoUrl) openLightbox(bannerPhotoUrl);
-              else if (isAdmin) setPhotoTarget("banner");
-            }}
+            {...(bannerPhotoUrl || isAdmin
+              ? pressable(() => {
+                  if (bannerPhotoUrl) openLightbox(bannerPhotoUrl);
+                  else setPhotoTarget("banner");
+                })
+              : {})}
+            aria-label={bannerPhotoUrl ? "View the group's cover photo" : isAdmin ? "Add a cover photo" : undefined}
             data-testid="banner-area"
           >
             {(group?.bannerUrl || group?.groupPhotoUrl) ? (
@@ -703,8 +707,8 @@ export default function GroupInfoPage({ params }: { params?: { groupId?: string 
                   height: "48px",
                   borderRadius: "12px",
                   background: "rgba(239,68,68,0.15)",
-                  border: "1.5px solid #EF4444",
-                  color: "#EF4444",
+                  border: "1.5px solid var(--vf-danger)",
+                  color: "var(--vf-danger)",
                 }}
                 data-testid="button-delete-group"
               >

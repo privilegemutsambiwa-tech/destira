@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { pressable } from "@/lib/a11y";
 import { LIMITS as SETTINGS_LIMITS } from "@shared/entitlements";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -27,7 +28,7 @@ export function HelpPanel({ onBack }: { onBack: () => void }) {
           <div key={i} style={{ borderBottom: i < faqs.length - 1 ? `1px solid ${BORDER}` : "none" }}>
             <div
               className="vf-row"
-              onClick={() => setOpen(open === i ? null : i)}
+              {...pressable(() => setOpen(open === i ? null : i), { expanded: open === i })}
               style={{ display: "flex", alignItems: "center", padding: "14px 16px", cursor: "pointer" }}
               data-testid={`faq-toggle-${i}`}
             >
