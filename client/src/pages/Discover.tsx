@@ -36,6 +36,7 @@ import { NextUp } from "@/components/discover/next-up";
 import { BlockReportDialog } from "@/components/discover/block-report-dialog";
 import { LikesUsedUp, DeckEmpty } from "@/components/discover/empty-states";
 import { DiscoverCardSkeleton } from "@/components/ui-vf/skeletons";
+import { type DeckKeyActions, useDeckKeys, useDeckOrder, perkRefusalGate } from "@/components/discover/use-deck";
 
 export default function Discover() {
   useMarkSeen("discover");
@@ -110,34 +111,10 @@ export default function Discover() {
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Keyboard shortcuts read the latest handlers through this; it's reset to
   // null every render and only filled in when a card is actually showing.
-  const keyActionsRef = useRef<{ pass: () => void; like: () => void; interview: () => void; undo: () => void } | null>(null);
+  const keyActionsRef = useRef<DeckKeyActions | null>(null);
   keyActionsRef.current = null;
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const a = keyActionsRef.current;
-      if (!a || e.metaKey || e.ctrlKey || e.altKey) return;
-      const t = e.target as HTMLElement | null;
-      // Never while typing, and never under an open dialog or sheet.
-      if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
-      if (document.querySelector('[role="dialog"]')) return;
-      const k = e.key.toLowerCase();
-      if (k === "arrowleft") { e.preventDefault(); a.pass(); }
-      else if (k === "arrowright") { e.preventDefault(); a.like(); }
-      else if (k === "i") a.interview();
-      else if (k === "z") a.undo();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useDeckKeys(keyActionsRef);
   useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
-  // The actual browsing order, as a list of ids — not re-derived from
-  // scratch each render. Tapping a "Next up" card must permanently rotate
-  // the previous front card out of the immediate preview window (otherwise
-  // it lands right back in the next-up slice and two or three people just
-  // trade places forever instead of the viewer ever reaching the rest of
-  // the deck — this was the actual bug, not the backend candidate list).
-  const [deckOrder, setDeckOrder] = useState<string[]>([]);
   const { data: rawProfiles, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useDiscoverProfiles(filter, userLat, userLng);
   const { data: feedStories } = useFeedStories();
   const startInterview = useStartInterview();
@@ -191,52 +168,8 @@ export default function Discover() {
 
   const viewingCardStories = viewingCardMeta ? storiesByUserId[viewingCardMeta.userId] : null;
 
-  // Under the active filter, before this session's evaluations thin it out
-  // — the stable denominator for the "N of total" counter below. Excludes
-  // evaluatedIds on purpose: the counter's total shouldn't shrink every time
-  // a card leaves the deck, only the position within it should climb.
-  const eligibleForFilter = useMemo(() => {
-    const base: any[] = rawProfiles ?? [];
-    const have = new Set(base.map((p: any) => p.userId));
-    const all = [...Object.values(extraCards).filter((c: any) => !have.has(c.userId)), ...base];
-    return filter === "nearby" ? all.filter((p: any) => p.distanceKm !== null && p.distanceKm !== undefined) : all;
-  }, [rawProfiles, filter, extraCards]);
-
-  // Keeps the deck's browsing order stable across renders instead of
-  // re-deriving it from the raw list every time. Newly-seen candidates
-  // (a fresh signup, or the filter changing) are appended at the back;
-  // anyone evaluated or filtered out drops off; everyone else keeps their
-  // relative position, which is what makes the "Next up" rotation below
-  // actually work.
-  //
-  // "Within 20km" sorts by distance HERE, once, as candidates join the deck —
-  // never on every render. Re-sorting the rendered list each time used to
-  // snap the nearest person straight back to the front, so tapping a "Next
-  // up" card in nearby mode did nothing. A filter change starts a fresh order.
-  const deckFilterRef = useRef(filter);
-  useEffect(() => {
-    let available: any[] = eligibleForFilter.filter((p: any) => !evaluatedIds.has(p.userId));
-    if (filter === "nearby") {
-      available = [...available].sort((a: any, b: any) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
-    }
-    const availableIds: string[] = available.map((p: any) => p.userId as string);
-    const availableSet = new Set(availableIds);
-    const filterChanged = deckFilterRef.current !== filter;
-    deckFilterRef.current = filter;
-    setDeckOrder((prev) => {
-      const kept = (filterChanged ? [] : prev).filter((id) => availableSet.has(id));
-      const keptSet = new Set(kept);
-      const added = availableIds.filter((id) => !keptSet.has(id));
-      const next = [...kept, ...added];
-      const unchanged = next.length === prev.length && next.every((id, i) => id === prev[i]);
-      return unchanged ? prev : next;
-    });
-  }, [eligibleForFilter, evaluatedIds, filter]);
-
-  const profiles = useMemo(() => {
-    const byId = new Map<string, any>(eligibleForFilter.map((p: any) => [p.userId as string, p]));
-    return deckOrder.map((id) => byId.get(id)).filter((p): p is any => !!p);
-  }, [eligibleForFilter, deckOrder]);
+  // The browsing order and the "N of total" count (components/discover/use-deck).
+  const { eligibleForFilter, profiles, toFront } = useDeckOrder(rawProfiles, extraCards, filter, evaluatedIds);
 
   // Always the front of the deck — evaluating a profile removes it from
   // `profiles` above (via evaluatedIds), so there's no index to advance,
@@ -271,41 +204,10 @@ export default function Discover() {
   }, [storiesByUserId]);
 
   const refusePerk = (feature: Feature, body: any) => {
-    if ((feature === "super_like" || feature === "boost") && body?.upgradeRequired) {
-      setPerkSheet({
-        feature,
-        gate: {
-          ok: false,
-          tier: body?.currentTier ?? "free",
-          limit: null,
-          resetAt: body?.resetAt,
-          line: body?.message,
-          action: body?.action,
-          requiredTierName: body?.requiredTierName,
-          requiredPrice: body?.requiredPrice,
-        },
-      });
-      return;
-    }
-    if (body?.requiredTierName) {
-      setPerkSheet({
-        feature,
-        gate: {
-          ok: false,
-          tier: body.currentTier ?? "free",
-          limit: null,
-          resetAt: body.resetAt,
-          line: body.message,
-          action: body.action,
-          requiredTierName: body.requiredTierName,
-          requiredPrice: body.requiredPrice,
-        },
-      });
-    } else {
-      toast({ title: body?.message || "Not right now" });
-    }
+    const gate = perkRefusalGate(feature, body);
+    if (gate) setPerkSheet({ feature, gate });
+    else toast({ title: body?.message || "Not right now" });
   };
-
   // The few-second Undo is free; after that it's a rewind of the last pass.
   const handleRewind = async () => {
     // Still inside the free undo: the same as tapping Undo. (Written out
@@ -316,7 +218,7 @@ export default function Discover() {
       setUndoPass(null);
       setExitDir(null);
       setDismissedIds((prev) => { const next = new Set(prev); next.delete(userId); return next; });
-      setDeckOrder((prev) => [userId, ...prev.filter((id) => id !== userId)]);
+      toFront(userId);
       takeBackPass(userId);
       return;
     }
@@ -336,7 +238,7 @@ export default function Discover() {
       forgetDecision(card.userId);
       setExtraCards((prev) => ({ ...prev, [card.userId]: card }));
       setDismissedIds((prev) => { const next = new Set(prev); next.delete(card.userId); return next; });
-      setDeckOrder((prev) => [card.userId, ...prev.filter((id) => id !== card.userId)]);
+      toFront(card.userId);
       setExitDir(null);
       qc.setQueryData(["/api/discover/perks"], body.perks);
       toast({ title: `${(card.displayName || "They").split(/\s+/)[0]} is back`, description: "Take another look." });
@@ -512,7 +414,7 @@ export default function Discover() {
     setExitDir(null);
     setDismissedIds((prev) => { const next = new Set(prev); next.delete(userId); return next; });
     // Back to the front of the deck, not the end of the line.
-    setDeckOrder((prev) => [userId, ...prev.filter((id) => id !== userId)]);
+    toFront(userId);
     takeBackPass(userId);
   };
 
