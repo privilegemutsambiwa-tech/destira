@@ -73,7 +73,7 @@ export function TrialBanner() {
       </Link>
       <button
         onClick={dismiss}
-        className="absolute top-3.5 right-3.5 sm:static sm:top-auto sm:right-auto text-vf-faint hover:text-vf-text transition-colors shrink-0 rounded-full p-0.5 hover:bg-vf-elevated"
+        className="absolute top-3.5 right-3.5 sm:static sm:top-auto sm:right-auto text-vf-faint hover:text-vf-text transition-colors shrink-0 rounded-full p-0.5 hover:bg-[var(--vf-elevated)]"
         aria-label="Dismiss trial banner"
         data-testid="trial-banner-dismiss"
       >

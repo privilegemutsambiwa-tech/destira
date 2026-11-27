@@ -32,7 +32,12 @@ export default defineConfig({
   use: {
     baseURL: process.env.SMOKE_BASE_URL || "http://localhost:5001",
     viewport: { width: 390, height: 844 },
-    launchOptions: { executablePath: process.env.SMOKE_CHROMIUM || chromium() },
+    launchOptions: {
+      executablePath: process.env.SMOKE_CHROMIUM || chromium(),
+      // A test pattern and a tone instead of a real camera and microphone,
+      // allowed without a prompt (video-call.spec.ts).
+      args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"],
+    },
     trace: "retain-on-failure",
   },
   outputDir: "test-results/smoke",

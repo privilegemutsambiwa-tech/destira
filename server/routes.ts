@@ -30,6 +30,7 @@ import * as eventsService from "./events";
 import * as officialEvents from "./official-events";
 import { runOfficialAutopilot } from "./official-autopilot";
 import { registerGrowthRoutes } from "./growth-routes";
+import { registerVideoCallRoutes, ensureVideoCallsTable, sweepVideoCalls } from "./video-calls";
 import { getDailyPicks } from "./daily-picks";
 import { withClickReasons } from "./click-reasons";
 import { withRoomExtras } from "./lounge-extras";
@@ -56,7 +57,6 @@ import { registerAdminConsole } from "./admin";
 import { registerVerificationRoutes, isSelfieKey } from "./verification";
 import * as safety from "./safety";
 import { registerBillingRoutes } from "./billing";
-import { registerMemberRateLimits } from "./rate-limits";
 import { registerCrownRoutes, canPayCrown } from "./crown";
 import { registerCrownPerkRoutes, applySpotlight, dropLiftedToday, privateModeHides, introMatchIds } from "./crown-perks";
 import { registerMatchmakerRoutes } from "./crown-matchmaker";
@@ -90,6 +90,7 @@ import { openerFacts, fallbackOpeners } from "./openers";
 import { isCrownPeriod } from "@shared/crown";
 import { DETAILS_SCHEMA, mergeDetails } from "@shared/profile-details";
 import { ADVANCED_PREF_KEYS, MATCH_PREFS_SCHEMA, mergePrefs } from "@shared/match-prefs";
+import { registerMemberRateLimits } from "./rate-limits";
 import * as emailTemplates from "./email/templates";
 import { setAdminLockoutHook } from "./admin/auth";
 import { trackActivity } from "./admin/activity";
@@ -219,7 +220,6 @@ export async function registerRoutes(
   // Plan reminders, receipts and payment history (server/billing.ts).
   // Before the /api/payments/:id route so "history" isn't taken for an id.
   registerBillingRoutes(app, getUserId);
-  // Selfie verification (server/verification.ts).
   // Destira Crown: apply, state, who wears it (server/crown.ts).
   registerCrownRoutes(app, getUserId);
   registerCrownPerkRoutes(app, getUserId);
@@ -273,7 +273,10 @@ export async function registerRoutes(
   startClicksSweep();
   // Event calendar files, host ratings and venue partners (Part J).
   registerEventExtraRoutes(app, getUserId);
+  // Selfie verification (server/verification.ts).
   registerVerificationRoutes(app, getUserId, upload);
+  // Video dates between matches (server/video-calls.ts).
+  registerVideoCallRoutes(app, getUserId);
 
   // Reactions and polls are keyed off a bare group-message id with no group
   // id in the URL, so without this a member of ANY group could read/react to
@@ -2835,12 +2838,7 @@ Only include structured_updates fields if the conversation clearly reveals them.
       const g = await gate.checkGate(userId, feature);
       // Carry the composed refusal copy so the client sheet / <Gated> card and
       // the server 403 body all render the same strings.
-      const copy = gateCopy(feature, {
-        tier: g.tier,
-        limit: g.limit,
-        used: g.used,
-        resetLabel: gate.resetLabelFromISO(g.resetAt),
-      });
+      const copy = gate.gateCopyFor(g, feature);
       res.json({ ...g, action: copy.action, line: copy.line, requiredTierName: copy.requiredTierName, requiredPrice: copy.requiredPrice });
     } catch (e) {
       res.status(400).json({ message: "Unknown feature" });
@@ -4363,9 +4361,6 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     const parsed = initiatePaymentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid payment request" });
     const { tier, period, method, phone, sourceFeature, resend } = parsed.data;
-    // NardoPay's hosted link takes the wallet number on its own page, not
-    // ours — the phone requirement only applies to Paynow's direct USSD push.
-    const walletMethod = method === "ecocash" || method === "onemoney" || method === "innbucks";
     // Crown: only its own periods, and only once the team has approved this
     // member (server/crown.ts). Every other plan: never a Crown period.
     if (tier === "crown") {
@@ -4375,6 +4370,9 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
     } else if (period === "threeMonth") {
       return res.status(400).json({ message: "Invalid payment request" });
     }
+    // NardoPay's hosted link takes the wallet number on its own page, not
+    // ours — the phone requirement only applies to Paynow's direct USSD push.
+    const walletMethod = method === "ecocash" || method === "onemoney" || method === "innbucks";
     const handledByNardoPay = walletMethod && payments.providerFor(method).name.startsWith("nardopay");
     if (walletMethod && !handledByNardoPay && !/^0?7\d{8}$/.test((phone || "").replace(/\D/g, ""))) {
       return res.status(400).json({ message: "Enter the wallet number as 07XX XXX XXX." });
@@ -6482,6 +6480,12 @@ Fill in what you can determine from the data. Use short, clear phrases. Limit ar
       .catch((e) => console.error("[official-autopilot] failed:", e));
   setTimeout(sweepOfficial, 8_000);
   setInterval(sweepOfficial, 15 * 60 * 1000);
+  // Video calls: the table on first boot, then close rings nobody answered
+  // and calls both phones have gone quiet on (so they stop counting minutes).
+  ensureVideoCallsTable().catch((e) => console.error("[video] couldn't create video_calls:", e));
+  setInterval(() => {
+    sweepVideoCalls().catch((e) => console.error("[video] sweep failed:", e));
+  }, 30_000);
   startOfficialStoriesSweep();
   setTimeout(initialBackfill, 12_000);
   setInterval(() => {

@@ -18,7 +18,32 @@ import { Filesystem, Directory } from "@capacitor/filesystem";
 import { closeTopOverlay } from "./back-button";
 
 // android/.../DestiraNativePlugin.java
-const DestiraNative = registerPlugin<{ hasFirebase(): Promise<{ value: boolean }> }>("DestiraNative");
+const DestiraNative = registerPlugin<{
+  hasFirebase(): Promise<{ value: boolean }>;
+  /** App 1.4+ only: stops screenshots and screen recording while set. */
+  setSecure(opts: { enabled: boolean }): Promise<void>;
+}>("DestiraNative");
+
+/** The installed app's build number (android versionCode); 0 on the web. */
+export async function nativeBuild(): Promise<number> {
+  if (!isNativeApp()) return 0;
+  try {
+    return Number((await App.getInfo()).build) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Blocks screenshots and screen recording of the app while on (video
+ *  calls). No-op on the web and on app builds from before it existed. */
+export async function setScreenSecure(enabled: boolean): Promise<void> {
+  if (!isNativeApp()) return;
+  try {
+    await DestiraNative.setSecure({ enabled });
+  } catch {
+    /* older app build */
+  }
+}
 
 // Leaving the app with Back only from a top-level screen.
 const HOME_PATHS = new Set(["/", "/discover", "/chats", "/interviews", "/matches", "/lounge", "/events", "/profile"]);

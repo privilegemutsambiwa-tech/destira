@@ -53,6 +53,9 @@ export interface TierLimits {
   superLikesPerWeek: number;
   /** boosts included per rolling 7 days; bought ones come on top */
   boostsPerWeek: number;
+  /** minutes of video dates you can START per day (the caller pays; answering
+   *  a call never counts, on any tier); null = no limit. Free is 0. */
+  videoMinutesPerDay: number | null;
 }
 
 export const LIMITS: Record<Tier, TierLimits> = {
@@ -72,6 +75,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
     dailyRewinds: 0,
     superLikesPerWeek: 0,
     boostsPerWeek: 0,
+    videoMinutesPerDay: 0,
   },
   spark: {
     priceCents: 499,
@@ -89,6 +93,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
     dailyRewinds: 1,
     superLikesPerWeek: 0,
     boostsPerWeek: 0,
+    videoMinutesPerDay: 30,
   },
   flame: {
     priceCents: 999,
@@ -106,6 +111,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
     dailyRewinds: null,
     superLikesPerWeek: 3,
     boostsPerWeek: 0,
+    videoMinutesPerDay: 120,
   },
   ember: {
     priceCents: 1999,
@@ -123,6 +129,7 @@ export const LIMITS: Record<Tier, TierLimits> = {
     dailyRewinds: null,
     superLikesPerWeek: 10,
     boostsPerWeek: 1,
+    videoMinutesPerDay: null,
   },
 };
 
@@ -144,6 +151,7 @@ export const FEATURES = [
   "see_story_engagers", // names/profiles of who viewed or liked your story
   "story_reply", // posting a reply to someone else's story
   "group_chat_request", // "Request Private Chat" on a member from inside a Lounge
+  "video_call", // starting a video date with a match (minutes per day)
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -165,6 +173,7 @@ export const FEATURE_MIN_TIER: Record<Feature, Tier> = {
   see_story_engagers: "spark",
   story_reply: "free", // a metered count, not a tier floor — see LIMIT_KEY
   group_chat_request: "free", // metered, not tier-floored — free's count is just 0, see LIMIT_KEY
+  video_call: "free", // metered in minutes; free's allowance is 0, see LIMIT_KEY
 };
 
 // ── Display metadata — the ONLY place plan copy lives ──
@@ -192,7 +201,7 @@ export const PLAN_CARDS: PlanCard[] = [
       `Join up to ${LIMITS.free.groupsMax} rooms in the Lounge`,
       "Browse events",
     ],
-    notYet: [`Transcripts stop at ${LIMITS.free.transcriptLines} lines`, "Can't see who asked to meet you", "Can't host events"],
+    notYet: [`Transcripts stop at ${LIMITS.free.transcriptLines} lines`, "Can't see who asked to meet you", "Can't host events", "Can't start video dates (you can answer them)"],
   },
   {
     tier: "spark",
@@ -206,6 +215,7 @@ export const PLAN_CARDS: PlanCard[] = [
       `${LIMITS.spark.dailyLikes} likes a day, unlimited passes`,
       `${LIMITS.spark.weeklyInterviews} interviews a week`,
       `Up to ${LIMITS.spark.groupsMax} rooms in the Lounge`,
+      `Video dates with your matches, ${LIMITS.spark.videoMinutesPerDay} minutes a day`,
     ],
     notYet: [`Transcripts still stop at ${LIMITS.spark.transcriptLines} lines`, "Can't host events"],
   },
@@ -221,6 +231,7 @@ export const PLAN_CARDS: PlanCard[] = [
       `${LIMITS.flame.dailyLikes} likes a day`,
       `${LIMITS.flame.weeklyInterviews} interviews a week`,
       `Up to ${LIMITS.flame.groupsMax} rooms, create up to ${LIMITS.flame.groupsCreatedMax}`,
+      `Video dates, ${LIMITS.flame.videoMinutesPerDay} minutes a day`,
     ],
     notYet: ["Likes, interviews and rooms still have a ceiling"],
     recommended: true,
@@ -237,6 +248,7 @@ export const PLAN_CARDS: PlanCard[] = [
       "The full transcript, every time",
       "Host your own events",
       `${LIMITS.ember.superLikesPerWeek} super likes and ${LIMITS.ember.boostsPerWeek} boost a week`,
+      "Unlimited video dates",
     ],
     notYet: [],
   },
@@ -335,6 +347,7 @@ const LIMIT_KEY: Partial<Record<Feature, keyof TierLimits>> = {
   join_group: "groupsMax",
   story_reply: "storyRepliesPerWeek",
   group_chat_request: "groupChatRequestsPerWeek",
+  video_call: "videoMinutesPerDay",
 };
 
 const ACTION: Record<Feature, string> = {
@@ -354,6 +367,7 @@ const ACTION: Record<Feature, string> = {
   see_story_engagers: "Seeing who viewed or liked your story",
   story_reply: "Replying to a story",
   group_chat_request: "Requesting a private chat",
+  video_call: "Starting a video date",
 };
 
 export interface GateCopy {
@@ -407,7 +421,13 @@ export function gateCopy(feature: Feature, s: GateCopyState = {}): GateCopy {
       : "";
 
     let line: string;
-    if (feature === "join_group") {
+    if (feature === "video_call") {
+      // The caller pays: answering is free on every plan, so say so.
+      line =
+        limit === 0
+          ? `Starting video dates begins on ${nextName}, ${priceLabel(LIMITS[nextTier].priceCents)} a month, with ${nextVal ?? "unlimited"} minutes a day. You can still answer when a match calls you.`
+          : `That's your ${limit} video minutes for today.${s.resetLabel ? ` More ${s.resetLabel}.` : ""} ${nextVal == null ? `${nextName} has no daily limit.` : `${nextName} gives you ${nextVal} a day.`} You can still answer calls.`;
+    } else if (feature === "join_group") {
       line = `You're in ${limit} rooms, the most on ${TIER_NAME[curTier]}. ${nextName} takes you to ${nextVal ?? "no limit"}.`;
     } else {
       const head =

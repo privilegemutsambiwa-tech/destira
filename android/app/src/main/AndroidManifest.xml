@@ -56,4 +56,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- To serve saved photos while offline (MainActivity.followConnectivity). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Video dates (client/src/pages/VideoCall.tsx). Asked for the first
+         time a member makes or answers a call, never at install. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Not required: phones without a camera can still install the app. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 </manifest>

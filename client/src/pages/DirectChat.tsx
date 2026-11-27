@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useDirectMessages, useSendDirectMessage, useMatches, useMarkThreadRead, useUnmatch } from "@/hooks/use-interactions";
 import { useSuggestedLounges } from "@/hooks/use-profiles";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, X, Users, Flag, MoreHorizontal, ArrowUp, UserRound, Ban, HeartOff } from "lucide-react";
+import { ArrowLeft, Loader2, X, Users, Flag, Video, MoreHorizontal, ArrowUp, UserRound, Ban, HeartOff } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useKeyboardScroll } from "@/hooks/use-keyboard-scroll";
@@ -23,6 +23,8 @@ import { CalendarHeart, Pencil as PencilIcon, X as XIcon } from "lucide-react";
 import { DateCard, DateCheckin, LetsMeetSheet } from "@/components/date-plan";
 import type { DmMessageView } from "@shared/dm";
 import { OutboxBubbles } from "@/components/outbox-bubbles";
+import { usePaywall } from "@/hooks/use-paywall";
+import { callApi, deviceCanVideo, openAppDownload } from "@/lib/video-call";
 import { IconButton, TwinGlyph, VfAvatar, VfButton, VfSheet } from "@/components/ui-vf";
 import { ease } from "@/lib/motion";
 import { haptic } from "@/lib/haptics";
@@ -163,9 +165,39 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
   const queryClient = useQueryClient();
   const markThreadRead = useMarkThreadRead();
   const unmatch = useUnmatch();
+  const paywall = usePaywall();
   const { toast } = useToast();
   const reduce = useReducedMotion();
   const suggestions = useSuggestions(matchId);
+  const [calling, setCalling] = useState(false);
+
+  // Video date: the caller pays (paid plans, minutes a day); answering is free.
+  const startVideoCall = async () => {
+    if (calling) return;
+    const can = await deviceCanVideo();
+    if (can === "update-app") {
+      toast({ title: "Update Destira for video dates", description: "Install the new version, then call again." });
+      openAppDownload();
+      return;
+    }
+    if (can === "unsupported") {
+      toast({ title: "Video calls need the Destira app or a newer browser" });
+      return;
+    }
+    paywall.guard("video_call", async () => {
+      setCalling(true);
+      try {
+        const { id } = await callApi.start(matchId);
+        setLocation(`/call/${id}`);
+      } catch (e: any) {
+        const msg = String(e?.message || "").replace(/^\d+:\s*/, "");
+        toast({ title: "Couldn't start the call", description: msg || "Try again in a moment.", variant: "destructive" });
+      } finally {
+        setCalling(false);
+      }
+    });
+  };
+
   const [shownTimeId, setShownTimeId] = useState<number | null>(null);
   const [reportTarget, setReportTarget] = useState<{ userId: string; messageId?: number } | null>(null);
   const [reportReason, setReportReason] = useState("");
@@ -433,6 +465,14 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
         <IconButton label={`Plan a date with ${otherFirst}`} onClick={() => setPlanning(true)} disabled={!match} data-testid="button-lets-meet">
           <CalendarHeart className="w-5 h-5" />
         </IconButton>
+        <IconButton
+          label={`Video call ${otherName}`}
+          onClick={startVideoCall}
+          disabled={calling || !match}
+          data-testid="button-video-call"
+        >
+          {calling ? <Loader2 className="w-5 h-5 animate-spin text-vf-ember" /> : <Video className="w-5 h-5" />}
+        </IconButton>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <IconButton label="More" data-testid="button-chat-menu">
@@ -456,6 +496,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
+      {paywall.sheet}
 
       <SharedLoungeStrip otherUserId={other?.userId} otherName={otherFirst} />
 

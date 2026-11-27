@@ -2442,6 +2442,35 @@ export const userActivityDaily = pgTable(
   (t) => [uniqueIndex("user_activity_daily_user_date_idx").on(t.userId, t.date)],
 );
 
+// Video dates between two matched members (server/video-calls.ts). The media
+// itself goes through LiveKit and is never recorded; this is the call's
+// record: who rang whom, whether it was answered, and for how long (the
+// caller's daily minutes are counted from answeredAt..endedAt). Created at
+// startup if missing (ensureVideoCallsTable), so no manual migration step.
+export const videoCalls = pgTable(
+  "video_calls",
+  {
+    id: serial("id").primaryKey(),
+    matchId: integer("match_id").notNull(),
+    callerId: varchar("caller_id").notNull(),
+    calleeId: varchar("callee_id").notNull(),
+    // ringing | active | ended | declined | cancelled | missed
+    status: text("status").notNull().default("ringing"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    answeredAt: timestamp("answered_at"),
+    endedAt: timestamp("ended_at"),
+    // Last sign of life from either phone during the call; a call nobody
+    // has checked in on for a while is closed by the sweep.
+    lastSeenAt: timestamp("last_seen_at"),
+    endedBy: varchar("ended_by"),
+  },
+  (t) => [
+    index("video_calls_callee_status_idx").on(t.calleeId, t.status),
+    index("video_calls_caller_created_idx").on(t.callerId, t.createdAt),
+  ],
+);
+export type VideoCall = typeof videoCalls.$inferSelect;
+
 export type AdminUser = typeof adminUsers.$inferSelect;
 export type AdminAuditLogEntry = typeof adminAuditLog.$inferSelect;
 export type Report = typeof reports.$inferSelect;
@@ -2450,7 +2479,6 @@ export type Feedback = typeof feedback.$inferSelect;
 
 export type CreateProfileRequest = InsertProfile;
 export type UpdateProfileRequest = Partial<InsertProfile>;
-
 
 // Selfie verification (docs/destira-3-upgrade-prompt.md Part A). A member
 // takes a live selfie copying a pose; a person on the team compares it with

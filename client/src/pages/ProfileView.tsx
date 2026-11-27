@@ -820,7 +820,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
           <button
             key={g.id}
             onClick={() => setLocation(g.viewerIsMember ? `/lounge/group/${g.id}` : `/lounge/group/${g.id}/info`)}
-            className="flex items-center justify-between gap-3 text-left -mx-2 px-2 py-1.5 rounded-lg transition-colors duration-150 hover:bg-vf-elevated"
+            className="flex items-center justify-between gap-3 text-left -mx-2 px-2 py-1.5 rounded-lg transition-colors duration-150 hover:bg-[var(--vf-elevated)]"
           >
             <span className="text-[14px] text-vf-text truncate">{g.name}</span>
             <span className="font-mono text-[10px] uppercase tracking-[0.16em] shrink-0 text-vf-faint">

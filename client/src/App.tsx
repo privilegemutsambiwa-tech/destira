@@ -30,6 +30,7 @@ import { OfflineBanner } from "@/components/offline-banner";
 import { AppUpdatePrompt } from "@/components/app-update-prompt";
 import { AppLockGate } from "@/components/app-lock";
 import { CommandPalette } from "@/components/command-palette";
+import { IncomingCallWatcher } from "@/components/incoming-call";
 // lazy(), plus a way to fetch the screen's code ahead of time. Once fetched,
 // the screen renders straight away instead of flashing the full-page loading
 // logo while its code arrives (seconds on a slow connection, the first time
@@ -82,10 +83,10 @@ const Essentials = screen(() => import("@/pages/Essentials"));
 const DevGallery = import.meta.env.MODE === "development" ? screen(() => import("@/pages/DevGallery")) : null;
 const Plans = screen(() => import("@/pages/Plans"));
 const PlansPay = screen(() => import("@/pages/PlansPay"));
-const GroupChatPage = screen(() => import("@/pages/GroupChat"));
 const Crown = screen(() => import("@/pages/Crown"));
 const ProfileDetails = screen(() => import("@/pages/ProfileDetails"));
 const Filters = screen(() => import("@/pages/Filters"));
+const GroupChatPage = screen(() => import("@/pages/GroupChat"));
 const GameRoomLobby = screen(() => import("@/pages/GameRoomLobby"));
 const GameRoomScreen = screen(() => import("@/pages/GameRoomScreen"));
 const GroupInfoPage = screen(() => import("@/pages/GroupInfo"));
@@ -104,6 +105,7 @@ const Introductions = screen(() => import("@/pages/Introductions"));
 const CrownTable = screen(() => import("@/pages/CrownTable"));
 const Till = screen(() => import("@/pages/Till"));
 const PublicEvent = screen(() => import("@/pages/PublicEvent"));
+const VideoCall = screen(() => import("@/pages/VideoCall"));
 
 // The screens people move between all the time, fetched quietly once someone
 // is signed in and the app has had a moment to settle, so tapping a tab or a
@@ -381,6 +383,9 @@ function Router() {
       <Route path="/chat/:matchId">
         {(params) => <ProtectedRoute component={DirectChat} params={params} />}
       </Route>
+      <Route path="/call/:id">
+        {(params) => <ProtectedRoute component={VideoCall} params={params} />}
+      </Route>
       <Route path="/twin-chat">
         <ProtectedRoute component={TwinChat} />
       </Route>
@@ -459,6 +464,7 @@ function App() {
       <ErrorBoundary>
         <Router />
       </ErrorBoundary>
+      <IncomingCallWatcher />
       <AppLockGate />
       <CommandPalette />
       <AppUpdatePrompt />

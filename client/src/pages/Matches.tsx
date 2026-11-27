@@ -119,7 +119,7 @@ function PassButton({ onClick, pending }: { onClick: () => void; pending?: boole
     <button
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       disabled={pending}
-      className="text-[13px] font-medium text-vf-muted hover:text-vf-text px-2.5 min-h-[44px] rounded-full transition-colors duration-150 hover:bg-vf-elevated disabled:opacity-40"
+      className="text-[13px] font-medium text-vf-muted hover:text-vf-text px-2.5 min-h-[44px] rounded-full transition-colors duration-150 hover:bg-[var(--vf-elevated)] disabled:opacity-40"
       data-testid="button-pass"
     >
       Pass

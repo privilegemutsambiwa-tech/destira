@@ -10,8 +10,8 @@
 // they're back on Flame+.
 
 import { db } from "./db";
-import { subscriptions, profiles, interviews, groupMembers, groups, dailyLikeCounts, storyComments, chatRequests, discoverPasses } from "@shared/schema";
-import { and, eq, gte, count, asc, sql } from "drizzle-orm";
+import { subscriptions, profiles, interviews, groupMembers, groups, dailyLikeCounts, storyComments, chatRequests, videoCalls, discoverPasses } from "@shared/schema";
+import { and, eq, gte, count, asc, isNotNull, sql } from "drizzle-orm";
 import { LIMITS, tierRank, FEATURE_MIN_TIER, gateCopy, type Tier, type Feature } from "@shared/entitlements";
 
 /** "at midnight" / "at 6:00 PM" / "in 3 days" from an ISO instant — mirrors
@@ -75,6 +75,28 @@ export async function getEffectiveTier(userId: string): Promise<Tier> {
   return sub ? "free" : coerceTier(p?.tier);
 }
 
+// Free time on a plan: the sign-up trial and invite-a-friend weeks. A
+// referral week added to a plan someone pays for keeps that plan's provider.
+const UNPAID_PROVIDERS = new Set(["trial", "referral"]);
+
+/** On a plan they paid for (not a trial or a free week). Owner decision:
+ *  starting video dates is for paying members only. Reads the same row
+ *  getEffectiveTier does. */
+export async function onPaidPlan(userId: string): Promise<boolean> {
+  const [sub] = await db
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, userId))
+    .orderBy(subscriptions.createdAt);
+  if (sub) {
+    const active = sub.status === "active" && (!sub.currentPeriodEnd || sub.currentPeriodEnd.getTime() > Date.now());
+    return active && coerceTier(sub.tier) !== "free" && !UNPAID_PROVIDERS.has(sub.provider ?? "");
+  }
+  const [p] = await db.select({ tier: profiles.subscriptionTier }).from(profiles).where(eq(profiles.userId, userId));
+  // Only ever set by a confirmed payment.
+  return coerceTier(p?.tier) !== "free";
+}
+
 /** The instant of the next local midnight in `tz` (IANA), as an ISO string.
  *  Falls back to server time when tz is missing or invalid. */
 export function nextMidnightISO(tz?: string | null): string {
@@ -119,6 +141,8 @@ export interface GateResult {
   resetAt?: string;
   requiredTier?: Tier;
   message?: string;
+  /** Refused because the plan is a trial or a free week, not a paid one. */
+  unpaid?: boolean;
 }
 
 async function usage(userId: string, feature: Feature): Promise<number> {
@@ -165,6 +189,8 @@ async function usage(userId: string, feature: Feature): Promise<number> {
         .from(chatRequests)
         .where(and(eq(chatRequests.requesterId, userId), gte(chatRequests.createdAt, weekAgo)))
         .then((r) => Number(r[0]?.n ?? 0));
+    case "video_call":
+      return videoMinutesUsedToday(userId);
     default:
       return 0;
   }
@@ -179,6 +205,22 @@ export async function passesToday(userId: string): Promise<number> {
     .from(discoverPasses)
     .where(and(eq(discoverPasses.userId, userId), gte(discoverPasses.createdAt, dayStart)))
     .then((r) => Number(r[0]?.n ?? 0));
+}
+
+/** Whole minutes of video dates this member STARTED since their local
+ *  midnight (answering never counts). A call still going counts up to now. */
+export async function videoMinutesUsedToday(userId: string): Promise<number> {
+  return Math.floor((await videoMsUsedToday(userId)) / 60_000);
+}
+
+export async function videoMsUsedToday(userId: string): Promise<number> {
+  const dayStart = new Date(new Date(nextMidnightISO(await userTimezone(userId))).getTime() - 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select({ answeredAt: videoCalls.answeredAt, endedAt: videoCalls.endedAt })
+    .from(videoCalls)
+    .where(and(eq(videoCalls.callerId, userId), isNotNull(videoCalls.answeredAt), gte(videoCalls.answeredAt, dayStart)));
+  const now = Date.now();
+  return rows.reduce((sum, r) => sum + Math.max(0, (r.endedAt?.getTime() ?? now) - r.answeredAt!.getTime()), 0);
 }
 
 /** When a bought "see who liked you" pass ends (shared/single-purchases.ts), if any. */
@@ -229,7 +271,20 @@ export async function checkGate(
 ): Promise<GateResult> {
   const tier = await getEffectiveTier(userId);
   const limits = LIMITS[tier];
-  const dailyReset = feature === "daily_likes" || feature === "daily_passes";
+  const dailyReset = feature === "daily_likes" || feature === "daily_passes" || feature === "video_call";
+
+  // Starting a video date needs a plan someone paid for: a trial or a free
+  // week doesn't open it, whatever tier it carries. (Answering is free.)
+  if (feature === "video_call" && tier !== "free" && !(await onPaidPlan(userId))) {
+    return {
+      ok: false,
+      tier,
+      limit: 0,
+      requiredTier: "spark",
+      unpaid: true,
+      message: "Video dates are for members on a paid plan. Your free time covers everything else, and you can still answer when a match calls you.",
+    };
+  }
 
   // A bought 24-hour pass (server/single-purchases.ts) opens "see who liked you".
   if (feature === "see_who_asked" && !limits.seeWhoAsked) {
@@ -295,7 +350,9 @@ export async function checkGate(
             ? limits.storyRepliesPerWeek
             : feature === "group_chat_request"
               ? limits.groupChatRequestsPerWeek
-              : null;
+              : feature === "video_call"
+                ? limits.videoMinutesPerDay
+                : null;
 
   if (limit == null) return { ok: true, tier, limit: null };
   const used = opts.countOverride ?? (await usage(userId, feature));
@@ -332,13 +389,17 @@ function nextTierUp(t: Tier): Tier {
 
 // The consistent, machine-readable 403 body. Extends the shape Discover already
 // expects ({ upgradeRequired, message }).
+/** The refusal copy for a gate result. Someone on free time is offered
+ *  the plans as if they were on free: those are what they'd pay for. */
+export function gateCopyFor(g: GateResult, feature: Feature) {
+  const copy = gateCopy(feature, g.unpaid
+    ? { tier: "free", limit: 0 }
+    : { tier: g.tier, limit: g.limit, used: g.used, resetLabel: resetLabelFromISO(g.resetAt) });
+  return g.unpaid && g.message ? { ...copy, line: g.message } : copy;
+}
+
 export function gateBody(g: GateResult, feature: Feature) {
-  const copy = gateCopy(feature, {
-    tier: g.tier,
-    limit: g.limit,
-    used: g.used,
-    resetLabel: resetLabelFromISO(g.resetAt),
-  });
+  const copy = gateCopyFor(g, feature);
   return {
     upgradeRequired: true,
     feature,

@@ -105,6 +105,7 @@ export function PrivacyPolicy() {
         <li className={LI}><b className="text-vf-text font-medium">Account details:</b> email address, name, and a password (stored only as a one-way hash), or your Google account if you sign in with Google.</li>
         <li className={LI}><b className="text-vf-text font-medium">Your profile:</b> photos, age, gender, who you want to meet, your city, prompts and your answers to the twin's questions.</li>
         <li className={LI}><b className="text-vf-text font-medium">What you do in the app:</b> likes, matches, messages, conversations with AI twins, events you join, groups and stories.</li>
+        <li className={LI}><b className="text-vf-text font-medium">Video dates:</b> who called whom, when, and how long the call lasted. The video and sound go straight between the two of you through our video provider and are never recorded or stored by us. Your camera and microphone are used only while you're on a call.</li>
         <li className={LI}><b className="text-vf-text font-medium">Location, only if you turn it on:</b> used to tell you when someone worth meeting is at the same named place. You can switch it off at any time.</li>
         <li className={LI}><b className="text-vf-text font-medium">Payments:</b> the plan you bought, the amount and the result. Your mobile-money PIN and card number go to the payment provider, never to us.</li>
         <li className={LI}><b className="text-vf-text font-medium">Device and usage:</b> a notification token for your phone or browser if you allow notifications, which days you used the app, and how you first found Destira (for example an invite link).</li>
@@ -127,6 +128,7 @@ export function PrivacyPolicy() {
         <li className={LI}>Resend: sends our emails.</li>
         <li className={LI}>Paynow: takes payments by EcoCash, OneMoney, InnBucks and card.</li>
         <li className={LI}>Google (Firebase): delivers notifications to the Android app.</li>
+        <li className={LI}>LiveKit: carries the video and sound of video dates between the two phones. It doesn't record them.</li>
       </ul>
 
       <h2 className={H2}>What other members see</h2>
