@@ -27,6 +27,7 @@ export const ALERT_TYPES = [
   "error_rate_threshold",
   "llm_cost_threshold",
   "new_error_spike",
+  "backup_missing",
 ] as const;
 export type AlertType = (typeof ALERT_TYPES)[number];
 
@@ -44,6 +45,9 @@ export const ALERT_META: Record<AlertType, AlertMeta> = {
   // One email per error, at most every 6 hours (server/admin/error-log.ts
   // keeps that per error, so no dedup window here).
   new_error_spike: { label: "New error spiking", configurable: true, dedupWindowMs: 0, hasThreshold: true, thresholdHint: "times in 15 min (5)" },
+  // The daily backup check (server/admin/backup-check.ts) runs once a day,
+  // so it sends at most one of these a day by itself.
+  backup_missing: { label: "Database backup missing or late", configurable: true, dedupWindowMs: 0, hasThreshold: false },
 };
 
 // Scheduled digests — same email_alert_config table, own small meta map

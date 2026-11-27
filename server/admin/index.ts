@@ -25,6 +25,7 @@ import { registerAdminDateVoucherRoutes } from "./date-vouchers";
 import { registerAdminEventTicketRoutes } from "./event-tickets";
 import { registerMemberAdminRoutes } from "./members";
 import { registerAdminErrorLogRoutes } from "./error-log";
+import { registerAdminBackupRoutes, startBackupChecks } from "./backup-check";
 
 export function registerAdminConsole(app: Express) {
   mountAdminSession(app);
@@ -34,6 +35,9 @@ export function registerAdminConsole(app: Express) {
   registerAdminEventRoutes(app);
   registerAdminFeedbackRoutes(app);
   registerAdminErrorLogRoutes(app);
+  registerAdminBackupRoutes(app);
+  // The daily backup check (K7): hourly look, runs once a day.
+  startBackupChecks();
   registerAdminEmailRoutes(app);
   registerAdminMetricsRoutes(app);
   registerAdminGrowthRoutes(app);

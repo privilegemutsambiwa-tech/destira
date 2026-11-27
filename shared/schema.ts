@@ -2595,3 +2595,24 @@ export const errorGroupHours = pgTable(
   },
   (t) => [uniqueIndex("error_group_hours_group_hour_idx").on(t.groupId, t.hour)],
 );
+
+// ── Backup checks (Part K7) ────────────────────────────────────────────────
+// Once a day the server asks Supabase when the database was last backed up
+// (server/admin/backup-check.ts) and keeps the answer here, so the console
+// shows the history and a missed backup can't go unnoticed.
+export const backupChecks = pgTable(
+  "backup_checks",
+  {
+    id: serial("id").primaryKey(),
+    checkedAt: timestamp("checked_at").notNull().defaultNow(),
+    /** ok | stale | missing | error | not_configured */
+    status: text("status").notNull(),
+    latestBackupAt: timestamp("latest_backup_at"),
+    backupCount: integer("backup_count").notNull().default(0),
+    pitr: boolean("pitr").notNull().default(false),
+    message: text("message").notNull(),
+    /** "schedule" or the admin who asked for a check from the console. */
+    trigger: text("trigger").notNull().default("schedule"),
+  },
+  (t) => [index("backup_checks_checked_at_idx").on(t.checkedAt)],
+);

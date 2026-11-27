@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminGet, adminPatch } from "./api";
+import { BackupCard } from "./AdminBackupCard";
 import { PageHeader, LABEL, MONO, LINE, SURFACE, MUTED, FAINT, TEXT, ALERT, EMBER, formatDateTime } from "./AdminShell";
 
 type State = "open" | "resolved" | "muted" | "all";
@@ -182,6 +183,7 @@ export default function AdminErrors() {
         title="Errors"
         sub="Server errors (500 and up) and screens that crashed, grouped by what broke. Wrong passwords, missing pages and bad input aren't errors."
       />
+      <BackupCard />
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         <select value={state} onChange={(e) => setState(e.target.value as State)} style={selectStyle} aria-label="Which errors" data-testid="select-error-state">
           <option value="open">Open{states.open != null ? ` (${states.open})` : ""}</option>
