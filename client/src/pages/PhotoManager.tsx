@@ -7,6 +7,7 @@ import { LayoutShell } from "@/components/layout-shell";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { PhotoGridSkeleton } from "@/components/ui-vf/skeletons";
 
 type Role = "cover" | "portrait" | "gallery";
 
@@ -235,9 +236,7 @@ export default function PhotoManager() {
         </div>
 
         {isLoading ? (
-          <div className="h-[40vh] flex items-center justify-center">
-            <Loader2 className="w-7 h-7 animate-spin text-vf-mint" />
-          </div>
+          <PhotoGridSkeleton />
         ) : photos.length === 0 ? (
           <EmptyState onPick={() => setShowPhotoSource(true)} dragOver={dragOver} uploading={uploading} />
         ) : (

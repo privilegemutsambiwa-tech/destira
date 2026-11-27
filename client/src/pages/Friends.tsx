@@ -4,12 +4,13 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, ChevronRight, CircleDot, ClipboardList, Hand, HeartHandshake, Quote, Loader2, MapPin, MessageCircle, Users, Utensils, X } from "lucide-react";
+import { BadgeCheck, ChevronRight, CircleDot, ClipboardList, Hand, HeartHandshake, Quote, MapPin, MessageCircle, Users, Utensils, X } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { VfAvatar } from "@/components/ui-vf";
 import { useToast } from "@/hooks/use-toast";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { lookingForOf, type FriendCard } from "@shared/friends";
+import { CardsSkeleton } from "@/components/ui-vf/skeletons";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 
@@ -222,7 +223,7 @@ export default function FriendsPage() {
 
         <div className="mt-6">
           {isLoading ? (
-            <Loader2 className="w-6 h-6 animate-spin text-vf-faint" />
+            <CardsSkeleton />
           ) : data && !data.on ? (
             <div className="rounded-2xl border border-vf-line p-5 text-center" data-testid="friends-off">
               <Users className="w-8 h-8 text-vf-faint mx-auto" />

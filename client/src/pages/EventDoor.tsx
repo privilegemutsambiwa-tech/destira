@@ -8,6 +8,7 @@ import { ArrowLeft, Check, Loader2, X } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { VfAvatar } from "@/components/ui-vf";
 import type { CheckInResult, DoorList } from "@shared/event-door";
+import { ListSkeleton } from "@/components/ui-vf/skeletons";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 const hm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -94,7 +95,7 @@ export default function EventDoor({ params }: { params: { id: string } }) {
         <Result r={result} error={error} />
 
         {isLoading ? (
-          <Loader2 className="w-6 h-6 animate-spin text-vf-faint" />
+          <ListSkeleton eyebrow={false} />
         ) : listError || !data ? (
           !error && <p className="text-[14px] text-vf-muted">Only the host sees the door list. If you're going, show your door pass from the event page.</p>
         ) : (

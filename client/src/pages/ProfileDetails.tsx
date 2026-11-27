@@ -4,12 +4,13 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useProfile } from "@/hooks/use-profiles";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { LayoutShell } from "@/components/layout-shell";
+import { FormSkeleton } from "@/components/ui-vf/skeletons";
 import {
   BASE_OPTIONS,
   DRINKING_OPTIONS,
@@ -101,7 +102,7 @@ export default function ProfileDetailsPage() {
   if (isLoading) {
     return (
       <LayoutShell>
-        <Loader2 className="w-6 h-6 animate-spin text-vf-faint" />
+        <FormSkeleton className="max-w-[560px] mx-auto" fields={5} />
       </LayoutShell>
     );
   }

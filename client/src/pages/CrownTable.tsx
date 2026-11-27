@@ -3,10 +3,11 @@
 // were asked to, and answers here.
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Crown as CrownIcon, Loader2, MapPin, UtensilsCrossed } from "lucide-react";
+import { Crown as CrownIcon, MapPin, UtensilsCrossed } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { apiRequest } from "@/lib/queryClient";
 import type { CrownDinnerView, CrownTableMe } from "@shared/crown-table";
+import { CardsSkeleton } from "@/components/ui-vf/skeletons";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 const GOLD = "#E9B949";
@@ -120,7 +121,7 @@ export default function CrownTablePage() {
         <div className={EYEBROW}>Destira Crown</div>
         <h1 className="font-serif font-normal text-[30px] leading-[1.1] text-vf-text mt-2">Crown Table</h1>
         {isLoading || !data ? (
-          <Loader2 className="w-6 h-6 animate-spin text-vf-faint mt-6" />
+          <CardsSkeleton className="mt-2" intro media="portrait" />
         ) : (
           <>
             <p className="text-[14px] text-vf-muted mt-2 leading-[1.5]">

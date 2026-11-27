@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { LOOKING_FOR_OPTIONS } from "@shared/friends";
-import { Loader2, ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useProfile } from "@/hooks/use-profiles";
@@ -20,6 +20,7 @@ import {
   ageFieldError,
 } from "@shared/essentials";
 import { FAITH_OPTIONS, MARRIAGE_OPTIONS, WANTS_CHILDREN_OPTIONS } from "@shared/profile-details";
+import { FormSkeleton } from "@/components/ui-vf/skeletons";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 
@@ -230,9 +231,7 @@ export default function Essentials() {
   if (isLoading) {
     return (
       <Shell>
-        <div className="flex justify-center">
-          <Loader2 className="w-7 h-7 animate-spin text-vf-ember" />
-        </div>
+        <FormSkeleton fields={3} />
       </Shell>
     );
   }

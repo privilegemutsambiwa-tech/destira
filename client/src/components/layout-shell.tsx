@@ -270,7 +270,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
 
         {/* Bottom tab bar — phone and tablet portrait (to lg, 1024) */}
         <nav
-          className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-vf-ink border-t border-vf-line"
+          className="vf-tabbar md:hidden fixed bottom-0 left-0 right-0 z-50 bg-vf-ink border-t border-vf-line"
           style={{
             paddingBottom: "env(safe-area-inset-bottom, 0px)",
             paddingLeft: "env(safe-area-inset-left, 0px)",

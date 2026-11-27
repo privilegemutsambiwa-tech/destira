@@ -7,7 +7,7 @@ import { InstallCard } from "@/components/install-card";
 import { requestPushNudge } from "@/lib/engagement-prompts";
 import { type ClickReason } from "@/components/why-click";
 import { LocationAskSheet, hasLocationConsent } from "@/components/location-permission-modal";
-import { Loader2, Flag } from "lucide-react";
+import { Flag } from "lucide-react";
 import { lookingForOf } from "@shared/friends";
 import { useDiscoverProfiles, useStartInterview, useCreateMatch, useFeedStories, UpgradeRequiredError, LikeWaitingError } from "@/hooks/use-interactions";
 import { haptic } from "@/lib/haptics";
@@ -35,6 +35,7 @@ import { ProfileCard } from "@/components/discover/profile-card";
 import { NextUp } from "@/components/discover/next-up";
 import { BlockReportDialog } from "@/components/discover/block-report-dialog";
 import { LikesUsedUp, DeckEmpty } from "@/components/discover/empty-states";
+import { DiscoverCardSkeleton } from "@/components/ui-vf/skeletons";
 
 export default function Discover() {
   useMarkSeen("discover");
@@ -366,8 +367,8 @@ export default function Discover() {
   if (isLoading || isOwnProfileLoading || needsEssentials) {
     return (
       <LayoutShell>
-        <div className="h-[60vh] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-vf-mint" />
+        <div className="max-w-[640px] md:max-w-3xl lg:max-w-5xl mx-auto">
+          <DiscoverCardSkeleton />
         </div>
       </LayoutShell>
     );

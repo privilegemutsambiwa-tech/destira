@@ -45,6 +45,8 @@ import { RichCard, CardHeader, StatusPill, GAME_ICON_LABEL, GameProgress } from 
 import { PhotoSourceSheet } from "@/components/photo-source-sheet";
 import { enqueue, isConnectionError } from "@/lib/outbox";
 import { OutboxBubbles } from "@/components/outbox-bubbles";
+import { ChatSkeleton } from "@/components/ui-vf/skeletons";
+import { haptic } from "@/lib/haptics";
 
 interface MessageAction {
   icon: React.ReactNode;
@@ -462,6 +464,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
     if (!input.trim() || slow.left > 0) return;
     const text = input;
     setInput("");
+    haptic.send();
     const payload: any = { content: text, contentType: "text" };
     if (replyTo) {
       payload.replyToMessageId = replyTo.id;
@@ -626,9 +629,7 @@ export default function GroupChatPage({ params }: { params?: { groupId?: string 
 
       <div className="flex-1 overflow-y-auto p-4 space-y-1" onClick={() => setActiveMessageId(null)}>
         {msgsLoading ? (
-          <div className="flex justify-center p-12">
-            <Loader2 className="w-6 h-6 animate-spin" style={{ color: EMBER }} />
-          </div>
+          <ChatSkeleton />
         ) : messages && messages.length > 0 ? (
           messages.map((msg: any, idx: number) => {
             const isMe = msg.userId === user?.id;

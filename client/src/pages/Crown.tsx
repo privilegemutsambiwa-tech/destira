@@ -8,6 +8,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { priceLabel } from "@shared/entitlements";
 import { CROWN_PERKS, CROWN_PERIOD_LABEL, type CrownPeriod } from "@shared/crown";
 import { CROWN_GRADIENT } from "@/components/crown-badge";
+import { CardsSkeleton } from "@/components/ui-vf/skeletons";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 const GOLD = "#E9B949";
@@ -43,7 +44,7 @@ export default function CrownPage() {
   if (isLoading || !s) {
     return (
       <Shell>
-        <Loader2 className="w-5 h-5 animate-spin text-vf-faint" />
+        <CardsSkeleton cards={2} media="none" intro />
       </Shell>
     );
   }

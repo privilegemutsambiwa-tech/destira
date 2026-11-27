@@ -620,3 +620,6 @@ html.vf-offline .fixed.top-0:not([data-testid="offline-banner"]) { top: var(--vf
    a field above it. */
 html.vf-kb-overlay .h-dvh { height: calc(100dvh - var(--vf-kb, 0px)) !important; }
 html.vf-kb-overlay body { padding-bottom: var(--vf-kb, 0px); }
+/* While typing on a phone the tab bar steps aside rather than sit on the
+   keyboard over the field (lib/keyboard-overlay.ts). */
+html.vf-kb-open .vf-tabbar { display: none; }

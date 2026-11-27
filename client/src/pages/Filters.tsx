@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { LayoutShell } from "@/components/layout-shell";
@@ -14,6 +14,7 @@ import { Gated } from "@/components/gated";
 import { Chip } from "@/pages/ProfileDetails";
 import { useProfile } from "@/hooks/use-profiles";
 import { ADVANCED_PREF_KEYS, PREF_OPTIONS, type AdvancedPrefKey, type MatchPrefs } from "@shared/match-prefs";
+import { FormSkeleton } from "@/components/ui-vf/skeletons";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 
@@ -81,7 +82,7 @@ export default function FiltersPage() {
   if (isLoading) {
     return (
       <LayoutShell>
-        <Loader2 className="w-6 h-6 animate-spin text-vf-faint" />
+        <FormSkeleton className="max-w-[560px] mx-auto" />
       </LayoutShell>
     );
   }

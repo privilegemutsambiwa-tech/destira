@@ -9,6 +9,7 @@ import { LayoutShell } from "@/components/layout-shell";
 import { VfAvatar } from "@/components/ui-vf";
 import { useToast } from "@/hooks/use-toast";
 import { useProfile } from "@/hooks/use-profiles";
+import { CardsSkeleton } from "@/components/ui-vf/skeletons";
 import {
   BOARD_REPORT_REASONS, BOARD_SEATS_MAX, BOARD_TITLE_MAX, BOARD_WHO,
   type BoardMe, type BoardPlace, type BoardPlanView, type BoardWho,
@@ -295,7 +296,7 @@ export default function PlansBoardPage() {
         </p>
         <div className="mt-6 space-y-6">
           {isLoading || !data ? (
-            <Loader2 className="w-6 h-6 animate-spin text-vf-faint" />
+            <CardsSkeleton />
           ) : (
             <>
               {posting ? (

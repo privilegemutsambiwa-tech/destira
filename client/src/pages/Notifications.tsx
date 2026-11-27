@@ -3,10 +3,11 @@
 import { useLocation } from "wouter";
 import { PeopleWhoFit } from "@/components/suggestions";
 import {
-  BadgeCheck, Bell, CalendarDays, Crown, Heart, Loader2, MessageCircle, Settings as SettingsIcon, Shield, Sparkles, Gift,
+  BadgeCheck, Bell, CalendarDays, Crown, Heart, MessageCircle, Settings as SettingsIcon, Shield, Sparkles, Gift,
 } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { useActivity, useOpenActivityItem, useReadAllActivity, type ActivityItem } from "@/hooks/use-activity";
+import { ListSkeleton } from "@/components/ui-vf/skeletons";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 
@@ -80,7 +81,7 @@ export default function NotificationsPage() {
         </div>
 
         {isLoading ? (
-          <Loader2 className="w-6 h-6 animate-spin text-vf-faint mt-8" />
+          <ListSkeleton className="mt-7" />
         ) : !items?.length ? (
           <div className="mt-10 text-center" data-testid="activity-empty">
             <Bell className="w-8 h-8 text-vf-faint mx-auto" />

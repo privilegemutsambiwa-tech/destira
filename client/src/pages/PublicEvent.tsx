@@ -8,10 +8,11 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, MapPin, Users, Loader2, Sparkles, ShieldCheck } from "lucide-react";
+import { CalendarDays, MapPin, Users, Sparkles, ShieldCheck } from "lucide-react";
 import { DestiraLockup } from "@/components/brand/logo";
 import { stashPendingEvent } from "@/lib/pending-invite";
 import { stashPendingRsvp } from "@/lib/pending-rsvp";
+import { EventSkeleton } from "@/components/ui-vf/skeletons";
 
 interface Teaser {
   id: number;
@@ -101,9 +102,7 @@ export default function PublicEvent({ eventId }: { eventId: string }) {
 
   if (isLoading) {
     return shell(
-      <div className="py-24 flex justify-center">
-        <Loader2 className="w-7 h-7 animate-spin text-vf-mint" />
-      </div>,
+      <EventSkeleton />,
     );
   }
 

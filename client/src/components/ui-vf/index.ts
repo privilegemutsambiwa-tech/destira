@@ -6,3 +6,4 @@ export { SearchField, EmptyState, RingsIllustration, VfSkeleton, VfAvatar, PageH
 export { ScreenNotes, Note, NOTE_PRIORITY, useNotesSettled, type NoteSpec, type NoteKind, type NoteTone } from "./note";
 export { TwinGlyph, ResonanceGlyph, TonightGlyph, SeatGlyph, LoungeGlyph } from "./glyphs";
 export { VfSheet, type VfSheetProps } from "./sheet";
+export { ListSkeleton, CardsSkeleton, ChatSkeleton, ProfileViewSkeleton, OwnProfileSkeleton, DiscoverCardSkeleton, EventSkeleton, FormSkeleton, PhotoGridSkeleton } from "./skeletons";

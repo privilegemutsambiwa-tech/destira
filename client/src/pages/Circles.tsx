@@ -8,6 +8,7 @@ import { LayoutShell } from "@/components/layout-shell";
 import { VfAvatar } from "@/components/ui-vf";
 import { useToast } from "@/hooks/use-toast";
 import { CIRCLE_MAX, CIRCLE_NAME_MAX, type CirclePerson, type CirclesMe } from "@shared/circles";
+import { CardsSkeleton } from "@/components/ui-vf/skeletons";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 
@@ -164,7 +165,7 @@ export default function CirclesPage() {
 
         <div className="mt-6 space-y-3">
           {isLoading || !data ? (
-            <Loader2 className="w-6 h-6 animate-spin text-vf-faint" />
+            <CardsSkeleton cards={2} media="none" />
           ) : (
             <>
               {data.invites.map((i) => (

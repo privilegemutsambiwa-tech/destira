@@ -20,6 +20,7 @@ import { queryClient } from "@/lib/queryClient";
 import { PLAN_CARDS, priceLabel } from "@shared/entitlements";
 import { NOTE_PRIORITY, ScreenNotes, TwinGlyph, VfButton } from "@/components/ui-vf";
 import { avatarColor } from "@/lib/avatar-color";
+import { OwnProfileSkeleton } from "@/components/ui-vf/skeletons";
 
 // Below this many total photos (cover + portrait + gallery combined), a
 // profile is genuinely light on the one thing that drives reads the most —
@@ -347,9 +348,7 @@ export default function Profile() {
   if (isLoading) {
     return (
       <LayoutShell>
-        <div className="h-[60vh] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-vf-mint" />
-        </div>
+        <OwnProfileSkeleton />
       </LayoutShell>
     );
   }

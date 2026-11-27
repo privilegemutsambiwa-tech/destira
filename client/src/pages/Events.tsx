@@ -369,7 +369,7 @@ export default function Events() {
           ) : (wideCount.data?.count ?? 0) > 0 ? (
             <EmptyState
               testId="events-empty-state"
-              title="Your preferences are narrower than Harare right now."
+              title="Your preferences are narrower than what's on right now."
               body="There are events further out. Loosen your preferences to see them."
               action={<VfButton variant="secondary" onClick={() => setLocation("/settings/events?from=/events")}>Event preferences</VfButton>}
             />

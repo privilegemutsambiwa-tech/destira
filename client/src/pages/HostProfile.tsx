@@ -2,10 +2,11 @@
 // stars from the people who went (once there are a few), what's coming up.
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Loader2, Star } from "lucide-react";
+import { ArrowLeft, Star } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { VfAvatar } from "@/components/ui-vf";
 import { RATINGS_SHOWN_FROM, type HostPage } from "@shared/event-extras";
+import { CardsSkeleton } from "@/components/ui-vf/skeletons";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
@@ -17,7 +18,7 @@ export default function HostProfile({ params }: { params: { userId: string } }) 
       <div className="max-w-[520px] mx-auto pb-10 flex flex-col gap-6" data-testid="page-host">
         <button onClick={() => history.back()} className="self-start inline-flex items-center gap-1.5 text-[13px] text-vf-muted"><ArrowLeft className="w-4 h-4" /> Back</button>
         {isLoading || !data ? (
-          <Loader2 className="w-6 h-6 animate-spin text-vf-faint" />
+          <CardsSkeleton media="none" />
         ) : (
           <>
             <div className="flex items-center gap-4">

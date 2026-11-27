@@ -34,6 +34,9 @@ import { withFrom, getFromRoute } from "@/lib/from-route";
 import { MatchCelebration } from "@/components/match-celebration";
 import { requestPushNudge } from "@/lib/engagement-prompts";
 import { dataSaverOn } from "@/lib/data-saver";
+import { ProfileViewSkeleton } from "@/components/ui-vf/skeletons";
+import { useBackToClose } from "@/lib/back-button";
+import { haptic } from "@/lib/haptics";
 
 /** Small mono "Edit" affordance for an editable region in the preview. Quiet
  *  by default (visible-but-unobtrusive on touch, no hover to reveal it),
@@ -150,6 +153,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const [savingAnswerId, setSavingAnswerId] = useState<number | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<"block" | "report" | null>(null);
+  useBackToClose(!!confirm, () => { setConfirm(null); setReportReason(""); setReportPhotoId(null); });
   const [reportReason, setReportReason] = useState("");
   const [reportPhotoId, setReportPhotoId] = useState<number | null>(null);
 
@@ -164,9 +168,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   if (isLoading || cardsLoading) {
     return (
       <ViewShell preview={preview}>
-        <div className="h-[60vh] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-vf-mint" />
-        </div>
+        <ProfileViewSkeleton />
       </ViewShell>
     );
   }
@@ -246,7 +248,8 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   // Liking from a full profile (opened from tonight's three, a lounge, a
   // story…). If they'd already liked you, the server makes it a match.
   const like = () =>
-    paywall.guard("daily_likes", () =>
+    paywall.guard("daily_likes", () => {
+      haptic.like();
       createMatch.mutate(userId, {
         onSuccess: (result: any) => {
           queryClient.invalidateQueries({ queryKey: ["/api/gate", "daily_likes"] });
@@ -260,8 +263,8 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
             void queryClient.invalidateQueries({ queryKey: ["/api/gate", "daily_likes"] }).then(() => paywall.guard("daily_likes", () => {}));
           } else toast({ title: "Could not like", description: "Something went wrong. Please try again.", variant: "destructive" });
         },
-      }),
-    );
+      });
+    });
 
   const withdraw = () => {
     if (!match) return;

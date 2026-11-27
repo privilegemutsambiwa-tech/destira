@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { useBackToClose } from "@/lib/back-button";
 
 interface LightboxPhoto {
   url: string;
@@ -15,6 +16,7 @@ interface PhotoLightboxProps {
  *  the object-cover crop every thumbnail/card uses) — tap the left/right
  *  third to step, arrow keys work, swipe down or the X to close. */
 export function PhotoLightbox({ photos, initialIndex = 0, onClose }: PhotoLightboxProps) {
+  useBackToClose(true, onClose);
   const [index, setIndex] = useState(Math.min(Math.max(initialIndex, 0), Math.max(photos.length - 1, 0)));
 
   const goPrev = useCallback(() => setIndex((i) => Math.max(0, i - 1)), []);

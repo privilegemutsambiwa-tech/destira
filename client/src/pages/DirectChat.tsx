@@ -27,6 +27,7 @@ import { IconButton, TwinGlyph, VfAvatar, VfButton, VfSheet } from "@/components
 import { ease } from "@/lib/motion";
 import { haptic } from "@/lib/haptics";
 import { LiveRegion, spokenMessage, useNewMessageAnnouncement } from "@/lib/a11y";
+import { ChatSkeleton } from "@/components/ui-vf/skeletons";
 
 // A lower-pressure first step than a cold 1:1 thread: if this pair already
 // shares Lounges, point at them; otherwise suggest ones the other person is
@@ -339,6 +340,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
     setInput("");
     suggestions.clear();
     typing.sent();
+    haptic.send();
     // No connection: it waits in the outbox and sends itself later.
     if (navigator.onLine === false) {
       enqueue("direct", matchId, text, undefined, clientId);
@@ -457,9 +459,7 @@ export default function DirectChat({ params }: { params: { matchId: string } }) 
       <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2" data-testid="messages-container">
         <div className="max-w-[720px] mx-auto flex flex-col">
           {isLoading ? (
-            <div className="flex justify-center p-12">
-              <Loader2 className="w-6 h-6 animate-spin text-vf-muted" />
-            </div>
+            <ChatSkeleton />
           ) : list.length > 0 ? (
             list.map((msg: any, i: number) => {
               const isMe = msg.senderId === user?.id;

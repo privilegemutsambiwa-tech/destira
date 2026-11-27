@@ -8,6 +8,7 @@ import { Crown as CrownIcon, Loader2, ShieldCheck } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { apiRequest } from "@/lib/queryClient";
 import { MATCHMAKER_CHAT_MAX, type MatchmakerIntroView, type MatchmakerMe } from "@shared/matchmaker";
+import { CardsSkeleton } from "@/components/ui-vf/skeletons";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 const GOLD = "#E9B949";
@@ -139,7 +140,7 @@ export default function IntroductionsPage() {
         <div className={EYEBROW}>Your Destira matchmaker</div>
         <h1 className="font-serif font-normal text-[30px] leading-[1.1] text-vf-text mt-2">Introductions</h1>
         {isLoading || !data ? (
-          <Loader2 className="w-6 h-6 animate-spin text-vf-faint mt-6" />
+          <CardsSkeleton className="mt-2" intro media="portrait" />
         ) : (
           <>
             <p className="text-[14px] text-vf-muted mt-2 leading-[1.5]">

@@ -10,6 +10,7 @@ import { VfAvatar } from "@/components/ui-vf";
 import { useToast } from "@/hooks/use-toast";
 import { useProfile, useUpdateProfile } from "@/hooks/use-profiles";
 import { TABLE_MIXES, type TableMix, type TablePickKind, type TablesMe, type TableView } from "@shared/tables";
+import { CardsSkeleton } from "@/components/ui-vf/skeletons";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 
@@ -315,7 +316,7 @@ export default function TablesPage() {
 
         <div className="mt-6 space-y-4">
           {isLoading || !me ? (
-            <Loader2 className="w-6 h-6 animate-spin text-vf-faint" />
+            <CardsSkeleton cards={2} media="none" />
           ) : !me.friendsOn ? (
             <div className="rounded-2xl border border-vf-line p-5 text-center" data-testid="tables-friends-off">
               <Users className="w-8 h-8 text-vf-faint mx-auto" />

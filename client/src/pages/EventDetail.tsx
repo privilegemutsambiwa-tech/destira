@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { PurchaseSheet } from "@/components/purchase-sheet";
 import { HOST_PAYOUT_DAYS, TICKET_FEE_PERCENT, ticketPrice, type HostTicketSummary } from "@shared/event-tickets";
+import { EventSkeleton } from "@/components/ui-vf/skeletons";
 
 function toLocalInput(dateStr: string): string {
   const d = new Date(dateStr);
@@ -367,8 +368,8 @@ export default function EventDetail({ params }: { params: { id: string } }) {
   if (isLoading) {
     return (
       <LayoutShell>
-        <div className="h-[60vh] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-vf-mint" />
+        <div className="max-w-4xl mx-auto">
+          <EventSkeleton />
         </div>
       </LayoutShell>
     );

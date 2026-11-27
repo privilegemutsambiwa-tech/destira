@@ -82,8 +82,8 @@ export function EmptyState({ title, body, action, illustration, className, testI
 
 /* ---------- Skeletons ---------- */
 
-export function VfSkeleton({ className }: { className?: string }) {
-  return <div className={cn("vf-skeleton rounded-[10px]", className)} aria-hidden="true" />;
+export function VfSkeleton({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return <div className={cn("vf-skeleton rounded-[10px]", className)} style={style} aria-hidden="true" />;
 }
 
 /* ---------- Avatars ---------- */

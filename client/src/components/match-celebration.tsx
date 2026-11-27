@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { duration, ease } from "@/lib/motion";
 import { VfButton } from "@/components/ui-vf";
 import { Users } from "lucide-react";
+import { useBackToClose } from "@/lib/back-button";
 import { useProfile, useSuggestedLounges } from "@/hooks/use-profiles";
 
 // A real portrait, not a tiny circle — this is a page about specific
@@ -47,6 +48,8 @@ export function MatchCelebration({
   const [, setLocation] = useLocation();
   const { data: myProfile } = useProfile();
   const { lounges } = useSuggestedLounges(otherUserId);
+  // Android back closes the moment instead of leaving the screen under it.
+  useBackToClose(true, onClose);
   // The match is felt as well as seen (docs/destira-upgrade-prompt.md §4.6).
   useEffect(() => {
     haptic.match();

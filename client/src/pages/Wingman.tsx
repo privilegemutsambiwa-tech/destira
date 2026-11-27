@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { HeartHandshake, Loader2 } from "lucide-react";
+import { HeartHandshake } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { VfAvatar } from "@/components/ui-vf";
 import type { WingmanMe, WingmanReceived } from "@shared/wingman";
+import { CardsSkeleton } from "@/components/ui-vf/skeletons";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 const KEY = ["/api/wingman/me"];
@@ -69,7 +70,7 @@ export default function WingmanPage() {
           People your friends think you'd like, and why. They're never told they were suggested.
         </p>
         {isLoading || !data ? (
-          <Loader2 className="w-6 h-6 animate-spin text-vf-faint mt-6" />
+          <CardsSkeleton className="mt-6" media="portrait" />
         ) : data.received.length ? (
           <div className="mt-6 flex flex-col gap-3">{data.received.map((s) => <Suggestion key={s.id} s={s} />)}</div>
         ) : (

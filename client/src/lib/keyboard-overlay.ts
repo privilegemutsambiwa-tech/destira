@@ -24,7 +24,29 @@ function isTextField(el: Element | null): el is HTMLElement {
   return (el as HTMLElement).isContentEditable;
 }
 
+/** html.vf-kb-open while the keyboard is up on a phone (app or browser):
+ *  the bottom tab bar steps aside instead of riding on top of the keyboard,
+ *  and the field being typed in is kept in view. */
+function trackKeyboardOpen() {
+  if (!window.matchMedia?.("(pointer: coarse)").matches) return;
+  const root = document.documentElement;
+  let base = window.innerHeight;
+  const sync = () => {
+    const el = document.activeElement;
+    const open = isTextField(el) && (window.innerHeight < base - 120 || root.classList.contains("vf-kb-overlay"));
+    if (!isTextField(el)) base = window.innerHeight;
+    if (open === root.classList.contains("vf-kb-open")) return;
+    root.classList.toggle("vf-kb-open", open);
+    if (open && el) requestAnimationFrame(() => (el as HTMLElement).scrollIntoView({ block: "nearest" }));
+  };
+  window.addEventListener("resize", sync);
+  window.addEventListener("orientationchange", () => { base = window.innerHeight; });
+  document.addEventListener("focusout", () => window.setTimeout(sync, 100));
+  new MutationObserver(sync).observe(root, { attributes: true, attributeFilter: ["class"] });
+}
+
 export function initKeyboardOverlay() {
+  trackKeyboardOpen();
   if (!isNativeApp() || !/android/i.test(navigator.userAgent)) return;
 
   const root = document.documentElement;

@@ -15,6 +15,7 @@ import { StatusBar, Style } from "@capacitor/status-bar";
 import { Browser } from "@capacitor/browser";
 import { Share } from "@capacitor/share";
 import { Filesystem, Directory } from "@capacitor/filesystem";
+import { closeTopOverlay } from "./back-button";
 
 // android/.../DestiraNativePlugin.java
 const DestiraNative = registerPlugin<{ hasFirebase(): Promise<{ value: boolean }> }>("DestiraNative");
@@ -74,6 +75,7 @@ export function initNative() {
   window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", syncStatusBar);
 
   App.addListener("backButton", ({ canGoBack }) => {
+    if (closeTopOverlay()) return;
     if (canGoBack && !HOME_PATHS.has(window.location.pathname)) window.history.back();
     else App.minimizeApp();
   });

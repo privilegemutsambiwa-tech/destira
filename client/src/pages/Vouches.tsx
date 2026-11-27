@@ -3,11 +3,12 @@
 // you've met through a Sunday Table, an event or a circle.
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Quote } from "lucide-react";
+import { Quote } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { VfAvatar } from "@/components/ui-vf";
 import { useToast } from "@/hooks/use-toast";
 import { VOUCH_MAX, VOUCHES_SHOWN_MAX, vouchProblem, type VouchPerson, type VouchView, type VouchesMe } from "@shared/vouches";
+import { CardsSkeleton } from "@/components/ui-vf/skeletons";
 
 const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
 const KEY = ["/api/vouches/me"];
@@ -138,7 +139,7 @@ export default function VouchesPage() {
         </p>
 
         {isLoading || !data ? (
-          <Loader2 className="w-6 h-6 animate-spin text-vf-faint mt-6" />
+          <CardsSkeleton className="mt-6" />
         ) : (
           <div className="mt-6 space-y-8">
             {waiting.length > 0 && (
