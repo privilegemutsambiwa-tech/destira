@@ -168,7 +168,7 @@ export async function checkQualification(invitedUserId: string): Promise<void> {
 }
 
 /** The reward itself, once the invited user has passed the gates above.
- *  Exported for scripts/assert-referral-rewards.ts. */
+ *  Exported for tests/db/referral-rewards.test.ts. */
 export async function rewardReferral(invitedUserId: string): Promise<void> {
   const outcome = await db.transaction(async (tx) => {
     const [row] = await tx

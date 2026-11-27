@@ -1,8 +1,8 @@
-// Pure fit-scoring for the Events feed. No DB import — so scripts/assert-feed-sort.mjs
+// Pure fit-scoring for the Events feed. No DB import — so tests/unit/feed-sort.test.ts
 // can exercise it directly, and the "attendee resonance never sorts the feed"
 // guarantee is structural: scoreEventForUser never receives attendee data.
 //
-// WEIGHTS (asserted in scripts/assert-feed-sort.mjs):
+// WEIGHTS (asserted in tests/unit/feed-sort.test.ts):
 //   kind match ................... +30
 //   each vibe match (cap 24) ..... +8
 //   placeType match .............. +12

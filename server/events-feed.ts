@@ -13,7 +13,7 @@
 //        prefs.soberOnly       -> event.isSober must be true
 //        prefs.accessibilityNeeds -> every need must be in event.accessibility
 //        age ranges (only when BOTH sides set one) must overlap
-//   2. ADDITIVE SCORE — weights, asserted in scripts/assert-feed-sort.mjs:
+//   2. ADDITIVE SCORE — weights, asserted in tests/unit/feed-sort.test.ts:
 //        kind match ................... +30
 //        each vibe match (cap 24) ..... +8
 //        placeType match .............. +12

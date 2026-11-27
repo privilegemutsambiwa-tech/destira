@@ -17,3 +17,7 @@ debug.log
 client/public/photos/_src/
 .localdb.corrupt-*/
 release/
+
+# test output
+test-results/
+playwright-report/

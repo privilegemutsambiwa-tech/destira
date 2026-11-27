@@ -10,7 +10,7 @@
 //      no deferred queue — the next qualifying publish re-evaluates)
 //
 // evaluateGates() is the whole dedupe decision as a pure function so
-// scripts/assert-twin-alerts.ts can check each gate in isolation.
+// tests/unit/twin-alerts.test.ts can check each gate in isolation.
 
 import { db } from "../db";
 import {

@@ -108,7 +108,7 @@ export function placePhrase(placeType: string, name: string): { label: string; w
   }
 }
 
-// ── gates (pure — scripts/assert-proximity-alerts.ts checks each) ────────
+// ── gates (pure — tests/unit/proximity-alerts.test.ts checks each) ────────
 export interface GateState {
   everSentForPair: boolean;
   msSinceLastAlert: number | null;
