@@ -1,7 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
+import { registerSignInRateLimits } from "./rate-limits";
 import { mountAppClient } from "./app-client";
 import { registerAppUpdateRoutes } from "./app-update";
 import { serveStatic } from "./static";
@@ -35,27 +35,10 @@ app.use(
 mountAppClient(app);
 registerAppUpdateRoutes(app);
 
-// Per-IP throttles: /api/auth/* against credential-stuffing / brute-force
-// login attempts (on top of the per-email lockout in replit_integrations/
-// auth/routes.ts), and /api/twin/* against hammering the LLM (on top of the
-// per-user checkAIRateLimit in routes.ts) — both act before the request ever
-// reaches a route handler, unauthenticated or not.
-const authRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 50,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many requests. Please try again later." },
-});
-const twinRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many requests. Please wait a moment." },
-});
-app.use("/api/auth", authRateLimiter);
-app.use("/api/twin", twinRateLimiter);
+// Sign-up, sign-in and password reset limits, before anything else sees the
+// request. The per-member limits (likes, messages, reports, AI) are mounted
+// in routes.ts once the session is known. Both live in server/rate-limits.ts.
+registerSignInRateLimits(app);
 
 declare module "http" {
   interface IncomingMessage {

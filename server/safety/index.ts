@@ -228,7 +228,7 @@ export async function checkPhoto(userId: string, photoId: number, photoUrl: stri
 const DEVICE_COOKIE = "vf_dev";
 const DEVICE_RE = /^[A-Za-z0-9_-]{16,64}$/;
 
-function deviceIdOf(req: Request): string | null {
+export function deviceIdOf(req: Request): string | null {
   const h = req.get("x-destira-device");
   if (h && DEVICE_RE.test(h)) return h;
   const c = (req.headers.cookie ?? "").split(/;\s*/).find((x) => x.startsWith(`${DEVICE_COOKIE}=`));
