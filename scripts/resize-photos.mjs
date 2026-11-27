@@ -22,6 +22,7 @@ import sharp from "sharp";
 import { readdir, mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { writeLandingPhotos } from "./landing-photos.mjs";
 
 const photosDir = join(dirname(fileURLToPath(import.meta.url)), "..", "client", "public", "photos");
 const srcDir = join(photosDir, "_src");
@@ -179,5 +180,6 @@ export const photosByName: Record<string, Photo> = Object.fromEntries(
 
 await writeFile(manifestPath, manifestSource);
 console.log(`  photos.ts manifest: ${photoEntries.length} hero-N entries`);
+console.log(`  landing-photos.ts: ${await writeLandingPhotos(photoEntries, WIDTHS)} photos`);
 
 console.log("photos regenerated.");

@@ -1,7 +1,7 @@
 // Landing: the pieces every section uses (reveal on scroll, eyebrow, heading).
 
 import type React from "react";
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, Suspense } from "react";
 
 export function usePrefersReducedMotion() {
   const [reduce, setReduce] = useState(false);
@@ -64,6 +64,35 @@ export function Reveal({
       {children}
     </div>
   );
+}
+
+/** Renders its (lazily loaded) children only once the spot is within about
+ *  a screen of the viewport, so the code for sections far down the page
+ *  isn't part of the first load on a phone (Part K5). Until then it holds
+ *  the space with an empty box of minHeight, so nothing jumps. */
+export function WhenNear({ minHeight, children }: { minHeight: number; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setNear(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          io.disconnect();
+          setNear(true);
+        }
+      },
+      { rootMargin: "900px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const hold = <div style={{ minHeight }} aria-hidden="true" />;
+  return <div ref={ref}>{near ? <Suspense fallback={hold}>{children}</Suspense> : hold}</div>;
 }
 
 export function Eyebrow({ children, tone = "faint" }: { children: React.ReactNode; tone?: "faint" | "mint" | "ember" }) {

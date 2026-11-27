@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, lazy } from "react";
 import { useLocation } from "wouter";
 import { AlertTriangle, ArrowRight, CalendarHeart, Flag, Lock, MapPin, MessageCircle, ShieldCheck, SlidersHorizontal, Sparkles, Users } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
@@ -7,13 +7,22 @@ import { isNativeApp } from "@/lib/native";
 import { pendingReferralCode } from "@/lib/attribution";
 import { trackCustom, trackPageView } from "@/lib/pixel";
 import { recordLandingVisit } from "@/lib/attribution";
-import { type LandingEvent, EventCard, TonightsThreeTeaser } from "@/components/landing/events";
+import type { LandingEvent } from "@/components/landing/events";
 import { FAQ, FaqItem } from "@/components/landing/faq";
 import { useHeadline, HeroOffers, startGoogle, SignupButtons, ANDROID_DOWNLOAD, GetTheApp } from "@/components/landing/hero";
 import { usePhotos, PhotoTile, PhotoWall } from "@/components/landing/photos";
-import { Reveal, Eyebrow, SectionHeading } from "@/components/landing/shared";
-import { TwinQuiz, AskATwin, TwinsTalking } from "@/components/landing/twin-demos";
+import { Reveal, Eyebrow, SectionHeading, WhenNear } from "@/components/landing/shared";
 import { WhatYoullFind } from "@/components/landing/what-youll-find";
+
+// Sections far below the fold load their code as you scroll towards them
+// (WhenNear), so a phone's first load is just the top of the page (Part K5).
+const twinDemos = () => import("@/components/landing/twin-demos");
+const TwinsTalking = lazy(() => twinDemos().then((m) => ({ default: m.TwinsTalking })));
+const TwinQuiz = lazy(() => twinDemos().then((m) => ({ default: m.TwinQuiz })));
+const AskATwin = lazy(() => twinDemos().then((m) => ({ default: m.AskATwin })));
+const eventsModule = () => import("@/components/landing/events");
+const EventCard = lazy(() => eventsModule().then((m) => ({ default: m.EventCard })));
+const TonightsThreeTeaser = lazy(() => eventsModule().then((m) => ({ default: m.TonightsThreeTeaser })));
 
 /* ------------------------------------------------------------------ *
  *  Landing — route "/" for signed-out visitors, and where the ads land.
@@ -330,13 +339,15 @@ export default function Landing() {
                 </p>
               </Reveal>
             </div>
-            <div className="mt-8 max-w-[1180px] mx-auto">
-              <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory px-5 sm:px-6 pb-2 [scrollbar-width:none]">
-                {live.events.map((e) => (
-                  <EventCard key={e.id} e={e} />
-                ))}
+            <WhenNear minHeight={340}>
+              <div className="mt-8 max-w-[1180px] mx-auto">
+                <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory px-5 sm:px-6 pb-2 [scrollbar-width:none]">
+                  {live.events.map((e) => (
+                    <EventCard key={e.id} e={e} />
+                  ))}
+                </div>
               </div>
-            </div>
+            </WhenNear>
           </div>
         )}
       </section>
@@ -418,7 +429,9 @@ export default function Landing() {
       {/* ============ 7 · TONIGHT'S THREE ============ */}
       <section className="px-5 sm:px-6 py-20 sm:py-28 overflow-hidden" aria-labelledby="tonight-heading" data-testid="section-tonight">
         <div className="max-w-[1180px] mx-auto">
-          <TonightsThreeTeaser />
+          <WhenNear minHeight={560}>
+            <TonightsThreeTeaser />
+          </WhenNear>
         </div>
       </section>
 
@@ -434,7 +447,9 @@ export default function Landing() {
             </p>
           </Reveal>
           <Reveal delay={100}>
-            <TwinsTalking />
+            <WhenNear minHeight={420}>
+              <TwinsTalking />
+            </WhenNear>
           </Reveal>
         </div>
       </section>
@@ -453,7 +468,9 @@ export default function Landing() {
             </Reveal>
           </div>
           <Reveal delay={100}>
-            <TwinQuiz />
+            <WhenNear minHeight={420}>
+              <TwinQuiz />
+            </WhenNear>
           </Reveal>
         </div>
       </section>
@@ -470,7 +487,9 @@ export default function Landing() {
             </p>
           </Reveal>
           <Reveal delay={100}>
-            <AskATwin />
+            <WhenNear minHeight={420}>
+              <AskATwin />
+            </WhenNear>
           </Reveal>
         </div>
       </section>

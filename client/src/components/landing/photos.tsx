@@ -15,16 +15,11 @@ const PHOTO_ORIGIN = isNativeApp() ? "https://www.destira.date" : "";
 const remote = (u: string) => u.replace(/(^|\s|,)\/photos\//g, `$1${PHOTO_ORIGIN}/photos/`);
 
 // ── Photos ───────────────────────────────────────────────────────────
-// Destira launches in Zimbabwe, so the landing shows Black couples only:
-// a hand-picked set from client/public/photos (hero-81+ repeat 26–80, so
-// only the originals are listed). Order is for variety along each column.
-const LOCAL_ORDER = [39, 64, 26, 46, 59, 41, 43, 62, 66, 36, 38, 28, 70, 30, 42, 44, 45, 52, 56, 61, 65, 67, 68, 71, 75, 37];
-
-//
-// The manifest (lib/photos.ts) is mostly blur-up placeholders for every
-// photo, so it loads as its own chunk instead of sitting in the app's first
-// load. The request starts as soon as this module runs, so it overlaps with
-// the first render; the headline and buttons never wait for it.
+// The landing's own photos (lib/landing-photo-set.ts picks them; Black
+// couples only, as Destira launches in Zimbabwe), never the whole library's
+// manifest. They're mostly blur-up placeholders, so they load as their own
+// small chunk; the request starts as soon as this module runs, so it overlaps
+// with the first render and the headline and buttons never wait for it.
 interface PhotoSet {
   local: Photo[];
   byName: Map<string, Photo>;
@@ -36,13 +31,13 @@ let photoSet: PhotoSet | null = null;
 let photoLoad: Promise<PhotoSet> | null = null;
 
 function loadPhotos(): Promise<PhotoSet> {
-  photoLoad ??= import("@/lib/photos").then(({ photos }) => {
+  photoLoad ??= import("@/lib/landing-photos").then(({ landingPhotos: photos }) => {
     const all: Photo[] = PHOTO_ORIGIN
       ? photos.map((p) => ({ ...p, src: remote(p.src), srcSet: remote(p.srcSet), webpSrcSet: remote(p.webpSrcSet), variants: p.variants.map((v) => ({ ...v, webp: remote(v.webp), jpg: remote(v.jpg) })) }))
       : photos;
     const byName = new Map(all.map((p) => [p.name, p]));
     const pick = (...ns: number[]) => ns.map((n) => byName.get(`hero-${n}`)).filter((p): p is Photo => !!p);
-    photoSet = { local: pick(...LOCAL_ORDER), byName, pick };
+    photoSet = { local: all, byName, pick };
     return photoSet;
   });
   return photoLoad;

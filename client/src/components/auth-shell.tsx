@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { DestiraLockup } from "@/components/brand/logo";
-import { photos } from "@/lib/photos";
+import { landingPhotos } from "@/lib/landing-photos";
 import { isNativeApp } from "@/lib/native";
 
 // Brief 7.2: one shared, calm layout for sign up, log in, forgot and reset.
@@ -24,7 +24,7 @@ const QUOTES = [
 ];
 
 const PHOTO_ORIGIN = isNativeApp() ? "https://www.destira.date" : "";
-const SIDE_PHOTO = photos.find((p) => p.name === "hero-39") ?? photos[0];
+const SIDE_PHOTO = landingPhotos.find((p) => p.name === "hero-39") ?? landingPhotos[0];
 
 function SidePanel() {
   const [i, setI] = useState(0);

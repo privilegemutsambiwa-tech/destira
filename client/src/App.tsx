@@ -5,8 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { isNativeApp, syncNativePushToken } from "@/lib/native";
 import { offlinePersister, shouldKeepOffline, OFFLINE_MAX_AGE, OFFLINE_BUSTER } from "@/lib/offline-cache";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { LazyToaster } from "@/components/lazy-toaster";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profiles";
 import { DestiraLoadingScreen } from "@/components/brand/logo";
@@ -455,16 +454,14 @@ function App() {
 
   return (
     <AppQueryProvider>
-      <TooltipProvider>
-        <Toaster />
-        <OfflineBanner />
-        <ErrorBoundary>
-          <Router />
-        </ErrorBoundary>
-        <AppLockGate />
-        <CommandPalette />
-        <AppUpdatePrompt />
-      </TooltipProvider>
+      <LazyToaster />
+      <OfflineBanner />
+      <ErrorBoundary>
+        <Router />
+      </ErrorBoundary>
+      <AppLockGate />
+      <CommandPalette />
+      <AppUpdatePrompt />
     </AppQueryProvider>
   );
 }

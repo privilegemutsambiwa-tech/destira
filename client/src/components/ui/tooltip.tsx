@@ -7,7 +7,13 @@ import { cn } from "@/lib/utils"
 
 const TooltipProvider = TooltipPrimitive.Provider
 
-const Tooltip = TooltipPrimitive.Root
+// Each tooltip brings its own provider, so the app doesn't wrap everything in
+// one and Radix's tooltip code stays out of the landing's first load (K5).
+const Tooltip = (props: React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Root>) => (
+  <TooltipPrimitive.Provider>
+    <TooltipPrimitive.Root {...props} />
+  </TooltipPrimitive.Provider>
+)
 
 const TooltipTrigger = TooltipPrimitive.Trigger
 

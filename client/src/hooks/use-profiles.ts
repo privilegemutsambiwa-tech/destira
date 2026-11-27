@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type InsertProfile } from "@shared/schema";
-import { useGroups, useTwinStructuredProfile } from "@/hooks/use-interactions";
 
 // Records the viewer's IANA timezone once, so limit-reset copy ("resets at
 // midnight") is honest to their actual clock. No-op once set.
@@ -165,6 +164,32 @@ function tagsOverlap(a: string[] | null | undefined, b: string[] | null | undefi
   });
 }
 
+// The two reads useSuggestedLounges needs, with the same query keys as
+// useTwinStructuredProfile and useGroups in use-interactions (so they share
+// one cache entry). Kept here rather than imported: this file loads with the
+// landing page, and importing use-interactions would put all of it there.
+function useMyStructuredProfile() {
+  return useQuery({
+    queryKey: ["/api/twin/structured-profile"],
+    queryFn: async () => {
+      const res = await fetch("/api/twin/structured-profile", { credentials: "include" });
+      if (!res.ok) return {};
+      return res.json();
+    },
+  });
+}
+
+function useOfficialLounges() {
+  return useQuery({
+    queryKey: ["/api/lounge/groups", undefined, "official"],
+    queryFn: async () => {
+      const res = await fetch("/api/lounge/groups?filter=official", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch groups");
+      return res.json();
+    },
+  });
+}
+
 export type SuggestedLounge = { id: number; name: string; reason: "mutual" | "their-interest" | "suggested" };
 
 const MAX_SUGGESTED_LOUNGES = 3;
@@ -184,9 +209,9 @@ const MAX_SUGGESTED_LOUNGES = 3;
  *  so "meet in a group first" reads the same wherever it shows up. */
 export function useSuggestedLounges(otherUserId?: string): { lounges: SuggestedLounge[] } {
   const { data: myProfile } = useProfile();
-  const { data: myStructured } = useTwinStructuredProfile();
+  const { data: myStructured } = useMyStructuredProfile();
   const { data: theirGroups } = useProfileGroups(otherUserId);
-  const { data: officialLounges } = useGroups(undefined, "official");
+  const { data: officialLounges } = useOfficialLounges();
 
   const mutual = (theirGroups || []).filter((g) => g.viewerIsMember);
   const myInterests: string[] = Array.isArray((myStructured as any)?.interests) ? (myStructured as any).interests : [];
