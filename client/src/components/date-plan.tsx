@@ -11,6 +11,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { isNativeApp } from "@/lib/native";
 import { haptic } from "@/lib/haptics";
 import { DateOnMe } from "@/components/date-on-me";
+import { SafetyCheckDue, SafetyCheckSetup } from "@/components/date-safety";
 import {
   buildIcs, CHECKIN_LABEL, DATE_KIND_LABEL, DATE_MAX_TIMES, dateTimeLabel, planTitle, shareMyDateText,
   type CheckinAnswer, type DateKind, type DatePlanView,
@@ -362,9 +363,12 @@ export function DateCard({ plan, isMe, otherFirst, onSuggestAnother }: { plan: D
             </VfButton>
           </div>
           <p className="vf-small text-vf-faint px-1">Share my date sends who, where and when to someone you trust.</p>
+          <SafetyCheckSetup plan={plan} />
           <button type="button" onClick={() => act("cancel")} className="self-start px-1 vf-small text-vf-faint hover:text-vf-text" data-testid="button-cancel-plan">Cancel the date</button>
         </div>
       )}
+
+      {plan.status === "confirmed" && !upcoming && <SafetyCheckDue plan={plan} />}
 
       {plan.kind !== "event" && <DateOnMe planId={plan.id} otherFirst={otherFirst} />}
     </div>

@@ -17,7 +17,7 @@ function iconFor(type: string) {
   if (type === "plan" || type === "crown") return Crown;
   if (type === "verification") return BadgeCheck;
   if (type === "proximity" || type.startsWith("twin")) return Sparkles;
-  if (type === "disclosure") return Shield;
+  if (type === "disclosure" || type === "safety") return Shield;
   if (type.startsWith("group") || type.startsWith("chat_request")) return MessageCircle;
   if (type.startsWith("referral")) return Gift;
   return Bell;

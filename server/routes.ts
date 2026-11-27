@@ -4,6 +4,7 @@ import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { and } from "drizzle-orm";
 import { registerGrowthRoutes } from "./growth-routes";
 import { registerVideoCallRoutes } from "./video-calls";
+import { registerDateSafetyRoutes } from "./date-safety";
 import { withClickReasons } from "./click-reasons";
 import * as payments from "./payments";
 import * as push from "./push";
@@ -146,6 +147,8 @@ export async function registerRoutes(
   registerVerificationRoutes(app, getUserId, upload);
   // Video dates between matches (server/video-calls.ts).
   registerVideoCallRoutes(app, getUserId);
+  // Date safety kit: "All good?" an hour into a date (server/date-safety.ts).
+  registerDateSafetyRoutes(app, getUserId);
 
   // The app's own routes, by area, in their original order.
   registerProfilesRoutes(app);

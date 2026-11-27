@@ -7,6 +7,7 @@ import * as eventsService from "../events";
 import * as officialEvents from "../official-events";
 import { runOfficialAutopilot } from "../official-autopilot";
 import { ensureVideoCallsTable, sweepVideoCalls } from "../video-calls";
+import { ensureDateSafetyTable, startSafetyCheckSweep } from "../date-safety";
 import * as onboarding from "../onboarding";
 import * as payments from "../payments";
 import * as proximity from "../services/twin-proximity-alerts";
@@ -138,6 +139,10 @@ export async function startBackgroundWork() {
   // Video calls: the table on first boot, then close rings nobody answered
   // and calls both phones have gone quiet on (so they stop counting minutes).
   ensureVideoCallsTable().catch((e) => console.error("[video] couldn't create video_calls:", e));
+  // Date safety check-ins: the table on first boot, then a sweep every minute.
+  ensureDateSafetyTable()
+    .then(() => startSafetyCheckSweep())
+    .catch((e) => console.error("[date-safety] couldn't create date_safety_checks:", e));
   setInterval(() => {
     sweepVideoCalls().catch((e) => console.error("[video] sweep failed:", e));
   }, 30_000);

@@ -2471,6 +2471,27 @@ export const videoCalls = pgTable(
 );
 export type VideoCall = typeof videoCalls.$inferSelect;
 
+// Date safety kit (Part B6): a member's "All good?" an hour into a confirmed
+// date (shared/date-safety.ts). Private to that member. Created at startup if
+// missing (ensureDateSafetyTable), so no manual migration step.
+export const dateSafetyChecks = pgTable(
+  "date_safety_checks",
+  {
+    id: serial("id").primaryKey(),
+    planId: integer("plan_id").notNull(),
+    userId: varchar("user_id").notNull(),
+    checkAt: timestamp("check_at").notNull(),
+    pushedAt: timestamp("pushed_at"),
+    answer: text("answer"), // fine | help
+    answeredAt: timestamp("answered_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("date_safety_plan_user_idx").on(t.planId, t.userId),
+    index("date_safety_due_idx").on(t.checkAt),
+  ],
+);
+
 export type AdminUser = typeof adminUsers.$inferSelect;
 export type AdminAuditLogEntry = typeof adminAuditLog.$inferSelect;
 export type Report = typeof reports.$inferSelect;

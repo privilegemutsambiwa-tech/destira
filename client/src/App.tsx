@@ -106,6 +106,7 @@ const CrownTable = screen(() => import("@/pages/CrownTable"));
 const Till = screen(() => import("@/pages/Till"));
 const PublicEvent = screen(() => import("@/pages/PublicEvent"));
 const VideoCall = screen(() => import("@/pages/VideoCall"));
+const DateSafetyCheck = screen(() => import("@/pages/DateSafetyCheck"));
 
 // The screens people move between all the time, fetched quietly once someone
 // is signed in and the app has had a moment to settle, so tapping a tab or a
@@ -382,6 +383,9 @@ function Router() {
       </Route>
       <Route path="/chat/:matchId">
         {(params) => <ProtectedRoute component={DirectChat} params={params} />}
+      </Route>
+      <Route path="/date-check/:id">
+        {(params) => <ProtectedRoute component={DateSafetyCheck} params={params} />}
       </Route>
       <Route path="/call/:id">
         {(params) => <ProtectedRoute component={VideoCall} params={params} />}
