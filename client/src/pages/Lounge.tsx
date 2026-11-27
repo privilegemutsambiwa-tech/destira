@@ -14,12 +14,14 @@ import { usePaywall } from "@/hooks/use-paywall";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LOUNGE_TOPICS, type LoungeDiscover } from "@shared/lounge";
 import { warmLounge } from "@/lib/lounge-warmup";
+import { RoomsNearYou } from "@/components/suggestions";
 import { avatarColor } from "@/lib/avatar-color";
 import { gameName } from "@/lib/game-names";
 import {
   EmptyState,
   NOTE_PRIORITY,
   ScreenNotes,
+  useNotesSettled,
   SearchField,
   VfAvatar,
   VfButton,
@@ -105,8 +107,8 @@ export default function Lounge() {
   const [showCreate, setShowCreate] = useState(false);
   const serverFilter = SERVER_FILTERS.has(activeFilter) ? activeFilter : "all";
   const { data: groups, isLoading } = useGroups(searchQuery || undefined, serverFilter);
-  const { data: everything } = useGroups(undefined, "all");
-  const { data: discover } = useQuery<LoungeDiscover>({ queryKey: ["/api/lounge/discover"], staleTime: 60_000 });
+  const { data: everything, isPending: everythingPending } = useGroups(undefined, "all");
+  const { data: discover, isPending: discoverPending } = useQuery<LoungeDiscover>({ queryKey: ["/api/lounge/discover"], staleTime: 60_000 });
   const byId = useMemo(() => new Map<number, any>((everything || []).map((g: any) => [g.id, g])), [everything]);
   const [, setLocation] = useLocation();
   const open = (id: number | string) => setLocation(`/lounge/group/${id}`);
@@ -162,6 +164,11 @@ export default function Lounge() {
     [discover, byId],
   );
 
+  // The tip, your rooms, the busy ones and the list all come in together: shown one
+  // by one, each pushed the rest down the page as it arrived.
+  const notesSettled = useNotesSettled(["lounge_intro_tip"]);
+  const firstLoad = everythingPending || discoverPending || !notesSettled;
+
   return (
     <LayoutShell>
       <div className="max-w-5xl mx-auto">
@@ -175,6 +182,10 @@ export default function Lounge() {
           </VfButton>
         </header>
 
+        {firstLoad ? (
+          <RoomsSkeleton />
+        ) : (
+        <>
         <ScreenNotes
           className="mb-5"
           notes={[
@@ -253,24 +264,18 @@ export default function Lounge() {
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" aria-busy="true">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="rounded-[22px] border border-vf-line overflow-hidden">
-                  <VfSkeleton className="aspect-[16/9] rounded-none" />
-                  <div className="p-4 flex flex-col gap-2">
-                    <VfSkeleton className="h-5 w-2/3" />
-                    <VfSkeleton className="h-4 w-full" />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <RoomsSkeleton />
           ) : found.length === 0 ? (
-            <EmptyState
-              testId="text-no-groups"
-              title={searching ? "No rooms match that." : activeFilter === "all" ? "You're in every room here." : "No rooms here yet."}
-              body={searching ? "Try another word, or start the room you're looking for." : activeFilter === "all" ? "Start a new one for the thing you'd like to talk about." : "Start the first one."}
-              action={<VfButton variant="secondary" onClick={() => setShowCreate(true)}>New room</VfButton>}
-            />
+            <div className="pb-6">
+              <EmptyState
+                className="pb-8"
+                testId="text-no-groups"
+                title={searching ? "No rooms match that." : activeFilter === "all" ? "You're in every room here." : "No rooms here yet."}
+                body={searching ? "Try another word, or start the room you're looking for." : activeFilter === "all" ? "Start a new one for the thing you'd like to talk about." : "Start the first one, or try one of these."}
+                action={<VfButton variant="secondary" onClick={() => setShowCreate(true)}>New room</VfButton>}
+              />
+              {activeFilter !== "all" || searching ? <RoomsNearYou /> : null}
+            </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="text-section-discover">
               {found.map((room: any, i: number) => (
@@ -286,10 +291,28 @@ export default function Lounge() {
             </div>
           )}
         </section>
+        </>
+        )}
       </div>
 
       <CreateRoomSheet open={showCreate} onOpenChange={setShowCreate} />
     </LayoutShell>
+  );
+}
+
+function RoomsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" aria-busy="true">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="rounded-[22px] border border-vf-line overflow-hidden">
+          <VfSkeleton className="aspect-[16/9] rounded-none" />
+          <div className="p-4 flex flex-col gap-2">
+            <VfSkeleton className="h-5 w-2/3" />
+            <VfSkeleton className="h-4 w-full" />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

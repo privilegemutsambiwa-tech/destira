@@ -183,6 +183,35 @@ export async function focusWalk(page: Page, stops = 40): Promise<{ order: string
   return { order, findings };
 }
 
+/** Records layout shifts from the very start of the page (call before goto). */
+export async function watchLayoutShift(page: Page) {
+  await page.addInitScript(() => {
+    (window as any).__shifts = [];
+    try {
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries() as any[]) {
+          if (e.hadRecentInput) continue;
+          const src = (e.sources || []).map((s: any) => {
+            const n = s.node as Element | null;
+            const name = n ? n.getAttribute?.("data-testid") || `${n.nodeName.toLowerCase()}${n.className ? "." + String(n.className).split(" ").slice(0, 2).join(".") : ""}` : "?";
+            const a = s.previousRect, b = s.currentRect;
+            return `${name} (y ${Math.round(a.y)}→${Math.round(b.y)}, h ${Math.round(a.height)}→${Math.round(b.height)})`;
+          });
+          (window as any).__shifts.push({ value: e.value, at: Math.round(e.startTime), src });
+        }
+      }).observe({ type: "layout-shift", buffered: true });
+    } catch {}
+  });
+}
+
+/** How much the page jumped while loading (CLS-style sum), and what moved most. */
+export async function layoutShift(page: Page): Promise<{ total: number; worst: { value: number; at: number; src: string[] }[] }> {
+  return page.evaluate(() => {
+    const s: { value: number; at: number; src: string[] }[] = (window as any).__shifts || [];
+    return { total: s.reduce((a, b) => a + b.value, 0), worst: [...s].sort((a, b) => b.value - a.value).slice(0, 3) };
+  });
+}
+
 /** Doubles every text size, as a phone set to its largest text does, and
  *  reports a page that scrolls sideways or controls whose label gets cut off. */
 export async function textAt200(page: Page): Promise<Finding[]> {

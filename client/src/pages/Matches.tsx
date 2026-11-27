@@ -18,6 +18,7 @@ import { MatchCelebration, Portrait } from "@/components/match-celebration";
 import { useProfile, useSuggestedLounges } from "@/hooks/use-profiles";
 import { withFrom } from "@/lib/from-route";
 import { EmptyState, UnderlineTabs, VfAvatar, VfButton, VfSkeleton } from "@/components/ui-vf";
+import { PeopleWhoFit } from "@/components/suggestions";
 import { avatarColor } from "@/lib/avatar-color";
 import { haptic } from "@/lib/haptics";
 import { PurchaseSheet } from "@/components/purchase-sheet";
@@ -261,15 +262,19 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
 function LikesEmpty({ title, body }: { title: string; body: string }) {
   const [, setLocation] = useLocation();
   return (
-    <EmptyState
-      title={title}
-      body={body}
-      action={
-        <VfButton variant="secondary" onClick={() => setLocation("/discover")} data-testid="link-discover">
-          Go to Discover
-        </VfButton>
-      }
-    />
+    <div className="pb-6">
+      <EmptyState
+        className="pb-8"
+        title={title}
+        body={body}
+        action={
+          <VfButton variant="secondary" onClick={() => setLocation("/discover")} data-testid="link-discover">
+            Go to Discover
+          </VfButton>
+        }
+      />
+      <PeopleWhoFit from="/matches" title="Meanwhile, three people who fit" />
+    </div>
   );
 }
 

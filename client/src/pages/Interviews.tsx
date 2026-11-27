@@ -4,6 +4,7 @@ import { useChatThreads, useMarkStoryRepliesRead } from "@/hooks/use-interaction
 import { useProfile } from "@/hooks/use-profiles";
 import { Link, useLocation, useSearch } from "wouter";
 import { ChevronRight } from "lucide-react";
+import { PeopleWhoFit } from "@/components/suggestions";
 import { EmptyState as VfEmptyState, PageHeader, SearchField, SegmentedControl, TwinGlyph, VfAvatar, VfButton, VfSkeleton } from "@/components/ui-vf";
 import { wantsFriends } from "@shared/friends";
 
@@ -200,14 +201,18 @@ export default function Interviews() {
 function EmptyState() {
   const [, setLocation] = useLocation();
   return (
-    <VfEmptyState
-      title="No chats yet."
-      body="When you and someone both say yes, you can talk here. Asking someone's twin a question starts a chat too."
-      action={
-        <VfButton onClick={() => setLocation("/discover")} data-testid="button-go-discover">
-          Go to Discover
-        </VfButton>
-      }
-    />
+    <div className="pb-6">
+      <VfEmptyState
+        className="pb-8"
+        title="No chats yet."
+        body="When you and someone both say yes, you can talk here. Asking someone's twin a question starts a chat too, so pick someone below and ask."
+        action={
+          <VfButton onClick={() => setLocation("/discover")} data-testid="button-go-discover">
+            Go to Discover
+          </VfButton>
+        }
+      />
+      <PeopleWhoFit from="/chats" />
+    </div>
   );
 }

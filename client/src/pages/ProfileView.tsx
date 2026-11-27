@@ -121,16 +121,20 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
 
   const { data: profile, isLoading, isError } = useProfile(userId);
   const { data: mine } = useProfile();
-  const { data: photos = [] } = usePhotos(userId);
-  const { data: answers = [] } = usePublicAnswers(userId);
-  const { data: groups = [] } = useProfileGroups(userId);
+  const { data: photos = [], isLoading: photosLoading } = usePhotos(userId);
+  const { data: answers = [], isLoading: answersLoading } = usePublicAnswers(userId);
+  const { data: groups = [], isLoading: groupsLoading } = useProfileGroups(userId);
   const { data: outgoing } = useOutgoingLikes();
   const { data: incoming } = useIncomingLikes();
   const { data: myReadiness } = useTwinReadiness();
   const { data: transcriptGate } = useGate("read_transcript");
-  const { data: twinTalk } = useTwinTalkSummary(userId);
-  const { data: reasonsData } = useClickReasons(userId, !preview);
-  const { data: vouchList = [] } = useVouchesFor(userId);
+  const { data: twinTalk, isLoading: twinTalkLoading } = useTwinTalkSummary(userId);
+  const { data: reasonsData, isLoading: reasonsLoading } = useClickReasons(userId, !preview);
+  const { data: vouchList = [], isLoading: vouchesLoading } = useVouchesFor(userId);
+  // The cards under the photo each load on their own; shown as they came,
+  // each pushed the rest down. The profile appears once they're all in.
+  // (isLoading, not isPending: a query switched off never stops pending.)
+  const cardsLoading = photosLoading || answersLoading || groupsLoading || twinTalkLoading || reasonsLoading || vouchesLoading;
   const paywall = usePaywall();
   const createMatch = useCreateMatch();
   const [celebrating, setCelebrating] = useState<{ matchId: number } | null>(null);
@@ -157,7 +161,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     return null;
   }, [outgoing, incoming, userId]);
 
-  if (isLoading) {
+  if (isLoading || cardsLoading) {
     return (
       <ViewShell preview={preview}>
         <div className="h-[60vh] flex items-center justify-center">

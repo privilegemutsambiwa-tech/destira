@@ -139,12 +139,12 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['"DM Sans"', "var(--font-sans)", "system-ui", "sans-serif"],
-        serif: ['"Instrument Serif"', "serif"],
+        sans: ['"DM Sans"', '"DM Sans Fallback"', "system-ui", "sans-serif"],
+        serif: ['"Instrument Serif"', '"Instrument Serif Fallback"', "serif"],
         mono: ['"DM Mono"', "monospace"],
         // Old aliases, now pointing at the real families (Inter is gone).
-        display: ['"Instrument Serif"', "serif"],
-        body: ['"DM Sans"', "system-ui", "sans-serif"],
+        display: ['"Instrument Serif"', '"Instrument Serif Fallback"', "serif"],
+        body: ['"DM Sans"', '"DM Sans Fallback"', "system-ui", "sans-serif"],
       },
       keyframes: {
         "accordion-down": {

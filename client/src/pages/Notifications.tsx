@@ -1,6 +1,7 @@
 // The bell: everything Destira told you, grouped by day, each opening the
 // screen it's about (the same links push uses). docs Part I.
 import { useLocation } from "wouter";
+import { PeopleWhoFit } from "@/components/suggestions";
 import {
   BadgeCheck, Bell, CalendarDays, Crown, Heart, Loader2, MessageCircle, Settings as SettingsIcon, Shield, Sparkles, Gift,
 } from "lucide-react";
@@ -85,6 +86,7 @@ export default function NotificationsPage() {
             <Bell className="w-8 h-8 text-vf-faint mx-auto" />
             <p className="text-[15px] text-vf-text mt-3">Nothing yet</p>
             <p className="text-[13px] text-vf-faint mt-1">Matches, event reminders and news about your account will show up here.</p>
+            <PeopleWhoFit from="/notifications" title="Start something: three people who fit" className="mt-8" />
           </div>
         ) : (
           groupByDay(items).map((g) => (

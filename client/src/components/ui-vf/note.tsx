@@ -69,21 +69,27 @@ function markShown(kind: string) {
 
 const reminderKey = (kind: string) => ["/api/reminders", kind];
 
+const reminderQuery = (kind: string) => ({
+  queryKey: reminderKey(kind),
+  queryFn: async () => {
+    const res = await fetch(`/api/reminders/${kind}`, { credentials: "include" });
+    if (!res.ok) return { dismissed: true };
+    return (await res.json()) as { dismissed: boolean };
+  },
+});
+
+/** True once the screen knows whether these notes show. A screen that loads
+ *  in one go waits for this too, so a note can't push it down afterwards. */
+export function useNotesSettled(kinds: NoteKind[]): boolean {
+  return useQueries({ queries: kinds.map(reminderQuery) }).every((r) => !r.isPending);
+}
+
 /** Shows the one note this screen should show, or nothing. */
 export function ScreenNotes({ notes, className }: { notes: NoteSpec[]; className?: string }) {
   const qc = useQueryClient();
   const candidates = notes.filter((n) => n.when !== false).sort((a, b) => b.priority - a.priority);
 
-  const results = useQueries({
-    queries: candidates.map((n) => ({
-      queryKey: reminderKey(n.kind),
-      queryFn: async () => {
-        const res = await fetch(`/api/reminders/${n.kind}`, { credentials: "include" });
-        if (!res.ok) return { dismissed: true };
-        return (await res.json()) as { dismissed: boolean };
-      },
-    })),
-  });
+  const results = useQueries({ queries: candidates.map((n) => reminderQuery(n.kind)) });
 
   // Walk down by priority. Stop at the first one still loading, so a lower
   // note never flashes up and then gets replaced by a higher one.

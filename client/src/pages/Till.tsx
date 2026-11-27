@@ -51,6 +51,7 @@ export default function Till() {
               autoCapitalize="characters"
               autoComplete="off"
               className="h-14 rounded-[16px] bg-vf-surface border border-vf-line px-4 font-mono text-[20px] tracking-wider placeholder:text-vf-faint placeholder:font-sans placeholder:text-[15px] placeholder:tracking-normal"
+              aria-label="Guest's code"
               data-testid="till-code"
             />
             <input
@@ -61,6 +62,7 @@ export default function Till() {
               type="password"
               autoComplete="off"
               className="h-12 rounded-[16px] bg-vf-surface border border-vf-line px-4 text-[16px] placeholder:text-vf-faint"
+              aria-label="Venue PIN"
               data-testid="till-pin"
             />
             {err && <p className="text-[14px] text-red-400" role="alert" data-testid="till-error">{err}</p>}

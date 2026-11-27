@@ -203,7 +203,8 @@ export default function EventPreferences() {
             onChange={(e) => patch({ maxDistanceKm: Number(e.target.value) })}
             className="w-full"
             style={{ accentColor: "var(--vf-mint-vivid)" }}
-            data-testid="slider-distance"
+            aria-label="Distance, in kilometres"
+              data-testid="slider-distance"
           />
           <p className="mt-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint">
             {count == null ? "counting…" : `${count} event${count === 1 ? "" : "s"} within ${draft.maxDistanceKm}km`}
@@ -293,7 +294,8 @@ export default function EventPreferences() {
                   onChange={(e) => patch({ notifyThreshold: Number(e.target.value) })}
                   className="w-full"
                   style={{ accentColor: "var(--vf-mint-vivid)" }}
-                  data-testid="slider-threshold"
+                  aria-label="Only tell me about someone above this fit score"
+              data-testid="slider-threshold"
                 />
               </div>
               <p className="text-[12.5px] leading-[1.5] text-vf-muted">

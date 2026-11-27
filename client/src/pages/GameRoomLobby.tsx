@@ -95,12 +95,10 @@ export default function GameRoomLobby({ params }: { params?: { groupId?: string 
       </div>
 
       <div className="flex-1 w-full max-w-[640px] mx-auto px-4 pb-10 space-y-9">
-        {/* Live now */}
-        {isLoading ? (
-          <div className="flex justify-center py-10">
-            <Loader2 className="w-6 h-6 animate-spin" style={{ color: STAGE.cream }} />
-          </div>
-        ) : games.length > 0 ? (
+        {/* Live now. No spinner while it loads: the game of the day below is
+            already useful, and a spinner taking room then vanishing made the
+            page jump. */}
+        {games.length > 0 ? (
           <section className="pt-2">
             <div className="flex items-center gap-2 mb-3 font-mono text-[11px] uppercase tracking-[0.18em]" style={{ color: STAGE.mint }}>
               <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: STAGE.mint }} /> Live now
@@ -139,8 +137,6 @@ export default function GameRoomLobby({ params }: { params?: { groupId?: string 
           </section>
         ) : null}
 
-        <GameNightsSection groupId={groupId} />
-
         {/* Game of the day */}
         <section className={games.length ? "" : "pt-2"}>
           <div className="font-mono text-[11px] uppercase tracking-[0.18em] mb-3" style={{ color: STAGE.faint }}>Game of the day</div>
@@ -167,12 +163,16 @@ export default function GameRoomLobby({ params }: { params?: { groupId?: string 
               Start a round <ArrowRight className="w-4 h-4" />
             </span>
           </motion.button>
-          {games.length === 0 && !isLoading && (
-            <p className="mt-3 text-center text-[13px]" style={{ color: STAGE.faint }}>
+          {games.length === 0 && (
+            // Held in place (hidden) while loading, so it doesn't push the games down when it appears.
+            <p className={`mt-3 text-center text-[13px] ${isLoading ? "invisible" : ""}`} style={{ color: STAGE.faint }}>
               Nothing live yet. Whatever you start shows up in the room's chat so everyone can jump in.
             </p>
           )}
         </section>
+
+        {/* Scheduled game nights: below the game of the day, so arriving late doesn't push it down. */}
+        <GameNightsSection groupId={groupId} />
 
         {/* Every game */}
         <section>

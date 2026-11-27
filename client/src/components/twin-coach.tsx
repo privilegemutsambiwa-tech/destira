@@ -232,6 +232,12 @@ export function CoachCard({ result }: { result: CoachResult }) {
 /** The profile writer: offered while the profile has no words of its own
  *  (no bio, or no prompt answered). The draft goes into the profile page's
  *  editor; nothing is saved until they press Save there. */
+/** True once the writer card knows whether it shows, so what sits under it
+ *  can wait rather than be pushed down when it appears. */
+export function useWriterSettled(): boolean {
+  return !useQuery<WriterStatus>({ queryKey: ["/api/twin/writer"] }).isPending;
+}
+
 export function WriterCard() {
   const [, setLocation] = useLocation();
   const [hidden, setHidden] = useState(() => {

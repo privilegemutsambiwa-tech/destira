@@ -151,6 +151,7 @@ export default function ProfileDetailsPage() {
               onBlur={() => job.trim() !== (d.job ?? "") && save({ job: job.trim() || null })}
               placeholder="e.g. Nurse, Accountant, Runs a salon"
               className="w-full max-w-[360px] rounded-[12px] border border-vf-line bg-vf-text/5 px-3.5 h-11 text-[15px] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60"
+              aria-label="What you do"
               data-testid="input-detail-job"
             />
           </Group>
@@ -170,7 +171,8 @@ export default function ProfileDetailsPage() {
                 }}
                 placeholder="170"
                 className="w-24 rounded-[12px] border border-vf-line bg-vf-text/5 px-3 h-11 text-center text-[15px] text-vf-text outline-none focus:border-vf-ember/60"
-                data-testid="input-detail-height"
+                aria-label="Height in centimetres"
+              data-testid="input-detail-height"
               />
               <span className="text-vf-muted text-[14px]">cm</span>
             </div>

@@ -5,9 +5,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Stand-ins sized to match DM Sans and Instrument Serif, used for the moment
+   before the real fonts are ready (font-display: swap). Without them the
+   swap rewraps text and the page jumps. Measured from the font files
+   against Arial and Times (scratch script: average width over ordinary
+   English, plus the fonts' own ascent and descent). */
+@font-face {
+  font-family: "DM Sans Fallback";
+  src: local("Arial"), local("ArialMT"), local("Roboto"), local("Helvetica Neue"), local("Helvetica");
+  size-adjust: 104.01%;
+  ascent-override: 95.38%;
+  descent-override: 29.81%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Instrument Serif Fallback";
+  src: local("Times New Roman"), local("Times"), local("Noto Serif"), local("Georgia");
+  size-adjust: 83.6%;
+  ascent-override: 118.42%;
+  descent-override: 37.08%;
+  line-gap-override: 0%;
+}
+
 :root {
-  --font-sans: 'DM Sans', system-ui, sans-serif;
-  --font-serif: 'Instrument Serif', serif;
+  --font-sans: 'DM Sans', 'DM Sans Fallback', system-ui, sans-serif;
+  --font-serif: 'Instrument Serif', 'Instrument Serif Fallback', serif;
   --font-mono: 'DM Mono', monospace;
 
   /* Destira redesign palette (mirrors tailwind.config.ts theme.extend.colors.vf).

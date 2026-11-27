@@ -24,7 +24,7 @@ import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { LiveRegion } from "@/lib/a11y";
-import { CoachBar, CoachCard, WriterCard, type CoachResult } from "@/components/twin-coach";
+import { CoachBar, CoachCard, WriterCard, useWriterSettled, type CoachResult } from "@/components/twin-coach";
 
 type MessageStatus = "sending" | "sent" | "delivered";
 
@@ -242,6 +242,7 @@ function TwinTrustPanel({
 
 export default function TwinChat() {
   const [input, setInput] = useState("");
+  const writerSettled = useWriterSettled();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
@@ -650,7 +651,7 @@ export default function TwinChat() {
             <div className="max-w-xl mx-auto">
               <WriterCard />
             </div>
-            {messages.length === 0 && !isTyping && (
+            {messages.length === 0 && !isTyping && writerSettled && (
               <div className="text-center py-12 px-2" data-testid="twin-empty">
                 {/* The most intimate screen (§7.12): calm, nearly bare, the
                     orb large and breathing. */}
@@ -773,7 +774,8 @@ export default function TwinChat() {
                 placeholder="Tell your twin something true..."
                 className="flex-1 rounded-full bg-vf-text/5 border-vf-line text-vf-text"
                 disabled={isStreaming}
-                data-testid="input-twin-message"
+                aria-label="Message your twin"
+              data-testid="input-twin-message"
               />
               <Button
                 type="submit"

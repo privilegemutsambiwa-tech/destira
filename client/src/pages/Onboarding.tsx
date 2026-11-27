@@ -513,7 +513,8 @@ function NicknameStep({
           maxLength={20}
           autoFocus
           className={`${INPUT} pl-8`}
-          data-testid="input-nickname"
+          aria-label="Nickname"
+              data-testid="input-nickname"
         />
         <span className="absolute right-3.5 top-1/2 -translate-y-1/2">
           {isFetching && <Loader2 className="w-4 h-4 animate-spin text-vf-faint" />}

@@ -14,6 +14,9 @@ const DISMISS_KEY = "vf_trial_banner_dismissed";
 export function TrialBanner() {
   const [location] = useLocation();
   const { data: sub } = useSubscription();
+  // Only if it's known when the screen first paints: arriving later, it would
+  // push the whole page down. Otherwise it shows from the next screen on.
+  const [knownAtFirstPaint] = useState(() => sub !== undefined);
   const [dismissed, setDismissed] = useState(() => {
     try {
       return localStorage.getItem(DISMISS_KEY) === "1";
@@ -22,7 +25,7 @@ export function TrialBanner() {
     }
   });
 
-  if (dismissed || !sub?.isTrial || sub.daysRemaining == null) return null;
+  if (!knownAtFirstPaint || dismissed || !sub?.isTrial || sub.daysRemaining == null) return null;
 
   const days = sub.daysRemaining as number;
   const dayLabel = days <= 0 ? "expires today" : days === 1 ? "1 day left" : `${days} days left`;

@@ -182,7 +182,8 @@ export default function TwinDisclosure() {
             rows={4}
             placeholder="e.g. Don't bring up my divorce, and never mention my sister at all."
             className="w-full rounded-[12px] border border-vf-line bg-vf-text/[0.04] p-3.5 text-[14px] leading-[1.6] text-vf-text placeholder:text-vf-faint outline-none focus:border-vf-ember/60 transition-colors resize-none"
-            data-testid="input-disclosure-directive"
+            aria-label="What your twin should never bring up"
+              data-testid="input-disclosure-directive"
           />
           <div className="flex items-center justify-between">
             <span className="font-mono text-[10.5px] text-vf-faint">

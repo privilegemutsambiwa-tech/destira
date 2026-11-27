@@ -5,6 +5,7 @@
 import { useMarkSeen } from "@/hooks/use-activity";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
+import { RoomsNearYou } from "@/components/suggestions";
 import { useQuery } from "@tanstack/react-query";
 import { LayoutShell } from "@/components/layout-shell";
 import { EventCard, EventRow } from "@/components/event-row";
@@ -30,6 +31,7 @@ import {
   IconButton,
   NOTE_PRIORITY,
   ScreenNotes,
+  useNotesSettled,
   SearchField,
   VfButton,
   VfSheet,
@@ -252,6 +254,10 @@ export default function Events() {
   const host = () => paywall.guard("host_event", () => setLocation("/events/host"));
   const hostLocked = hostGate?.ok === false;
   const mySeats = seats.data ?? [];
+  // The tip, your seats and the list come in together: one by one, each
+  // pushed the rest down as it arrived.
+  const notesSettled = useNotesSettled(["events_intro_tip"]);
+  const firstLoad = feed.isLoading || seats.isPending || !notesSettled;
   const resultCount = results.data?.events.length ?? 0;
 
   return (
@@ -281,6 +287,7 @@ export default function Events() {
           </div>
         </header>
 
+        {!firstLoad && (
         <ScreenNotes
           className="mb-6"
           notes={[
@@ -293,8 +300,9 @@ export default function Events() {
             },
           ]}
         />
+        )}
 
-        {mySeats.length > 0 && !searching && (
+        {!firstLoad && mySeats.length > 0 && !searching && (
           <section className="mb-8" data-testid="section-my-seats">
             <SectionLabel tone="text">My seats</SectionLabel>
             <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory -mx-4 px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -305,7 +313,7 @@ export default function Events() {
           </section>
         )}
 
-        <div className="flex items-center justify-between gap-3 mb-6">
+        <div className={`flex items-center justify-between gap-3 mb-6 ${firstLoad ? "hidden" : ""}`}>
           {searching ? (
             <div className="vf-label text-vf-faint" data-testid="text-result-count">
               {results.isLoading ? "Searching…" : `${resultCount} event${resultCount === 1 ? "" : "s"} · by date`}
@@ -353,7 +361,7 @@ export default function Events() {
               ))}
             </div>
           )
-        ) : feed.isLoading ? (
+        ) : firstLoad ? (
           <CardSkeletons />
         ) : feedEmpty ? (
           wideCount.isLoading ? (
@@ -366,12 +374,16 @@ export default function Events() {
               action={<VfButton variant="secondary" onClick={() => setLocation("/settings/events?from=/events")}>Event preferences</VfButton>}
             />
           ) : (
-            <EmptyState
-              testId="events-empty-state"
-              title="Quiet week."
-              body="Host the thing you'd want to go to. Small is fine."
-              action={<VfButton onClick={host}>Host an event</VfButton>}
-            />
+            <div className="pb-6">
+              <EmptyState
+                className="pb-8"
+                testId="events-empty-state"
+                title="Quiet week."
+                body="Host the thing you'd want to go to. Small is fine. Or meet people in a room while it's quiet."
+                action={<VfButton onClick={host}>Host an event</VfButton>}
+              />
+              <RoomsNearYou />
+            </div>
           )
         ) : (
           <div className="flex flex-col gap-10">
