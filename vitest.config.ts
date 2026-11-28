@@ -11,6 +11,8 @@ import { defineConfig } from "vitest/config";
 import path from "path";
 
 export default defineConfig({
+  // The app's JSX transform (React 17+), so screens can be rendered in tests.
+  esbuild: { jsx: "automatic" },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
