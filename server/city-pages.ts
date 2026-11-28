@@ -5,6 +5,9 @@
 // HTML copy of the content are written into the page on the server, so a
 // search engine reads it without running the app.
 import type { Express, Request } from "express";
+import { and, asc, eq, gt } from "drizzle-orm";
+import { db } from "./db";
+import { events } from "@shared/schema";
 import { getUpcomingPublicEvents, type PublicEventTeaser } from "./event-share";
 import { escapeHtml, publicOrigin } from "./group-invite";
 import { getSignedUrl, keyFromUploadUrl } from "./storage/objectStorage";
@@ -128,43 +131,93 @@ export function registerCityPageRoutes(app: Express) {
 
   // Search engines: the public pages only. The app behind sign-in is private.
   app.get("/robots.txt", (req, res) => {
-    const origin = publicOrigin(req);
     res.type("text/plain").setHeader("Cache-Control", "public, max-age=3600");
-    res.send([
-      "User-agent: *",
-      "Allow: /",
-      "Disallow: /api/",
-      "Disallow: /admin",
-      "Disallow: /chat/",
-      "Disallow: /call/",
-      "Disallow: /u/",
-      "Disallow: /settings",
-      "Disallow: /join/",
-      "Disallow: /date-check/",
-      "Disallow: /uploads/",
-      "",
-      `Sitemap: ${origin}/sitemap.xml`,
-      "",
-    ].join("\n"));
+    res.send(robotsTxt(siteOrigin(req)));
   });
 
   app.get("/sitemap.xml", async (req, res) => {
-    const origin = publicOrigin(req);
-    const urls: { loc: string; changefreq: string; lastmod?: string }[] = [
-      { loc: `${origin}/`, changefreq: "weekly" },
-      ...CITY_PAGES.map((c) => ({ loc: `${origin}${cityPath(c)}`, changefreq: "daily" })),
-      { loc: `${origin}/privacy`, changefreq: "monthly" },
-    ];
     try {
-      for (const t of await getUpcomingPublicEvents(200)) urls.push({ loc: `${origin}/events/${t.id}`, changefreq: "daily" });
+      const xml = await sitemapXml(siteOrigin(req));
+      res.type("application/xml").setHeader("Cache-Control", "public, max-age=3600");
+      res.send(xml);
     } catch (e) {
-      console.error("Sitemap events error:", e);
+      console.error("Sitemap error:", e);
+      res.status(500).type("text/plain").send("Sitemap unavailable");
     }
-    res.type("application/xml").setHeader("Cache-Control", "public, max-age=3600");
-    res.send(
-      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-      urls.map((u) => `  <url><loc>${escapeHtml(u.loc)}</loc><changefreq>${u.changefreq}</changefreq></url>`).join("\n") +
-      `\n</urlset>\n`,
-    );
   });
+}
+
+// ── robots.txt and sitemap.xml ─────────────────────────────────────
+
+/** The site's own address, no trailing slash (PUBLIC_APP_URL in production). */
+function siteOrigin(req: Request): string {
+  return publicOrigin(req).replace(/\/+$/, "");
+}
+
+/** Screens behind sign-in, plus the API and member uploads. Never crawled. */
+export const PRIVATE_PATHS = [
+  "/api/", "/uploads/", "/admin", "/auth/",
+  "/essentials", "/onboarding", "/meet-your-twin", "/invite", "/redeem",
+  "/profile", "/u/", "/photos", "/matches", "/discover", "/chats", "/chat/",
+  "/interviews", "/lounge", "/events/host", "/hosts/", "/wingman", "/introductions",
+  "/vouches", "/plans", "/circles", "/tables", "/friends", "/notifications",
+  "/settings", "/twin-chat", "/twin-disclosure", "/crown", "/billing", "/upgrade",
+  "/join/", "/date-check/", "/call/", "/dev/", "/forgot-password", "/reset-password", "/login",
+];
+
+export function robotsTxt(origin: string): string {
+  return [
+    "User-agent: *",
+    "Allow: /",
+    ...PRIVATE_PATHS.map((p) => `Disallow: ${p}`),
+    // An event's door scanner is for its host only.
+    "Disallow: /events/*/door",
+    "",
+    `Sitemap: ${origin}/sitemap.xml`,
+    "",
+  ].join("\n");
+}
+
+const xmlEscape = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+
+let sitemapCache: { at: number; origin: string; xml: string } | null = null;
+
+/** Every public page: home, sign-up, the city pages, the policy pages, and
+ *  each upcoming public event (newest 1,000). Rebuilt at most every 10 min. */
+export async function sitemapXml(origin: string, now = Date.now()): Promise<string> {
+  if (sitemapCache && sitemapCache.origin === origin && now - sitemapCache.at < 10 * 60_000) return sitemapCache.xml;
+  const urls: { loc: string; changefreq: string; priority: string; lastmod?: string }[] = [
+    { loc: `${origin}/`, changefreq: "weekly", priority: "1.0" },
+    { loc: `${origin}/signup`, changefreq: "monthly", priority: "0.8" },
+    ...CITY_PAGES.map((c) => ({ loc: `${origin}${cityPath(c)}`, changefreq: "daily", priority: "0.9" })),
+    { loc: `${origin}/privacy`, changefreq: "monthly", priority: "0.3" },
+    { loc: `${origin}/delete-account`, changefreq: "yearly", priority: "0.2" },
+  ];
+  const upcoming = await db
+    .select({ id: events.id, createdAt: events.createdAt })
+    .from(events)
+    .where(and(eq(events.visibility, "public"), eq(events.status, "published"), gt(events.startsAt, new Date(now))))
+    .orderBy(asc(events.startsAt))
+    .limit(1000);
+  for (const e of upcoming) {
+    urls.push({
+      loc: `${origin}/events/${e.id}`,
+      changefreq: "daily",
+      priority: "0.7",
+      lastmod: e.createdAt ? new Date(e.createdAt).toISOString().slice(0, 10) : undefined,
+    });
+  }
+  const xml =
+    `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+` +
+    urls
+      .map((u) => `  <url><loc>${xmlEscape(u.loc)}</loc>${u.lastmod ? `<lastmod>${u.lastmod}</lastmod>` : ""}<changefreq>${u.changefreq}</changefreq><priority>${u.priority}</priority></url>`)
+      .join("\n") +
+    `
+</urlset>
+`;
+  sitemapCache = { at: now, origin, xml };
+  return xml;
 }

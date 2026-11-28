@@ -38,14 +38,39 @@ test("an unknown city says so", async ({ page, request }) => {
 });
 
 test("robots.txt and the sitemap list public pages only", async ({ request }) => {
-  const robots = await (await request.get("/robots.txt")).text();
-  expect(robots).toContain("Disallow: /api/");
-  expect(robots).toContain("Disallow: /chat/");
-  expect(robots).toMatch(/Sitemap: .+\/sitemap\.xml/);
+  const r = await request.get("/robots.txt");
+  expect(r.status()).toBe(200);
+  expect(r.headers()["content-type"]).toContain("text/plain");
+  const robots = await r.text();
+  for (const p of ["/api/", "/chat/", "/u/", "/admin", "/matches", "/discover", "/settings", "/profile", "/uploads/"]) {
+    expect(robots).toContain(`Disallow: ${p}`);
+  }
+  // Public pages stay crawlable.
+  expect(robots).not.toMatch(/^Disallow: \/(events|dating-in|privacy|signup)\/?$/m);
+  expect(robots).toMatch(/^Sitemap: https?:\/\/[^/\s]+\/sitemap\.xml$/m);
+
   const res = await request.get("/sitemap.xml");
-  expect(res.headers()["content-type"]).toContain("xml");
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-type"]).toContain("application/xml");
   const xml = await res.text();
-  expect(xml).toContain("/dating-in/harare</loc>");
-  expect(xml).toContain("/dating-in/bulawayo</loc>");
-  expect(xml).not.toMatch(/\/(u|chat|api)\//);
+  expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+  expect(xml).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
+  const locs = Array.from(xml.matchAll(/<loc>([^<]+)<\/loc>/g), (m) => m[1]);
+  expect(locs.length).toBe((xml.match(/<url>/g) || []).length);
+  // Absolute, on one site, no duplicates.
+  const origin = new URL(locs[0]).origin;
+  for (const l of locs) expect(new URL(l).origin).toBe(origin);
+  expect(new Set(locs).size).toBe(locs.length);
+  for (const p of ["/", "/signup", "/dating-in/harare", "/dating-in/bulawayo", "/privacy", "/delete-account"]) {
+    expect(locs).toContain(`${origin}${p}`);
+  }
+  // Every upcoming public event is listed; nothing private is.
+  const city = await (await request.get("/api/public/city/harare")).json();
+  for (const e of city.events) expect(locs).toContain(`${origin}/events/${e.id}`);
+  for (const l of locs) {
+    const path = new URL(l).pathname;
+    expect(path === "/" || /^\/(signup|privacy|delete-account|dating-in\/[a-z-]+|events\/\d+)$/.test(path), path).toBe(true);
+  }
+  // Each listed page actually opens.
+  for (const l of locs.slice(0, 12)) expect((await request.get(new URL(l).pathname)).status()).toBe(200);
 });
