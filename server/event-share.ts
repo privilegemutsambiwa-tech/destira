@@ -13,7 +13,7 @@ import satori from "satori";
 import { BRAND_ICON_DATA_URI, SHARE_CARD_DESIGN } from "./brand-mark";
 import sharp from "sharp";
 import type { Request } from "express";
-import { and, eq, count, gt, asc } from "drizzle-orm";
+import { and, eq, count, gt, asc, ilike } from "drizzle-orm";
 import { db } from "./db";
 import { events, eventAttendees, groups, profiles, type Event } from "@shared/schema";
 import { CACHE_DIR, CARD_W, CARD_H, loadFonts, loadPhotoDataUri, publicOrigin, trimToWord, escapeHtml } from "./group-invite";
@@ -91,11 +91,17 @@ export async function getPublicEventTeaser(eventId: number): Promise<PublicEvent
 }
 
 /** The next few public events, soonest first, for the signed-out homepage. */
-export async function getUpcomingPublicEvents(limit = 4): Promise<PublicEventTeaser[]> {
+export async function getUpcomingPublicEvents(limit = 4, city?: string): Promise<PublicEventTeaser[]> {
   const rows = await db
     .select({ id: events.id })
     .from(events)
-    .where(and(eq(events.visibility, "public"), eq(events.status, "published"), gt(events.startsAt, new Date())))
+    .where(and(
+      eq(events.visibility, "public"),
+      eq(events.status, "published"),
+      gt(events.startsAt, new Date()),
+      // A city page (server/city-pages.ts) lists only its own city.
+      city ? ilike(events.city, city) : undefined,
+    ))
     .orderBy(asc(events.startsAt))
     .limit(limit * 2);
   const teasers = await Promise.all(rows.map((r) => getPublicEventTeaser(r.id)));

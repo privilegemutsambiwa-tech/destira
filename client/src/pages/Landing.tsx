@@ -13,6 +13,7 @@ import { useHeadline, HeroOffers, startGoogle, SignupButtons, ANDROID_DOWNLOAD, 
 import { usePhotos, PhotoTile, PhotoWall } from "@/components/landing/photos";
 import { Reveal, Eyebrow, SectionHeading, WhenNear } from "@/components/landing/shared";
 import { WhatYoullFind } from "@/components/landing/what-youll-find";
+import { CITY_PAGES, cityPath } from "@shared/city-pages";
 
 // Sections far below the fold load their code as you scroll towards them
 // (WhenNear), so a phone's first load is just the top of the page (Part K5).
@@ -604,6 +605,11 @@ export default function Landing() {
               <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">Learn</span>
               <a href="#how-it-works" className="text-vf-muted hover:text-vf-text">How it works</a>
               <a href="#faq" className="text-vf-muted hover:text-vf-text">FAQ</a>
+              {CITY_PAGES.map((c) => (
+                <a key={c.slug} href={cityPath(c)} className="text-vf-muted hover:text-vf-text" data-testid={`footer-link-city-${c.slug}`}>
+                  Dating in {c.name}
+                </a>
+              ))}
             </div>
             <div className="flex flex-col gap-2.5">
               <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">Legal</span>

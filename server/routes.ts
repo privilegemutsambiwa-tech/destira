@@ -5,6 +5,7 @@ import { and } from "drizzle-orm";
 import { registerGrowthRoutes } from "./growth-routes";
 import { registerVideoCallRoutes } from "./video-calls";
 import { registerDateSafetyRoutes } from "./date-safety";
+import { registerCityPageRoutes } from "./city-pages";
 import { withClickReasons } from "./click-reasons";
 import * as payments from "./payments";
 import * as push from "./push";
@@ -87,6 +88,8 @@ export async function registerRoutes(
   // Phase 1 retention: public event teaser + share card, first-day checklist,
   // member email unsubscribe and the member-email sweep.
   registerGrowthRoutes(app, getUserId);
+  // "Dating in Harare" pages, robots.txt and sitemap.xml (server/city-pages.ts).
+  registerCityPageRoutes(app);
   // Plan reminders, receipts and payment history (server/billing.ts).
   // Before the /api/payments/:id route so "history" isn't taken for an id.
   registerBillingRoutes(app, getUserId);

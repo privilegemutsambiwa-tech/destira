@@ -31,6 +31,11 @@ export async function withInviteMeta(url: string, req: Request, page: string): P
     const enriched = await withEventMeta(url, req, page);
     if (enriched != null) return enriched;
   }
+  if (url.startsWith("/dating-in/")) {
+    const { withCityMeta } = await import("./city-pages");
+    const enriched = await withCityMeta(url, req, page);
+    if (enriched != null) return enriched;
+  }
   const match = JOIN_PATH.exec(url);
   if (!match) return page;
   try {

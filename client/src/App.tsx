@@ -58,6 +58,7 @@ const Onboarding = screen(() => import("@/pages/Onboarding"));
 const MeetYourTwin = screen(() => import("@/pages/MeetYourTwin"));
 const Invite = screen(() => import("@/pages/Invite"));
 const PrivacyPolicy = screen(() => import("@/pages/Legal").then((m) => ({ default: m.PrivacyPolicy })));
+const CityPage = screen(() => import("@/pages/CityPage"));
 const DeleteAccountInfo = screen(() => import("@/pages/Legal").then((m) => ({ default: m.DeleteAccountInfo })));
 const Profile = screen(() => import("@/pages/Profile"));
 const ProfileView = screen(() => import("@/pages/ProfileView"));
@@ -259,6 +260,8 @@ function Router() {
       <Route path="/login" component={Login} />
       {/* Public: the store listings and the law link to these. */}
       <Route path="/privacy" component={PrivacyPolicy} />
+      {/* Public search pages: "Dating in Harare" (server/city-pages.ts). */}
+      <Route path="/dating-in/:city">{(params) => <CityPage params={params as { city: string }} />}</Route>
       {DevGallery && <Route path="/dev/gallery" component={DevGallery} />}
       <Route path="/delete-account" component={DeleteAccountInfo} />
       <Route path="/redeem" component={Till} />
