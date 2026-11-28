@@ -1,11 +1,6 @@
 import { LayoutShell } from "@/components/layout-shell";
-import {
-  BUTTON_CLASSES,
-  eventActionState,
-  eventResonanceSignal,
-  OfficialBadge,
-} from "@/components/event-row";
-import { type EventItem, useMySeats, useMyLeadApplication, useApplyToLead, useEvent, useEventAttendees, useAttendEvent, useCancelAttendance, useUpdateEvent, useCancelEvent, useEnsureEventChat, useEventResources, useAddEventResource, useDeleteEventResource } from "@/hooks/use-events";
+import { BUTTON_CLASSES, eventActionState, eventResonanceSignal, OfficialBadge } from "@/components/event-row";
+import { useMySeats, useEvent, useEventAttendees, useAttendEvent, useCancelAttendance, useUpdateEvent, useCancelEvent, useEnsureEventChat, useEventResources, useAddEventResource, useDeleteEventResource } from "@/hooks/use-events";
 import { useGroups } from "@/hooks/use-interactions";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -17,138 +12,14 @@ import { SeatTicket, addToCalendar } from "@/components/seat-ticket";
 import { DoorPassCard, EventClicksCard, HostDoorLink } from "@/components/event-door";
 import { EventHostCard, EventRatingCard } from "@/components/event-extras";
 import { AvatarStack, goingLine } from "@/components/event-row";
-import { renderStatusCard, shareStatusBlob, logShare } from "@/lib/status-card";
-import { isNativeApp, nativeShareLink } from "@/lib/native";
-import { publicOrigin } from "@/lib/app-api";
-import { useQuery } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { PurchaseSheet } from "@/components/purchase-sheet";
-import { HOST_PAYOUT_DAYS, TICKET_FEE_PERCENT, ticketPrice, type HostTicketSummary } from "@shared/event-tickets";
+import { ticketPrice } from "@shared/event-tickets";
 import { EventSkeleton } from "@/components/ui-vf/skeletons";
-
-function toLocalInput(dateStr: string): string {
-  const d = new Date(dateStr);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function formatFullDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    weekday: "long", month: "long", day: "numeric",
-  });
-}
-function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-}
-
-const SEAT_MODEL_COPY: Record<string, string> = {
-  open: "Open — anyone can save a seat",
-  capped: "Limited seats — waitlist once full",
-  curated: "Seats picked for conversation, not first-come",
-};
-
-function genderLabel(gender: string | null | undefined): string | null {
-  if (gender === "man") return "Man";
-  if (gender === "woman") return "Woman";
-  return null;
-}
-
-function genderPolicyLabel(event: { genderPolicy: string; menSlots: number | null; womenSlots: number | null }): string | null {
-  if (event.genderPolicy === "men_only") return "Men only";
-  if (event.genderPolicy === "women_only") return "Women only";
-  if (event.genderPolicy === "quota" && (event.menSlots != null || event.womenSlots != null)) {
-    const parts = [];
-    if (event.menSlots != null) parts.push(`${event.menSlots} men`);
-    if (event.womenSlots != null) parts.push(`${event.womenSlots} women`);
-    return `${parts.join(", ")} needed`;
-  }
-  return null;
-}
-
-// Lead + confirmation status for an official event, and the "I'll lead this"
-// offer. States the 48h rule plainly so nobody is surprised by a cancellation.
-function OfficialLeadPanel({ event }: { event: EventItem }) {
-  const min = event.minGoing ?? 5;
-  const going = event.resonance.goingCount;
-  const deadline = new Date(new Date(event.startsAt).getTime() - 48 * 60 * 60 * 1000);
-  const deadlineText = deadline.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  const isGoing = event.myStatus === "going";
-  const canOffer = isGoing && !event.leadUserId && !event.iAmLead;
-  const { data: mine } = useMyLeadApplication(event.id, canOffer);
-  const apply = useApplyToLead();
-  const [open, setOpen] = useState(false);
-  const [note, setNote] = useState("");
-  const application = mine?.application ?? null;
-
-  return (
-    <div className="rounded-[14px] border border-vf-line bg-vf-surface px-4 py-3.5 flex flex-col gap-3" data-testid="official-lead-panel">
-      <div>
-        <div className="font-mono uppercase tracking-[0.16em] text-[10.5px] text-vf-faint mb-1">Lead</div>
-        {event.leadUserId ? (
-          <div className="text-[14px] text-vf-text" data-testid="event-lead-name">
-            {event.iAmLead ? "You're leading this one" : event.leadName ?? "A member"}
-          </div>
-        ) : (
-          <div className="text-[14px] text-vf-gold" data-testid="event-needs-lead">Needs a lead</div>
-        )}
-      </div>
-      <p className="text-[12.5px] text-vf-muted leading-[1.5]">
-        Confirmed if {min} people have joined and it has a lead by {deadlineText}. {going} of {min} so far.
-        Otherwise it's called off and everyone is told.
-      </p>
-
-      {canOffer && !application && !open && (
-        <button
-          onClick={() => setOpen(true)}
-          className="w-full h-10 rounded-full border border-vf-gold/40 text-vf-gold hover:bg-vf-gold/[0.08] text-[13px] font-semibold transition-colors"
-          data-testid="button-lead-open"
-        >
-          I'll lead this
-        </button>
-      )}
-      {canOffer && !application && open && (
-        <div className="flex flex-col gap-2">
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            maxLength={500}
-            placeholder="Why you? Where you'd meet people, what you'd organise (optional)"
-            className="w-full bg-vf-ink border border-vf-line rounded-[10px] px-3 py-2 h-20 text-[13.5px] text-vf-text outline-none focus:border-vf-mint/50 leading-[1.5]"
-            data-testid="input-lead-note"
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={() => apply.mutate({ eventId: event.id, note: note.trim() }, { onSuccess: () => setOpen(false) })}
-              disabled={apply.isPending}
-              className="flex-1 h-10 rounded-full bg-vf-ember text-vf-ink text-[13px] font-semibold btn-press disabled:opacity-50 inline-flex items-center justify-center gap-2"
-              data-testid="button-lead-submit"
-            >
-              {apply.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Send my offer
-            </button>
-            <button onClick={() => setOpen(false)} className="h-10 px-4 rounded-full border border-vf-line text-vf-faint text-[13px]">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-      {canOffer && application?.status === "pending" && (
-        <p className="text-[12.5px] text-vf-mint" data-testid="lead-pending">
-          Offer sent. Destira reviews offers and will tell you if you're picked.
-        </p>
-      )}
-      {canOffer && application?.status === "rejected" && (
-        <p className="text-[12.5px] text-vf-faint">We went another way this time. Thanks for offering.</p>
-      )}
-      {!isGoing && !event.leadUserId && (
-        <p className="text-[12.5px] text-vf-faint">Save a seat first, then you can offer to lead.</p>
-      )}
-    </div>
-  );
-}
+import { toLocalInput, formatFullDate, formatTime, SEAT_MODEL_COPY, genderLabel, genderPolicyLabel } from "@/components/event-detail/event-detail-utils";
+import { OfficialLeadPanel, HostTicketsCard } from "@/components/event-detail/host-panels";
+import { EventReportDialog, useEventSharing } from "@/components/event-detail/event-sharing";
 
 export default function EventDetail({ params }: { params: { id: string } }) {
   const eventId = Number(params.id);
@@ -174,20 +45,13 @@ export default function EventDetail({ params }: { params: { id: string } }) {
   const [cancelReason, setCancelReason] = useState("");
   const { toast } = useToast();
   const [reportOpen, setReportOpen] = useState(false);
-  const [reportReason, setReportReason] = useState("");
-  const [reportBusy, setReportBusy] = useState(false);
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [shareLink, setShareLink] = useState("");
   const [seatJustSaved, setSeatJustSaved] = useState(false);
   // Paid tickets (shared/event-tickets.ts): buy one, then the seat is yours.
   const [buyingTicket, setBuyingTicket] = useState(false);
   const [ticketBusy, setTicketBusy] = useState(false);
   const { data: myProfile } = useProfile();
   const autoRsvpTried = useRef(false);
-  const [makingCard, setMakingCard] = useState(false);
-  // The sharer's invite code rides along on event links, so a friend who
-  // signs up from one counts as their invite (you both get a free week).
-  const { data: referral } = useQuery<{ code: string }>({ queryKey: ["/api/referrals/me"], enabled: !!user });
+  const { shareEvent, makeStatusCard, makingCard, dialogs: sharingDialogs } = useEventSharing(event, user?.id);
 
   // Arrived via "Save my seat" on the signed-out preview: save it now, once.
   useEffect(() => {
@@ -202,168 +66,6 @@ export default function EventDetail({ params }: { params: { id: string } }) {
       { onSuccess: (r) => { setSeatJustSaved(true); toast({ title: r.status === "going" ? "Your seat is saved" : r.status === "waitlisted" ? "You're on the waitlist" : "Request sent to the host" }); } },
     );
   }, [event, user, attend, toast]);
-
-  const submitEventReport = async () => {
-    if (!event) return;
-    setReportBusy(true);
-    try {
-      // Dedicated event-report endpoint, not the user-report one — reporting
-      // an event isn't the same as wanting to never see this host again, so
-      // unlike a profile report this deliberately doesn't auto-block them.
-      await apiRequest("POST", `/api/events/${event.id}/report`, {
-        reason: reportReason.trim(),
-      });
-      toast({ title: "Report sent", description: "Our team will review it." });
-      setReportOpen(false);
-      setReportReason("");
-    } catch {
-      toast({ title: "Could not send report", variant: "destructive" });
-    } finally {
-      setReportBusy(false);
-    }
-  };
-
-  // The event's own URL doubles as its invite link — it's public once
-  // published, so (unlike a group) there's no separate token to mint first.
-  // A friend who isn't signed up yet still gets funneled back here after
-  // signup (see EventLinkGate / pending-invite.ts in App.tsx).
-  const eventShareUrl = (extra = "") => {
-    if (!event) return "";
-    const params = new URLSearchParams();
-    if (referral?.code) params.set("ref", referral.code);
-    const qs = [params.toString(), extra].filter(Boolean).join("&");
-    return `${publicOrigin()}/events/${event.id}${qs ? `?${qs}` : ""}`;
-  };
-
-  const handleShareEvent = async () => {
-    if (!event) return;
-    const url = eventShareUrl();
-    const shareData = { title: event.title, text: `Come to "${event.title}" on Destira`, url };
-    logShare("event", "link", event.id);
-    try {
-      if (isNativeApp()) {
-        await nativeShareLink(event.title, shareData.text, url);
-      } else if (navigator.share) {
-        await navigator.share(shareData);
-      } else {
-        setShareLink(url);
-        setShareDialogOpen(true);
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") return;
-      setShareLink(url);
-      setShareDialogOpen(true);
-    }
-  };
-
-  // "Post to Status": one card, two places to put it — the member's
-  // Destira story (with a live "See the event" panel for viewers) or their
-  // WhatsApp Status (link in the caption, since images aren't tappable there).
-  const [statusOpen, setStatusOpen] = useState(false);
-  const [statusCard, setStatusCard] = useState<{ blob: Blob; url: string } | null>(null);
-  const [postingStory, setPostingStory] = useState(false);
-
-  const seatsBadge = (s: { going: number; seatsLeft: number | null; womenSeatsLeft: number | null; menSeatsLeft: number | null }) => {
-    if (s.womenSeatsLeft != null && s.menSeatsLeft != null) {
-      // Nobody in yet: lead with what makes it easy to say yes.
-      if (s.going === 0) return `Free · ${s.womenSeatsLeft + s.menSeatsLeft} seats, half for women`;
-      if (s.womenSeatsLeft > 0 && s.menSeatsLeft > 0) return `${s.womenSeatsLeft} women's and ${s.menSeatsLeft} men's seats left`;
-      if (s.womenSeatsLeft > 0) return `${s.womenSeatsLeft} women's ${s.womenSeatsLeft === 1 ? "seat" : "seats"} left`;
-      if (s.menSeatsLeft > 0) return `${s.menSeatsLeft} men's ${s.menSeatsLeft === 1 ? "seat" : "seats"} left`;
-      return "Waitlist open";
-    }
-    if (s.seatsLeft != null) return s.seatsLeft > 0 ? `${s.seatsLeft} ${s.seatsLeft === 1 ? "seat" : "seats"} left` : "Waitlist open";
-    return s.going > 0 ? `${s.going} going` : null;
-  };
-
-  const handleStatusCard = async () => {
-    if (!event) return;
-    setMakingCard(true);
-    try {
-      const mine = event.hostUserId === user?.id;
-      const going = event.myStatus === "going";
-      const place = [event.venueName, event.suburb, event.city].filter(Boolean).join(" · ");
-      const seats = await fetch(`/api/events/${event.id}/seats`, { credentials: "include" })
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null);
-      const d = new Date(event.startsAt);
-      const blob = await renderStatusCard({
-        eyebrow: mine ? "I'm hosting" : going ? "I'm going" : "Who's coming?",
-        title: event.title,
-        lines: [`${formatFullDate(event.startsAt)} · ${formatTime(event.startsAt)}`, ...(place ? [place] : [])],
-        footer: "Save a seat on Destira",
-        imageUrl: event.coverImageUrl,
-        date: {
-          dow: d.toLocaleDateString("en-GB", { weekday: "short" }),
-          day: String(d.getDate()),
-          month: d.toLocaleDateString("en-GB", { month: "short" }),
-        },
-        badge: seats ? seatsBadge(seats) : null,
-      });
-      setStatusCard((prev) => {
-        if (prev) URL.revokeObjectURL(prev.url);
-        return { blob, url: URL.createObjectURL(blob) };
-      });
-      setStatusOpen(true);
-    } catch {
-      toast({ title: "Couldn't make the card", variant: "destructive" });
-    } finally {
-      setMakingCard(false);
-    }
-  };
-
-  const postToDestiraStory = async () => {
-    if (!event || !statusCard) return;
-    setPostingStory(true);
-    try {
-      const form = new FormData();
-      form.append("media", new File([statusCard.blob], "destira-event.png", { type: "image/png" }));
-      form.append("eventId", String(event.id));
-      const res = await fetch("/api/stories", { method: "POST", body: form, credentials: "include" });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || "Couldn't post");
-      logShare("event", "destira_story", event.id);
-      queryClient.invalidateQueries({ queryKey: ["/api/stories/feed"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stories/mine"] });
-      setStatusOpen(false);
-      toast({ title: "Posted to your story", description: "Anyone who views it can open the event and save a seat." });
-    } catch (err) {
-      toast({ title: "Couldn't post your story", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
-    } finally {
-      setPostingStory(false);
-    }
-  };
-
-  const postToWhatsAppStatus = async () => {
-    if (!event || !statusCard) return;
-    const mine = event.hostUserId === user?.id;
-    const going = event.myStatus === "going";
-    const url = eventShareUrl("utm_source=status&utm_content=event");
-    try {
-      const outcome = await shareStatusBlob(
-        statusCard.blob,
-        `${mine ? "I'm hosting" : going ? "I'm going to" : "Come to"} "${event.title}". Save a seat: ${url}`,
-        "destira-event.png",
-      );
-      if (outcome !== "cancelled") {
-        logShare("event", "status_card", event.id);
-        setStatusOpen(false);
-      }
-      if (outcome === "downloaded") {
-        toast({ title: "Card saved", description: "Post it as your Status. The link is copied for the caption." });
-      }
-    } catch {
-      toast({ title: "Couldn't share the card", variant: "destructive" });
-    }
-  };
-
-  const handleCopyShareLink = async () => {
-    try {
-      await navigator.clipboard.writeText(shareLink);
-      toast({ title: "Link copied!" });
-    } catch {
-      toast({ title: "Could not copy link", variant: "destructive" });
-    }
-  };
 
   if (isLoading) {
     return (
@@ -716,7 +418,7 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                   </button>
                 )}
                 <button
-                  onClick={handleShareEvent}
+                  onClick={shareEvent}
                   className="inline-flex items-center gap-1.5 text-[12.5px] text-vf-faint hover:text-vf-text transition-colors"
                   data-testid="button-share-event"
                 >
@@ -724,7 +426,7 @@ export default function EventDetail({ params }: { params: { id: string } }) {
                 </button>
                 {event.status === "published" && (
                   <button
-                    onClick={handleStatusCard}
+                    onClick={makeStatusCard}
                     disabled={makingCard}
                     className="inline-flex items-center gap-1.5 text-[12.5px] text-vf-faint hover:text-vf-text transition-colors disabled:opacity-60"
                     data-testid="button-status-card-event"
@@ -931,115 +633,8 @@ export default function EventDetail({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      <Dialog open={reportOpen} onOpenChange={(v) => { setReportOpen(v); if (!v) setReportReason(""); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Report this event</DialogTitle>
-            <DialogDescription>This sends a record to our team for review, citing this event.</DialogDescription>
-          </DialogHeader>
-          <textarea
-            value={reportReason}
-            onChange={(e) => setReportReason(e.target.value)}
-            placeholder="What's going on? (optional)"
-            rows={3}
-            className="w-full rounded-[12px] border border-vf-line bg-vf-surface2 p-3 text-sm text-vf-text outline-none resize-none"
-            data-testid="input-event-report-reason"
-          />
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setReportOpen(false)} data-testid="button-cancel-event-report">
-              Cancel
-            </Button>
-            <Button onClick={submitEventReport} disabled={reportBusy} data-testid="button-submit-event-report">
-              {reportBusy ? "Sending…" : "Send report"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={statusOpen} onOpenChange={setStatusOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Post to Status</DialogTitle>
-            <DialogDescription>
-              Put this card on your Destira story, where people can tap through to the event, or on your WhatsApp Status.
-            </DialogDescription>
-          </DialogHeader>
-          {statusCard && (
-            <img
-              src={statusCard.url}
-              alt="Your Status card for this event"
-              className="mx-auto w-[180px] max-w-full rounded-[14px] shadow-lg"
-              style={{ aspectRatio: "9 / 16" }}
-              data-testid="img-status-card-preview"
-            />
-          )}
-          <div className="flex flex-col gap-2.5 mt-1">
-            <Button onClick={postToDestiraStory} disabled={postingStory} data-testid="button-post-destira-story">
-              {postingStory && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Post to my Destira story
-            </Button>
-            <Button variant="outline" onClick={postToWhatsAppStatus} data-testid="button-post-whatsapp-status">
-              Share to WhatsApp Status
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Share this event</DialogTitle>
-            <DialogDescription>
-              Anyone with this link can see the event, including a friend who isn't on Destira yet. In WhatsApp it
-              shows as a card with the date and how many are going, and they can save a seat in one tap.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex items-center gap-2 rounded-[12px] border border-vf-line bg-vf-surface2 p-3 text-[13px] text-vf-text break-all" data-testid="text-event-share-link">
-            {shareLink}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShareDialogOpen(false)} data-testid="button-close-event-share">
-              Close
-            </Button>
-            <Button variant="outline" onClick={handleCopyShareLink} data-testid="button-copy-event-share-link">
-              Copy link
-            </Button>
-            <Button
-              asChild
-              data-testid="button-whatsapp-event-share"
-            >
-              <a
-                href={`https://wa.me/?text=${encodeURIComponent(`Come with me to "${event.title}" on Destira ${shareLink}`)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Send on WhatsApp
-              </a>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EventReportDialog eventId={event.id} open={reportOpen} onOpenChange={setReportOpen} />
+      {sharingDialogs}
     </LayoutShell>
-  );
-}
-
-/** The host's ticket sales: what's sold, Destira's cut, and their payout. */
-function HostTicketsCard({ eventId }: { eventId: number }) {
-  const { data: t } = useQuery<HostTicketSummary | null>({ queryKey: [`/api/events/${eventId}/tickets`] });
-  if (!t) return null;
-  const due = new Date(t.payoutDueBy).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
-  return (
-    <div className="rounded-[16px] border border-vf-line p-4" data-testid="host-tickets">
-      <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-vf-faint">Tickets</div>
-      <div className="text-[15px] text-vf-text mt-1.5">
-        {t.sold} sold · {ticketPrice(t.grossCents)}
-      </div>
-      <div className="text-[13px] text-vf-muted mt-1 leading-[1.5]">
-        {t.paidOutAt
-          ? `We sent you ${ticketPrice(t.paidOutCents ?? t.hostCents)} on ${new Date(t.paidOutAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}.`
-          : `You get ${ticketPrice(t.hostCents)} after Destira's ${TICKET_FEE_PERCENT}% (${ticketPrice(t.feeCents)}), sent to ${t.payoutNumberMasked ?? "your EcoCash"} by ${due}, within ${HOST_PAYOUT_DAYS} days of the event.`}
-      </div>
-      {t.refundsDue > 0 && <div className="text-[12.5px] text-vf-faint mt-1">{t.refundsDue} being refunded.</div>}
-    </div>
   );
 }

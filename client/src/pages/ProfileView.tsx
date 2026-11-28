@@ -1,36 +1,25 @@
-import type React from "react";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Flag, Heart, Loader2, Pencil } from "lucide-react";
+import { Flag, Heart, Loader2 } from "lucide-react";
 import { CrownBadge } from "@/components/crown-badge";
 import { IntroduceButton } from "@/components/crown-intro";
 import { DetailChips } from "@/components/detail-chips";
-import { LayoutShell } from "@/components/layout-shell";
 import { WhyYouMightClick, useClickReasons } from "@/components/why-click";
-import { ResonanceGlyph, TwinGlyph, VfAvatar, VfButton } from "@/components/ui-vf";
+import { ResonanceGlyph, TwinGlyph, VfButton } from "@/components/ui-vf";
 import { RefineWithAI } from "@/components/refine-with-ai";
 import { useProfile, usePhotos, usePublicAnswers, useProfileGroups, useUpdateProfile } from "@/hooks/use-profiles";
 import { useTwinReadiness, useSaveOnboardingAnswer } from "@/hooks/use-onboarding";
 import { useGate } from "@/hooks/use-gate";
 import { usePaywall } from "@/hooks/use-paywall";
-import {
-  useOutgoingLikes,
-  useIncomingLikes,
-  useStartInterview,
-  useCreateMatch,
-  useUnmatch,
-  useTwinTalkSummary,
-  UpgradeRequiredError,
-  LikeWaitingError,
-} from "@/hooks/use-interactions";
+import { useOutgoingLikes, useIncomingLikes, useStartInterview, useCreateMatch, useUnmatch, useTwinTalkSummary, UpgradeRequiredError, LikeWaitingError } from "@/hooks/use-interactions";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { overlap, distanceKm } from "@/lib/profile-derived";
 import { useVouchesFor } from "@/hooks/use-vouches";
 import { WingmanNote, WingmanSuggest } from "@/components/wingman";
 import { PhotoLightbox } from "@/components/photo-lightbox";
-import { withFrom, getFromRoute } from "@/lib/from-route";
+import { withFrom } from "@/lib/from-route";
 import { MatchCelebration } from "@/components/match-celebration";
 import { requestPushNudge } from "@/lib/engagement-prompts";
 import { dataSaverOn } from "@/lib/data-saver";
@@ -38,72 +27,8 @@ import { ProfileViewSkeleton } from "@/components/ui-vf/skeletons";
 import { useBackToClose } from "@/lib/back-button";
 import { haptic } from "@/lib/haptics";
 import { noteBadMoment } from "@/lib/review-prompt";
-
-/** Small mono "Edit" affordance for an editable region in the preview. Quiet
- *  by default (visible-but-unobtrusive on touch, no hover to reveal it),
- *  full opacity on hover/focus on desktop. Never a bare icon — always labelled. */
-function EditAffordance({ onClick, label = "Edit" }: { onClick: () => void; label?: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-full border border-vf-line bg-vf-surface/90 backdrop-blur px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-vf-muted opacity-60 hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-      data-testid="button-preview-edit"
-    >
-      <Pencil className="w-3 h-3" />
-      {label}
-    </button>
-  );
-}
-
-/** In preview mode the preview bar (rendered by ProfilePreview.tsx) is the
- *  only chrome — the real app nav would be redundant and confusing next to
- *  it. Real /u/:userId visits keep the normal LayoutShell. */
-function ViewShell({ preview, children }: { preview: boolean; children: React.ReactNode }) {
-  if (preview) return <div className="px-4 py-6 sm:px-6">{children}</div>;
-  return (
-    <LayoutShell>
-      <BackBar />
-      {children}
-    </LayoutShell>
-  );
-}
-
-/** A profile opens from many places (Discover, Likes, Lounge, a chat…). An
- *  explicit ?from= wins; otherwise step back through history, and only fall
- *  back to Discover when there's nothing to go back to (a shared link). */
-function BackBar() {
-  const [, setLocation] = useLocation();
-  const goBack = () => {
-    const from = getFromRoute(window.location.search, "");
-    if (from) setLocation(from);
-    else if (window.history.length > 1) window.history.back();
-    else setLocation("/discover");
-  };
-  return (
-    <button
-      onClick={goBack}
-      className="inline-flex items-center gap-1 -ml-1 mb-4 text-[13px] text-vf-muted hover:text-vf-text transition-colors"
-      data-testid="button-profile-back"
-    >
-      <ChevronLeft className="w-4 h-4" /> Back
-    </button>
-  );
-}
-
-const EYEBROW = "font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-faint";
-
-function firstName(p: any): string {
-  return (p?.displayName || p?.user?.firstName || "Someone").split(" ")[0];
-}
-function relAge(iso?: string): string {
-  if (!iso) return "recently";
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (days <= 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 7) return `${days} days ago`;
-  if (days < 14) return "last week";
-  return `${Math.floor(days / 7)} weeks ago`;
-}
+import { EditAffordance, ViewShell, EYEBROW, firstName, relAge } from "@/components/profile-view/view-shell";
+import { BlockReportConfirm, OverlapChips, RoomsCard, TranscriptCard, VouchList } from "@/components/profile-view/profile-sections";
 
 interface ProfileViewProps {
   /** Real route: wouter passes the URL param this way. */
@@ -154,9 +79,7 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
   const [savingAnswerId, setSavingAnswerId] = useState<number | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<"block" | "report" | null>(null);
-  useBackToClose(!!confirm, () => { setConfirm(null); setReportReason(""); setReportPhotoId(null); });
-  const [reportReason, setReportReason] = useState("");
-  const [reportPhotoId, setReportPhotoId] = useState<number | null>(null);
+  useBackToClose(!!confirm, () => setConfirm(null));
 
   const match = useMemo(() => {
     const ask = (outgoing?.asks || []).find((a: any) => a.toUserId === userId);
@@ -286,12 +209,9 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
       toast({ title: "Couldn't block", variant: "destructive" });
     }
   };
-  const doReport = async () => {
-    const reason = reportReason.trim();
+  const doReport = async (reason: string, reportPhotoId: number | null) => {
     const evidence = reportPhotoId != null ? [{ type: "photo", id: reportPhotoId }] : undefined;
     setConfirm(null);
-    setReportReason("");
-    setReportPhotoId(null);
     try {
       noteBadMoment();
       await fetch(`/api/users/${userId}/report`, {
@@ -711,36 +631,6 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     </div>
   ) : null;
 
-  const VouchList = vouchList.length ? (
-    <section>
-      <div className={`${EYEBROW} mb-3`}>Vouched by</div>
-      <div className="flex flex-col">
-        {vouchList.map((v) => (
-          <div key={v.id} className="flex gap-3 py-4 border-b border-vf-line last:border-b-0" data-testid={`profile-vouch-${v.id}`}>
-            <div className="shrink-0"><VfAvatar size={36} src={v.from.photoUrl ?? undefined} name={v.from.name} seed={v.from.userId} /></div>
-            <div>
-              <p className="text-[14.5px] text-vf-soft" style={{ lineHeight: 1.55 }}>&ldquo;{v.body}&rdquo;</p>
-              <div className="text-[12.5px] text-vf-faint mt-1.5">{v.from.name} · {v.metLabel}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  ) : null;
-
-  const OverlapChips = overlapChips.length ? (
-    <section>
-      <div className={`${EYEBROW} mb-3`}>Where you overlap</div>
-      <div className="flex flex-wrap gap-2">
-        {overlapChips.map((c) => (
-          <span key={c} className="border border-vf-line rounded-full text-[13px] text-vf-soft" style={{ padding: "8px 15px" }}>
-            {c}
-          </span>
-        ))}
-      </div>
-    </section>
-  ) : null;
-
   // No score (docs/destira-upgrade-prompt.md §5.3). The old card showed a
   // number made up from the member's id; this shows only what's true.
   const ResonanceCard = preview ? (
@@ -758,79 +648,21 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
     </div>
   ) : null;
 
-  const TranscriptCard = transcript ? (
-    <div className="rounded-[20px] p-[22px] vf-card" style={{ border: "1px solid rgba(143,227,199,.24)", background: "rgba(143,227,199,.045)" }}>
-      <div className="flex items-center gap-2">
-        <span
-          className="block w-[11px] h-[11px] rounded-full shrink-0 animate-[vf-breathe_4.5s_ease-in-out_infinite] motion-reduce:animate-none"
-          style={{ background: "radial-gradient(circle at 35% 30%, var(--vf-mint-vivid), #2E7F6B)" }}
-        />
-        <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-vf-mint">When you asked {her ? "her" : "their"} twin</span>
-      </div>
-      {(() => {
-        const full = transcriptGate?.ok === true;
-        const shown = full ? transcript.lines : transcript.lines.slice(0, 2);
-        return (
-          <>
-            <div className="mt-4 flex flex-col gap-3.5">
-              {shown.map((l, i) => (
-                <div key={i}>
-                  <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-vf-faint mb-1">{l.who === "viewer" ? "You" : `${name}'s twin`}</div>
-                  <p className="text-[14px] text-vf-soft" style={{ lineHeight: 1.55 }}>{l.text}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 pt-3.5 border-t border-vf-mint/15 text-[12.5px] text-vf-muted">
-              {full ? (
-                <>All <span className="font-serif text-vf-text">{transcript.total}</span> lines.</>
-              ) : (
-                <>
-                  <span className="font-serif text-vf-text">Two</span> of{" "}
-                  <span className="font-serif text-vf-text">{transcript.total}</span> lines.{" "}
-                  <button
-                    onClick={() => paywall.guard("read_transcript", () => {})}
-                    className="text-vf-ember hover:text-[var(--vf-ember-soft)] transition-colors"
-                    data-testid="link-read-transcript"
-                  >
-                    {transcriptGate?.requiredTierName || "Flame"} reads the rest.
-                  </button>
-                </>
-              )}
-            </div>
-          </>
-        );
-      })()}
-      {myReadiness && myReadiness.pct < 50 && (
-        <div className="mt-2.5 text-[12px] text-vf-mint/80 leading-[1.5]">
-          Your own twin has {myReadiness.answeredCount === 1 ? "one answer" : `${myReadiness.answeredCount} answers`} so far —{" "}
-          <button onClick={() => setLocation("/onboarding")} className="underline underline-offset-2 hover:text-vf-text transition-colors">
-            sharpen it
-          </button>
-          .
-        </div>
-      )}
-    </div>
+  const Transcript = transcript ? (
+    <TranscriptCard
+      transcript={transcript}
+      name={name}
+      her={her}
+      gate={transcriptGate}
+      readiness={myReadiness}
+      onReadAll={() => paywall.guard("read_transcript", () => {})}
+      onSharpen={() => setLocation("/onboarding")}
+    />
   ) : null;
 
-  const RoomsCard = groups.length ? (
-    <div className="bg-vf-surface2 rounded-[20px] vf-card" style={{ padding: "22px" }}>
-      <div className={`${EYEBROW} mb-3`}>Rooms {her ? "she's" : "they're"} in</div>
-      <div className="flex flex-col gap-2.5">
-        {groups.map((g: any) => (
-          <button
-            key={g.id}
-            onClick={() => setLocation(g.viewerIsMember ? `/lounge/group/${g.id}` : `/lounge/group/${g.id}/info`)}
-            className="flex items-center justify-between gap-3 text-left -mx-2 px-2 py-1.5 rounded-lg transition-colors duration-150 hover:bg-[var(--vf-elevated)]"
-          >
-            <span className="text-[14px] text-vf-text truncate">{g.name}</span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.16em] shrink-0 text-vf-faint">
-              {g.viewerIsMember ? "You're in it" : "Join"}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
-  ) : null;
+  const Rooms = (
+    <RoomsCard groups={groups} her={her} onOpen={(g) => setLocation(g.viewerIsMember ? `/lounge/group/${g.id}` : `/lounge/group/${g.id}/info`)} />
+  );
 
   // Always in reach (docs/destira-upgrade-prompt.md §7.5): the same sticky
   // bar Discover has, so a long profile never means scrolling back up to act.
@@ -895,13 +727,13 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
             {PullQuote}
             {TwoAnswers}
             {PhotoGrid}
-            {VouchList}
-            {OverlapChips}
+            <VouchList vouches={vouchList} />
+            <OverlapChips chips={overlapChips} />
           </div>
           <div className="flex flex-col gap-4">
             {ResonanceCard}
-            {TranscriptCard}
-            {RoomsCard}
+            {Transcript}
+            {Rooms}
           </div>
         </div>
 
@@ -909,12 +741,12 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
         <div className="lg:hidden flex flex-col gap-8">
           {ResonanceCard}
           {PullQuote}
-          {TranscriptCard}
+          {Transcript}
           {TwoAnswers}
           {PhotoGrid}
-          {VouchList}
-          {OverlapChips}
-          {RoomsCard}
+          <VouchList vouches={vouchList} />
+          <OverlapChips chips={overlapChips} />
+          {Rooms}
         </div>
         {!preview && !match && (
           <div className="flex justify-center">
@@ -935,75 +767,14 @@ export default function ProfileView({ params, userId: userIdProp, preview = fals
       )}
 
       {confirm && (
-        <div
-          className="fixed inset-0 flex items-center justify-center z-[100] p-4"
-          style={{ background: "rgba(8,6,11,.82)", backdropFilter: "blur(14px)" }}
-          onClick={() => { setConfirm(null); setReportReason(""); setReportPhotoId(null); }}
-        >
-          <div
-            className="w-full max-w-[400px] rounded-[20px] border border-vf-line bg-vf-surface p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="font-serif font-normal text-[20px] text-vf-text mb-1.5">
-              {confirm === "block" ? `Block ${name}?` : `Report ${name}?`}
-            </h2>
-            <p className="text-[13.5px] leading-relaxed text-vf-muted mb-4">
-              {confirm === "block"
-                ? "They won't see you in Discover and you won't see them. You can undo this in Settings."
-                : "This sends a record to our team for review. It also blocks them."}
-            </p>
-            {confirm === "report" && (
-              <>
-                <textarea
-                  value={reportReason}
-                  onChange={(e) => setReportReason(e.target.value)}
-                  placeholder="What's going on? (optional)"
-                  rows={3}
-                  className="w-full mb-3 rounded-[12px] bg-vf-surface2 border border-vf-line p-3 text-[14px] text-vf-text placeholder:text-vf-faint resize-none outline-none focus:border-vf-text/25"
-                  data-testid="input-report-reason"
-                />
-                {galleryPhotos.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-[12px] text-vf-faint mb-2">Is it a specific photo? (optional)</p>
-                    <div className="flex gap-2 flex-wrap">
-                      {galleryPhotos.map((p: any) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => setReportPhotoId(reportPhotoId === p.id ? null : p.id)}
-                          className="w-14 h-14 rounded-[10px] overflow-hidden shrink-0"
-                          style={{
-                            outline: reportPhotoId === p.id ? "2px solid hsl(var(--vf-ember))" : "2px solid transparent",
-                            outlineOffset: "2px",
-                          }}
-                          data-testid={`button-report-photo-${p.id}`}
-                        >
-                          <img src={p.variants?.w800 || p.photoUrl} alt="" className="w-full h-full object-cover" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-            <div className="flex gap-2.5">
-              <button
-                onClick={() => { setConfirm(null); setReportReason(""); setReportPhotoId(null); }}
-                className="flex-1 h-11 rounded-full border border-vf-text/14 text-[14px] text-vf-muted hover:text-vf-text transition-colors"
-                data-testid="button-confirm-cancel"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirm === "block" ? doBlock : doReport}
-                className="flex-1 h-11 rounded-full text-[14px] font-semibold bg-vf-ember text-vf-ink hover:bg-[var(--vf-ember-soft)] transition-colors"
-                data-testid="button-confirm-action"
-              >
-                {confirm === "block" ? "Block" : "Send report"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <BlockReportConfirm
+          kind={confirm}
+          name={name}
+          galleryPhotos={galleryPhotos}
+          onClose={() => setConfirm(null)}
+          onBlock={doBlock}
+          onReport={doReport}
+        />
       )}
       {celebrating && (
         <MatchCelebration
